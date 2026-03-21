@@ -1,6 +1,6 @@
 {
   "name": "nomad-server",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "main": "src/index.js",
   "scripts": {
     "start": "node --experimental-sqlite src/index.js",
