@@ -212,12 +212,6 @@ API keys are configured in the **Admin Panel** after login. Keys set by the admi
 3. Create an API key under Credentials
 4. In NOMAD: Admin Panel → Settings → Google Maps
 
-### OpenWeatherMap (Weather Forecasts)
-
-1. Sign up at [OpenWeatherMap](https://openweathermap.org/api)
-2. Get a free API key
-3. In NOMAD: Admin Panel → Settings → OpenWeatherMap
-
 ## Building from Source
 
 ```bash
