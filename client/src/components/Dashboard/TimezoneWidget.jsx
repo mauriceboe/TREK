@@ -51,6 +51,9 @@ export default function TimezoneWidget() {
   })
   const [now, setNow] = useState(Date.now())
   const [showAdd, setShowAdd] = useState(false)
+  const [custom_label, set_custom_label] = useState('')
+  const [custom_tz, set_custom_tz] = useState('')
+  const [custom_error, set_custom_error] = useState('')
 
   useEffect(() => {
     const i = setInterval(() => setNow(Date.now()), 10000)
@@ -60,6 +63,15 @@ export default function TimezoneWidget() {
   useEffect(() => {
     localStorage.setItem('dashboard_timezones', JSON.stringify(zones))
   }, [zones])
+
+  function is_valid_tz(tz) {
+    try {
+      Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date())
+      return true
+    } catch {
+      return false
+    }
+  }
 
   const addZone = (zone) => {
     if (!zones.find(z => z.tz === zone.tz)) {
@@ -75,6 +87,31 @@ export default function TimezoneWidget() {
   const localZone = rawZone.split('/').pop().replace(/_/g, ' ')
   // Show abbreviated timezone name (e.g. CET, CEST, EST)
   const tzAbbr = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop()
+
+  const add_custom_zone = () => {
+    const tz = custom_tz.trim()
+    const label_from_tz = tz.split('/').pop()?.replace(/_/g, ' ') || tz
+    const label = custom_label.trim() || label_from_tz
+
+    if (!tz) {
+      set_custom_error(t('dashboard.timezoneCustomErrorEmpty'))
+      return
+    }
+    if (!is_valid_tz(tz)) {
+      set_custom_error(t('dashboard.timezoneCustomErrorInvalid'))
+      return
+    }
+    if (zones.find(z => z.tz === tz)) {
+      set_custom_error(t('dashboard.timezoneCustomErrorDuplicate'))
+      return
+    }
+
+    setZones([...zones, { label, tz }])
+    set_custom_label('')
+    set_custom_tz('')
+    set_custom_error('')
+    setShowAdd(false)
+  }
 
   return (
     <div className="rounded-2xl border p-4" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
@@ -109,6 +146,47 @@ export default function TimezoneWidget() {
       {/* Add zone dropdown */}
       {showAdd && (
         <div className="mt-2 rounded-xl p-2 max-h-[200px] overflow-auto" style={{ background: 'var(--bg-secondary)' }}>
+          <div className="px-2 py-2 mb-2 rounded-lg" style={{ background: 'var(--bg-card)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-faint)' }}>
+              {t('dashboard.timezoneCustomTitle')}
+            </p>
+            <div className="space-y-2">
+              <input
+                value={custom_label}
+                onChange={(e) => set_custom_label(e.target.value)}
+                placeholder={t('dashboard.timezoneCustomLabelPlaceholder')}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-secondary)' }}
+              />
+              <input
+                value={custom_tz}
+                onChange={(e) => set_custom_tz(e.target.value)}
+                placeholder={t('dashboard.timezoneCustomTzPlaceholder')}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-secondary)' }}
+              />
+              {custom_error && (
+                <p className="text-[10px]" style={{ color: 'var(--text-danger, #ef4444)' }}>{custom_error}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={add_custom_zone}
+                  className="px-2 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-primary)' }}
+                >
+                  {t('dashboard.timezoneCustomAdd')}
+                </button>
+                <button
+                  onClick={() => { set_custom_label(''); set_custom_tz(''); set_custom_error(''); setShowAdd(false) }}
+                  className="px-2 py-1.5 rounded-lg text-xs"
+                  style={{ color: 'var(--text-faint)' }}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {POPULAR_ZONES.filter(z => !zones.find(existing => existing.tz === z.tz)).map(z => (
             <button key={z.tz} onClick={() => addZone(z)}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs text-left transition-colors"
