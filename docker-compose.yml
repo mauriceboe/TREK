@@ -1,12 +1,11 @@
 services:
   app:
-    image: nomad:local
-    container_name: nomad
+    image: mauriceboe/trek:latest
+    container_name: trek
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - FORCE_HTTPS=false
       - JWT_SECRET=${JWT_SECRET:-}
       # - ALLOWED_ORIGINS=https://yourdomain.com  # Optional: restrict CORS to specific origins
       - PORT=3000

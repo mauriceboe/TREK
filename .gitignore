@@ -52,5 +52,4 @@ coverage
 .cache
 *.tsbuildinfo
 *.tgz
-.github
 data/.jwt_secret
