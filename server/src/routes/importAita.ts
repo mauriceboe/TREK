@@ -382,8 +382,8 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
   `);
 
   const insertPlace = db.prepare(`
-    INSERT INTO places (trip_id, name, address, reservation_status, transport_mode)
-    VALUES (?, ?, ?, 'confirmed', 'driving')
+    INSERT INTO places (trip_id, name, address, reservation_status)
+    VALUES (?, ?, ?, 'confirmed')
   `);
 
   const MS_PER_DAY = 86400000;
