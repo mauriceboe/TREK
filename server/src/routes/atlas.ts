@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
+import { getCountriesFromFlightLocation } from '../data/airportToCountry';
 import { AuthRequest, Trip, Place } from '../types';
 
 const router = express.Router();
@@ -101,6 +102,11 @@ router.get('/stats', (req: Request, res: Response) => {
 
   const placeholders = tripIds.map(() => '?').join(',');
   const places = db.prepare(`SELECT * FROM places WHERE trip_id IN (${placeholders})`).all(...tripIds) as Place[];
+  const reservations = db.prepare(`
+    SELECT trip_id, location, type
+    FROM reservations
+    WHERE trip_id IN (${placeholders})
+  `).all(...tripIds) as { trip_id: number; location: string | null; type: string | null }[];
 
   interface CountryEntry { code: string; places: { id: number; name: string; lat: number | null; lng: number | null }[]; tripIds: Set<number> }
   const countrySet = new Map<string, CountryEntry>();
@@ -115,6 +121,17 @@ router.get('/stats', (req: Request, res: Response) => {
       }
       countrySet.get(code)!.places.push({ id: place.id, name: place.name, lat: place.lat, lng: place.lng });
       countrySet.get(code)!.tripIds.add(place.trip_id);
+    }
+  }
+
+  for (const reservation of reservations) {
+    if (reservation.type !== 'flight') continue;
+    const codes = getCountriesFromFlightLocation(reservation.location);
+    for (const code of codes) {
+      if (!countrySet.has(code)) {
+        countrySet.set(code, { code, places: [], tripIds: new Set() });
+      }
+      countrySet.get(code)!.tripIds.add(reservation.trip_id);
     }
   }
 
@@ -224,6 +241,11 @@ router.get('/country/:code', (req: Request, res: Response) => {
 
   const placeholders = tripIds.map(() => '?').join(',');
   const places = db.prepare(`SELECT * FROM places WHERE trip_id IN (${placeholders})`).all(...tripIds) as Place[];
+  const reservations = db.prepare(`
+    SELECT trip_id, location, type
+    FROM reservations
+    WHERE trip_id IN (${placeholders})
+  `).all(...tripIds) as { trip_id: number; location: string | null; type: string | null }[];
 
   const matchingPlaces: { id: number; name: string; address: string | null; lat: number | null; lng: number | null; trip_id: number }[] = [];
   const matchingTripIds = new Set<number>();
@@ -234,6 +256,14 @@ router.get('/country/:code', (req: Request, res: Response) => {
     if (pCode === code) {
       matchingPlaces.push({ id: place.id, name: place.name, address: place.address, lat: place.lat, lng: place.lng, trip_id: place.trip_id });
       matchingTripIds.add(place.trip_id);
+    }
+  }
+
+  for (const reservation of reservations) {
+    if (reservation.type !== 'flight') continue;
+    const codes = getCountriesFromFlightLocation(reservation.location);
+    if (codes.includes(code)) {
+      matchingTripIds.add(reservation.trip_id);
     }
   }
 

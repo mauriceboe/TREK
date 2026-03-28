@@ -95,7 +95,22 @@
 docker run -d -p 3000:3000 -v ./data:/app/data -v ./uploads:/app/uploads mauriceboe/trek
 ```
 
+If your host is Apple Silicon (`linux/arm64`) and your local Docker cache still resolves an older non-multi-arch image, run:
+
+```bash
+docker run -d --platform linux/amd64 -p 3000:3000 -v ./data:/app/data -v ./uploads:/app/uploads mauriceboe/nomad
+```
+
 The app runs on port `3000`. The first user to register becomes the admin.
+
+### Local Build (without Docker Hub)
+
+Build the image locally and run it with the same persistent volume mounts:
+
+```bash
+docker build -t nomad:local .
+docker run -d --name nomad -p 3000:3000 -v ./data:/app/data -v ./uploads:/app/uploads --restart unless-stopped nomad:local
+```
 
 ### Install as App (PWA)
 

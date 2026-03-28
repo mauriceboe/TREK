@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { db } from '../db/database';
+import { resolveCountryCodeForAirport } from '../data/airportToCountry';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
@@ -59,6 +60,128 @@ interface ParsedTrip {
   departureTime: string | null;
   arrivalTime: string | null;
   flights: ParsedFlight[];
+}
+
+const MAX_CONNECTION_GAP_MS = 24 * 60 * 60 * 1000;
+
+function normalizeAirport(code: string | null): string | null {
+  if (!code) return null;
+  const normalized = code.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(normalized) ? normalized : null;
+}
+
+function toMs(iso: string | null): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function firstFlightDepartureMs(trip: ParsedTrip): number | null {
+  let min: number | null = null;
+  for (const flight of trip.flights) {
+    const ms = toMs(flight.scheduledDeparture);
+    if (ms === null) continue;
+    min = min === null ? ms : Math.min(min, ms);
+  }
+  return min;
+}
+
+function lastFlightArrivalMs(trip: ParsedTrip): number | null {
+  let max: number | null = null;
+  for (const flight of trip.flights) {
+    const ms = toMs(flight.scheduledArrival);
+    if (ms === null) continue;
+    max = max === null ? ms : Math.max(max, ms);
+  }
+  return max;
+}
+
+function tripStartMs(trip: ParsedTrip): number | null {
+  return toMs(trip.departureTime) ?? firstFlightDepartureMs(trip);
+}
+
+function tripEndMs(trip: ParsedTrip): number | null {
+  return toMs(trip.arrivalTime) ?? lastFlightArrivalMs(trip);
+}
+
+function tripDepartureAirport(trip: ParsedTrip): string | null {
+  const fromHeader = normalizeAirport(trip.originAirport);
+  if (fromHeader) return fromHeader;
+  for (const flight of trip.flights) {
+    const fromFlight = normalizeAirport(flight.origin);
+    if (fromFlight) return fromFlight;
+  }
+  return null;
+}
+
+function tripArrivalAirport(trip: ParsedTrip): string | null {
+  const fromHeader = normalizeAirport(trip.destinationAirport);
+  if (fromHeader) return fromHeader;
+  for (let i = trip.flights.length - 1; i >= 0; i--) {
+    const fromFlight = normalizeAirport(trip.flights[i].destination);
+    if (fromFlight) return fromFlight;
+  }
+  return null;
+}
+
+function cloneTrip(trip: ParsedTrip): ParsedTrip {
+  return {
+    originAirport: trip.originAirport,
+    destinationAirport: trip.destinationAirport,
+    departureTime: trip.departureTime,
+    arrivalTime: trip.arrivalTime,
+    flights: [...trip.flights],
+  };
+}
+
+function shouldStitchTrips(current: ParsedTrip, next: ParsedTrip): boolean {
+  const currentArrival = tripArrivalAirport(current);
+  const nextDeparture = tripDepartureAirport(next);
+  if (!currentArrival || !nextDeparture || currentArrival !== nextDeparture) return false;
+
+  const currentEnd = tripEndMs(current);
+  const nextStart = tripStartMs(next);
+  if (currentEnd === null || nextStart === null) return false;
+
+  const gap = nextStart - currentEnd;
+  return gap >= 0 && gap <= MAX_CONNECTION_GAP_MS;
+}
+
+function stitchConnectingTrips(trips: ParsedTrip[]): { trips: ParsedTrip[]; mergedConnections: number } {
+  if (trips.length <= 1) return { trips, mergedConnections: 0 };
+
+  const sorted = [...trips].sort((a, b) => {
+    const aStart = tripStartMs(a);
+    const bStart = tripStartMs(b);
+    if (aStart === null && bStart === null) return 0;
+    if (aStart === null) return 1;
+    if (bStart === null) return -1;
+    return aStart - bStart;
+  });
+
+  const stitched: ParsedTrip[] = [];
+  let mergedConnections = 0;
+  let current = cloneTrip(sorted[0]);
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+    if (shouldStitchTrips(current, next)) {
+      current = {
+        originAirport: current.originAirport ?? next.originAirport,
+        destinationAirport: next.destinationAirport ?? current.destinationAirport,
+        departureTime: current.departureTime ?? next.departureTime,
+        arrivalTime: next.arrivalTime ?? current.arrivalTime,
+        flights: [...current.flights, ...next.flights],
+      };
+      mergedConnections++;
+    } else {
+      stitched.push(current);
+      current = cloneTrip(next);
+    }
+  }
+
+  stitched.push(current);
+  return { trips: stitched, mergedConnections };
 }
 
 function nullIfNone(val: string): string | null {
@@ -172,6 +295,39 @@ function flightTitle(f: ParsedFlight): string {
   return `${prefix}${from} → ${to}`;
 }
 
+function buildTripTitle(trip: ParsedTrip): string {
+  const fallbackOrigin = trip.originAirport ?? '???';
+  const fallbackDestination = trip.destinationAirport ?? '???';
+
+  if (trip.flights.length === 0) {
+    return `${fallbackOrigin} → ${fallbackDestination}`;
+  }
+
+  const orderedFlights = [...trip.flights].sort((a, b) => {
+    const aMs = toMs(a.scheduledDeparture) ?? Number.MAX_SAFE_INTEGER;
+    const bMs = toMs(b.scheduledDeparture) ?? Number.MAX_SAFE_INTEGER;
+    return aMs - bMs;
+  });
+
+  const route: string[] = [];
+  const firstOrigin = normalizeAirport(orderedFlights[0].origin) ?? normalizeAirport(trip.originAirport);
+  if (firstOrigin) route.push(firstOrigin);
+
+  for (const flight of orderedFlights) {
+    const dest = normalizeAirport(flight.destination);
+    if (!dest) continue;
+    if (route.length === 0 || route[route.length - 1] !== dest) {
+      route.push(dest);
+    }
+  }
+
+  if (route.length >= 2) {
+    return route.join(' → ');
+  }
+
+  return `${fallbackOrigin} → ${fallbackDestination}`;
+}
+
 router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user.id;
@@ -194,7 +350,11 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
     return res.status(400).json({ error: 'Failed to parse file' });
   }
 
-  if (parsedTrips.length === 0) {
+  const stitched = stitchConnectingTrips(parsedTrips);
+  const tripsForImport = stitched.trips;
+  const mergedConnections = stitched.mergedConnections;
+
+  if (tripsForImport.length === 0) {
     return res.status(400).json({ error: 'No trips found in file' });
   }
 
@@ -217,6 +377,11 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
     INSERT INTO reservations
       (trip_id, title, reservation_time, reservation_end_time, location, confirmation_number, notes, status, type)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', 'flight')
+  `);
+
+  const insertPlace = db.prepare(`
+    INSERT INTO places (trip_id, name, address, reservation_status, transport_mode)
+    VALUES (?, ?, ?, 'confirmed', 'driving')
   `);
 
   const MS_PER_DAY = 86400000;
@@ -247,12 +412,11 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
 
   let importedTrips = 0;
   let importedFlights = 0;
+  const unresolvedAirports = new Set<string>();
 
   const importAll = db.transaction(() => {
-    for (const trip of parsedTrips) {
-      const origin = trip.originAirport ?? '???';
-      const destination = trip.destinationAirport ?? '???';
-      const title = `${origin} → ${destination}`;
+    for (const trip of tripsForImport) {
+      const title = buildTripTitle(trip);
       const startDate = toDateStr(trip.departureTime);
       const endDate = toDateStr(trip.arrivalTime) ?? startDate;
 
@@ -288,6 +452,27 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
         importedFlights++;
       }
 
+      // Create airport places so Atlas can derive visited countries from imported flight data.
+      const airportsInTrip = new Set<string>();
+      if (trip.originAirport) airportsInTrip.add(trip.originAirport.toUpperCase());
+      if (trip.destinationAirport) airportsInTrip.add(trip.destinationAirport.toUpperCase());
+      for (const flight of trip.flights) {
+        if (flight.origin) airportsInTrip.add(flight.origin.toUpperCase());
+        if (flight.destination) airportsInTrip.add(flight.destination.toUpperCase());
+      }
+      for (const airport of airportsInTrip) {
+        const countryCode = resolveCountryCodeForAirport(airport);
+        if (!countryCode) {
+          unresolvedAirports.add(airport);
+          continue;
+        }
+        insertPlace.run(
+          tripId,
+          `${airport} Airport`,
+          `${airport}, ${countryCode}`,
+        );
+      }
+
       importedTrips++;
     }
   });
@@ -299,7 +484,14 @@ router.post('/', authenticate, importRateLimiter, upload.single('file'), (req: R
     return res.status(500).json({ error: 'Database error during import' });
   }
 
-  return res.json({ importedTrips, importedFlights });
+  const unresolvedAirportList = [...unresolvedAirports].sort();
+  const warnings = unresolvedAirportList.length > 0
+    ? [
+      `Could not map airport code(s): ${unresolvedAirportList.join(', ')}. Please open a PR to extend AIRPORT_TO_COUNTRY.`,
+    ]
+    : [];
+
+  return res.json({ importedTrips, importedFlights, mergedConnections, unresolvedAirports: unresolvedAirportList, warnings });
 });
 
 export default router;
