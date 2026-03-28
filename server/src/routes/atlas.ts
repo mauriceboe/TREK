@@ -244,7 +244,7 @@ router.get('/country/:code', (req: Request, res: Response) => {
   const reservations = db.prepare(`
     SELECT trip_id, location, type
     FROM reservations
-    WHERE trip_id IN (${placeholders})
+    WHERE trip_id IN (${placeholders}) AND type = 'flight' AND location IS NOT NULL
   `).all(...tripIds) as { trip_id: number; location: string | null; type: string | null }[];
 
   const matchingPlaces: { id: number; name: string; address: string | null; lat: number | null; lng: number | null; trip_id: number }[] = [];
