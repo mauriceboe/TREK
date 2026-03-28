@@ -2,10 +2,11 @@ import React, { createContext, useContext, useMemo, ReactNode } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import de from './translations/de'
 import en from './translations/en'
+import es from './translations/es'
 
-type TranslationStrings = Record<string, string>
+type TranslationStrings = Record<string, any>
 
-const translations: Record<string, TranslationStrings> = { de, en }
+const translations: Record<string, TranslationStrings> = { de, en, es }
 
 interface TranslationContextValue {
   t: (key: string, params?: Record<string, string | number>) => string
@@ -36,7 +37,19 @@ export function TranslationProvider({ children }: TranslationProviderProps) {
       return val
     }
 
-    return { t, language, locale: language === 'en' ? 'en-US' : 'de-DE' }
+    let locale = 'de-DE'
+    switch (language) {
+      case 'en':
+        locale = 'en-US'
+        break
+      case 'es':
+        locale = 'es-ES'
+        break
+      default:
+        locale = 'de-DE'
+    }
+
+    return { t, language, locale }
   }, [language])
 
   return <TranslationContext.Provider value={value}>{children}</TranslationContext.Provider>

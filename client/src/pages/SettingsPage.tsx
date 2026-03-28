@@ -262,6 +262,7 @@ export default function SettingsPage(): React.ReactElement {
                 {[
                   { value: 'de', label: 'Deutsch' },
                   { value: 'en', label: 'English' },
+                  { value: 'es', label: 'Español' },
                 ].map(opt => (
                   <button
                     key={opt.value}
@@ -345,7 +346,7 @@ export default function SettingsPage(): React.ReactElement {
                 ))}
               </div>
             </div>
-          {/* Route Calculation */}
+            {/* Route Calculation */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>{t('settings.routeCalculation')}</label>
               <div className="flex gap-3">
@@ -541,7 +542,7 @@ export default function SettingsPage(): React.ReactElement {
                         setShowDeleteConfirm('blocked')
                         return
                       }
-                    } catch {}
+                    } catch { }
                   }
                   setShowDeleteConfirm(true)
                 }}
