@@ -9,6 +9,8 @@ interface AuthResponse {
   token: string
 }
 
+export type LoginResult = AuthResponse | { mfa_required: true; mfa_token: string }
+
 interface AvatarResponse {
   avatar_url: string
 }
@@ -22,7 +24,8 @@ interface AuthState {
   demoMode: boolean
   hasMapsKey: boolean
 
-  login: (email: string, password: string) => Promise<AuthResponse>
+  login: (email: string, password: string) => Promise<LoginResult>
+  completeMfaLogin: (mfaToken: string, code: string) => Promise<AuthResponse>
   register: (username: string, email: string, password: string) => Promise<AuthResponse>
   logout: () => void
   loadUser: () => Promise<void>
@@ -48,7 +51,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const data = await authApi.login({ email, password })
+      const data = await authApi.login({ email, password }) as AuthResponse & { mfa_required?: boolean; mfa_token?: string }
+      if (data.mfa_required && data.mfa_token) {
+        set({ isLoading: false, error: null })
+        return { mfa_required: true as const, mfa_token: data.mfa_token }
+      }
       localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,
@@ -58,7 +65,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       })
       connect(data.token)
-      return data
+      return data as AuthResponse
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Login failed')
       set({ isLoading: false, error })
@@ -66,10 +73,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (username: string, email: string, password: string) => {
+  completeMfaLogin: async (mfaToken: string, code: string) => {
     set({ isLoading: true, error: null })
     try {
-      const data = await authApi.register({ username, email, password })
+      const data = await authApi.verifyMfaLogin({ mfa_token: mfaToken, code: code.replace(/\s/g, '') })
+      localStorage.setItem('auth_token', data.token)
+      set({
+        user: data.user,
+        token: data.token,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      })
+      connect(data.token)
+      return data as AuthResponse
+    } catch (err: unknown) {
+      const error = getApiErrorMessage(err, 'Verification failed')
+      set({ isLoading: false, error })
+      throw new Error(error)
+    }
+  },
+
+  register: async (username: string, email: string, password: string, invite_token?: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const data = await authApi.register({ username, email, password, invite_token })
       localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,

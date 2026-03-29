@@ -4,7 +4,8 @@ import { getIntlLanguage, getLocaleForLanguage, useTranslation } from '../i18n'
 import { useSettingsStore } from '../store/settingsStore'
 import Navbar from '../components/Layout/Navbar'
 import apiClient from '../api/client'
-import { Globe, MapPin, Briefcase, Calendar, Flag, ChevronRight, PanelLeftOpen, PanelLeftClose, X } from 'lucide-react'
+import CustomSelect from '../components/shared/CustomSelect'
+import { Globe, MapPin, Briefcase, Calendar, Flag, ChevronRight, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2 } from 'lucide-react'
 import L from 'leaflet'
 import type { AtlasPlace, GeoJsonFeatureCollection, TranslationFn } from '../types'
 
@@ -40,6 +41,7 @@ interface AtlasData {
 interface CountryDetail {
   places: AtlasPlace[]
   trips: { id: number; title: string }[]
+  manually_marked?: boolean
 }
 
 function MobileStats({ data, stats, countries, resolveName, t, dark }: { data: AtlasData | null; stats: AtlasStats; countries: AtlasCountry[]; resolveName: (code: string) => string; t: TranslationFn; dark: boolean }): React.ReactElement {
@@ -108,7 +110,9 @@ function useCountryNames(language: string): (code: string) => string {
 }
 
 // Map visited country codes to ISO-3166 alpha3 (GeoJSON uses alpha3)
-const A2_TO_A3: Record<string, string> = {"AF":"AFG","AL":"ALB","DZ":"DZA","AD":"AND","AO":"AGO","AR":"ARG","AM":"ARM","AU":"AUS","AT":"AUT","AZ":"AZE","BR":"BRA","BE":"BEL","BG":"BGR","CA":"CAN","CL":"CHL","CN":"CHN","CO":"COL","HR":"HRV","CZ":"CZE","DK":"DNK","EG":"EGY","EE":"EST","FI":"FIN","FR":"FRA","DE":"DEU","GR":"GRC","HU":"HUN","IS":"ISL","IN":"IND","ID":"IDN","IR":"IRN","IQ":"IRQ","IE":"IRL","IL":"ISR","IT":"ITA","JP":"JPN","KE":"KEN","KR":"KOR","LV":"LVA","LT":"LTU","LU":"LUX","MY":"MYS","MX":"MEX","MA":"MAR","NL":"NLD","NZ":"NZL","NO":"NOR","PK":"PAK","PE":"PER","PH":"PHL","PL":"POL","PT":"PRT","RO":"ROU","RU":"RUS","SA":"SAU","RS":"SRB","SK":"SVK","SI":"SVN","ZA":"ZAF","ES":"ESP","SE":"SWE","CH":"CHE","TH":"THA","TR":"TUR","UA":"UKR","AE":"ARE","GB":"GBR","US":"USA","VN":"VNM","NG":"NGA"}
+// Built dynamically from GeoJSON + hardcoded fallbacks
+const A2_TO_A3_BASE: Record<string, string> = {"AF":"AFG","AL":"ALB","DZ":"DZA","AD":"AND","AO":"AGO","AG":"ATG","AR":"ARG","AM":"ARM","AU":"AUS","AT":"AUT","AZ":"AZE","BS":"BHS","BH":"BHR","BD":"BGD","BB":"BRB","BY":"BLR","BE":"BEL","BZ":"BLZ","BJ":"BEN","BT":"BTN","BO":"BOL","BA":"BIH","BW":"BWA","BR":"BRA","BN":"BRN","BG":"BGR","BF":"BFA","BI":"BDI","CV":"CPV","KH":"KHM","CM":"CMR","CA":"CAN","CF":"CAF","TD":"TCD","CL":"CHL","CN":"CHN","CO":"COL","KM":"COM","CG":"COG","CD":"COD","CR":"CRI","CI":"CIV","HR":"HRV","CU":"CUB","CY":"CYP","CZ":"CZE","DK":"DNK","DJ":"DJI","DM":"DMA","DO":"DOM","EC":"ECU","EG":"EGY","SV":"SLV","GQ":"GNQ","ER":"ERI","EE":"EST","SZ":"SWZ","ET":"ETH","FJ":"FJI","FI":"FIN","FR":"FRA","GA":"GAB","GM":"GMB","GE":"GEO","DE":"DEU","GH":"GHA","GR":"GRC","GD":"GRD","GT":"GTM","GN":"GIN","GW":"GNB","GY":"GUY","HT":"HTI","HN":"HND","HU":"HUN","IS":"ISL","IN":"IND","ID":"IDN","IR":"IRN","IQ":"IRQ","IE":"IRL","IL":"ISR","IT":"ITA","JM":"JAM","JP":"JPN","JO":"JOR","KZ":"KAZ","KE":"KEN","KI":"KIR","KP":"PRK","KR":"KOR","KW":"KWT","KG":"KGZ","LA":"LAO","LV":"LVA","LB":"LBN","LS":"LSO","LR":"LBR","LY":"LBY","LI":"LIE","LT":"LTU","LU":"LUX","MG":"MDG","MW":"MWI","MY":"MYS","MV":"MDV","ML":"MLI","MT":"MLT","MR":"MRT","MU":"MUS","MX":"MEX","MD":"MDA","MN":"MNG","ME":"MNE","MA":"MAR","MZ":"MOZ","MM":"MMR","NA":"NAM","NP":"NPL","NL":"NLD","NZ":"NZL","NI":"NIC","NE":"NER","NG":"NGA","MK":"MKD","NO":"NOR","OM":"OMN","PK":"PAK","PA":"PAN","PG":"PNG","PY":"PRY","PE":"PER","PH":"PHL","PL":"POL","PT":"PRT","QA":"QAT","RO":"ROU","RU":"RUS","RW":"RWA","SA":"SAU","SN":"SEN","RS":"SRB","SL":"SLE","SG":"SGP","SK":"SVK","SI":"SVN","SB":"SLB","SO":"SOM","ZA":"ZAF","SS":"SSD","ES":"ESP","LK":"LKA","SD":"SDN","SR":"SUR","SE":"SWE","CH":"CHE","SY":"SYR","TW":"TWN","TJ":"TJK","TZ":"TZA","TH":"THA","TL":"TLS","TG":"TGO","TT":"TTO","TN":"TUN","TR":"TUR","TM":"TKM","UG":"UGA","UA":"UKR","AE":"ARE","GB":"GBR","US":"USA","UY":"URY","UZ":"UZB","VU":"VUT","VE":"VEN","VN":"VNM","YE":"YEM","ZM":"ZMB","ZW":"ZWE"}
+let A2_TO_A3: Record<string, string> = { ...A2_TO_A3_BASE }
 
 export default function AtlasPage(): React.ReactElement {
   const { t, language } = useTranslation()
@@ -149,11 +153,26 @@ export default function AtlasPage(): React.ReactElement {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(null)
   const [geoData, setGeoData] = useState<GeoJsonFeatureCollection | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'mark' | 'unmark' | 'choose' | 'bucket'; code: string; name: string } | null>(null)
+  const [bucketMonth, setBucketMonth] = useState(new Date().getMonth() + 1)
+  const [bucketYear, setBucketYear] = useState(new Date().getFullYear())
 
-  // Load atlas data
+  // Bucket list
+  interface BucketItem { id: number; name: string; lat: number | null; lng: number | null; country_code: string | null; notes: string | null }
+  const [bucketList, setBucketList] = useState<BucketItem[]>([])
+  const [showBucketAdd, setShowBucketAdd] = useState(false)
+  const [bucketForm, setBucketForm] = useState({ name: '', notes: '' })
+  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket'>('stats')
+  const bucketMarkersRef = useRef<any>(null)
+
+  // Load atlas data + bucket list
   useEffect(() => {
-    apiClient.get('/addons/atlas/stats').then(r => {
-      setData(r.data)
+    Promise.all([
+      apiClient.get('/addons/atlas/stats'),
+      apiClient.get('/addons/atlas/bucket-list'),
+    ]).then(([statsRes, bucketRes]) => {
+      setData(statsRes.data)
+      setBucketList(bucketRes.data.items || [])
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -162,7 +181,17 @@ export default function AtlasPage(): React.ReactElement {
   useEffect(() => {
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
       .then(r => r.json())
-      .then(geo => setGeoData(geo))
+      .then(geo => {
+        // Dynamically build A2→A3 mapping from GeoJSON
+        for (const f of geo.features) {
+          const a2 = f.properties?.ISO_A2
+          const a3 = f.properties?.ADM0_A3 || f.properties?.ISO_A3
+          if (a2 && a3 && a2 !== '-99' && a3 !== '-99' && !A2_TO_A3[a2]) {
+            A2_TO_A3[a2] = a3
+          }
+        }
+        setGeoData(geo)
+      })
       .catch(() => {})
   }, [])
 
@@ -222,6 +251,10 @@ export default function AtlasPage(): React.ReactElement {
     const countryMap = {}
     data.countries.forEach(c => { if (A2_TO_A3[c.code]) countryMap[A2_TO_A3[c.code]] = c })
 
+    // Preserve current map view
+    const currentCenter = mapInstance.current.getCenter()
+    const currentZoom = mapInstance.current.getZoom()
+
     if (geoLayerRef.current) {
       mapInstance.current.removeLayer(geoLayerRef.current)
     }
@@ -241,7 +274,7 @@ export default function AtlasPage(): React.ReactElement {
       interactive: true,
       bubblingMouseEvents: false,
       style: (feature) => {
-        const a3 = feature.properties?.ISO_A3 || feature.properties?.ADM0_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
+        const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const visited = visitedA3.has(a3)
         return {
           fillColor: visited ? colorForCode(a3) : (dark ? '#1e1e2e' : '#e2e8f0'),
@@ -251,7 +284,7 @@ export default function AtlasPage(): React.ReactElement {
         }
       },
       onEachFeature: (feature, layer) => {
-        const a3 = feature.properties?.ISO_A3 || feature.properties?.ADM0_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
+        const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const c = countryMap[a3]
         if (c) {
           const name = resolveName(c.code)
@@ -278,17 +311,127 @@ export default function AtlasPage(): React.ReactElement {
           layer.bindTooltip(tooltipHtml, {
             sticky: false, permanent: false, className: 'atlas-tooltip', direction: 'top', offset: [0, -10], opacity: 1
           })
-          layer.on('click', () => loadCountryDetail(c.code))
+          layer.on('click', () => {
+            if (c.placeCount === 0 && c.tripCount === 0) {
+              // Manually marked only — show unmark popup
+              handleUnmarkCountry(c.code)
+            } else {
+              loadCountryDetail(c.code)
+            }
+          })
           layer.on('mouseover', (e) => {
             e.target.setStyle({ fillOpacity: 0.9, weight: 2, color: dark ? '#818cf8' : '#4f46e5' })
           })
           layer.on('mouseout', (e) => {
             geoLayerRef.current.resetStyle(e.target)
           })
+        } else {
+          // Unvisited country — allow clicking to mark as visited
+          // Reverse lookup: find A2 code from A3, or use A3 directly
+          const a3ToA2Entry = Object.entries(A2_TO_A3).find(([, v]) => v === a3)
+          const isoA2 = feature.properties?.ISO_A2
+          const countryCode = a3ToA2Entry ? a3ToA2Entry[0] : (isoA2 && isoA2 !== '-99' ? isoA2 : null)
+          if (countryCode && countryCode !== '-99') {
+            const name = feature.properties?.NAME || feature.properties?.ADMIN || resolveName(countryCode)
+            layer.bindTooltip(`<div style="font-size:12px;font-weight:600">${name}</div>`, {
+              sticky: false, className: 'atlas-tooltip', direction: 'top', offset: [0, -10], opacity: 1
+            })
+            layer.on('click', () => handleMarkCountry(countryCode, name))
+            layer.on('mouseover', (e) => {
+              e.target.setStyle({ fillOpacity: 0.5, weight: 1.5, color: dark ? '#555' : '#94a3b8' })
+            })
+            layer.on('mouseout', (e) => {
+              geoLayerRef.current.resetStyle(e.target)
+            })
+          }
         }
       }
     }).addTo(mapInstance.current)
+
+    // Restore map view after re-render
+    mapInstance.current.setView(currentCenter, currentZoom, { animate: false })
   }, [geoData, data, dark])
+
+  const handleMarkCountry = (code: string, name: string): void => {
+    setConfirmAction({ type: 'choose', code, name })
+  }
+
+  const handleUnmarkCountry = (code: string): void => {
+    const country = data?.countries.find(c => c.code === code)
+    setConfirmAction({ type: 'unmark', code, name: resolveName(code) })
+  }
+
+  const executeConfirmAction = async (): Promise<void> => {
+    if (!confirmAction) return
+    const { type, code } = confirmAction
+    setConfirmAction(null)
+
+    // Update local state immediately (no API reload = no map re-render flash)
+    if (type === 'mark') {
+      apiClient.post(`/addons/atlas/country/${code}/mark`).catch(() => {})
+      setData(prev => {
+        if (!prev || prev.countries.find(c => c.code === code)) return prev
+        return {
+          ...prev,
+          countries: [...prev.countries, { code, placeCount: 0, tripCount: 0, firstVisit: null, lastVisit: null }],
+          stats: { ...prev.stats, totalCountries: prev.stats.totalCountries + 1 },
+        }
+      })
+    } else {
+      apiClient.delete(`/addons/atlas/country/${code}/mark`).catch(() => {})
+      setSelectedCountry(null)
+      setCountryDetail(null)
+      setData(prev => {
+        if (!prev) return prev
+        const c = prev.countries.find(c => c.code === code)
+        if (!c || c.placeCount > 0 || c.tripCount > 0) return prev
+        return {
+          ...prev,
+          countries: prev.countries.filter(c => c.code !== code),
+          stats: { ...prev.stats, totalCountries: Math.max(0, prev.stats.totalCountries - 1) },
+        }
+      })
+    }
+  }
+
+  const handleAddBucketItem = async (): Promise<void> => {
+    if (!bucketForm.name.trim()) return
+    try {
+      const r = await apiClient.post('/addons/atlas/bucket-list', { name: bucketForm.name.trim(), notes: bucketForm.notes.trim() || null })
+      setBucketList(prev => [r.data.item, ...prev])
+      setBucketForm({ name: '', notes: '' })
+      setShowBucketAdd(false)
+    } catch { /* */ }
+  }
+
+  const handleDeleteBucketItem = async (id: number): Promise<void> => {
+    try {
+      await apiClient.delete(`/addons/atlas/bucket-list/${id}`)
+      setBucketList(prev => prev.filter(i => i.id !== id))
+    } catch { /* */ }
+  }
+
+  // Render bucket list markers on map
+  useEffect(() => {
+    if (!mapInstance.current) return
+    if (bucketMarkersRef.current) {
+      mapInstance.current.removeLayer(bucketMarkersRef.current)
+    }
+    if (bucketList.length === 0) return
+    const markers = bucketList.filter(b => b.lat && b.lng).map(b => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:28px;height:28px;border-radius:50%;background:rgba(251,191,36,0.9);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white"><svg width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      })
+      return L.marker([b.lat!, b.lng!], { icon }).bindTooltip(
+        `<div style="font-size:12px;font-weight:600">${b.name}</div>${b.notes ? `<div style="font-size:10px;opacity:0.7;margin-top:2px">${b.notes}</div>` : ''}`,
+        { className: 'atlas-tooltip', direction: 'top', offset: [0, -14] }
+      )
+    })
+    bucketMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
+  }, [bucketList])
 
   const loadCountryDetail = async (code: string): Promise<void> => {
     setSelectedCountry(code)
@@ -348,6 +491,7 @@ export default function AtlasPage(): React.ReactElement {
             left: '50%',
             transform: 'translateX(-50%)',
             width: 'fit-content',
+            maxWidth: 'calc(100vw - 40px)',
             background: dark ? 'rgba(10,10,15,0.55)' : 'rgba(255,255,255,0.2)',
             backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
@@ -368,13 +512,139 @@ export default function AtlasPage(): React.ReactElement {
           <SidebarContent
             data={data} stats={stats} countries={countries} selectedCountry={selectedCountry}
             countryDetail={countryDetail} resolveName={resolveName}
-            onCountryClick={loadCountryDetail} onTripClick={(id) => navigate(`/trips/${id}`)}
+            onCountryClick={loadCountryDetail} onTripClick={(id) => navigate(`/trips/${id}`)} onUnmarkCountry={handleUnmarkCountry}
+            bucketList={bucketList} bucketTab={bucketTab} setBucketTab={setBucketTab}
+            showBucketAdd={showBucketAdd} setShowBucketAdd={setShowBucketAdd}
+            bucketForm={bucketForm} setBucketForm={setBucketForm}
+            onAddBucket={handleAddBucketItem} onDeleteBucket={handleDeleteBucketItem}
             t={t} dark={dark}
           />
         </div>
 
-
       </div>
+
+      {/* Country action popup */}
+      {confirmAction && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setConfirmAction(null)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, maxWidth: 340, width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.2)', textAlign: 'center' }}
+            onClick={e => e.stopPropagation()}>
+            {confirmAction.code.length === 2 ? (
+              <img src={`https://flagcdn.com/w80/${confirmAction.code.toLowerCase()}.png`} alt={confirmAction.code} style={{ width: 48, height: 34, borderRadius: 6, objectFit: 'cover', marginBottom: 12, display: 'inline-block' }} />
+            ) : (
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{countryCodeToFlag(confirmAction.code)}</div>
+            )}
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{confirmAction.name}</h3>
+
+            {confirmAction.type === 'choose' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button onClick={async () => {
+                  try {
+                    await apiClient.post(`/addons/atlas/country/${confirmAction.code}/mark`)
+                    setData(prev => {
+                      if (!prev || prev.countries.find(c => c.code === confirmAction.code)) return prev
+                      return { ...prev, countries: [...prev.countries, { code: confirmAction.code, placeCount: 0, tripCount: 0, firstVisit: null, lastVisit: null }], stats: { ...prev.stats, totalCountries: prev.stats.totalCountries + 1 } }
+                    })
+                  } catch {}
+                  setConfirmAction(null)
+                }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-primary)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 0.12s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <MapPin size={18} style={{ color: 'var(--text-primary)', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('atlas.markVisited')}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{t('atlas.markVisitedHint')}</div>
+                  </div>
+                </button>
+                <button onClick={() => setConfirmAction({ ...confirmAction, type: 'bucket' as any })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-primary)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 0.12s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <Star size={18} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('atlas.addToBucket')}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{t('atlas.addToBucketHint')}</div>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {confirmAction.type === 'unmark' && (
+              <>
+                <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>{t('atlas.confirmUnmark')}</p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button onClick={() => setConfirmAction(null)}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}>
+                    {t('common.cancel')}
+                  </button>
+                  <button onClick={executeConfirmAction}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: '#ef4444', color: 'white' }}>
+                    {t('atlas.unmark')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {confirmAction.type === 'bucket' && (
+              <>
+                <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-muted)' }}>{t('atlas.bucketWhen')}</p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <CustomSelect
+                      value={bucketMonth}
+                      onChange={v => setBucketMonth(Number(v))}
+                      options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2000, i).toLocaleString(language, { month: 'long' }) }))}
+                      size="sm"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <CustomSelect
+                      value={bucketYear}
+                      onChange={v => setBucketYear(Number(v))}
+                      options={Array.from({ length: 20 }, (_, i) => ({ value: new Date().getFullYear() + i, label: String(new Date().getFullYear() + i) }))}
+                      size="sm"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button onClick={() => setConfirmAction({ ...confirmAction, type: 'choose' })}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}>
+                    {t('common.back')}
+                  </button>
+                  <button onClick={async () => {
+                    const monthStr = new Date(bucketYear, bucketMonth - 1).toLocaleString(language, { month: 'short', year: 'numeric' })
+                    try {
+                      const r = await apiClient.post('/addons/atlas/bucket-list', { name: confirmAction.name, country_code: confirmAction.code, notes: monthStr })
+                      setBucketList(prev => [r.data.item, ...prev])
+                    } catch {}
+                    setConfirmAction(null)
+                  }}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: '#fbbf24', color: '#1a1a1a' }}>
+                    {t('atlas.addToBucket')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {confirmAction.type === 'mark' && (
+              <>
+                <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>{t('atlas.confirmMark')}</p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button onClick={() => setConfirmAction(null)}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}>
+                    {t('common.cancel')}
+                  </button>
+                  <button onClick={executeConfirmAction}
+                    style={{ padding: '8px 20px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: 'var(--text-primary)', color: 'white' }}>
+                    {t('atlas.markVisited')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -388,11 +658,21 @@ interface SidebarContentProps {
   resolveName: (code: string) => string
   onCountryClick: (code: string) => void
   onTripClick: (id: number) => void
+  onUnmarkCountry?: (code: string) => void
+  bucketList: any[]
+  bucketTab: 'stats' | 'bucket'
+  setBucketTab: (tab: 'stats' | 'bucket') => void
+  showBucketAdd: boolean
+  setShowBucketAdd: (v: boolean) => void
+  bucketForm: { name: string; notes: string }
+  setBucketForm: (f: { name: string; notes: string }) => void
+  onAddBucket: () => Promise<void>
+  onDeleteBucket: (id: number) => Promise<void>
   t: TranslationFn
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onCountryClick, onTripClick, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onCountryClick, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, t, dark }: SidebarContentProps): React.ReactElement {
   const bg = (o) => dark ? `rgba(255,255,255,${o})` : `rgba(0,0,0,${o})`
   const tp = dark ? '#f1f5f9' : '#0f172a'
   const tm = dark ? '#94a3b8' : '#64748b'
@@ -405,20 +685,75 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   const CL = { 'Europe': t('atlas.europe'), 'Asia': t('atlas.asia'), 'North America': t('atlas.northAmerica'), 'South America': t('atlas.southAmerica'), 'Africa': t('atlas.africa'), 'Oceania': t('atlas.oceania') }
   const contColors = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#22d3ee']
 
-  if (countries.length === 0 && !lastTrip) {
+  // Tab switcher
+  const tabBar = (
+    <div style={{ display: 'flex', gap: 4, padding: '12px 16px 0', marginBottom: 4 }}>
+      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }].map(tab => (
+        <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            padding: '7px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+            background: bucketTab === tab.id ? bg(0.1) : 'transparent',
+            color: bucketTab === tab.id ? tp : tf,
+          }}>
+          <tab.icon size={13} />
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (countries.length === 0 && !lastTrip && bucketTab !== 'bucket') {
     return (
-      <div className="p-8 text-center">
-        <Globe size={28} className="mx-auto mb-2" style={{ color: tf, opacity: 0.4 }} />
-        <p className="text-sm font-medium" style={{ color: tm }}>{t('atlas.noData')}</p>
-        <p className="text-xs mt-1" style={{ color: tf }}>{t('atlas.noDataHint')}</p>
-      </div>
+      <>
+        {tabBar}
+        <div className="p-8 text-center">
+          <Globe size={28} className="mx-auto mb-2" style={{ color: tf, opacity: 0.4 }} />
+          <p className="text-sm font-medium" style={{ color: tm }}>{t('atlas.noData')}</p>
+          <p className="text-xs mt-1" style={{ color: tf }}>{t('atlas.noDataHint')}</p>
+        </div>
+      </>
     )
   }
 
   const thisYear = new Date().getFullYear()
   const divider = `2px solid ${bg(0.08)}`
 
+  // Bucket list content
+  const bucketContent = (
+    <div className="flex items-stretch" style={{ overflowX: 'auto', padding: '0 8px' }}>
+      {bucketList.map(item => (
+        <div key={item.id} className="group flex flex-col items-center justify-center shrink-0" style={{ padding: '8px 14px', position: 'relative', minWidth: 80 }}>
+          {(() => {
+            const code = item.country_code?.length === 2 ? item.country_code : (Object.entries(A2_TO_A3).find(([, v]) => v === item.country_code)?.[0] || '')
+            return code ? (
+              <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={code} style={{ width: 28, height: 20, borderRadius: 4, objectFit: 'cover', marginBottom: 4 }} />
+            ) : <Star size={16} style={{ color: '#fbbf24', marginBottom: 4 }} fill="#fbbf24" />
+          })()}
+          <span className="text-xs font-semibold text-center leading-tight" style={{ color: tp, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+          {item.notes && <span className="text-[9px] mt-0.5 text-center" style={{ color: tf, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.notes}</span>}
+          <button onClick={() => onDeleteBucket(item.id)}
+            className="opacity-0 group-hover:opacity-100"
+            style={{ position: 'absolute', top: 4, right: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: tf, display: 'flex', transition: 'opacity 0.15s' }}>
+            <X size={10} />
+          </button>
+        </div>
+      ))}
+      {bucketList.length === 0 && (
+        <div className="flex items-center justify-center py-4 px-6" style={{ color: tf, fontSize: 12 }}>
+          {t('atlas.bucketEmptyHint')}
+        </div>
+      )}
+    </div>
+  )
+
   return (
+    <>
+    {tabBar}
+    {/* Both tabs always rendered so the wider one sets the panel width */}
+    <div style={{ display: 'grid' }}>
+    <div style={bucketTab === 'bucket' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
     <div className="flex items-stretch justify-center">
 
       {/* ═══ SECTION 1: Numbers ═══ */}
@@ -507,11 +842,25 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
                     {trip.title}
                   </button>
                 ))}
+                {countryDetail.manually_marked && onUnmarkCountry && (
+                  <button onClick={() => onUnmarkCountry(selectedCountry!)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-opacity hover:opacity-75"
+                    style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                    <X size={9} />
+                    {t('atlas.unmark')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </>
       )}
     </div>
+    </div>
+    <div style={bucketTab === 'stats' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+      {bucketContent}
+    </div>
+    </div>
+    </>
   )
 }

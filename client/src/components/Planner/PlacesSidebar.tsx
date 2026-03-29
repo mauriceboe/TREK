@@ -22,17 +22,23 @@ interface PlacesSidebarProps {
   onDeletePlace: (placeId: number) => void
   days: Day[]
   isMobile: boolean
+  onCategoryFilterChange?: (categoryId: string) => void
 }
 
 export default function PlacesSidebar({
   places, categories, assignments, selectedDayId, selectedPlaceId,
-  onPlaceClick, onAddPlace, onAssignToDay, onEditPlace, onDeletePlace, days, isMobile,
+  onPlaceClick, onAddPlace, onAssignToDay, onEditPlace, onDeletePlace, days, isMobile, onCategoryFilterChange,
 }: PlacesSidebarProps) {
   const { t } = useTranslation()
   const ctxMenu = useContextMenu()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoryFilter, setCategoryFilterLocal] = useState('')
+
+  const setCategoryFilter = (val: string) => {
+    setCategoryFilterLocal(val)
+    onCategoryFilterChange?.(val)
+  }
   const [dayPickerPlace, setDayPickerPlace] = useState(null)
 
   // Alle geplanten Ort-IDs abrufen (einem Tag zugewiesen)

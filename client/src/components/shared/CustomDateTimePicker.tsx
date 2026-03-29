@@ -59,9 +59,43 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
   const today = new Date()
   const isToday = (d: number) => today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d
 
+  const [textInput, setTextInput] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
+
+  const handleTextSubmit = () => {
+    setIsTyping(false)
+    if (!textInput.trim()) return
+    // Try to parse various date formats
+    const input = textInput.trim()
+    // ISO: 2026-03-29
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) { onChange(input); return }
+    // EU: 29.03.2026 or 29/03/2026
+    const euMatch = input.match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/)
+    if (euMatch) {
+      const y = euMatch[3].length === 2 ? 2000 + parseInt(euMatch[3]) : parseInt(euMatch[3])
+      onChange(`${y}-${String(euMatch[2]).padStart(2, '0')}-${String(euMatch[1]).padStart(2, '0')}`)
+      return
+    }
+    // Try native Date parse as fallback
+    const d = new Date(input)
+    if (!isNaN(d.getTime())) {
+      onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+    }
+  }
+
   return (
     <div ref={ref} style={{ position: 'relative', ...style }}>
-      <button type="button" onClick={() => setOpen(o => !o)}
+      {isTyping ? (
+        <input autoFocus type="text" value={textInput} onChange={e => setTextInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleTextSubmit(); if (e.key === 'Escape') setIsTyping(false) }}
+          onBlur={handleTextSubmit}
+          placeholder="DD.MM.YYYY"
+          style={{
+            width: '100%', padding: '8px 14px', borderRadius: 10, border: '1px solid var(--text-faint)',
+            background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          }} />
+      ) : (
+      <button type="button" onClick={() => setOpen(o => !o)} onDoubleClick={() => { setTextInput(value || ''); setIsTyping(true) }}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           padding: '8px 14px', borderRadius: 10,
@@ -75,6 +109,7 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
         <Calendar size={14} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayValue || placeholder || t('common.date')}</span>
       </button>
+      )}
 
       {open && ReactDOM.createPortal(
         <div ref={dropRef} style={{

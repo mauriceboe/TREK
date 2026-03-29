@@ -22,7 +22,7 @@
 </p>
 
 ![TREK Screenshot](docs/screenshot.png)
-![NOMAD Screenshot 2](docs/screenshot-2.png)
+![TREK Screenshot 2](docs/screenshot-2.png)
 
 <details>
 <summary>More Screenshots</summary>
@@ -44,11 +44,14 @@
 - **Day Notes** — Add timestamped, icon-tagged notes to individual days with drag & drop reordering
 - **Route Optimization** — Auto-optimize place order and export to Google Maps
 - **Weather Forecasts** — 16-day forecasts via Open-Meteo (no API key needed) with historical climate averages as fallback
+- **Map Category Filter** — Filter places by category and see only matching pins on the map
 
 ### Travel Management
-- **Reservations & Bookings** — Track flights, hotels, restaurants with status, confirmation numbers, and file attachments
+- **Reservations & Bookings** — Track flights, accommodations, restaurants with status, confirmation numbers, and file attachments
 - **Budget Tracking** — Category-based expenses with pie chart, per-person/per-day splitting, and multi-currency support
-- **Packing Lists** — Categorized checklists with progress tracking, color coding, and smart suggestions
+- **Packing Lists** — Category-based checklists with user assignment, packing templates, and progress tracking
+- **Packing Templates** — Create reusable packing templates in the admin panel with categories and items, apply to any trip
+- **Bag Tracking** — Optional weight tracking and bag assignment for packing items with iOS-style weight distribution (admin-toggleable)
 - **Document Manager** — Attach documents, tickets, and PDFs to trips, places, or reservations (up to 50 MB per file)
 - **PDF Export** — Export complete trip plans as PDF with cover page, images, notes, and TREK branding
 
@@ -61,19 +64,22 @@
 ### Collaboration
 - **Real-Time Sync** — Plan together via WebSocket — changes appear instantly across all connected users
 - **Multi-User** — Invite members to collaborate on shared trips with role-based access
+- **Invite Links** — Create one-time registration links with configurable max uses and expiry for easy onboarding
 - **Single Sign-On (OIDC)** — Login with Google, Apple, Authentik, Keycloak, or any OIDC provider
+- **Two-Factor Authentication (MFA)** — TOTP-based 2FA with QR code setup, works with Google Authenticator, Authy, etc.
 - **Collab** — Chat with your group, share notes, create polls, and track who's signed up for each day's activities
 
 ### Addons (modular, admin-toggleable)
 - **Vacay** — Personal vacation day planner with calendar view, public holidays (100+ countries), company holidays, user fusion with live sync, and carry-over tracking
-- **Atlas** — Interactive world map with visited countries, travel stats, continent breakdown, streak tracking, and liquid glass UI effects
+- **Atlas** — Interactive world map with visited countries, bucket list with planned travel dates, travel stats, continent breakdown, streak tracking, and liquid glass UI effects
 - **Collab** — Chat with your group, share notes, create polls, and track who's signed up for each day's activities
 - **Dashboard Widgets** — Currency converter and timezone clock, toggleable per user
 
 ### Customization & Admin
+- **Dashboard Views** — Toggle between card grid and compact list view on the My Trips page
 - **Dark Mode** — Full light and dark theme with dynamic status bar color matching
-- **Multilingual** — English, German, Chinese (Simplified), Dutch, Russian (i18n)
-- **Admin Panel** — User management, global categories, addon management, API keys, backups, and GitHub release history
+- **Multilingual** — English, German, Spanish, French, Russian, Chinese (Simplified), Dutch, Arabic (with RTL support)
+- **Admin Panel** — User management, invite links, packing templates, global categories, addon management, API keys, backups, and GitHub release history
 - **Auto-Backups** — Scheduled backups with configurable interval and retention
 - **Customizable** — Temperature units, time format (12h/24h), map tile sources, default coordinates
 
@@ -84,7 +90,7 @@
 - **PWA**: vite-plugin-pwa + Workbox
 - **Real-Time**: WebSocket (`ws`)
 - **State**: Zustand
-- **Auth**: JWT + OIDC
+- **Auth**: JWT + OIDC + TOTP (MFA)
 - **Maps**: Leaflet + react-leaflet-cluster + Google Places API (optional)
 - **Weather**: Open-Meteo API (free, no key required)
 - **Icons**: lucide-react
@@ -119,6 +125,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # - OIDC_ISSUER=https://auth.example.com
+      # - OIDC_CLIENT_ID=trek
+      # - OIDC_CLIENT_SECRET=supersecret
+      # - OIDC_DISPLAY_NAME="SSO"
+      # - OIDC_ONLY=true          # disable password auth entirely
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
@@ -163,13 +174,13 @@ For production, put TREK behind a reverse proxy with HTTPS (e.g. Nginx, Caddy, T
 ```nginx
 server {
     listen 80;
-    server_name nomad.yourdomain.com;
+    server_name trek.yourdomain.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name nomad.yourdomain.com;
+    server_name trek.yourdomain.com;
 
     ssl_certificate /path/to/fullchain.pem;
     ssl_certificate_key /path/to/privkey.pem;
@@ -204,12 +215,28 @@ server {
 Caddy handles WebSocket upgrades automatically:
 
 ```
-nomad.yourdomain.com {
+trek.yourdomain.com {
     reverse_proxy localhost:3000
 }
 ```
 
 </details>
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `3000` |
+| `NODE_ENV` | Environment | `production` |
+| `JWT_SECRET` | JWT signing secret | Auto-generated |
+| `FORCE_HTTPS` | Redirect HTTP to HTTPS | `false` |
+| `OIDC_ISSUER` | OIDC provider URL | — |
+| `OIDC_CLIENT_ID` | OIDC client ID | — |
+| `OIDC_CLIENT_SECRET` | OIDC client secret | — |
+| `OIDC_DISPLAY_NAME` | SSO button label | `SSO` |
+| `OIDC_ONLY` | Disable password auth | `false` |
+| `TRUST_PROXY` | Trust proxy headers | `1` |
+| `DEMO_MODE` | Enable demo mode | `false` |
 
 ## Optional API Keys
 
@@ -226,7 +253,7 @@ API keys are configured in the **Admin Panel** after login. Keys set by the admi
 
 ```bash
 git clone https://github.com/mauriceboe/TREK.git
-cd NOMAD
+cd TREK
 docker build -t trek .
 ```
 

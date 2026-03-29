@@ -15,6 +15,8 @@ function createTables(db: Database.Database): void {
       oidc_sub TEXT,
       oidc_issuer TEXT,
       last_login DATETIME,
+      mfa_enabled INTEGER DEFAULT 0,
+      mfa_secret TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useTripStore } from '../../store/tripStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
+import { packingApi, tripsApi, adminApi } from '../../api/client'
 import {
   CheckSquare, Square, Trash2, Plus, ChevronDown, ChevronRight,
-  Sparkles, X, Pencil, Check, MoreHorizontal, CheckCheck, RotateCcw, Luggage,
+  X, Pencil, Check, MoreHorizontal, CheckCheck, RotateCcw, Luggage, UserPlus, Package, FolderPlus,
 } from 'lucide-react'
 import type { PackingItem } from '../../types'
 
@@ -64,19 +65,27 @@ function katColor(kat, allCategories) {
   return KAT_COLORS[Math.abs(h) % KAT_COLORS.length]
 }
 
+interface PackingBag { id: number; trip_id: number; name: string; color: string; weight_limit_grams: number | null }
+
 // ── Artikel-Zeile ──────────────────────────────────────────────────────────
 interface ArtikelZeileProps {
   item: PackingItem
   tripId: number
   categories: string[]
   onCategoryChange: () => void
+  bagTrackingEnabled?: boolean
+  bags?: PackingBag[]
+  onCreateBag: (name: string) => Promise<PackingBag | undefined>
 }
 
-function ArtikelZeile({ item, tripId, categories, onCategoryChange }: ArtikelZeileProps) {
+function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingEnabled, bags = [], onCreateBag }: ArtikelZeileProps) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(item.name)
   const [hovered, setHovered] = useState(false)
   const [showCatPicker, setShowCatPicker] = useState(false)
+  const [showBagPicker, setShowBagPicker] = useState(false)
+  const [bagInlineCreate, setBagInlineCreate] = useState(false)
+  const [bagInlineName, setBagInlineName] = useState('')
   const { togglePackingItem, updatePackingItem, deletePackingItem } = useTripStore()
   const toast = useToast()
   const { t } = useTranslation()
@@ -103,8 +112,9 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange }: ArtikelZei
 
   return (
     <div
+      className="group"
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setShowCatPicker(false) }}
+      onMouseLeave={() => { setHovered(false); setShowCatPicker(false); setShowBagPicker(false) }}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 10px', borderRadius: 10, position: 'relative',
@@ -141,7 +151,102 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange }: ArtikelZei
         </span>
       )}
 
-      <div style={{ display: 'flex', gap: 2, alignItems: 'center', opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
+      {/* Weight + Bag (when enabled) */}
+      {bagTrackingEnabled && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, border: '1px solid var(--border-primary)', borderRadius: 8, padding: '3px 6px', background: 'transparent' }}>
+            <input
+              type="text" inputMode="numeric"
+              value={item.weight_grams ?? ''}
+              onChange={async e => {
+                const raw = e.target.value.replace(/[^0-9]/g, '')
+                const v = raw === '' ? null : parseInt(raw)
+                try { await updatePackingItem(tripId, item.id, { weight_grams: v }) } catch {}
+              }}
+              placeholder="—"
+              style={{ width: 36, border: 'none', fontSize: 12, textAlign: 'right', fontFamily: 'inherit', outline: 'none', color: 'var(--text-secondary)', background: 'transparent', padding: 0 }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--text-faint)', userSelect: 'none' }}>g</span>
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowBagPicker(p => !p)}
+              style={{
+                width: 22, height: 22, borderRadius: '50%', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: item.bag_id ? `2.5px solid ${bags.find(b => b.id === item.bag_id)?.color || 'var(--border-primary)'}` : '2px dashed var(--border-primary)',
+                background: item.bag_id ? `${bags.find(b => b.id === item.bag_id)?.color || 'var(--border-primary)'}30` : 'transparent',
+              }}
+            >
+              {!item.bag_id && <Package size={9} style={{ color: 'var(--text-faint)' }} />}
+            </button>
+            {showBagPicker && (
+              <div style={{
+                position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
+                background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 160,
+              }}>
+                {item.bag_id && (
+                  <button onClick={async () => { setShowBagPicker(false); try { await updatePackingItem(tripId, item.id, { bag_id: null }) } catch {} }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', color: 'var(--text-faint)', borderRadius: 7 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px dashed var(--border-primary)' }} />
+                    {t('packing.noBag')}
+                  </button>
+                )}
+                {bags.map(b => (
+                  <button key={b.id} onClick={async () => { setShowBagPicker(false); try { await updatePackingItem(tripId, item.id, { bag_id: b.id }) } catch {} }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '6px 10px',
+                      background: item.bag_id === b.id ? 'var(--bg-tertiary)' : 'none',
+                      border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', color: 'var(--text-secondary)', borderRadius: 7,
+                    }}
+                    onMouseEnter={e => { if (item.bag_id !== b.id) e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+                    onMouseLeave={e => { if (item.bag_id !== b.id) e.currentTarget.style.background = 'none' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: b.color, flexShrink: 0 }} />
+                    {b.name}
+                  </button>
+                ))}
+                {bags.length > 0 && <div style={{ height: 1, background: 'var(--bg-tertiary)', margin: '4px 0' }} />}
+                <div style={{ padding: '4px 6px' }}>
+                  {bagInlineCreate ? (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input autoFocus value={bagInlineName} onChange={e => setBagInlineName(e.target.value)}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter' && bagInlineName.trim()) {
+                            const newBag = await onCreateBag(bagInlineName.trim())
+                            if (newBag) { try { await updatePackingItem(tripId, item.id, { bag_id: newBag.id }) } catch {} }
+                            setBagInlineName(''); setBagInlineCreate(false); setShowBagPicker(false)
+                          }
+                          if (e.key === 'Escape') { setBagInlineCreate(false); setBagInlineName('') }
+                        }}
+                        placeholder={t('packing.bagName')}
+                        style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-primary)', fontSize: 11, fontFamily: 'inherit', outline: 'none' }} />
+                      <button onClick={async () => {
+                        if (bagInlineName.trim()) {
+                          const newBag = await onCreateBag(bagInlineName.trim())
+                          if (newBag) { try { await updatePackingItem(tripId, item.id, { bag_id: newBag.id }) } catch {} }
+                          setBagInlineName(''); setBagInlineCreate(false); setShowBagPicker(false)
+                        }
+                      }}
+                        style={{ padding: '3px 6px', borderRadius: 6, border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <Plus size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setBagInlineCreate(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', padding: '5px 6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', color: 'var(--text-faint)', borderRadius: 7 }}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
+                      <Plus size={11} /> {t('packing.addBag')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="sm:opacity-0 sm:group-hover:opacity-100" style={{ display: 'flex', gap: 2, alignItems: 'center', transition: 'opacity 0.12s', flexShrink: 0 }}>
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowCatPicker(p => !p)}
@@ -186,6 +291,19 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange }: ArtikelZei
 }
 
 // ── Kategorie-Gruppe ───────────────────────────────────────────────────────
+interface TripMember {
+  id: number
+  username: string
+  avatar?: string | null
+  avatar_url?: string | null
+}
+
+interface CategoryAssignee {
+  user_id: number
+  username: string
+  avatar?: string | null
+}
+
 interface KategorieGruppeProps {
   kategorie: string
   items: PackingItem[]
@@ -193,16 +311,39 @@ interface KategorieGruppeProps {
   allCategories: string[]
   onRename: (oldName: string, newName: string) => Promise<void>
   onDeleteAll: (items: PackingItem[]) => Promise<void>
+  onAddItem: (category: string, name: string) => Promise<void>
+  assignees: CategoryAssignee[]
+  tripMembers: TripMember[]
+  onSetAssignees: (category: string, userIds: number[]) => Promise<void>
+  bagTrackingEnabled?: boolean
+  bags?: PackingBag[]
+  onCreateBag: (name: string) => Promise<PackingBag | undefined>
 }
 
-function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, onDeleteAll }: KategorieGruppeProps) {
+function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, onDeleteAll, onAddItem, assignees, tripMembers, onSetAssignees, bagTrackingEnabled, bags, onCreateBag }: KategorieGruppeProps) {
   const [offen, setOffen] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [editKatName, setEditKatName] = useState(kategorie)
   const [showMenu, setShowMenu] = useState(false)
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
+  const [showAddItem, setShowAddItem] = useState(false)
+  const [newItemName, setNewItemName] = useState('')
+  const addItemRef = useRef<HTMLInputElement>(null)
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null)
   const { togglePackingItem } = useTripStore()
   const toast = useToast()
   const { t } = useTranslation()
+  useEffect(() => {
+    if (!showAssigneeDropdown) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(e.target as Node)) {
+        setShowAssigneeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAssigneeDropdown])
+
   const abgehakt = items.filter(i => i.checked).length
   const alleAbgehakt = abgehakt === items.length
   const dot = katColor(kategorie, allCategories)
@@ -247,10 +388,97 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
             style={{ flex: 1, fontSize: 12.5, fontWeight: 600, border: 'none', borderBottom: '2px solid var(--text-primary)', outline: 'none', background: 'transparent', fontFamily: 'inherit', color: 'var(--text-primary)', padding: '0 2px' }}
           />
         ) : (
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', flex: 1 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {kategorie}
           </span>
         )}
+
+        {/* Assignee chips */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1, minWidth: 0, marginLeft: 4 }}>
+          {assignees.map(a => (
+            <div key={a.user_id} style={{ position: 'relative' }}
+              onClick={e => { e.stopPropagation(); onSetAssignees(kategorie, assignees.filter(x => x.user_id !== a.user_id).map(x => x.user_id)) }}
+            >
+              <div className="assignee-chip"
+                style={{
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+                  background: `hsl(${a.username.charCodeAt(0) * 37 % 360}, 55%, 55%)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: 'white', textTransform: 'uppercase',
+                  border: '2px solid var(--bg-card)', transition: 'opacity 0.15s',
+                }}
+              >
+                {a.username[0]}
+              </div>
+              <div className="assignee-tooltip" style={{
+                position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                marginTop: 6, padding: '3px 8px', borderRadius: 6, zIndex: 60,
+                background: 'var(--text-primary)', color: 'var(--bg-primary)',
+                fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s',
+              }}>
+                {a.username}
+              </div>
+            </div>
+          ))}
+          <div ref={assigneeDropdownRef} style={{ position: 'relative' }}>
+            <button onClick={e => { e.stopPropagation(); setShowAssigneeDropdown(v => !v) }}
+              style={{
+                width: 20, height: 20, borderRadius: '50%', border: '1.5px dashed var(--border-primary)',
+                background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--text-faint)', flexShrink: 0, padding: 0, transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-muted)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.color = 'var(--text-faint)' }}
+            >
+              <UserPlus size={10} />
+            </button>
+            {showAssigneeDropdown && (
+              <div style={{
+                position: 'absolute', left: 0, top: '100%', marginTop: 4, zIndex: 50,
+                background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 160,
+              }}>
+                {tripMembers.map(m => {
+                  const isAssigned = assignees.some(a => a.user_id === m.id)
+                  return (
+                    <button key={m.id} onClick={e => {
+                      e.stopPropagation()
+                      const newIds = isAssigned
+                        ? assignees.filter(a => a.user_id !== m.id).map(a => a.user_id)
+                        : [...assignees.map(a => a.user_id), m.id]
+                      onSetAssignees(kategorie, newIds)
+                    }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                        padding: '6px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                        background: isAssigned ? 'var(--bg-hover)' : 'transparent',
+                        fontFamily: 'inherit', fontSize: 12, color: 'var(--text-primary)',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => { if (!isAssigned) e.currentTarget.style.background = 'var(--bg-tertiary)' }}
+                      onMouseLeave={e => { if (!isAssigned) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <div style={{
+                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                        background: `hsl(${m.username.charCodeAt(0) * 37 % 360}, 55%, 55%)`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 700, color: 'white', textTransform: 'uppercase',
+                      }}>
+                        {m.username[0]}
+                      </div>
+                      <span style={{ flex: 1 }}>{m.username}</span>
+                      {isAssigned && <Check size={12} style={{ color: 'var(--text-muted)' }} />}
+                    </button>
+                  )
+                })}
+                {tripMembers.length === 0 && (
+                  <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-faint)' }}>{t('packing.noMembers')}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         <span style={{
           fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 99,
@@ -281,8 +509,45 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
       {offen && (
         <div style={{ padding: '4px 4px 6px' }}>
           {items.map(item => (
-            <ArtikelZeile key={item.id} item={item} tripId={tripId} categories={allCategories} onCategoryChange={() => {}} />
+            <ArtikelZeile key={item.id} item={item} tripId={tripId} categories={allCategories} onCategoryChange={() => {}} bagTrackingEnabled={bagTrackingEnabled} bags={bags} onCreateBag={onCreateBag} />
           ))}
+          {/* Inline add item */}
+          {showAddItem ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' }}>
+              <input
+                ref={addItemRef}
+                autoFocus
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newItemName.trim()) {
+                    onAddItem(kategorie, newItemName.trim())
+                    setNewItemName('')
+                    setTimeout(() => addItemRef.current?.focus(), 30)
+                  }
+                  if (e.key === 'Escape') { setShowAddItem(false); setNewItemName('') }
+                }}
+                placeholder={t('packing.addItemPlaceholder')}
+                style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)', background: 'var(--bg-input)' }}
+              />
+              <button onClick={() => { if (newItemName.trim()) { onAddItem(kategorie, newItemName.trim()); setNewItemName(''); setTimeout(() => addItemRef.current?.focus(), 30) } }}
+                disabled={!newItemName.trim()}
+                style={{ padding: '5px 8px', borderRadius: 8, border: 'none', background: newItemName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newItemName.trim() ? 'pointer' : 'default', display: 'flex' }}>
+                <Plus size={14} />
+              </button>
+              <button onClick={() => { setShowAddItem(false); setNewItemName('') }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: 'var(--text-faint)' }}>
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => { setShowAddItem(true); setTimeout(() => addItemRef.current?.focus(), 30) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', margin: '2px 4px', borderRadius: 8, border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-faint)', fontFamily: 'inherit' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
+              <Plus size={12} /> {t('packing.addItem')}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -319,19 +584,45 @@ interface PackingListPanelProps {
 }
 
 export default function PackingListPanel({ tripId, items }: PackingListPanelProps) {
-  const [neuerName, setNeuerName] = useState('')
-  const [neueKategorie, setNeueKategorie] = useState('')
-  const [zeigeVorschlaege, setZeigeVorschlaege] = useState(false)
   const [filter, setFilter] = useState('alle') // 'alle' | 'offen' | 'erledigt'
-  const [showKatDropdown, setShowKatDropdown] = useState(false)
-  const katInputRef = useRef(null)
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
   const { addPackingItem, updatePackingItem, deletePackingItem } = useTripStore()
   const toast = useToast()
   const { t } = useTranslation()
 
+  // Trip members & category assignees
+  const [tripMembers, setTripMembers] = useState<TripMember[]>([])
+  const [categoryAssignees, setCategoryAssignees] = useState<Record<string, CategoryAssignee[]>>({})
+
+  useEffect(() => {
+    tripsApi.getMembers(tripId).then(data => {
+      const all: TripMember[] = []
+      if (data.owner) all.push({ id: data.owner.id, username: data.owner.username, avatar: data.owner.avatar_url })
+      if (data.members) all.push(...data.members.map((m: any) => ({ id: m.id, username: m.username, avatar: m.avatar_url })))
+      setTripMembers(all)
+    }).catch(() => {})
+    packingApi.getCategoryAssignees(tripId).then(data => {
+      setCategoryAssignees(data.assignees || {})
+    }).catch(() => {})
+  }, [tripId])
+
+  const handleSetAssignees = async (category: string, userIds: number[]) => {
+    try {
+      const data = await packingApi.setCategoryAssignees(tripId, category, userIds)
+      setCategoryAssignees(prev => ({ ...prev, [category]: data.assignees || [] }))
+    } catch {
+      toast.error(t('packing.toast.saveError'))
+    }
+  }
+
   const allCategories = useMemo(() => {
-    const cats = new Set(items.map(i => i.category || t('packing.defaultCategory')))
-    return Array.from(cats).sort()
+    const seen: string[] = []
+    for (const item of items) {
+      const cat = item.category || t('packing.defaultCategory')
+      if (!seen.includes(cat)) seen.push(cat)
+    }
+    return seen
   }, [items, t])
 
   const gruppiert = useMemo(() => {
@@ -352,21 +643,20 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
   const abgehakt = items.filter(i => i.checked).length
   const fortschritt = items.length > 0 ? Math.round((abgehakt / items.length) * 100) : 0
 
-  const handleAdd = async (e) => {
-    e.preventDefault()
-    if (!neuerName.trim()) return
-    const kat = neueKategorie.trim() || (allCategories[0] || t('packing.defaultCategory'))
+  const handleAddItemToCategory = async (category: string, name: string) => {
     try {
-      await addPackingItem(tripId, { name: neuerName.trim(), category: kat })
-      setNeuerName('')
+      await addPackingItem(tripId, { name, category })
     } catch { toast.error(t('packing.toast.addError')) }
   }
 
-  const vorschlaege = t('packing.suggestions.items') || VORSCHLAEGE
-
-  const handleVorschlag = async (v) => {
-    try { await addPackingItem(tripId, { name: v.name, category: v.category || v.kategorie }) }
-    catch { toast.error(t('packing.toast.addError')) }
+  const handleAddNewCategory = async () => {
+    if (!newCatName.trim()) return
+    // Create a first item in the new category to make it appear
+    try {
+      await addPackingItem(tripId, { name: '...', category: newCatName.trim() })
+      setNewCatName('')
+      setAddingCategory(false)
+    } catch { toast.error(t('packing.toast.addError')) }
   }
 
   const handleRenameCategory = async (oldName, newName) => {
@@ -389,8 +679,79 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
     }
   }
 
-  const vorhandeneNamen = new Set(items.map(i => i.name.toLowerCase()))
-  const verfuegbareVorschlaege = vorschlaege.filter(v => !vorhandeneNamen.has(v.name.toLowerCase()))
+  // Bag tracking
+  const [bagTrackingEnabled, setBagTrackingEnabled] = useState(false)
+  const [bags, setBags] = useState<PackingBag[]>([])
+  const [newBagName, setNewBagName] = useState('')
+  const [showAddBag, setShowAddBag] = useState(false)
+  const [showBagModal, setShowBagModal] = useState(false)
+
+  useEffect(() => {
+    adminApi.getBagTracking().then(d => {
+      setBagTrackingEnabled(d.enabled)
+      if (d.enabled) packingApi.listBags(tripId).then(r => setBags(r.bags || [])).catch(() => {})
+    }).catch(() => {})
+  }, [tripId])
+
+  const BAG_COLORS = ['#6366f1', '#ec4899', '#f97316', '#10b981', '#06b6d4', '#8b5cf6', '#ef4444', '#f59e0b']
+
+  const handleCreateBag = async () => {
+    if (!newBagName.trim()) return
+    try {
+      const data = await packingApi.createBag(tripId, { name: newBagName.trim(), color: BAG_COLORS[bags.length % BAG_COLORS.length] })
+      setBags(prev => [...prev, data.bag])
+      setNewBagName(''); setShowAddBag(false)
+    } catch { toast.error(t('packing.toast.saveError')) }
+  }
+
+  const handleCreateBagByName = async (name: string): Promise<PackingBag | undefined> => {
+    try {
+      const data = await packingApi.createBag(tripId, { name, color: BAG_COLORS[bags.length % BAG_COLORS.length] })
+      setBags(prev => [...prev, data.bag])
+      return data.bag
+    } catch { toast.error(t('packing.toast.saveError')); return undefined }
+  }
+
+  const handleDeleteBag = async (bagId: number) => {
+    try {
+      await packingApi.deleteBag(tripId, bagId)
+      setBags(prev => prev.filter(b => b.id !== bagId))
+    } catch { toast.error(t('packing.toast.deleteError')) }
+  }
+
+  // Templates
+  const [availableTemplates, setAvailableTemplates] = useState<{ id: number; name: string; item_count: number }[]>([])
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false)
+  const [applyingTemplate, setApplyingTemplate] = useState(false)
+  const templateDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    adminApi.packingTemplates().then(d => setAvailableTemplates(d.templates || [])).catch(() => {})
+  }, [tripId])
+
+  useEffect(() => {
+    if (!showTemplateDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) setShowTemplateDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showTemplateDropdown])
+
+  const handleApplyTemplate = async (templateId: number) => {
+    setApplyingTemplate(true)
+    try {
+      const data = await packingApi.applyTemplate(tripId, templateId)
+      toast.success(t('packing.templateApplied', { count: data.count }))
+      setShowTemplateDropdown(false)
+      // Reload packing items
+      window.location.reload()
+    } catch {
+      toast.error(t('packing.templateError'))
+    } finally {
+      setApplyingTemplate(false)
+    }
+  }
 
   const font = { fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }
 
@@ -416,15 +777,57 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
                 <span className="sm:hidden">{t('packing.clearCheckedShort', { count: abgehakt })}</span>
               </button>
             )}
-            <button onClick={() => setZeigeVorschlaege(v => !v)} style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 99,
-              border: '1px solid', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-              background: zeigeVorschlaege ? 'var(--text-primary)' : 'var(--bg-card)',
-              borderColor: zeigeVorschlaege ? 'var(--text-primary)' : 'var(--border-primary)',
-              color: zeigeVorschlaege ? 'var(--bg-primary)' : 'var(--text-muted)',
-            }}>
-              <Sparkles size={12} /> {t('packing.suggestions')}
-            </button>
+            {availableTemplates.length > 0 && (
+              <div ref={templateDropdownRef} style={{ position: 'relative' }}>
+                <button onClick={() => setShowTemplateDropdown(v => !v)} disabled={applyingTemplate} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 99,
+                  border: '1px solid', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  background: showTemplateDropdown ? 'var(--text-primary)' : 'var(--bg-card)',
+                  borderColor: showTemplateDropdown ? 'var(--text-primary)' : 'var(--border-primary)',
+                  color: showTemplateDropdown ? 'var(--bg-primary)' : 'var(--text-muted)',
+                }}>
+                  <Package size={12} /> <span className="hidden sm:inline">{t('packing.applyTemplate')}</span><span className="sm:hidden">{t('packing.template')}</span>
+                </button>
+                {showTemplateDropdown && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 6, zIndex: 50,
+                    background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 200,
+                  }}>
+                    {availableTemplates.map(tmpl => (
+                      <button key={tmpl.id} onClick={() => handleApplyTemplate(tmpl.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                          background: 'transparent', fontFamily: 'inherit', fontSize: 12, color: 'var(--text-primary)',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Package size={13} style={{ color: 'var(--text-faint)' }} />
+                        <div style={{ flex: 1, textAlign: 'left' }}>
+                          <div style={{ fontWeight: 600 }}>{tmpl.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{tmpl.item_count} {t('admin.packingTemplates.items')}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {bagTrackingEnabled && (
+              <button onClick={() => setShowBagModal(true)} className="xl:!hidden"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 99,
+                  border: '1px solid', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  background: showBagModal ? 'var(--text-primary)' : 'var(--bg-card)',
+                  borderColor: showBagModal ? 'var(--text-primary)' : 'var(--border-primary)',
+                  color: showBagModal ? 'var(--bg-primary)' : 'var(--text-muted)',
+                }}>
+                <Luggage size={12} /> {t('packing.bags')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -443,71 +846,33 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
           </div>
         )}
 
-        <form onSubmit={handleAdd} style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="text" value={neuerName} onChange={e => setNeuerName(e.target.value)}
-            placeholder={t('packing.addPlaceholder')}
-            style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)' }}
-          />
-          <div style={{ position: 'relative' }}>
+        {addingCategory ? (
+          <div style={{ display: 'flex', gap: 6 }}>
             <input
-              ref={katInputRef}
-              type="text" value={neueKategorie}
-              onChange={e => { setNeueKategorie(e.target.value); setShowKatDropdown(true) }}
-              onFocus={() => setShowKatDropdown(true)}
-              onBlur={() => setTimeout(() => setShowKatDropdown(false), 150)}
-              placeholder={allCategories[0] || t('packing.categoryPlaceholder')}
-              style={{ width: 120, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none', color: 'var(--text-secondary)' }}
+              autoFocus
+              type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddNewCategory(); if (e.key === 'Escape') { setAddingCategory(false); setNewCatName('') } }}
+              placeholder={t('packing.newCategoryPlaceholder')}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)' }}
             />
-            {showKatDropdown && allCategories.length > 0 && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 50, padding: 4, marginTop: 2 }}>
-                {allCategories.filter(c => !neueKategorie || c.toLowerCase().includes(neueKategorie.toLowerCase())).map(cat => (
-                  <button key={cat} type="button" onMouseDown={() => setNeueKategorie(cat)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                    padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer',
-                    fontSize: 12.5, fontFamily: 'inherit', color: 'var(--text-secondary)', borderRadius: 7, textAlign: 'left',
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                  >
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: katColor(cat, allCategories), flexShrink: 0 }} />
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button type="submit" style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <Plus size={16} />
-          </button>
-        </form>
-      </div>
-
-      {/* ── Vorschläge ── */}
-      {zeigeVorschlaege && (
-        <div style={{ borderBottom: '1px solid rgba(0,0,0,0.06)', background: 'var(--bg-secondary)', padding: '10px 20px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('packing.suggestionsTitle')}</span>
-            <button onClick={() => setZeigeVorschlaege(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
-              <X size={14} style={{ color: 'var(--text-faint)' }} />
+            <button onClick={handleAddNewCategory} disabled={!newCatName.trim()}
+              style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: newCatName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newCatName.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}>
+              <Check size={16} />
+            </button>
+            <button onClick={() => { setAddingCategory(false); setNewCatName('') }}
+              style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-faint)' }}>
+              <X size={16} />
             </button>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 110, overflowY: 'auto' }}>
-            {verfuegbareVorschlaege.map((v, i) => (
-              <button key={i} onClick={() => handleVorschlag(v)} style={{
-                fontSize: 12, padding: '4px 10px', borderRadius: 99, border: '1px solid var(--border-primary)',
-                background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)', fontFamily: 'inherit', transition: 'all 0.1s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--text-primary)'; e.currentTarget.style.color = 'white'; e.currentTarget.style.borderColor = 'var(--text-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-primary)' }}
-              >
-                + {v.name}
-              </button>
-            ))}
-            {verfuegbareVorschlaege.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: 0 }}>{t('packing.allSuggested')}</p>}
-          </div>
-        </div>
-      )}
+        ) : (
+          <button onClick={() => setAddingCategory(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '9px 14px', borderRadius: 10, border: '1px dashed var(--border-primary)', background: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-faint)', fontFamily: 'inherit', transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.color = 'var(--text-faint)' }}>
+            <FolderPlus size={14} /> {t('packing.addCategory')}
+          </button>
+        )}
+      </div>
 
       {/* ── Filter-Tabs ── */}
       {items.length > 0 && (
@@ -523,7 +888,8 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
         </div>
       )}
 
-      {/* ── Liste ── */}
+      {/* ── Liste + Bags Sidebar ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px 16px' }}>
         {items.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -546,11 +912,192 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
                 allCategories={allCategories}
                 onRename={handleRenameCategory}
                 onDeleteAll={handleDeleteCategory}
+                onAddItem={handleAddItemToCategory}
+                assignees={categoryAssignees[kat] || []}
+                tripMembers={tripMembers}
+                onSetAssignees={handleSetAssignees}
+                bagTrackingEnabled={bagTrackingEnabled}
+                bags={bags}
+                onCreateBag={handleCreateBagByName}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* ── Bag Weight Sidebar ── */}
+      {bagTrackingEnabled && bags.length > 0 && (
+        <div className="hidden xl:block" style={{ width: 260, borderLeft: '1px solid var(--border-secondary)', overflowY: 'auto', padding: 16, flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-faint)', marginBottom: 12 }}>
+            {t('packing.bags')}
+          </div>
+
+          {bags.map(bag => {
+            const bagItems = items.filter(i => i.bag_id === bag.id)
+            const totalWeight = bagItems.reduce((sum, i) => sum + (i.weight_grams || 0), 0)
+            const maxWeight = bag.weight_limit_grams || Math.max(...bags.map(b => items.filter(i => i.bag_id === b.id).reduce((s, i) => s + (i.weight_grams || 0), 0)), 1)
+            const pct = Math.min(100, Math.round((totalWeight / maxWeight) * 100))
+            return (
+              <div key={bag.id} style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: bag.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{bag.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 500 }}>
+                    {totalWeight >= 1000 ? `${(totalWeight / 1000).toFixed(1)} kg` : `${totalWeight} g`}
+                  </span>
+                  <button onClick={() => handleDeleteBag(bag.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-faint)', display: 'flex' }}>
+                    <X size={11} />
+                  </button>
+                </div>
+                <div style={{ height: 6, background: 'var(--bg-tertiary)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, background: bag.color, width: `${pct}%`, transition: 'width 0.3s' }} />
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>{bagItems.length} {t('admin.packingTemplates.items')}</div>
+              </div>
+            )
+          })}
+
+          {/* Unassigned */}
+          {(() => {
+            const unassigned = items.filter(i => !i.bag_id)
+            const unassignedWeight = unassigned.reduce((s, i) => s + (i.weight_grams || 0), 0)
+            if (unassigned.length === 0) return null
+            return (
+              <div style={{ marginBottom: 14, opacity: 0.6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px dashed var(--border-primary)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-faint)' }}>{t('packing.noBag')}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                    {unassignedWeight >= 1000 ? `${(unassignedWeight / 1000).toFixed(1)} kg` : `${unassignedWeight} g`}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{unassigned.length} {t('admin.packingTemplates.items')}</div>
+              </div>
+            )
+          })()}
+
+          {/* Total */}
+          <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 10, marginTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+              <span>{t('packing.totalWeight')}</span>
+              <span>{(() => { const w = items.reduce((s, i) => s + (i.weight_grams || 0), 0); return w >= 1000 ? `${(w / 1000).toFixed(1)} kg` : `${w} g` })()}</span>
+            </div>
+          </div>
+
+          {/* Add bag */}
+          {showAddBag ? (
+            <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+              <input autoFocus value={newBagName} onChange={e => setNewBagName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateBag(); if (e.key === 'Escape') { setShowAddBag(false); setNewBagName('') } }}
+                placeholder={t('packing.bagName')}
+                style={{ flex: 1, padding: '5px 8px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 11, fontFamily: 'inherit', outline: 'none' }} />
+              <button onClick={handleCreateBag} style={{ padding: '4px 8px', borderRadius: 8, border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <Plus size={12} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAddBag(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 12, padding: '5px 8px', borderRadius: 8, border: '1px dashed var(--border-primary)', background: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-faint)', fontFamily: 'inherit', width: '100%' }}>
+              <Plus size={11} /> {t('packing.addBag')}
+            </button>
+          )}
+        </div>
+      )}
+      </div>
+
+      {/* ── Bag Modal (mobile + click) ── */}
+      {showBagModal && bagTrackingEnabled && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setShowBagModal(false)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 16, width: '100%', maxWidth: 360, maxHeight: '80vh', overflow: 'auto', padding: 20, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{t('packing.bags')}</h3>
+              <button onClick={() => setShowBagModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><X size={18} /></button>
+            </div>
+
+            {bags.map(bag => {
+              const bagItems = items.filter(i => i.bag_id === bag.id)
+              const totalWeight = bagItems.reduce((sum, i) => sum + (i.weight_grams || 0), 0)
+              const maxWeight = Math.max(...bags.map(b => items.filter(i => i.bag_id === b.id).reduce((s, i) => s + (i.weight_grams || 0), 0)), 1)
+              const pct = Math.min(100, Math.round((totalWeight / maxWeight) * 100))
+              return (
+                <div key={bag.id} style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: bag.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{bag.name}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+                      {totalWeight >= 1000 ? `${(totalWeight / 1000).toFixed(1)} kg` : `${totalWeight} g`}
+                    </span>
+                    <button onClick={() => handleDeleteBag(bag.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-faint)', display: 'flex' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <div style={{ height: 8, background: 'var(--bg-tertiary)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 99, background: bag.color, width: `${pct}%`, transition: 'width 0.3s' }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>{bagItems.length} {t('admin.packingTemplates.items')}</div>
+                </div>
+              )
+            })}
+
+            {/* Unassigned */}
+            {(() => {
+              const unassigned = items.filter(i => !i.bag_id)
+              const unassignedWeight = unassigned.reduce((s, i) => s + (i.weight_grams || 0), 0)
+              if (unassigned.length === 0) return null
+              return (
+                <div style={{ marginBottom: 16, opacity: 0.6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px dashed var(--border-primary)', flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--text-faint)' }}>{t('packing.noBag')}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+                      {unassignedWeight >= 1000 ? `${(unassignedWeight / 1000).toFixed(1)} kg` : `${unassignedWeight} g`}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{unassigned.length} {t('admin.packingTemplates.items')}</div>
+                </div>
+              )
+            })()}
+
+            {/* Total */}
+            <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 12, marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                <span>{t('packing.totalWeight')}</span>
+                <span>{(() => { const w = items.reduce((s, i) => s + (i.weight_grams || 0), 0); return w >= 1000 ? `${(w / 1000).toFixed(1)} kg` : `${w} g` })()}</span>
+              </div>
+            </div>
+
+            {/* Add bag */}
+            {showAddBag ? (
+              <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+                <input autoFocus value={newBagName} onChange={e => setNewBagName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleCreateBag(); if (e.key === 'Escape') { setShowAddBag(false); setNewBagName('') } }}
+                  placeholder={t('packing.bagName')}
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+                <button onClick={handleCreateBag} disabled={!newBagName.trim()}
+                  style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: newBagName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newBagName.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}>
+                  <Plus size={14} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowAddBag(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '9px 14px', borderRadius: 10, border: '1px dashed var(--border-primary)', background: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-faint)', fontFamily: 'inherit', width: '100%', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.color = 'var(--text-faint)' }}>
+                <Plus size={14} /> {t('packing.addBag')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .assignee-chip:hover + .assignee-tooltip { opacity: 1 !important; }
+        .assignee-chip:hover { opacity: 0.7; }
+      `}</style>
     </div>
   )
 }

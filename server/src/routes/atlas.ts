@@ -153,6 +153,14 @@ router.get('/stats', (req: Request, res: Response) => {
   }
   const totalCities = citySet.size;
 
+  // Merge manually marked countries
+  const manualCountries = db.prepare('SELECT country_code FROM visited_countries WHERE user_id = ?').all(userId) as { country_code: string }[];
+  for (const mc of manualCountries) {
+    if (!countries.find(c => c.code === mc.country_code)) {
+      countries.push({ code: mc.country_code, placeCount: 0, tripCount: 0, firstVisit: null, lastVisit: null });
+    }
+  }
+
   const mostVisited = countries.length > 0 ? countries.reduce((a, b) => a.placeCount > b.placeCount ? a : b) : null;
 
   const continents: Record<string, number> = {};
@@ -239,7 +247,57 @@ router.get('/country/:code', (req: Request, res: Response) => {
 
   const matchingTrips = trips.filter(t => matchingTripIds.has(t.id)).map(t => ({ id: t.id, title: t.title, start_date: t.start_date, end_date: t.end_date }));
 
-  res.json({ places: matchingPlaces, trips: matchingTrips });
+  const isManuallyMarked = !!(db.prepare('SELECT 1 FROM visited_countries WHERE user_id = ? AND country_code = ?').get(userId, code));
+  res.json({ places: matchingPlaces, trips: matchingTrips, manually_marked: isManuallyMarked });
+});
+
+// Mark/unmark country as visited
+router.post('/country/:code/mark', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  db.prepare('INSERT OR IGNORE INTO visited_countries (user_id, country_code) VALUES (?, ?)').run(authReq.user.id, req.params.code.toUpperCase());
+  res.json({ success: true });
+});
+
+router.delete('/country/:code/mark', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  db.prepare('DELETE FROM visited_countries WHERE user_id = ? AND country_code = ?').run(authReq.user.id, req.params.code.toUpperCase());
+  res.json({ success: true });
+});
+
+// ── Bucket List ─────────────────────────────────────────────────────────────
+
+router.get('/bucket-list', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const items = db.prepare('SELECT * FROM bucket_list WHERE user_id = ? ORDER BY created_at DESC').all(authReq.user.id);
+  res.json({ items });
+});
+
+router.post('/bucket-list', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { name, lat, lng, country_code, notes } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+  const result = db.prepare('INSERT INTO bucket_list (user_id, name, lat, lng, country_code, notes) VALUES (?, ?, ?, ?, ?, ?)').run(
+    authReq.user.id, name.trim(), lat ?? null, lng ?? null, country_code ?? null, notes ?? null
+  );
+  const item = db.prepare('SELECT * FROM bucket_list WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json({ item });
+});
+
+router.put('/bucket-list/:id', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { name, notes } = req.body;
+  const item = db.prepare('SELECT * FROM bucket_list WHERE id = ? AND user_id = ?').get(req.params.id, authReq.user.id);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  db.prepare('UPDATE bucket_list SET name = COALESCE(?, name), notes = COALESCE(?, notes) WHERE id = ?').run(name?.trim() || null, notes ?? null, req.params.id);
+  res.json({ item: db.prepare('SELECT * FROM bucket_list WHERE id = ?').get(req.params.id) });
+});
+
+router.delete('/bucket-list/:id', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const item = db.prepare('SELECT * FROM bucket_list WHERE id = ? AND user_id = ?').get(req.params.id, authReq.user.id);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  db.prepare('DELETE FROM bucket_list WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
 });
 
 export default router;

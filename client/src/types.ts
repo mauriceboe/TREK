@@ -8,6 +8,8 @@ export interface User {
   avatar_url: string | null
   maps_api_key: string | null
   created_at: string
+  /** Present after load; true when TOTP MFA is enabled for password login */
+  mfa_enabled?: boolean
 }
 
 export interface Trip {
