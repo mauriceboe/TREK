@@ -18,8 +18,14 @@ import { useTripStore } from '../../store/tripStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
+import {
+  sortMergedByTimeOfDayIfNeeded,
+  getMergedItemTimeMeta,
+  timeBucketLabel,
+  type MergedPlanItem,
+} from '../../utils/dayPlanTimeGroups'
 import { useDayNotes } from '../../hooks/useDayNotes'
-import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult } from '../../types'
+import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult, MergedItem } from '../../types'
 
 const NOTE_ICONS = [
   { id: 'FileText', Icon: FileText },
@@ -182,15 +188,16 @@ export default function DayPlanSidebar({
   const getMergedItems = (dayId) => {
     const da = getDayAssignments(dayId)
     const dn = (dayNotes[String(dayId)] || []).slice().sort((a, b) => a.sort_order - b.sort_order)
-    return [
-      ...da.map(a => ({ type: 'place', sortKey: a.order_index, data: a })),
-      ...dn.map(n => ({ type: 'note', sortKey: n.sort_order, data: n })),
+    const raw: MergedPlanItem[] = [
+      ...da.map(a => ({ type: 'place' as const, sortKey: a.order_index, data: a })),
+      ...dn.map(n => ({ type: 'note' as const, sortKey: n.sort_order, data: n })),
     ].sort((a, b) => a.sortKey - b.sortKey)
+    return sortMergedByTimeOfDayIfNeeded(raw, reservations)
   }
 
   const openAddNote = (dayId, e) => {
     e?.stopPropagation()
-    _openAddNote(dayId, getMergedItems, (id) => {
+    _openAddNote(dayId, getMergedItems as (id: number) => MergedItem[], (id) => {
       if (!expandedDays.has(id)) setExpandedDays(prev => new Set([...prev, id]))
     })
   }
@@ -249,7 +256,7 @@ export default function DayPlanSidebar({
   }
 
   const moveNote = async (dayId, noteId, direction) => {
-    await _moveNote(dayId, noteId, direction, getMergedItems)
+    await _moveNote(dayId, noteId, direction, getMergedItems as (id: number) => MergedItem[])
   }
 
   const startEditTitle = (day, e) => {
@@ -396,7 +403,7 @@ export default function DayPlanSidebar({
                 notes.map(n => ({ ...n, day_id: Number(dayId) }))
               )
               try {
-                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, t, locale })
+                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale })
               } catch (e) {
                 console.error('PDF error:', e)
                 toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
@@ -427,6 +434,8 @@ export default function DayPlanSidebar({
           const loc = da.find(a => a.place?.lat && a.place?.lng)
           const isDragTarget = dragOverDayId === day.id
           const merged = getMergedItems(day.id)
+          const mergedTimeMetas = merged.map((item) => getMergedItemTimeMeta(item, reservations))
+          const hasAnyTimedInDay = mergedTimeMetas.some((m) => m.bucket > 0)
           const dayNoteUi = noteUi[day.id]
           const placeItems = merged.filter(i => i.type === 'place')
 
@@ -579,6 +588,12 @@ export default function DayPlanSidebar({
                     merged.map((item, idx) => {
                       const itemKey = item.type === 'place' ? `place-${item.data.id}` : `note-${item.data.id}`
                       const showDropLine = (!!draggingId || !!dropTargetKey) && dropTargetKey === itemKey
+                      const timeMeta = mergedTimeMetas[idx]
+                      const prevTimeMeta = idx > 0 ? mergedTimeMetas[idx - 1] : null
+                      const showTimeSectionHeader =
+                        hasAnyTimedInDay &&
+                        timeMeta.bucket > 0 &&
+                        (idx === 0 || (prevTimeMeta && prevTimeMeta.bucket !== timeMeta.bucket))
 
                       if (item.type === 'place') {
                         const assignment = item.data
@@ -608,6 +623,20 @@ export default function DayPlanSidebar({
                         return (
                           <React.Fragment key={`place-${assignment.id}`}>
                             {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
+                            {showTimeSectionHeader && (
+                              <div
+                                style={{
+                                  padding: '8px 16px 4px',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.06em',
+                                  textTransform: 'uppercase',
+                                  color: 'var(--text-faint)',
+                                }}
+                              >
+                                {timeBucketLabel(timeMeta.bucket, t)}
+                              </div>
+                            )}
                           <div
                             draggable
                             onDragStart={e => {
@@ -793,6 +822,20 @@ export default function DayPlanSidebar({
                       return (
                         <React.Fragment key={`note-${note.id}`}>
                           {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
+                          {showTimeSectionHeader && (
+                            <div
+                              style={{
+                                padding: '8px 16px 4px',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                color: 'var(--text-faint)',
+                              }}
+                            >
+                              {timeBucketLabel(timeMeta.bucket, t)}
+                            </div>
+                          )}
                         <div
                           draggable
                           onDragStart={e => { e.dataTransfer.setData('noteId', String(note.id)); e.dataTransfer.setData('fromDayId', String(day.id)); e.dataTransfer.effectAllowed = 'move'; dragDataRef.current = { noteId: String(note.id), fromDayId: String(day.id) }; setDraggingId(`note-${note.id}`) }}

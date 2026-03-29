@@ -1,0 +1,32 @@
+{
+  "name": "TREK",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [5173, 3001],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite (client)",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "API (Express)",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "bash -c 'test -f server/.env || cp server/.env.example server/.env; npm ci --prefix server && npm ci --prefix client'",
+  "postStartCommand": "bash -c 'nohup npm run dev --prefix server >/tmp/trek-server-dev.log 2>&1 & nohup npm run dev --prefix client >/tmp/trek-client-dev.log 2>&1 &'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "PORT": "3001",
+    "NODE_ENV": "development"
+  }
+}

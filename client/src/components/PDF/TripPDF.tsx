@@ -3,7 +3,13 @@ import { createElement } from 'react'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark } from 'lucide-react'
 import { mapsApi } from '../../api/client'
-import type { Trip, Day, Place, Category, AssignmentsMap, DayNotesMap } from '../../types'
+import type { Trip, Day, Place, Category, AssignmentsMap, DayNotesMap, Reservation, DayNote } from '../../types'
+import {
+  sortMergedByTimeOfDayIfNeeded,
+  getMergedItemTimeMeta,
+  timeBucketLabel,
+  type MergedPlanItem,
+} from '../../utils/dayPlanTimeGroups'
 
 const NOTE_ICON_MAP = { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark }
 function noteIconSvg(iconId) {
@@ -95,15 +101,35 @@ interface downloadTripPDFProps {
   places: Place[]
   assignments: AssignmentsMap
   categories: Category[]
-  dayNotes: DayNotesMap
+  dayNotes: DayNotesMap | (DayNote & { day_id: number })[]
+  reservations?: Reservation[]
   t: (key: string, params?: Record<string, string | number>) => string
   locale: string
 }
 
-export async function downloadTripPDF({ trip, days, places, assignments, categories, dayNotes, t: _t, locale: _locale }: downloadTripPDFProps) {
+function flattenDayNotesForPdf(dayNotes: DayNotesMap | (DayNote & { day_id: number })[]): (DayNote & { day_id: number })[] {
+  if (Array.isArray(dayNotes)) return dayNotes
+  return Object.entries(dayNotes || {}).flatMap(([dayId, notes]) =>
+    ((notes as DayNote[] | undefined) || []).map((n) => ({ ...n, day_id: Number(dayId) }))
+  )
+}
+
+export async function downloadTripPDF({
+  trip,
+  days,
+  places,
+  assignments,
+  categories,
+  dayNotes,
+  reservations = [],
+  t: _t,
+  locale: _locale,
+}: downloadTripPDFProps) {
   await ensureRenderer()
   const loc = _locale || 'de-DE'
-  const tr = _t || (k => k)
+  const tr = _t || ((k: string) => k)
+  const resList = reservations || []
+  const notesFlat = flattenDayNotesForPdf(dayNotes)
   const sorted = [...(days || [])].sort((a, b) => a.day_number - b.day_number)
   const range = longDateRange(sorted, loc)
   const coverImg = safeImg(trip?.cover_image)
@@ -120,21 +146,34 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
   // Build day HTML
   const daysHtml = sorted.map((day, di) => {
     const assigned = assignments[String(day.id)] || []
-    const notes = (dayNotes || []).filter(n => n.day_id === day.id)
+    const notes = notesFlat.filter(n => n.day_id === day.id)
     const cost = dayCost(assignments, day.id, loc)
 
-    const merged = []
-    assigned.forEach(a => merged.push({ type: 'place', k: a.order_index ?? a.sort_order ?? 0, data: a }))
-    notes.forEach(n    => merged.push({ type: 'note',  k: n.sort_order ?? 0, data: n }))
-    merged.sort((a, b) => a.k - b.k)
+    const raw: MergedPlanItem[] = [
+      ...assigned.map((a) => ({ type: 'place' as const, sortKey: a.order_index ?? 0, data: a })),
+      ...notes.map((n) => ({ type: 'note' as const, sortKey: n.sort_order ?? 0, data: n })),
+    ].sort((a, b) => a.sortKey - b.sortKey)
+    const merged = sortMergedByTimeOfDayIfNeeded(raw, resList)
+    const mergedTimeMetas = merged.map((item) => getMergedItemTimeMeta(item, resList))
+    const hasAnyTimedInDay = mergedTimeMetas.some((m) => m.bucket > 0)
 
     let pi = 0
     const itemsHtml = merged.length === 0
       ? `<div class="empty-day">${escHtml(tr('dayplan.emptyDay'))}</div>`
-      : merged.map(item => {
+      : merged.map((item, idx) => {
+          const timeMeta = mergedTimeMetas[idx]
+          const prevTimeMeta = idx > 0 ? mergedTimeMetas[idx - 1] : null
+          const showTimeSectionHeader =
+            hasAnyTimedInDay &&
+            timeMeta.bucket > 0 &&
+            (idx === 0 || (prevTimeMeta && prevTimeMeta.bucket !== timeMeta.bucket))
+          const sectionHeaderHtml = showTimeSectionHeader
+            ? `<div class="time-section-label">${escHtml(timeBucketLabel(timeMeta.bucket, tr))}</div>`
+            : ''
+
           if (item.type === 'note') {
             const note = item.data
-            return `
+            return `${sectionHeaderHtml}
               <div class="note-card">
                 <div class="note-line"></div>
                 <span class="note-icon">${noteIconSvg(note.icon)}</span>
@@ -168,7 +207,7 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
             place.price && parseFloat(place.price) > 0 ? `<span class="chip chip-green">${svgEuro}${Number(place.price).toLocaleString(loc)} EUR</span>` : '',
           ].filter(Boolean).join('')
 
-          return `
+          return `${sectionHeaderHtml}
             <div class="place-card">
               <div class="place-bar" style="background:${color}"></div>
               ${thumbHtml}
@@ -277,6 +316,12 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
   .day-date  { font-size: 9px; color: rgba(255,255,255,0.45); }
   .day-cost  { font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.65); }
   .day-body  { padding: 12px 28px 6px; }
+
+  .time-section-label {
+    font-size: 8px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #94a3b8; padding: 10px 0 4px; margin-top: 2px;
+  }
+  .day-body > .time-section-label:first-child { padding-top: 0; margin-top: 0; }
 
   /* ── Place card ────────────────────────────────── */
   .place-card {

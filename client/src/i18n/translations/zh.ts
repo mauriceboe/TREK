@@ -531,6 +531,9 @@ const zh: Record<string, string> = {
   'dayplan.pdf': 'PDF',
   'dayplan.pdfTooltip': '导出当天计划为 PDF',
   'dayplan.pdfError': 'PDF 导出失败',
+  'dayplan.timeMorning': '上午',
+  'dayplan.timeAfternoon': '下午',
+  'dayplan.timeEvening': '晚上',
 
   // Places Sidebar
   'places.addPlace': '添加地点/活动',

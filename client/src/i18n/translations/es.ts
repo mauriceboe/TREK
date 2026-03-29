@@ -511,6 +511,9 @@ const es: Record<string, string> = {
   'dayplan.pdf': 'PDF',
   'dayplan.pdfTooltip': 'Exportar plan diario como PDF',
   'dayplan.pdfError': 'No se pudo exportar el PDF',
+  'dayplan.timeMorning': 'Mañana',
+  'dayplan.timeAfternoon': 'Tarde',
+  'dayplan.timeEvening': 'Noche',
 
   // Places Sidebar
   'places.addPlace': 'Añadir lugar/actividad',

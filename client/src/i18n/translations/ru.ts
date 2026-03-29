@@ -531,6 +531,9 @@ const ru: Record<string, string> = {
   'dayplan.pdf': 'PDF',
   'dayplan.pdfTooltip': 'Экспортировать план дня в PDF',
   'dayplan.pdfError': 'Ошибка экспорта PDF',
+  'dayplan.timeMorning': 'Утро',
+  'dayplan.timeAfternoon': 'День',
+  'dayplan.timeEvening': 'Вечер',
 
   // Places Sidebar
   'places.addPlace': 'Добавить место/активность',

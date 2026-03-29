@@ -531,6 +531,9 @@ const nl: Record<string, string> = {
   'dayplan.pdf': 'PDF',
   'dayplan.pdfTooltip': 'Dagplan exporteren als PDF',
   'dayplan.pdfError': 'PDF-export mislukt',
+  'dayplan.timeMorning': 'Ochtend',
+  'dayplan.timeAfternoon': 'Middag',
+  'dayplan.timeEvening': 'Avond',
 
   // Places Sidebar
   'places.addPlace': 'Plaats/activiteit toevoegen',
