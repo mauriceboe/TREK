@@ -17,6 +17,7 @@ function createTables(db: Database.Database): void {
       last_login DATETIME,
       mfa_enabled INTEGER DEFAULT 0,
       mfa_secret TEXT,
+      mfa_backup_codes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

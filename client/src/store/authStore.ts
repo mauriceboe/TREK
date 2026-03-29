@@ -28,7 +28,8 @@ interface AuthState {
   completeMfaLogin: (mfaToken: string, code: string) => Promise<AuthResponse>
   register: (username: string, email: string, password: string) => Promise<AuthResponse>
   logout: () => void
-  loadUser: () => Promise<void>
+  /** Pass `{ silent: true }` to refresh the user without toggling global loading (avoids unmounting protected pages). */
+  loadUser: (opts?: { silent?: boolean }) => Promise<void>
   updateMapsKey: (key: string | null) => Promise<void>
   updateApiKeys: (keys: Record<string, string | null>) => Promise<void>
   updateProfile: (profileData: Partial<User>) => Promise<void>
@@ -126,13 +127,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     })
   },
 
-  loadUser: async () => {
+  loadUser: async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
     const token = get().token
     if (!token) {
-      set({ isLoading: false })
+      if (!silent) set({ isLoading: false })
       return
     }
-    set({ isLoading: true })
+    if (!silent) {
+      set({ isLoading: true })
+    }
     try {
       const data = await authApi.me()
       set({
@@ -141,7 +145,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       })
       connect(token)
-    } catch (err: unknown) {
+    } catch {
       localStorage.removeItem('auth_token')
       set({
         user: null,

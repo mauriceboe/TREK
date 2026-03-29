@@ -15,6 +15,8 @@ export interface User {
   last_login?: string | null;
   mfa_enabled?: number | boolean;
   mfa_secret?: string | null;
+  /** JSON array of bcrypt hashes; never exposed to clients */
+  mfa_backup_codes?: string | null;
   created_at?: string;
   updated_at?: string;
 }

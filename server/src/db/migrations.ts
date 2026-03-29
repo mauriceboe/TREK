@@ -285,6 +285,9 @@ function runMigrations(db: Database.Database): void {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
     },
+    () => {
+      try { db.exec('ALTER TABLE users ADD COLUMN mfa_backup_codes TEXT'); } catch {}
+    },
   ];
 
   if (currentVersion < migrations.length) {

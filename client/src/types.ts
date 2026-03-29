@@ -10,6 +10,8 @@ export interface User {
   created_at: string
   /** Present after load; true when TOTP MFA is enabled for password login */
   mfa_enabled?: boolean
+  /** Remaining one-time backup codes (hashed on server); not the codes themselves */
+  mfa_backup_codes_remaining?: number
 }
 
 export interface Trip {

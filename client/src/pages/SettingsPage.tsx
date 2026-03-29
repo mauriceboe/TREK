@@ -6,15 +6,97 @@ import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import CustomSelect from '../components/shared/CustomSelect'
 import { useToast } from '../components/shared/Toast'
-import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound } from 'lucide-react'
+import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, Copy, Printer, FileDown } from 'lucide-react'
 import { authApi, adminApi } from '../api/client'
 import type { LucideIcon } from 'lucide-react'
 import type { UserWithOidc } from '../types'
 import { getApiErrorMessage } from '../types'
+import Modal from '../components/shared/Modal'
 
 interface MapPreset {
   name: string
   url: string
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * Prints via a hidden iframe (no pop-up). In the system dialog, choose "Save as PDF" or a printer.
+ */
+function printMfaBackupCodes(codes: string[], docTitle: string, docIntro: string, docFooter: string): void {
+  const items = codes.map((c) => `<li>${escapeHtml(c)}</li>`).join('')
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>${escapeHtml(docTitle)}</title>
+<style>
+  @page { margin: 18mm; size: auto; }
+  body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding: 12px 16px; color: #111; line-height: 1.5; max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 1.1rem; margin: 0 0 12px; }
+  p.intro { font-size: 0.85rem; color: #444; margin: 0 0 16px; }
+  ol { margin: 0; padding-left: 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; line-height: 1.75; }
+  p.footer { font-size: 0.75rem; color: #666; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 12px; }
+</style></head><body>
+<h1>${escapeHtml(docTitle)}</h1>
+<p class="intro">${escapeHtml(docIntro)}</p>
+<ol>${items}</ol>
+<p class="footer">${escapeHtml(docFooter)}</p>
+</body></html>`
+
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.setAttribute('title', 'print')
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    left: '-9999px',
+    top: '0',
+    width: '1px',
+    height: '1px',
+    opacity: '0',
+    border: 'none',
+    pointerEvents: 'none',
+  })
+  document.body.appendChild(iframe)
+
+  const idoc = iframe.contentDocument
+  const iwin = iframe.contentWindow
+  if (!idoc || !iwin) {
+    iframe.remove()
+    return
+  }
+
+  idoc.open()
+  idoc.write(html)
+  idoc.close()
+
+  const cleanup = (): void => {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+  }
+
+  const runPrint = (): void => {
+    try {
+      iwin.focus()
+      iwin.print()
+    } finally {
+      setTimeout(cleanup, 500)
+    }
+  }
+
+  // Defer so layout is ready in all engines (Safari/Firefox/Chrome)
+  setTimeout(runPrint, 100)
+}
+
+function downloadMfaBackupCodesTxt(codes: string[], fileHeader: string): void {
+  const text = `${fileHeader}\n\n${codes.join('\n')}\n`
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `trek-mfa-backup-codes-${new Date().toISOString().slice(0, 10)}.txt`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 const MAP_PRESETS: MapPreset[] = [
@@ -85,6 +167,7 @@ export default function SettingsPage(): React.ReactElement {
   const [mfaDisablePwd, setMfaDisablePwd] = useState('')
   const [mfaDisableCode, setMfaDisableCode] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
+  const [mfaBackupCodesModal, setMfaBackupCodesModal] = useState<string[] | null>(null)
 
   useEffect(() => {
     setMapTileUrl(settings.map_tile_url || '')
@@ -524,12 +607,17 @@ export default function SettingsPage(): React.ReactElement {
                             onClick={async () => {
                               setMfaLoading(true)
                               try {
-                                await authApi.mfaEnable({ code: mfaSetupCode })
+                                const data = await authApi.mfaEnable({ code: mfaSetupCode }) as {
+                                  backup_codes?: string[]
+                                }
                                 toast.success(t('settings.mfa.toastEnabled'))
                                 setMfaQr(null)
                                 setMfaSecret(null)
                                 setMfaSetupCode('')
-                                await loadUser()
+                                if (data.backup_codes?.length) {
+                                  setMfaBackupCodesModal(data.backup_codes)
+                                }
+                                await loadUser({ silent: true })
                               } catch (err: unknown) {
                                 toast.error(getApiErrorMessage(err, t('common.error')))
                               } finally {
@@ -581,7 +669,7 @@ export default function SettingsPage(): React.ReactElement {
                               toast.success(t('settings.mfa.toastDisabled'))
                               setMfaDisablePwd('')
                               setMfaDisableCode('')
-                              await loadUser()
+                              await loadUser({ silent: true })
                             } catch (err: unknown) {
                               toast.error(getApiErrorMessage(err, t('common.error')))
                             } finally {
@@ -705,6 +793,91 @@ export default function SettingsPage(): React.ReactElement {
               </button>
             </div>
           </Section>
+
+          <Modal
+            isOpen={!!mfaBackupCodesModal && mfaBackupCodesModal.length > 0}
+            onClose={() => setMfaBackupCodesModal(null)}
+            title={t('settings.mfa.backupCodesTitle')}
+            size="lg"
+            footer={(
+              <div className="flex flex-wrap gap-2 justify-end items-center">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(mfaBackupCodesModal?.join('\n') ?? '')
+                      toast.success(t('settings.mfa.backupCodesCopied'))
+                    } catch {
+                      toast.error(t('common.error'))
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                  style={{ borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                >
+                  <Copy size={14} />
+                  {t('settings.mfa.backupCodesCopyAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!mfaBackupCodesModal?.length) return
+                    try {
+                      printMfaBackupCodes(
+                        mfaBackupCodesModal,
+                        t('settings.mfa.backupCodesTitle'),
+                        t('settings.mfa.backupCodesIntro'),
+                        t('settings.mfa.backupCodesPrintFooter')
+                      )
+                    } catch {
+                      toast.error(t('common.error'))
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                  style={{ borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                >
+                  <Printer size={14} />
+                  {t('settings.mfa.backupCodesPrint')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!mfaBackupCodesModal?.length) return
+                    downloadMfaBackupCodesTxt(mfaBackupCodesModal, t('settings.mfa.backupCodesFileHeader'))
+                    toast.success(t('settings.mfa.backupCodesSavedTxt'))
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                  style={{ borderColor: 'var(--border-primary)', color: 'var(--text-primary)' }}
+                >
+                  <FileDown size={14} />
+                  {t('settings.mfa.backupCodesSaveTxt')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMfaBackupCodesModal(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-700"
+                >
+                  {t('settings.mfa.backupCodesClose')}
+                </button>
+              </div>
+            )}
+          >
+            <p className="text-sm m-0 mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.mfa.backupCodesIntro')}</p>
+            <p className="text-sm m-0 mb-4 font-medium" style={{ color: '#b45309' }}>{t('settings.mfa.backupCodesWarning')}</p>
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl font-mono text-sm"
+              style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-secondary)' }}
+            >
+              {mfaBackupCodesModal?.map((c, i) => (
+                <div
+                  key={`${c}-${i}`}
+                  className="px-3 py-2 rounded-lg text-center select-all"
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', letterSpacing: '0.02em' }}
+                >
+                  {c}
+                </div>
+              ))}
+            </div>
+          </Modal>
 
           {/* Delete Account Confirmation */}
           {showDeleteConfirm === 'blocked' && (

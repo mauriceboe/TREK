@@ -545,10 +545,10 @@ export default function LoginPage(): React.ReactElement {
                     <KeyRound size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="text"
                       autoComplete="one-time-code"
                       value={mfaCode}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMfaCode(e.target.value.replace(/\s/g, '').slice(0, 11))}
                       placeholder="000000"
                       required
                       style={inputBase}
