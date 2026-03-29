@@ -86,6 +86,70 @@ const texts: Record<string, DemoTexts> = {
     selfHostLink: 'self-host it',
     close: 'Got it',
   },
+  es: {
+    titleBefore: 'Bienvenido a ',
+    titleAfter: '',
+    title: 'Bienvenido a la demo de TREK',
+    description: 'Puedes ver, editar y crear viajes. Todos los cambios se restablecen automáticamente cada hora.',
+    resetIn: 'Próximo reinicio en',
+    minutes: 'minutos',
+    uploadNote: 'Las subidas de archivos (fotos, documentos, portadas) están desactivadas en el modo demo.',
+    fullVersionTitle: 'Además, en la versión completa:',
+    features: [
+      'Subida de archivos (fotos, documentos, portadas)',
+      'Gestión de claves API (Google Maps, tiempo)',
+      'Gestión de usuarios y permisos',
+      'Copias de seguridad automáticas',
+      'Gestión de addons (activar/desactivar)',
+      'Inicio de sesión único OIDC / SSO',
+    ],
+    addonsTitle: 'Complementos modulares (se pueden desactivar en la versión completa)',
+    addons: [
+      ['Vacaciones', 'Planificador de vacaciones con calendario, festivos y fusión de usuarios'],
+      ['Atlas', 'Mapa del mundo con países visitados y estadísticas de viaje'],
+      ['Equipaje', 'Listas de comprobación para cada viaje'],
+      ['Presupuesto', 'Control de gastos con reparto'],
+      ['Documentos', 'Adjunta archivos a los viajes'],
+      ['Widgets', 'Conversor de divisas y zonas horarias'],
+    ],
+    whatIs: '¿Qué es TREK?',
+    whatIsDesc: 'Un planificador de viajes autohospedado con colaboración en tiempo real, mapas interactivos, inicio de sesión OIDC y modo oscuro.',
+    selfHost: 'Código abierto — ',
+    selfHostLink: 'alójalo tú mismo',
+    close: 'Entendido',
+  },
+  ar: {
+    titleBefore: 'مرحبًا بك في ',
+    titleAfter: '',
+    title: 'مرحبًا بك في النسخة التجريبية من TREK',
+    description: 'يمكنك عرض الرحلات وتعديلها وإنشاء رحلات جديدة. تتم إعادة ضبط جميع التغييرات تلقائيًا كل ساعة.',
+    resetIn: 'إعادة الضبط التالية خلال',
+    minutes: 'دقيقة',
+    uploadNote: 'رفع الملفات (الصور والمستندات وصور الغلاف) معطّل في وضع العرض التجريبي.',
+    fullVersionTitle: 'وفي النسخة الكاملة أيضًا:',
+    features: [
+      'رفع الملفات (الصور والمستندات وصور الغلاف)',
+      'إدارة مفاتيح API (خرائط Google والطقس)',
+      'إدارة المستخدمين والصلاحيات',
+      'نسخ احتياطية تلقائية',
+      'إدارة الإضافات (تفعيل/تعطيل)',
+      'تسجيل دخول موحد OIDC / SSO',
+    ],
+    addonsTitle: 'إضافات مرنة (يمكن تعطيلها في النسخة الكاملة)',
+    addons: [
+      ['Vacay', 'مخطط إجازات مع تقويم وعطل ودمج مستخدمين'],
+      ['Atlas', 'خريطة عالمية مع الدول التي تمت زيارتها وإحصاءات السفر'],
+      ['Packing', 'قوائم تجهيز لكل رحلة'],
+      ['Budget', 'تتبع المصروفات مع التقسيم'],
+      ['Documents', 'إرفاق الملفات بالرحلات'],
+      ['Widgets', 'محول عملات ومناطق زمنية'],
+    ],
+    whatIs: 'ما هو TREK؟',
+    whatIsDesc: 'مخطط رحلات مستضاف ذاتيًا مع تعاون لحظي وخرائط تفاعلية وتسجيل دخول OIDC ووضع داكن.',
+    selfHost: 'مفتوح المصدر — ',
+    selfHostLink: 'استضفه بنفسك',
+    close: 'فهمت',
+  },
 }
 
 const featureIcons = [Upload, Key, Users, Database, Puzzle, Shield]
@@ -159,7 +223,7 @@ export default function DemoBanner(): React.ReactElement | null {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <Map size={14} style={{ color: '#111827' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: 4 }}>
-              {language === 'de' ? 'Was ist ' : 'What is '}<img src="/text-dark.svg" alt="TREK" style={{ height: 13, marginRight: -2 }} />?
+              {t.whatIs}
             </span>
           </div>
           <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, margin: 0 }}>{t.whatIsDesc}</p>

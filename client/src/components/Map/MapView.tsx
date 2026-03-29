@@ -107,20 +107,14 @@ function SelectionController({ places, selectedPlaceId, dayPlaces, paddingOpts }
 
   useEffect(() => {
     if (selectedPlaceId && selectedPlaceId !== prev.current) {
-      // Fit all day places into view (so you see context), but ensure selected is visible
-      const toFit = dayPlaces.length > 0 ? dayPlaces : places.filter(p => p.id === selectedPlaceId)
-      const withCoords = toFit.filter(p => p.lat && p.lng)
-      if (withCoords.length > 0) {
-        try {
-          const bounds = L.latLngBounds(withCoords.map(p => [p.lat, p.lng]))
-          if (bounds.isValid()) {
-            map.fitBounds(bounds, { ...paddingOpts, maxZoom: 16, animate: true })
-          }
-        } catch {}
+      // Pan to the selected place without changing zoom
+      const selected = places.find(p => p.id === selectedPlaceId)
+      if (selected?.lat && selected?.lng) {
+        map.panTo([selected.lat, selected.lng], { animate: true })
       }
     }
     prev.current = selectedPlaceId
-  }, [selectedPlaceId, places, dayPlaces, paddingOpts, map])
+  }, [selectedPlaceId, places, map])
 
   return null
 }

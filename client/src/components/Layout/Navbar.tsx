@@ -67,6 +67,12 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
     updateSetting('dark_mode', dark ? 'light' : 'dark').catch(() => {})
   }
 
+  const getAddonName = (addon: Addon): string => {
+    const key = `admin.addons.catalog.${addon.id}.name`
+    const translated = t(key)
+    return translated !== key ? translated : addon.name
+  }
+
   return (
     <nav style={{
       background: dark ? 'rgba(9,9,11,0.95)' : 'rgba(255,255,255,0.95)',
@@ -124,7 +130,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
                   <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">{addon.name}</span>
+                  <span className="hidden md:inline">{getAddonName(addon)}</span>
                 </Link>
               )
             })}

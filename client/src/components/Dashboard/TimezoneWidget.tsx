@@ -23,9 +23,9 @@ const POPULAR_ZONES = [
   { label: 'Cairo', tz: 'Africa/Cairo' },
 ]
 
-function getTime(tz) {
+function getTime(tz, locale) {
   try {
-    return new Date().toLocaleTimeString('de-DE', { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+    return new Date().toLocaleTimeString(locale, { timeZone: tz, hour: '2-digit', minute: '2-digit' })
   } catch { return '—' }
 }
 
@@ -41,7 +41,7 @@ function getOffset(tz) {
 }
 
 export default function TimezoneWidget() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [zones, setZones] = useState(() => {
     const saved = localStorage.getItem('dashboard_timezones')
     return saved ? JSON.parse(saved) : [
@@ -51,6 +51,9 @@ export default function TimezoneWidget() {
   })
   const [now, setNow] = useState(Date.now())
   const [showAdd, setShowAdd] = useState(false)
+  const [customLabel, setCustomLabel] = useState('')
+  const [customTz, setCustomTz] = useState('')
+  const [customError, setCustomError] = useState('')
 
   useEffect(() => {
     const i = setInterval(() => setNow(Date.now()), 10000)
@@ -61,6 +64,20 @@ export default function TimezoneWidget() {
     localStorage.setItem('dashboard_timezones', JSON.stringify(zones))
   }, [zones])
 
+  const isValidTz = (tz: string) => {
+    try { Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date()); return true } catch { return false }
+  }
+
+  const addCustomZone = () => {
+    const tz = customTz.trim()
+    if (!tz) { setCustomError(t('dashboard.timezoneCustomErrorEmpty')); return }
+    if (!isValidTz(tz)) { setCustomError(t('dashboard.timezoneCustomErrorInvalid')); return }
+    if (zones.find(z => z.tz === tz)) { setCustomError(t('dashboard.timezoneCustomErrorDuplicate')); return }
+    const label = customLabel.trim() || tz.split('/').pop()?.replace(/_/g, ' ') || tz
+    setZones([...zones, { label, tz }])
+    setCustomLabel(''); setCustomTz(''); setCustomError(''); setShowAdd(false)
+  }
+
   const addZone = (zone) => {
     if (!zones.find(z => z.tz === zone.tz)) {
       setZones([...zones, zone])
@@ -70,7 +87,7 @@ export default function TimezoneWidget() {
 
   const removeZone = (tz) => setZones(zones.filter(z => z.tz !== tz))
 
-  const localTime = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  const localTime = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
   const rawZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const localZone = rawZone.split('/').pop().replace(/_/g, ' ')
   // Show abbreviated timezone name (e.g. CET, CEST, EST)
@@ -96,7 +113,7 @@ export default function TimezoneWidget() {
         {zones.map(z => (
           <div key={z.tz} className="flex items-center justify-between group">
             <div>
-              <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{getTime(z.tz)}</p>
+              <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{getTime(z.tz, locale)}</p>
               <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{z.label} <span style={{ color: 'var(--text-muted)' }}>{getOffset(z.tz)}</span></p>
             </div>
             <button onClick={() => removeZone(z.tz)} className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all" style={{ color: 'var(--text-faint)' }}>
@@ -108,7 +125,29 @@ export default function TimezoneWidget() {
 
       {/* Add zone dropdown */}
       {showAdd && (
-        <div className="mt-2 rounded-xl p-2 max-h-[200px] overflow-auto" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="mt-2 rounded-xl p-2 max-h-[280px] overflow-auto" style={{ background: 'var(--bg-secondary)' }}>
+          {/* Custom timezone */}
+          <div className="px-2 py-2 mb-2 rounded-lg" style={{ background: 'var(--bg-card)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-faint)' }}>{t('dashboard.timezoneCustomTitle')}</p>
+            <div className="space-y-1.5">
+              <input value={customLabel} onChange={e => setCustomLabel(e.target.value)}
+                placeholder={t('dashboard.timezoneCustomLabelPlaceholder')}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-secondary)' }} />
+              <input value={customTz} onChange={e => { setCustomTz(e.target.value); setCustomError('') }}
+                placeholder={t('dashboard.timezoneCustomTzPlaceholder')}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: `1px solid ${customError ? '#ef4444' : 'var(--border-secondary)'}` }}
+                onKeyDown={e => { if (e.key === 'Enter') addCustomZone() }} />
+              {customError && <p className="text-[10px]" style={{ color: '#ef4444' }}>{customError}</p>}
+              <button onClick={addCustomZone}
+                className="w-full py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)' }}>
+                {t('dashboard.timezoneCustomAdd')}
+              </button>
+            </div>
+          </div>
+          {/* Popular zones */}
           {POPULAR_ZONES.filter(z => !zones.find(existing => existing.tz === z.tz)).map(z => (
             <button key={z.tz} onClick={() => addZone(z)}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs text-left transition-colors"
@@ -116,7 +155,7 @@ export default function TimezoneWidget() {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <span className="font-medium">{z.label}</span>
-              <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{getTime(z.tz)}</span>
+              <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{getTime(z.tz, locale)}</span>
             </button>
           ))}
         </div>

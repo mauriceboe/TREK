@@ -44,6 +44,8 @@ if (allowedOrigins) {
   corsOrigin = true;
 }
 
+const shouldForceHttps = process.env.FORCE_HTTPS === 'true';
+
 app.use(cors({
   origin: corsOrigin,
   credentials: true
@@ -60,13 +62,15 @@ app.use(helmet({
       objectSrc: ["'self'"],
       frameSrc: ["'self'"],
       frameAncestors: ["'self'"],
+      upgradeInsecureRequests: shouldForceHttps ? [] : null
     }
   },
   crossOriginEmbedderPolicy: false,
-  hsts: process.env.FORCE_HTTPS === 'true' ? { maxAge: 31536000, includeSubDomains: false } : false,
+  hsts: shouldForceHttps ? { maxAge: 31536000, includeSubDomains: false } : false,
 }));
+
 // Redirect HTTP to HTTPS (opt-in via FORCE_HTTPS=true)
-if (process.env.FORCE_HTTPS === 'true') {
+if (shouldForceHttps) {
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.secure || req.headers['x-forwarded-proto'] === 'https') return next();
     res.redirect(301, 'https://' + req.headers.host + req.url);

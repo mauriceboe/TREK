@@ -281,6 +281,15 @@ export default function PlaceFormModal({
               step="any"
               value={form.lat}
               onChange={e => handleChange('lat', e.target.value)}
+              onPaste={e => {
+                const text = e.clipboardData.getData('text').trim()
+                const match = text.match(/^(-?\d+\.?\d*)\s*[,;\s]\s*(-?\d+\.?\d*)$/)
+                if (match) {
+                  e.preventDefault()
+                  handleChange('lat', match[1])
+                  handleChange('lng', match[2])
+                }
+              }}
               placeholder={t('places.formLat')}
               className="form-input"
             />

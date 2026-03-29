@@ -27,7 +27,7 @@ function AddonIcon({ name, size = 20 }: AddonIconProps) {
   return <Icon size={size} />
 }
 
-export default function AddonManager() {
+export default function AddonManager({ bagTrackingEnabled, onToggleBagTracking }: { bagTrackingEnabled?: boolean; onToggleBagTracking?: () => void }) {
   const { t } = useTranslation()
   const dm = useSettingsStore(s => s.settings.dark_mode)
   const dark = dm === true || dm === 'dark' || (dm === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -104,7 +104,28 @@ export default function AddonManager() {
                   </span>
                 </div>
                 {tripAddons.map(addon => (
-                  <AddonRow key={addon.id} addon={addon} onToggle={handleToggle} t={t} />
+                  <div key={addon.id}>
+                    <AddonRow addon={addon} onToggle={handleToggle} t={t} />
+                    {addon.id === 'packing' && addon.enabled && onToggleBagTracking && (
+                      <div className="flex items-center gap-4 px-6 py-3 border-b" style={{ borderColor: 'var(--border-secondary)', background: 'var(--bg-secondary)', paddingLeft: 70 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{t('admin.bagTracking.title')}</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>{t('admin.bagTracking.subtitle')}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="hidden sm:inline text-xs font-medium" style={{ color: bagTrackingEnabled ? 'var(--text-primary)' : 'var(--text-faint)' }}>
+                            {bagTrackingEnabled ? t('admin.addons.enabled') : t('admin.addons.disabled')}
+                          </span>
+                          <button onClick={onToggleBagTracking}
+                            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                            style={{ background: bagTrackingEnabled ? 'var(--text-primary)' : 'var(--border-primary)' }}>
+                            <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                              style={{ transform: bagTrackingEnabled ? 'translateX(20px)' : 'translateX(0)' }} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -136,8 +157,21 @@ interface AddonRowProps {
   t: (key: string) => string
 }
 
+function getAddonLabel(t: (key: string) => string, addon: Addon): { name: string; description: string } {
+  const nameKey = `admin.addons.catalog.${addon.id}.name`
+  const descKey = `admin.addons.catalog.${addon.id}.description`
+  const translatedName = t(nameKey)
+  const translatedDescription = t(descKey)
+
+  return {
+    name: translatedName !== nameKey ? translatedName : addon.name,
+    description: translatedDescription !== descKey ? translatedDescription : addon.description,
+  }
+}
+
 function AddonRow({ addon, onToggle, t }: AddonRowProps) {
   const isComingSoon = false
+  const label = getAddonLabel(t, addon)
   return (
     <div className="flex items-center gap-4 px-6 py-4 border-b transition-colors hover:opacity-95" style={{ borderColor: 'var(--border-secondary)', opacity: isComingSoon ? 0.5 : 1, pointerEvents: isComingSoon ? 'none' : 'auto' }}>
       {/* Icon */}
@@ -148,7 +182,7 @@ function AddonRow({ addon, onToggle, t }: AddonRowProps) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{addon.name}</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{label.name}</span>
           {isComingSoon && (
             <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-faint)' }}>
               Coming Soon
@@ -161,12 +195,12 @@ function AddonRow({ addon, onToggle, t }: AddonRowProps) {
             {addon.type === 'global' ? t('admin.addons.type.global') : t('admin.addons.type.trip')}
           </span>
         </div>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{addon.description}</p>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{label.description}</p>
       </div>
 
       {/* Toggle */}
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs font-medium" style={{ color: (addon.enabled && !isComingSoon) ? 'var(--text-primary)' : 'var(--text-faint)' }}>
+        <span className="hidden sm:inline text-xs font-medium" style={{ color: (addon.enabled && !isComingSoon) ? 'var(--text-primary)' : 'var(--text-faint)' }}>
           {isComingSoon ? t('admin.addons.disabled') : addon.enabled ? t('admin.addons.enabled') : t('admin.addons.disabled')}
         </span>
         <button

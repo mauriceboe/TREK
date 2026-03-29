@@ -5,8 +5,19 @@ import type { HolidaysMap, VacayEntry } from '../../types'
 
 const WEEKDAYS_EN = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+const WEEKDAYS_ES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
+const WEEKDAYS_AR = ['اث', 'ثل', 'أر', 'خم', 'جم', 'سب', 'أح']
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
+const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
 
 interface VacayMonthCardProps {
   year: number
@@ -25,8 +36,8 @@ export default function VacayMonthCard({
   onCellClick, companyMode, blockWeekends
 }: VacayMonthCardProps) {
   const { language } = useTranslation()
-  const weekdays = language === 'de' ? WEEKDAYS_DE : WEEKDAYS_EN
-  const monthNames = language === 'de' ? MONTHS_DE : MONTHS_EN
+  const weekdays = language === 'de' ? WEEKDAYS_DE : language === 'es' ? WEEKDAYS_ES : language === 'ar' ? WEEKDAYS_AR : WEEKDAYS_EN
+  const monthNames = language === 'de' ? MONTHS_DE : language === 'es' ? MONTHS_ES : language === 'ar' ? MONTHS_AR : MONTHS_EN
 
   const weeks = useMemo(() => {
     const firstDay = new Date(year, month, 1)
@@ -86,7 +97,7 @@ export default function VacayMonthCard({
                   onMouseEnter={e => { if (!isBlocked) e.currentTarget.style.background = 'var(--bg-hover)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = weekend ? 'var(--bg-secondary)' : 'transparent' }}
                 >
-                  {holiday && <div className="absolute inset-0.5 rounded" style={{ background: 'rgba(239,68,68,0.12)' }} />}
+                  {holiday && <div className="absolute inset-0.5 rounded" style={{ background: hexToRgba(holiday.color, 0.12) }} />}
                   {isCompany && <div className="absolute inset-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)' }} />}
 
                   {dayEntries.length === 1 && (
@@ -115,7 +126,7 @@ export default function VacayMonthCard({
                   )}
 
                   <span className="relative z-[1] text-[11px] font-medium" style={{
-                    color: holiday ? '#dc2626' : weekend ? 'var(--text-faint)' : 'var(--text-primary)',
+                    color: holiday ? holiday.color : weekend ? 'var(--text-faint)' : 'var(--text-primary)',
                     fontWeight: dayEntries.length > 0 ? 700 : 500,
                   }}>
                     {day}

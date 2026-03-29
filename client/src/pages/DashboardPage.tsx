@@ -14,6 +14,7 @@ import { useToast } from '../components/shared/Toast'
 import {
   Plus, Calendar, Trash2, Edit2, Map, ChevronDown, ChevronUp,
   Archive, ArchiveRestore, Clock, MapPin, Settings, X, ArrowRightLeft,
+  LayoutGrid, List,
 } from 'lucide-react'
 
 interface DashboardTrip {
@@ -53,12 +54,12 @@ function getTripStatus(trip: DashboardTrip): string | null {
   return 'past'
 }
 
-function formatDate(dateStr: string | null | undefined, locale: string = 'de-DE'): string | null {
+function formatDate(dateStr: string | null | undefined, locale: string = 'en-US'): string | null {
   if (!dateStr) return null
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function formatDateShort(dateStr: string | null | undefined, locale: string = 'de-DE'): string | null {
+function formatDateShort(dateStr: string | null | undefined, locale: string = 'en-US'): string | null {
   if (!dateStr) return null
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
 }
@@ -315,6 +316,102 @@ function TripCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omi
   )
 }
 
+// ── List View Item ──────────────────────────────────────────────────────────
+function TripListItem({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omit<TripCardProps, 'dark'>): React.ReactElement {
+  const status = getTripStatus(trip)
+  const [hovered, setHovered] = useState(false)
+
+  const coverBg = trip.cover_image
+    ? `url(${trip.cover_image}) center/cover no-repeat`
+    : tripGradient(trip.id)
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => onClick(trip)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '10px 16px',
+        background: hovered ? 'var(--bg-tertiary)' : 'var(--bg-card)', borderRadius: 14,
+        border: `1px solid ${hovered ? 'var(--text-faint)' : 'var(--border-primary)'}`,
+        cursor: 'pointer', transition: 'all 0.15s',
+        boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.08)' : '0 1px 3px rgba(0,0,0,0.03)',
+      }}
+    >
+      {/* Cover thumbnail */}
+      <div style={{
+        width: 52, height: 52, borderRadius: 12, flexShrink: 0,
+        background: coverBg, position: 'relative', overflow: 'hidden',
+      }}>
+        {status === 'ongoing' && (
+          <span style={{
+            position: 'absolute', top: 4, left: 4,
+            width: 7, height: 7, borderRadius: '50%', background: '#ef4444',
+            animation: 'blink 1s ease-in-out infinite',
+          }} />
+        )}
+      </div>
+
+      {/* Title & description */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {trip.title}
+          </span>
+          {!trip.is_owner && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 99, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {t('dashboard.shared')}
+            </span>
+          )}
+          {status && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 99,
+              background: status === 'ongoing' ? 'rgba(239,68,68,0.1)' : 'var(--bg-tertiary)',
+              color: status === 'ongoing' ? '#ef4444' : 'var(--text-muted)',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {status === 'ongoing' ? t('dashboard.status.ongoing')
+                : status === 'today' ? t('dashboard.status.today')
+                : status === 'tomorrow' ? t('dashboard.status.tomorrow')
+                : status === 'future' ? t('dashboard.status.daysLeft', { count: daysUntil(trip.start_date) })
+                : t('dashboard.status.past')}
+            </span>
+          )}
+        </div>
+        {trip.description && (
+          <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {trip.description}
+          </p>
+        )}
+      </div>
+
+      {/* Date & stats */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+        {trip.start_date && (
+          <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+            <Calendar size={11} />
+            {formatDateShort(trip.start_date, locale)}
+            {trip.end_date && <> — {formatDateShort(trip.end_date, locale)}</>}
+          </div>
+        )}
+        <div className="hidden md:flex" style={{ alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+          <Clock size={11} /> {trip.day_count || 0}
+        </div>
+        <div className="hidden md:flex" style={{ alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+          <MapPin size={11} /> {trip.place_count || 0}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <CardAction onClick={() => onEdit(trip)} icon={<Edit2 size={12} />} label="" />
+        <CardAction onClick={() => onArchive(trip.id)} icon={<Archive size={12} />} label="" />
+        <CardAction onClick={() => onDelete(trip)} icon={<Trash2 size={12} />} label="" danger />
+      </div>
+    </div>
+  )
+}
+
 // ── Archived Trip Row ────────────────────────────────────────────────────────
 interface ArchivedRowProps {
   trip: DashboardTrip
@@ -429,6 +526,15 @@ export default function DashboardPage(): React.ReactElement {
   const [editingTrip, setEditingTrip] = useState<DashboardTrip | null>(null)
   const [showArchived, setShowArchived] = useState<boolean>(false)
   const [showWidgetSettings, setShowWidgetSettings] = useState<boolean | 'mobile'>(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => (localStorage.getItem('trek_dashboard_view') as 'grid' | 'list') || 'grid')
+
+  const toggleViewMode = () => {
+    setViewMode(prev => {
+      const next = prev === 'grid' ? 'list' : 'grid'
+      localStorage.setItem('trek_dashboard_view', next)
+      return next
+    })
+  }
 
   const navigate = useNavigate()
   const toast = useToast()
@@ -554,6 +660,22 @@ export default function DashboardPage(): React.ReactElement {
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+              {/* View mode toggle */}
+              <button
+                onClick={toggleViewMode}
+                title={viewMode === 'grid' ? t('dashboard.listView') : t('dashboard.gridView')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 14px',
+                  background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 12,
+                  cursor: 'pointer', color: 'var(--text-faint)', fontFamily: 'inherit',
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--text-faint)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.borderColor = 'var(--border-primary)' }}
+              >
+                {viewMode === 'grid' ? <List size={15} /> : <LayoutGrid size={15} />}
+              </button>
               {/* Widget settings */}
               <button
                 onClick={() => setShowWidgetSettings(s => s ? false : true)}
@@ -655,8 +777,8 @@ export default function DashboardPage(): React.ReactElement {
             </div>
           )}
 
-          {/* Spotlight */}
-          {!isLoading && spotlight && (
+          {/* Spotlight (grid mode only) */}
+          {!isLoading && spotlight && viewMode === 'grid' && (
             <SpotlightCard
               trip={spotlight}
               t={t} locale={locale} dark={dark}
@@ -667,21 +789,37 @@ export default function DashboardPage(): React.ReactElement {
             />
           )}
 
-          {/* Rest grid */}
-          {!isLoading && rest.length > 0 && (
-            <div className="trip-grid" style={{ display: 'grid', gap: 16, marginBottom: 40 }}>
-              {rest.map(trip => (
-                <TripCard
-                  key={trip.id}
-                  trip={trip}
-                  t={t} locale={locale}
-                  onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
-                  onDelete={handleDelete}
-                  onArchive={handleArchive}
-                  onClick={tr => navigate(`/trips/${tr.id}`)}
-                />
-              ))}
-            </div>
+          {/* Trips — grid or list */}
+          {!isLoading && (viewMode === 'grid' ? rest : trips).length > 0 && (
+            viewMode === 'grid' ? (
+              <div className="trip-grid" style={{ display: 'grid', gap: 16, marginBottom: 40 }}>
+                {rest.map(trip => (
+                  <TripCard
+                    key={trip.id}
+                    trip={trip}
+                    t={t} locale={locale}
+                    onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
+                    onDelete={handleDelete}
+                    onArchive={handleArchive}
+                    onClick={tr => navigate(`/trips/${tr.id}`)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 40 }}>
+                {trips.map(trip => (
+                  <TripListItem
+                    key={trip.id}
+                    trip={trip}
+                    t={t} locale={locale}
+                    onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
+                    onDelete={handleDelete}
+                    onArchive={handleArchive}
+                    onClick={tr => navigate(`/trips/${tr.id}`)}
+                  />
+                ))}
+              </div>
+            )
           )}
 
           {/* Archived section */}

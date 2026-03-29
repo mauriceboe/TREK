@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import Modal from '../shared/Modal'
-import { Calendar, Camera, X, Clipboard } from 'lucide-react'
-import { tripsApi } from '../../api/client'
+import { Calendar, Camera, X, Clipboard, UserPlus } from 'lucide-react'
+import { tripsApi, authApi } from '../../api/client'
+import CustomSelect from '../shared/CustomSelect'
+import { useAuthStore } from '../../store/authStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
@@ -20,6 +22,7 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
   const fileRef = useRef(null)
   const toast = useToast()
   const { t } = useTranslation()
+  const currentUser = useAuthStore(s => s.user)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -32,6 +35,9 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
   const [coverPreview, setCoverPreview] = useState(null)
   const [pendingCoverFile, setPendingCoverFile] = useState(null)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [allUsers, setAllUsers] = useState<{ id: number; username: string }[]>([])
+  const [selectedMembers, setSelectedMembers] = useState<number[]>([])
+  const [memberSelectValue, setMemberSelectValue] = useState('')
 
   useEffect(() => {
     if (trip) {
@@ -47,7 +53,11 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
       setCoverPreview(null)
     }
     setPendingCoverFile(null)
+    setSelectedMembers([])
     setError('')
+    if (!trip) {
+      authApi.listUsers().then(d => setAllUsers(d.users || [])).catch(() => {})
+    }
   }, [trip, isOpen])
 
   const handleSubmit = async (e) => {
@@ -65,6 +75,15 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
       })
+      // Add selected members for newly created trips
+      if (selectedMembers.length > 0 && result?.trip?.id) {
+        for (const userId of selectedMembers) {
+          const user = allUsers.find(u => u.id === userId)
+          if (user) {
+            try { await tripsApi.addMember(result.trip.id, user.username) } catch {}
+          }
+        }
+      }
       // Upload pending cover for newly created trips
       if (pendingCoverFile && result?.trip?.id) {
         try {
@@ -212,7 +231,10 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
             </div>
           ) : (
             <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingCover}
-              style={{ width: '100%', padding: '18px', border: '2px dashed #e5e7eb', borderRadius: 10, background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: '#9ca3af', fontFamily: 'inherit' }}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = 'rgba(99,102,241,0.04)' }}
+              onDragLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = 'none' }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = 'none'; const file = e.dataTransfer.files?.[0]; if (file?.type.startsWith('image/')) handleCoverSelect(file) }}
+              style={{ width: '100%', padding: '18px', border: '2px dashed #e5e7eb', borderRadius: 10, background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, color: '#9ca3af', fontFamily: 'inherit', transition: 'all 0.15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#9ca3af' }}>
               <Camera size={15} /> {uploadingCover ? t('common.uploading') : t('dashboard.addCoverImage')}
@@ -249,6 +271,46 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
             <CustomDatePicker value={formData.end_date} onChange={v => update('end_date', v)} placeholder={t('dashboard.endDate')} />
           </div>
         </div>
+
+        {/* Members — only for new trips */}
+        {!isEditing && allUsers.filter(u => u.id !== currentUser?.id).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <UserPlus className="inline w-4 h-4 mr-1" />{t('dashboard.addMembers')}
+            </label>
+            {selectedMembers.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {selectedMembers.map(uid => {
+                  const user = allUsers.find(u => u.id === uid)
+                  if (!user) return null
+                  return (
+                    <span key={uid} onClick={() => setSelectedMembers(prev => prev.filter(id => id !== uid))}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99,
+                        background: 'var(--bg-secondary)', fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', cursor: 'pointer',
+                        border: '1px solid var(--border-primary)',
+                      }}>
+                      {user.username}
+                      <X size={11} style={{ color: 'var(--text-faint)' }} />
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <CustomSelect
+                value={memberSelectValue}
+                onChange={value => {
+                  if (value) { setSelectedMembers(prev => prev.includes(Number(value)) ? prev : [...prev, Number(value)]); setMemberSelectValue('') }
+                }}
+                placeholder={t('dashboard.addMember')}
+                options={allUsers.filter(u => u.id !== currentUser?.id && !selectedMembers.includes(u.id)).map(u => ({ value: u.id, label: u.username }))}
+                searchable
+                size="sm"
+              />
+            </div>
+          </div>
+        )}
 
         {!formData.start_date && !formData.end_date && (
           <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3">

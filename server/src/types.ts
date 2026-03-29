@@ -13,6 +13,8 @@ export interface User {
   oidc_sub?: string | null;
   oidc_issuer?: string | null;
   last_login?: string | null;
+  mfa_enabled?: number | boolean;
+  mfa_secret?: string | null;
   created_at?: string;
   updated_at?: string;
 }

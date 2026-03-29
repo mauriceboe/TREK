@@ -8,7 +8,7 @@ import { weatherApi, accommodationsApi } from '../../api/client'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import { useSettingsStore } from '../../store/settingsStore'
-import { useTranslation } from '../../i18n'
+import { getLocaleForLanguage, useTranslation } from '../../i18n'
 import type { Day, Place, Category, Reservation, AssignmentsMap } from '../../types'
 
 const WEATHER_ICON_MAP = {
@@ -53,7 +53,7 @@ interface DayDetailPanelProps {
 }
 
 export default function DayDetailPanel({ day, days, places, categories = [], tripId, assignments, reservations = [], lat, lng, onClose, onAccommodationChange }: DayDetailPanelProps) {
-  const { t, language } = useTranslation()
+  const { t, language, locale } = useTranslation()
   const isFahrenheit = useSettingsStore(s => s.settings.temperature_unit) === 'fahrenheit'
   const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
   const fmtTime = (v) => formatTime12(v, is12h)
@@ -138,7 +138,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   if (!day) return null
 
   const formattedDate = day.date ? new Date(day.date + 'T00:00:00').toLocaleDateString(
-    language === 'de' ? 'de-DE' : 'en-US',
+    getLocaleForLanguage(language),
     { weekday: 'long', day: 'numeric', month: 'long' }
   ) : null
 
@@ -270,7 +270,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                         </div>
                         {r.reservation_time?.includes('T') && (
                           <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {new Date(r.reservation_time).toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: is12h })}
+                            {new Date(r.reservation_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: is12h })}
                             {r.reservation_end_time && ` – ${fmtTime(r.reservation_end_time)}`}
                           </span>
                         )}
@@ -423,7 +423,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                           onChange={v => setHotelDayRange(prev => ({ start: v, end: Math.max(v, prev.end) }))}
                           options={days.map((d, i) => ({
                             value: d.id,
-                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00').toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' })}` : ''}`,
+                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })}` : ''}`,
                           }))}
                           size="sm"
                         />
@@ -435,7 +435,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                           onChange={v => setHotelDayRange(prev => ({ start: Math.min(prev.start, v), end: v }))}
                           options={days.map((d, i) => ({
                             value: d.id,
-                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00').toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' })}` : ''}`,
+                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })}` : ''}`,
                           }))}
                           size="sm"
                         />

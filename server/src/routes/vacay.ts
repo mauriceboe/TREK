@@ -43,8 +43,58 @@ interface Holiday {
   counties?: string[] | null;
 }
 
+interface VacayHolidayCalendar {
+  id: number;
+  plan_id: number;
+  region: string;
+  label: string | null;
+  color: string;
+  sort_order: number;
+}
+
 const holidayCache = new Map<string, { data: unknown; time: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000;
+
+async function applyHolidayCalendars(planId: number): Promise<void> {
+  const plan = db.prepare('SELECT holidays_enabled FROM vacay_plans WHERE id = ?').get(planId) as { holidays_enabled: number } | undefined;
+  if (!plan?.holidays_enabled) return;
+  const calendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(planId) as VacayHolidayCalendar[];
+  if (calendars.length === 0) return;
+  const years = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ?').all(planId) as { year: number }[];
+  for (const cal of calendars) {
+    const country = cal.region.split('-')[0];
+    const region = cal.region.includes('-') ? cal.region : null;
+    for (const { year } of years) {
+      try {
+        const cacheKey = `${year}-${country}`;
+        let holidays = holidayCache.get(cacheKey)?.data as Holiday[] | undefined;
+        if (!holidays) {
+          const resp = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
+          holidays = await resp.json() as Holiday[];
+          holidayCache.set(cacheKey, { data: holidays, time: Date.now() });
+        }
+        const hasRegions = holidays.some((h: Holiday) => h.counties && h.counties.length > 0);
+        if (hasRegions && !region) continue;
+        for (const h of holidays) {
+          if (h.global || !h.counties || (region && h.counties.includes(region))) {
+            db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, h.date);
+            db.prepare('DELETE FROM vacay_company_holidays WHERE plan_id = ? AND date = ?').run(planId, h.date);
+          }
+        }
+      } catch { /* API error, skip */ }
+    }
+  }
+}
+
+async function migrateHolidayCalendars(planId: number, plan: VacayPlan): Promise<void> {
+  const existing = db.prepare('SELECT id FROM vacay_holiday_calendars WHERE plan_id = ?').get(planId);
+  if (existing) return;
+  if (plan.holidays_enabled && plan.holidays_region) {
+    db.prepare(
+      'INSERT INTO vacay_holiday_calendars (plan_id, region, label, color, sort_order) VALUES (?, ?, NULL, ?, 0)'
+    ).run(planId, plan.holidays_region, '#fecaca');
+  }
+}
 
 const router = express.Router();
 router.use(authenticate);
@@ -124,6 +174,8 @@ router.get('/plan', (req: Request, res: Response) => {
     WHERE m.user_id = ? AND m.status = 'pending'
   `).all(authReq.user.id);
 
+  const holidayCalendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(activePlanId) as VacayHolidayCalendar[];
+
   res.json({
     plan: {
       ...plan,
@@ -131,6 +183,7 @@ router.get('/plan', (req: Request, res: Response) => {
       holidays_enabled: !!plan.holidays_enabled,
       company_holidays_enabled: !!plan.company_holidays_enabled,
       carry_over_enabled: !!plan.carry_over_enabled,
+      holiday_calendars: holidayCalendars,
     },
     users,
     pendingInvites,
@@ -166,30 +219,8 @@ router.put('/plan', async (req: Request, res: Response) => {
   }
 
   const updatedPlan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan;
-  if (updatedPlan.holidays_enabled && updatedPlan.holidays_region) {
-    const country = updatedPlan.holidays_region.split('-')[0];
-    const region = updatedPlan.holidays_region.includes('-') ? updatedPlan.holidays_region : null;
-    const years = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ?').all(planId) as { year: number }[];
-    for (const { year } of years) {
-      try {
-        const cacheKey = `${year}-${country}`;
-        let holidays = holidayCache.get(cacheKey)?.data as Holiday[] | undefined;
-        if (!holidays) {
-          const resp = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
-          holidays = await resp.json() as Holiday[];
-          holidayCache.set(cacheKey, { data: holidays, time: Date.now() });
-        }
-        const hasRegions = (holidays as Holiday[]).some((h: Holiday) => h.counties && h.counties.length > 0);
-        if (hasRegions && !region) continue;
-        for (const h of holidays) {
-          if (h.global || !h.counties || (region && h.counties.includes(region))) {
-            db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, h.date);
-            db.prepare('DELETE FROM vacay_company_holidays WHERE plan_id = ? AND date = ?').run(planId, h.date);
-          }
-        }
-      } catch { /* API error, skip */ }
-    }
-  }
+  await migrateHolidayCalendars(planId, updatedPlan);
+  await applyHolidayCalendars(planId);
 
   if (carry_over_enabled === false) {
     db.prepare('UPDATE vacay_user_years SET carried_over = 0 WHERE plan_id = ?').run(planId);
@@ -217,9 +248,56 @@ router.put('/plan', async (req: Request, res: Response) => {
   notifyPlanUsers(planId, req.headers['x-socket-id'] as string, 'vacay:settings');
 
   const updated = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan;
+  const updatedCalendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(planId) as VacayHolidayCalendar[];
   res.json({
-    plan: { ...updated, block_weekends: !!updated.block_weekends, holidays_enabled: !!updated.holidays_enabled, company_holidays_enabled: !!updated.company_holidays_enabled, carry_over_enabled: !!updated.carry_over_enabled }
+    plan: { ...updated, block_weekends: !!updated.block_weekends, holidays_enabled: !!updated.holidays_enabled, company_holidays_enabled: !!updated.company_holidays_enabled, carry_over_enabled: !!updated.carry_over_enabled, holiday_calendars: updatedCalendars }
   });
+});
+
+router.post('/plan/holiday-calendars', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { region, label, color, sort_order } = req.body;
+  if (!region) return res.status(400).json({ error: 'region required' });
+  const planId = getActivePlanId(authReq.user.id);
+  const result = db.prepare(
+    'INSERT INTO vacay_holiday_calendars (plan_id, region, label, color, sort_order) VALUES (?, ?, ?, ?, ?)'
+  ).run(planId, region, label || null, color || '#fecaca', sort_order ?? 0);
+  const cal = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ?').get(result.lastInsertRowid) as VacayHolidayCalendar;
+  notifyPlanUsers(planId, req.headers['x-socket-id'] as string, 'vacay:settings');
+  res.json({ calendar: cal });
+});
+
+router.put('/plan/holiday-calendars/:id', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const id = parseInt(req.params.id);
+  const planId = getActivePlanId(authReq.user.id);
+  const cal = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ? AND plan_id = ?').get(id, planId) as VacayHolidayCalendar | undefined;
+  if (!cal) return res.status(404).json({ error: 'Calendar not found' });
+  const { region, label, color, sort_order } = req.body;
+  const updates: string[] = [];
+  const params: (string | number | null)[] = [];
+  if (region !== undefined) { updates.push('region = ?'); params.push(region); }
+  if (label !== undefined) { updates.push('label = ?'); params.push(label); }
+  if (color !== undefined) { updates.push('color = ?'); params.push(color); }
+  if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
+  if (updates.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE vacay_holiday_calendars SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  const updated = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ?').get(id) as VacayHolidayCalendar;
+  notifyPlanUsers(planId, req.headers['x-socket-id'] as string, 'vacay:settings');
+  res.json({ calendar: updated });
+});
+
+router.delete('/plan/holiday-calendars/:id', (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const id = parseInt(req.params.id);
+  const planId = getActivePlanId(authReq.user.id);
+  const cal = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ? AND plan_id = ?').get(id, planId);
+  if (!cal) return res.status(404).json({ error: 'Calendar not found' });
+  db.prepare('DELETE FROM vacay_holiday_calendars WHERE id = ?').run(id);
+  notifyPlanUsers(planId, req.headers['x-socket-id'] as string, 'vacay:settings');
+  res.json({ success: true });
 });
 
 router.put('/color', (req: Request, res: Response) => {

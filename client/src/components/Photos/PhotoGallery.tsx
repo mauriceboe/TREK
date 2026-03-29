@@ -3,7 +3,7 @@ import { PhotoLightbox } from './PhotoLightbox'
 import { PhotoUpload } from './PhotoUpload'
 import { Upload, Camera } from 'lucide-react'
 import Modal from '../shared/Modal'
-import { useTranslation } from '../../i18n'
+import { getLocaleForLanguage, useTranslation } from '../../i18n'
 import type { Photo, Place, Day } from '../../types'
 
 interface PhotoGalleryProps {
@@ -17,7 +17,7 @@ interface PhotoGalleryProps {
 }
 
 export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, places, days, tripId }: PhotoGalleryProps) {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const [showUpload, setShowUpload] = useState(false)
   const [filterDayId, setFilterDayId] = useState('')
@@ -53,7 +53,7 @@ export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, pla
         <div style={{ marginRight: 'auto' }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Fotos</h2>
           <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#9ca3af' }}>
-            {photos.length} Foto{photos.length !== 1 ? 's' : ''}
+            {photos.length} {photos.length !== 1 ? 'Fotos' : 'Foto'}
           </p>
         </div>
 
@@ -65,7 +65,7 @@ export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, pla
           <option value="">{t('photos.allDays')}</option>
           {(days || []).map(day => (
             <option key={day.id} value={day.id}>
-              Tag {day.day_number}{day.date ? ` · ${formatDate(day.date)}` : ''}
+              {t('planner.dayN', { n: day.day_number })}{day.date ? ` · ${formatDate(day.date, getLocaleForLanguage(language))}` : ''}
             </option>
           ))}
         </select>
@@ -84,7 +84,7 @@ export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, pla
           className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-700 text-sm font-medium whitespace-nowrap"
         >
           <Upload className="w-4 h-4" />
-          Fotos hochladen
+          {t('common.upload')}
         </button>
       </div>
 
@@ -101,7 +101,7 @@ export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, pla
               style={{ display: 'inline-flex', margin: '0 auto' }}
             >
               <Upload className="w-4 h-4" />
-              Fotos hochladen
+              {t('common.upload')}
             </button>
           </div>
         ) : (
@@ -146,7 +146,7 @@ export default function PhotoGallery({ photos, onUpload, onDelete, onUpdate, pla
       <Modal
         isOpen={showUpload}
         onClose={() => setShowUpload(false)}
-        title="Fotos hochladen"
+        title={t('common.upload')}
         size="lg"
       >
         <PhotoUpload
@@ -211,7 +211,7 @@ function PhotoThumbnail({ photo, days, places, onClick }: PhotoThumbnailProps) {
   )
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, locale) {
   if (!dateStr) return ''
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
 }

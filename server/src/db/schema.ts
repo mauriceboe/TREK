@@ -15,6 +15,8 @@ function createTables(db: Database.Database): void {
       oidc_sub TEXT,
       oidc_issuer TEXT,
       last_login DATETIME,
+      mfa_enabled INTEGER DEFAULT 0,
+      mfa_secret TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -279,6 +281,15 @@ function createTables(db: Database.Database): void {
       date TEXT NOT NULL,
       note TEXT DEFAULT '',
       UNIQUE(plan_id, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS vacay_holiday_calendars (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id   INTEGER NOT NULL REFERENCES vacay_plans(id) ON DELETE CASCADE,
+      region    TEXT NOT NULL,
+      label     TEXT,
+      color     TEXT NOT NULL DEFAULT '#fecaca',
+      sort_order INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS day_accommodations (

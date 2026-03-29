@@ -312,7 +312,7 @@ export default function PlaceInspector({
                   icon={<Star size={12} fill="#facc15" color="#facc15" />}
                   text={<>
                     {googleDetails.rating.toFixed(1)}
-                    {googleDetails.rating_count ? <span style={{ opacity: 0.5 }}> ({googleDetails.rating_count.toLocaleString('de-DE')})</span> : ''}
+                    {googleDetails.rating_count ? <span style={{ opacity: 0.5 }}> ({googleDetails.rating_count.toLocaleString(locale)})</span> : ''}
                     {shortReview && <span className="hidden md:inline" style={{ opacity: 0.6, fontWeight: 400, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}> · „{shortReview.text}"</span>}
                   </>}
                   color="var(--text-secondary)" bg="var(--bg-hover)"

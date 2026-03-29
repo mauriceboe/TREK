@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import apiClient from '../api/client'
 import type { AxiosResponse } from 'axios'
-import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo } from '../types'
+import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo, VacayHolidayCalendar } from '../types'
 
 const ax = apiClient
 
@@ -65,6 +65,9 @@ interface VacayApi {
   updateStats: (year: number, days: number, targetUserId?: number) => Promise<unknown>
   getCountries: () => Promise<{ countries: string[] }>
   getHolidays: (year: number, country: string) => Promise<VacayHolidayRaw[]>
+  addHolidayCalendar: (data: { region: string; color?: string; label?: string | null }) => Promise<{ calendar: VacayHolidayCalendar }>
+  updateHolidayCalendar: (id: number, data: { region?: string; color?: string; label?: string | null }) => Promise<{ calendar: VacayHolidayCalendar }>
+  deleteHolidayCalendar: (id: number) => Promise<unknown>
 }
 
 const api: VacayApi = {
@@ -87,6 +90,9 @@ const api: VacayApi = {
   updateStats: (year, days, targetUserId) => ax.put(`/addons/vacay/stats/${year}`, { vacation_days: days, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
   getCountries: () => ax.get('/addons/vacay/holidays/countries').then((r: AxiosResponse) => r.data),
   getHolidays: (year, country) => ax.get(`/addons/vacay/holidays/${year}/${country}`).then((r: AxiosResponse) => r.data),
+  addHolidayCalendar: (data) => ax.post('/addons/vacay/plan/holiday-calendars', data).then((r: AxiosResponse) => r.data),
+  updateHolidayCalendar: (id, data) => ax.put(`/addons/vacay/plan/holiday-calendars/${id}`, data).then((r: AxiosResponse) => r.data),
+  deleteHolidayCalendar: (id) => ax.delete(`/addons/vacay/plan/holiday-calendars/${id}`).then((r: AxiosResponse) => r.data),
 }
 
 interface VacayState {
@@ -124,6 +130,9 @@ interface VacayState {
   loadStats: (year?: number) => Promise<void>
   updateVacationDays: (year: number, days: number, targetUserId?: number) => Promise<void>
   loadHolidays: (year?: number) => Promise<void>
+  addHolidayCalendar: (data: { region: string; color?: string; label?: string | null }) => Promise<void>
+  updateHolidayCalendar: (id: number, data: { region?: string; color?: string; label?: string | null }) => Promise<void>
+  deleteHolidayCalendar: (id: number) => Promise<void>
   loadAll: () => Promise<void>
 }
 
@@ -247,29 +256,47 @@ export const useVacayStore = create<VacayState>((set, get) => ({
   loadHolidays: async (year?: number) => {
     const y = year || get().selectedYear
     const plan = get().plan
-    if (!plan?.holidays_enabled || !plan?.holidays_region) {
+    const calendars = plan?.holiday_calendars ?? []
+    if (!plan?.holidays_enabled || calendars.length === 0) {
       set({ holidays: {} })
       return
     }
-    const country = plan.holidays_region.split('-')[0]
-    const region = plan.holidays_region.includes('-') ? plan.holidays_region : null
-    try {
-      const data = await api.getHolidays(y, country)
-      const hasRegions = data.some((h: VacayHolidayRaw) => h.counties && h.counties.length > 0)
-      if (hasRegions && !region) {
-        set({ holidays: {} })
-        return
-      }
-      const map: HolidaysMap = {}
-      data.forEach((h: VacayHolidayRaw) => {
-        if (h.global || !h.counties || (region && h.counties.includes(region))) {
-          map[h.date] = { name: h.name, localName: h.localName }
-        }
-      })
-      set({ holidays: map })
-    } catch {
-      set({ holidays: {} })
+    const map: HolidaysMap = {}
+    for (const cal of calendars) {
+      const country = cal.region.split('-')[0]
+      const region = cal.region.includes('-') ? cal.region : null
+      try {
+        const data = await api.getHolidays(y, country)
+        const hasRegions = data.some((h: VacayHolidayRaw) => h.counties && h.counties.length > 0)
+        if (hasRegions && !region) continue
+        data.forEach((h: VacayHolidayRaw) => {
+          if (h.global || !h.counties || (region && h.counties.includes(region))) {
+            if (!map[h.date]) {
+              map[h.date] = { name: h.name, localName: h.localName, color: cal.color, label: cal.label }
+            }
+          }
+        })
+      } catch { /* API error, skip */ }
     }
+    set({ holidays: map })
+  },
+
+  addHolidayCalendar: async (data) => {
+    await api.addHolidayCalendar(data)
+    await get().loadPlan()
+    await get().loadHolidays()
+  },
+
+  updateHolidayCalendar: async (id, data) => {
+    await api.updateHolidayCalendar(id, data)
+    await get().loadPlan()
+    await get().loadHolidays()
+  },
+
+  deleteHolidayCalendar: async (id) => {
+    await api.deleteHolidayCalendar(id)
+    await get().loadPlan()
+    await get().loadHolidays()
   },
 
   loadAll: async () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Tag, Calendar, ExternalLink, ChevronDown, ChevronUp, Loader2, Heart, Coffee } from 'lucide-react'
-import { useTranslation } from '../../i18n'
+import { getLocaleForLanguage, useTranslation } from '../../i18n'
 import apiClient from '../../api/client'
 
 const REPO = 'mauriceboe/NOMAD'
@@ -46,7 +46,7 @@ export default function GitHubPanel() {
 
   const formatDate = (dateStr) => {
     const d = new Date(dateStr)
-    return d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+    return d.toLocaleDateString(getLocaleForLanguage(language), { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   // Simple markdown-to-html for release notes (handles headers, bold, lists, links)
@@ -130,7 +130,7 @@ export default function GitHubPanel() {
           </div>
           <div>
             <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Ko-fi</div>
-            <div className="text-xs" style={{ color: 'var(--text-faint)' }}>{language === 'de' ? 'Hilft mir, TREK weiterzuentwickeln' : 'Helps me keep building TREK'}</div>
+            <div className="text-xs" style={{ color: 'var(--text-faint)' }}>{t('admin.github.support')}</div>
           </div>
           <ExternalLink size={14} className="ml-auto flex-shrink-0" style={{ color: 'var(--text-faint)' }} />
         </a>
@@ -148,7 +148,7 @@ export default function GitHubPanel() {
           </div>
           <div>
             <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Buy Me a Coffee</div>
-            <div className="text-xs" style={{ color: 'var(--text-faint)' }}>{language === 'de' ? 'Hilft mir, TREK weiterzuentwickeln' : 'Helps me keep building TREK'}</div>
+            <div className="text-xs" style={{ color: 'var(--text-faint)' }}>{t('admin.github.support')}</div>
           </div>
           <ExternalLink size={14} className="ml-auto flex-shrink-0" style={{ color: 'var(--text-faint)' }} />
         </a>

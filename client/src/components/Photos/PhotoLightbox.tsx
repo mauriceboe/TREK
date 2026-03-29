@@ -227,10 +227,10 @@ export function PhotoLightbox({ photos, initialIndex, onClose, onUpdate, onDelet
   )
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, locale = 'en-US') {
   if (!dateStr) return ''
   try {
-    return new Date(dateStr).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+    return new Date(dateStr).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })
   } catch { return '' }
 }
 

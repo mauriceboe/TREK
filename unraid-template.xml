@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>TREK</Name>
+  <Repository>mauriceboe/trek</Repository>
+  <Registry>https://hub.docker.com/r/mauriceboe/trek</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/mauriceboe/TREK/issues</Support>
+  <Project>https://github.com/mauriceboe/TREK</Project>
+  <Overview>TREK is a self-hosted, real-time collaborative travel planner with interactive maps, budgets, bookings, packing lists, file management, and more. Plan trips together with your group — changes sync instantly across all connected users. Includes OIDC/SSO support, dark mode, PWA, and a modular addon system (Vacay, Atlas, Collab, Budget, Packing).</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/mauriceboe/TREK/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/mauriceboe/TREK/main/client/public/icons/icon-dark.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <DonateText>Support TREK development</DonateText>
+  <DonateLink>https://ko-fi.com/mauriceboe</DonateLink>
+  <Requires/>
+  <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/trek/data" Mode="rw" Description="Database and app data" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/trek/data</Config>
+  <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/trek/uploads" Mode="rw" Description="Uploaded files (photos, documents)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/trek/uploads</Config>
+  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node environment" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+  <Config Name="JWT_SECRET" Target="JWT_SECRET" Default="" Mode="" Description="JWT secret key (auto-generated if empty)" Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="PORT" Target="PORT" Default="3000" Mode="" Description="Internal port" Type="Variable" Display="advanced" Required="false" Mask="false">3000</Config>
+</Container>
