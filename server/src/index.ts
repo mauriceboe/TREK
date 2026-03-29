@@ -120,6 +120,7 @@ import budgetRoutes from './routes/budget';
 import collabRoutes from './routes/collab';
 import backupRoutes from './routes/backup';
 import oidcRoutes from './routes/oidc';
+import aiRoutes, { aiConfigRouter } from './routes/ai';
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/oidc', oidcRoutes);
 app.use('/api/trips', tripsRoutes);
@@ -153,6 +154,8 @@ app.use('/api/addons/vacay', vacayRoutes);
 import atlasRoutes from './routes/atlas';
 app.use('/api/addons/atlas', atlasRoutes);
 
+app.use('/api/trips/:tripId/ai', aiRoutes);
+app.use('/api/ai', aiConfigRouter);
 app.use('/api/maps', mapsRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/settings', settingsRoutes);

@@ -4,7 +4,9 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "node --import tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "archiver": "^6.0.1",
@@ -37,6 +39,7 @@
     "@types/unzipper": "^0.10.11",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "vitest": "^4.1.2"
   }
 }

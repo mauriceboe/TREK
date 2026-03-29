@@ -12,7 +12,7 @@ import CategoryManager from '../components/Admin/CategoryManager'
 import BackupPanel from '../components/Admin/BackupPanel'
 import GitHubPanel from '../components/Admin/GitHubPanel'
 import AddonManager from '../components/Admin/AddonManager'
-import { Users, Map, Briefcase, Shield, Trash2, Edit2, Camera, FileText, Eye, EyeOff, Save, CheckCircle, XCircle, Loader2, UserPlus, ArrowUpCircle, ExternalLink, Download, AlertTriangle, RefreshCw, GitBranch, Sun } from 'lucide-react'
+import { Users, Map, Briefcase, Shield, Trash2, Edit2, Camera, FileText, Eye, EyeOff, Save, CheckCircle, XCircle, Loader2, UserPlus, ArrowUpCircle, ExternalLink, Download, AlertTriangle, RefreshCw, GitBranch, Sun, Bot } from 'lucide-react'
 import CustomSelect from '../components/shared/CustomSelect'
 
 interface AdminUser {
@@ -97,6 +97,16 @@ export default function AdminPage(): React.ReactElement {
   const [updating, setUpdating] = useState<boolean>(false)
   const [updateResult, setUpdateResult] = useState<'success' | 'error' | null>(null)
 
+  // AI config
+  const [aiProvider, setAiProvider] = useState<string>('openai')
+  const [aiApiKey, setAiApiKey] = useState<string>('')
+  const [aiModel, setAiModel] = useState<string>('')
+  const [aiBaseUrl, setAiBaseUrl] = useState<string>('')
+  const [aiKeySet, setAiKeySet] = useState<boolean>(false)
+  const [savingAi, setSavingAi] = useState<boolean>(false)
+  const [validatingAi, setValidatingAi] = useState<boolean>(false)
+  const [aiValidation, setAiValidation] = useState<{ valid?: boolean; error?: string } | null>(null)
+
   const { user: currentUser, updateApiKeys } = useAuthStore()
   const navigate = useNavigate()
   const toast = useToast()
@@ -108,6 +118,12 @@ export default function AdminPage(): React.ReactElement {
     adminApi.getOidc().then(setOidcConfig).catch(() => {})
     adminApi.checkVersion().then(data => {
       if (data.update_available) setUpdateInfo(data)
+    }).catch(() => {})
+    adminApi.getAiConfig().then(data => {
+      setAiProvider(data.provider || 'openai')
+      setAiModel(data.model || '')
+      setAiBaseUrl(data.base_url || '')
+      setAiKeySet(data.api_key_set || false)
     }).catch(() => {})
   }, [])
 
@@ -672,7 +688,138 @@ export default function AdminPage(): React.ReactElement {
               {/* OIDC / SSO Configuration */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100">
-                  <h2 className="font-semibold text-slate-900">{t('admin.oidcTitle')}</h2>
+                  <h2 className="font-semibold text-slate-900">AI Assistant</h2>
+                  <p className="text-xs text-slate-400 mt-1">Configure an AI provider for smart trip suggestions, packing lists, and itinerary planning. Supports OpenAI and MiniMax.</p>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">AI Provider</label>
+                    <CustomSelect
+                      value={aiProvider}
+                      onChange={value => {
+                        setAiProvider(value)
+                        setAiModel('')
+                        setAiBaseUrl('')
+                        setAiValidation(null)
+                      }}
+                      options={[
+                        { value: 'openai', label: 'OpenAI' },
+                        { value: 'minimax', label: 'MiniMax' },
+                      ]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showKeys.ai ? 'text' : 'password'}
+                        value={aiApiKey}
+                        onChange={e => { setAiApiKey(e.target.value); setAiValidation(null) }}
+                        placeholder={aiKeySet ? '••••••••' : 'Enter API key'}
+                        className="w-full pr-10 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleKey('ai')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showKeys.ai ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {aiProvider === 'minimax' ? 'Get your API key from minimax.io' : 'Get your API key from platform.openai.com'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Model (optional)</label>
+                    <input
+                      type="text"
+                      value={aiModel}
+                      onChange={e => setAiModel(e.target.value)}
+                      placeholder={aiProvider === 'minimax' ? 'MiniMax-M2.7' : 'gpt-4o-mini'}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      {aiProvider === 'minimax' ? 'Available: MiniMax-M2.7, MiniMax-M2.7-highspeed, MiniMax-M2.5' : 'e.g. gpt-4o-mini, gpt-4o, gpt-4-turbo'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Base URL (optional)</label>
+                    <input
+                      type="url"
+                      value={aiBaseUrl}
+                      onChange={e => setAiBaseUrl(e.target.value)}
+                      placeholder={aiProvider === 'minimax' ? 'https://api.minimax.io/v1' : 'https://api.openai.com/v1'}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+
+                  {aiValidation && (
+                    <div className={`text-xs flex items-center gap-1 ${aiValidation.valid ? 'text-emerald-600' : 'text-red-500'}`}>
+                      <span className={`w-2 h-2 rounded-full inline-block ${aiValidation.valid ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                      {aiValidation.valid ? 'Connection successful' : (aiValidation.error || 'Connection failed')}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setSavingAi(true)
+                        try {
+                          const payload: Record<string, unknown> = { provider: aiProvider }
+                          if (aiApiKey) payload.api_key = aiApiKey
+                          if (aiModel) payload.model = aiModel
+                          if (aiBaseUrl) payload.base_url = aiBaseUrl
+                          await adminApi.updateAiConfig(payload)
+                          setAiKeySet(!!aiApiKey || aiKeySet)
+                          toast.success('AI settings saved')
+                        } catch (err: unknown) {
+                          toast.error(err instanceof Error ? err.message : 'Error saving AI settings')
+                        } finally {
+                          setSavingAi(false)
+                        }
+                      }}
+                      disabled={savingAi}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:bg-slate-400"
+                    >
+                      {savingAi ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                      {t('common.save')}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setValidatingAi(true)
+                        setAiValidation(null)
+                        try {
+                          // Save first so validation uses current values
+                          const payload: Record<string, unknown> = { provider: aiProvider }
+                          if (aiApiKey) payload.api_key = aiApiKey
+                          if (aiModel) payload.model = aiModel
+                          if (aiBaseUrl) payload.base_url = aiBaseUrl
+                          await adminApi.updateAiConfig(payload)
+                          setAiKeySet(!!aiApiKey || aiKeySet)
+                          const result = await adminApi.validateAi()
+                          setAiValidation(result)
+                        } catch (err: unknown) {
+                          setAiValidation({ valid: false, error: 'Validation request failed' })
+                        } finally {
+                          setValidatingAi(false)
+                        }
+                      }}
+                      disabled={validatingAi || (!aiApiKey && !aiKeySet)}
+                      className="px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {validatingAi ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Bot className="w-4 h-4" />
+                      )}
+                      Test Connection
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* OIDC / SSO Configuration */}
                   <p className="text-xs text-slate-400 mt-1">{t('admin.oidcSubtitle')}</p>
                 </div>
                 <div className="p-6 space-y-4">

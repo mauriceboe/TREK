@@ -135,10 +135,22 @@ export const adminApi = {
   updateAddon: (id: number | string, data: Record<string, unknown>) => apiClient.put(`/admin/addons/${id}`, data).then(r => r.data),
   checkVersion: () => apiClient.get('/admin/version-check').then(r => r.data),
   installUpdate: () => apiClient.post('/admin/update', {}, { timeout: 300000 }).then(r => r.data),
+  getAiConfig: () => apiClient.get('/ai/config').then(r => r.data),
+  updateAiConfig: (data: Record<string, unknown>) => apiClient.put('/ai/config', data).then(r => r.data),
+  validateAi: () => apiClient.post('/ai/validate').then(r => r.data),
 }
 
 export const addonsApi = {
   enabled: () => apiClient.get('/addons').then(r => r.data),
+}
+
+export const aiApi = {
+  suggestPacking: (tripId: number | string) => apiClient.post(`/trips/${tripId}/ai/suggest-packing`).then(r => r.data),
+  suggestPlaces: (tripId: number | string, query?: string) => apiClient.post(`/trips/${tripId}/ai/suggest-places`, { query }).then(r => r.data),
+  suggestItinerary: (tripId: number | string, dayId?: number | string) => apiClient.post(`/trips/${tripId}/ai/suggest-itinerary`, { dayId }).then(r => r.data),
+  getConfig: () => apiClient.get('/ai/config').then(r => r.data),
+  updateConfig: (data: Record<string, unknown>) => apiClient.put('/ai/config', data).then(r => r.data),
+  validate: () => apiClient.post('/ai/validate').then(r => r.data),
 }
 
 export const mapsApi = {

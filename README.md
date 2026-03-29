@@ -222,6 +222,22 @@ API keys are configured in the **Admin Panel** after login. Keys set by the admi
 3. Create an API key under Credentials
 4. In TREK: Admin Panel → Settings → Google Maps
 
+### AI Assistant (Trip Suggestions)
+
+TREK includes an optional AI assistant that can help with:
+- **Packing suggestions** — AI-generated packing lists based on your trip details
+- **Place recommendations** — Discover attractions, restaurants, and activities
+- **Itinerary planning** — Get day-by-day schedule suggestions
+
+Supports multiple AI providers:
+
+| Provider | Models | API Key |
+|----------|--------|---------|
+| **OpenAI** | gpt-4o-mini, gpt-4o, gpt-4-turbo | [platform.openai.com](https://platform.openai.com/) |
+| **MiniMax** | MiniMax-M2.7, MiniMax-M2.7-highspeed, MiniMax-M2.5 | [minimax.io](https://www.minimax.io/) |
+
+To configure: Admin Panel → Settings → AI Assistant → Select provider and enter API key.
+
 ## Building from Source
 
 ```bash
