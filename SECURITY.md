@@ -21,6 +21,6 @@ You will receive a response within 48 hours. Once confirmed, a fix will be relea
 
 ## Scope
 
-This policy covers the TREK application and its Docker image (`mauriceboe/nomad`).
+This policy covers the TREK application and its Docker image (`mauriceboe/trek`).
 
 Third-party dependencies are monitored via GitHub Dependabot.
