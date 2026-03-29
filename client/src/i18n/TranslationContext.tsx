@@ -8,6 +8,7 @@ import ru from './translations/ru'
 import zh from './translations/zh'
 import nl from './translations/nl'
 import ar from './translations/ar'
+import br from './translations/br'
 
 type TranslationStrings = Record<string, string | { name: string; category: string }[]>
 
@@ -17,13 +18,24 @@ export const SUPPORTED_LANGUAGES = [
   { value: 'es', label: 'Español' },
   { value: 'fr', label: 'Français' },
   { value: 'nl', label: 'Nederlands' },
+  { value: 'br', label: 'Português (Brasil)' },
   { value: 'ru', label: 'Русский' },
   { value: 'zh', label: '中文' },
   { value: 'ar', label: 'العربية' },
 ] as const
 
-const translations: Record<string, TranslationStrings> = { de, en, es, fr, ru, zh, nl, ar }
-const LOCALES: Record<string, string> = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', ru: 'ru-RU', zh: 'zh-CN', nl: 'nl-NL', ar: 'ar-SA' }
+const translations: Record<string, TranslationStrings> = { de, en, es, fr, ru, zh, nl, ar, br }
+const LOCALES: Record<string, string> = {
+  de: 'de-DE',
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+  ru: 'ru-RU',
+  zh: 'zh-CN',
+  nl: 'nl-NL',
+  ar: 'ar-SA',
+  br: 'pt-BR',
+}
 const RTL_LANGUAGES = new Set(['ar'])
 
 export function getLocaleForLanguage(language: string): string {
@@ -31,6 +43,7 @@ export function getLocaleForLanguage(language: string): string {
 }
 
 export function getIntlLanguage(language: string): string {
+  if (language === 'br') return 'pt-BR'
   return ['de', 'es', 'fr', 'ru', 'zh', 'nl', 'ar'].includes(language) ? language : 'en'
 }
 
@@ -54,7 +67,7 @@ export function TranslationProvider({ children }: TranslationProviderProps) {
   const language = useSettingsStore((s) => s.settings.language) || 'en'
 
   useEffect(() => {
-    document.documentElement.lang = language
+    document.documentElement.lang = getLocaleForLanguage(language)
     document.documentElement.dir = isRtlLanguage(language) ? 'rtl' : 'ltr'
   }, [language])
 

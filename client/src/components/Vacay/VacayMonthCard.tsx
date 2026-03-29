@@ -10,7 +10,9 @@ const WEEKDAYS_AR = ['اث', 'ثل', 'أر', 'خم', 'جم', 'سب', 'أح']
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const MONTHS_BR = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+const WEEKDAYS_BR = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16)
@@ -36,8 +38,26 @@ export default function VacayMonthCard({
   onCellClick, companyMode, blockWeekends
 }: VacayMonthCardProps) {
   const { language } = useTranslation()
-  const weekdays = language === 'de' ? WEEKDAYS_DE : language === 'es' ? WEEKDAYS_ES : language === 'ar' ? WEEKDAYS_AR : WEEKDAYS_EN
-  const monthNames = language === 'de' ? MONTHS_DE : language === 'es' ? MONTHS_ES : language === 'ar' ? MONTHS_AR : MONTHS_EN
+  const weekdays =
+    language === 'de'
+      ? WEEKDAYS_DE
+      : language === 'es'
+        ? WEEKDAYS_ES
+        : language === 'ar'
+          ? WEEKDAYS_AR
+          : language === 'br'
+            ? WEEKDAYS_BR
+            : WEEKDAYS_EN
+  const monthNames =
+    language === 'de'
+      ? MONTHS_DE
+      : language === 'es'
+        ? MONTHS_ES
+        : language === 'ar'
+          ? MONTHS_AR
+          : language === 'br'
+            ? MONTHS_BR
+            : MONTHS_EN
 
   const weeks = useMemo(() => {
     const firstDay = new Date(year, month, 1)
