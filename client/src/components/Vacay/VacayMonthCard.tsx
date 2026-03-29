@@ -6,9 +6,11 @@ import type { HolidaysMap, VacayEntry } from '../../types'
 const WEEKDAYS_EN = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 const WEEKDAYS_ES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
+const WEEKDAYS_FR = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16)
@@ -34,8 +36,8 @@ export default function VacayMonthCard({
   onCellClick, companyMode, blockWeekends
 }: VacayMonthCardProps) {
   const { language } = useTranslation()
-  const weekdays = language === 'de' ? WEEKDAYS_DE : language === 'es' ? WEEKDAYS_ES : WEEKDAYS_EN
-  const monthNames = language === 'de' ? MONTHS_DE : language === 'es' ? MONTHS_ES : MONTHS_EN
+  const weekdays = language === 'de' ? WEEKDAYS_DE : language === 'es' ? WEEKDAYS_ES : language === 'fr' ? WEEKDAYS_FR : WEEKDAYS_EN
+  const monthNames = language === 'de' ? MONTHS_DE : language === 'es' ? MONTHS_ES : language === 'fr' ? MONTHS_FR : MONTHS_EN
 
   const weeks = useMemo(() => {
     const firstDay = new Date(year, month, 1)
