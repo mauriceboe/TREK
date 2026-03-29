@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { getCountriesFromFlightLocation } from '../data/airportToCountry';
+import { getCountriesFromFlightLocation, resolveCountryCodeForAirport } from '../data/airportToCountry';
 import { AuthRequest, Trip, Place } from '../types';
 
 const router = express.Router();
@@ -84,6 +84,34 @@ const CONTINENT_MAP: Record<string, string> = {
   SE:'Europe',CH:'Europe',TH:'Asia',TR:'Europe',UA:'Europe',AE:'Asia',GB:'Europe',US:'North America',VN:'Asia',NG:'Africa',
 };
 
+interface FlightReservationRow {
+  trip_id: number;
+  location: string | null;
+  type: string | null;
+  metadata?: string | null;
+}
+
+function extractCountriesFromFlightReservation(reservation: FlightReservationRow): string[] {
+  const found = new Set<string>(getCountriesFromFlightLocation(reservation.location));
+
+  if (reservation.metadata) {
+    try {
+      const meta = typeof reservation.metadata === 'string'
+        ? JSON.parse(reservation.metadata)
+        : reservation.metadata;
+
+      const departure = resolveCountryCodeForAirport(meta?.departure_airport ?? null);
+      const arrival = resolveCountryCodeForAirport(meta?.arrival_airport ?? null);
+      if (departure) found.add(departure);
+      if (arrival) found.add(arrival);
+    } catch {
+      // Ignore malformed metadata and keep location-based fallback.
+    }
+  }
+
+  return [...found];
+}
+
 router.get('/stats', (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user.id;
@@ -103,10 +131,10 @@ router.get('/stats', (req: Request, res: Response) => {
   const placeholders = tripIds.map(() => '?').join(',');
   const places = db.prepare(`SELECT * FROM places WHERE trip_id IN (${placeholders})`).all(...tripIds) as Place[];
   const reservations = db.prepare(`
-    SELECT trip_id, location, type
+    SELECT trip_id, location, type, metadata
     FROM reservations
-    WHERE trip_id IN (${placeholders}) AND type = 'flight' AND location IS NOT NULL
-  `).all(...tripIds) as { trip_id: number; location: string | null; type: string | null }[];
+    WHERE trip_id IN (${placeholders}) AND type = 'flight'
+  `).all(...tripIds) as FlightReservationRow[];
 
   interface CountryEntry { code: string; places: { id: number; name: string; lat: number | null; lng: number | null }[]; tripIds: Set<number> }
   const countrySet = new Map<string, CountryEntry>();
@@ -126,7 +154,7 @@ router.get('/stats', (req: Request, res: Response) => {
 
   for (const reservation of reservations) {
     if (reservation.type !== 'flight') continue;
-    const codes = getCountriesFromFlightLocation(reservation.location);
+    const codes = extractCountriesFromFlightReservation(reservation);
     for (const code of codes) {
       if (!countrySet.has(code)) {
         countrySet.set(code, { code, places: [], tripIds: new Set() });
@@ -250,10 +278,10 @@ router.get('/country/:code', (req: Request, res: Response) => {
   const placeholders = tripIds.map(() => '?').join(',');
   const places = db.prepare(`SELECT * FROM places WHERE trip_id IN (${placeholders})`).all(...tripIds) as Place[];
   const reservations = db.prepare(`
-    SELECT trip_id, location, type
+    SELECT trip_id, location, type, metadata
     FROM reservations
-    WHERE trip_id IN (${placeholders}) AND type = 'flight' AND location IS NOT NULL
-  `).all(...tripIds) as { trip_id: number; location: string | null; type: string | null }[];
+    WHERE trip_id IN (${placeholders}) AND type = 'flight'
+  `).all(...tripIds) as FlightReservationRow[];
 
   const matchingPlaces: { id: number; name: string; address: string | null; lat: number | null; lng: number | null; trip_id: number }[] = [];
   const matchingTripIds = new Set<number>();
@@ -269,7 +297,7 @@ router.get('/country/:code', (req: Request, res: Response) => {
 
   for (const reservation of reservations) {
     if (reservation.type !== 'flight') continue;
-    const codes = getCountriesFromFlightLocation(reservation.location);
+    const codes = extractCountriesFromFlightReservation(reservation);
     if (codes.includes(code)) {
       matchingTripIds.add(reservation.trip_id);
     }
