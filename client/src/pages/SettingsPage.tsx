@@ -6,8 +6,8 @@ import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import CustomSelect from '../components/shared/CustomSelect'
 import { useToast } from '../components/shared/Toast'
-import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound } from 'lucide-react'
-import { authApi, adminApi } from '../api/client'
+import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, Bot, Plus, Key, Copy, Check } from 'lucide-react'
+import { authApi, adminApi, mcpApi } from '../api/client'
 import apiClient from '../api/client'
 import type { LucideIcon } from 'lucide-react'
 import type { UserWithOidc } from '../types'
@@ -64,6 +64,16 @@ export default function SettingsPage(): React.ReactElement {
   const [immichConnected, setImmichConnected] = useState(false)
   const [immichTesting, setImmichTesting] = useState(false)
 
+  // MCP
+  const [mcpEnabled, setMcpEnabled] = useState(false)
+  const [mcpTokens, setMcpTokens] = useState<Array<{ id: number; name: string; token_prefix: string; last_used: string | null; expires_at: string | null; created_at: string }>>([]
+  )
+  const [mcpNewName, setMcpNewName] = useState('')
+  const [mcpNewExpiry, setMcpNewExpiry] = useState('')
+  const [mcpCreating, setMcpCreating] = useState(false)
+  const [mcpRevealed, setMcpRevealed] = useState<{ token: string; id: number; name: string } | null>(null)
+  const [mcpCopied, setMcpCopied] = useState(false)
+
   useEffect(() => {
     apiClient.get('/addons').then(r => {
       const mem = r.data.addons?.find((a: any) => a.id === 'memories' && a.enabled)
@@ -74,8 +84,45 @@ export default function SettingsPage(): React.ReactElement {
           setImmichConnected(r2.data.connected)
         }).catch(() => {})
       }
+      const mcp = r.data.addons?.find((a: any) => a.id === 'mcp' && a.enabled)
+      setMcpEnabled(!!mcp)
+      if (mcp) {
+        mcpApi.listTokens().then((d: any) => setMcpTokens(d.tokens || [])).catch(() => {})
+      }
     }).catch(() => {})
   }, [])
+
+  const handleMcpCreate = async () => {
+    if (!mcpNewName.trim()) return
+    setMcpCreating(true)
+    try {
+      const data: any = await mcpApi.createToken({
+        name: mcpNewName.trim(),
+        ...(mcpNewExpiry ? { expires_at: new Date(mcpNewExpiry).toISOString() } : {}),
+      })
+      setMcpRevealed({ token: data.token, id: data.id, name: data.name })
+      setMcpNewName('')
+      setMcpNewExpiry('')
+      const d: any = await mcpApi.listTokens()
+      setMcpTokens(d.tokens || [])
+    } catch { toast.error('Failed to create MCP token') }
+    finally { setMcpCreating(false) }
+  }
+
+  const handleMcpRevoke = async (id: number) => {
+    if (!confirm('Revoke this token? Any AI clients using it will lose access immediately.')) return
+    try {
+      await mcpApi.deleteToken(id)
+      setMcpTokens(prev => prev.filter(t => t.id !== id))
+      toast.success('Token revoked')
+    } catch { toast.error('Failed to revoke token') }
+  }
+
+  const handleMcpCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    setMcpCopied(true)
+    setTimeout(() => setMcpCopied(false), 2000)
+  }
 
   const handleSaveImmich = async () => {
     setSaving(s => ({ ...s, immich: true }))
@@ -440,6 +487,81 @@ export default function SettingsPage(): React.ReactElement {
               </div>
             </div>
           </Section>
+
+          {/* MCP — only when MCP addon is enabled */}
+          {mcpEnabled && (
+            <Section title="AI / MCP" icon={Bot}>
+              <div className="space-y-4">
+                {mcpRevealed && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-sm font-medium text-amber-800 mb-2 flex items-center gap-2">
+                      <Key className="w-4 h-4" /> Token created — copy it now, it won't be shown again
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-white border border-amber-200 rounded px-3 py-2 text-xs font-mono break-all" style={{ color: 'var(--text-primary)' }}>
+                        {mcpRevealed.token}
+                      </code>
+                      <button onClick={() => handleMcpCopy(mcpRevealed.token)}
+                        className="flex-shrink-0 p-2 rounded-lg border border-amber-200 bg-white hover:bg-amber-50 text-amber-700 transition-colors">
+                        {mcpCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <button onClick={() => setMcpRevealed(null)} className="mt-2 text-xs text-amber-600 hover:text-amber-800">I've saved it — dismiss</button>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Create Service Token</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input type="text" value={mcpNewName} onChange={e => setMcpNewName(e.target.value)}
+                      placeholder="Token name (e.g. Claude Desktop)"
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                      onKeyDown={e => e.key === 'Enter' && handleMcpCreate()} />
+                    <input type="date" value={mcpNewExpiry} onChange={e => setMcpNewExpiry(e.target.value)}
+                      title="Expiry date (optional)"
+                      className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                    <button onClick={handleMcpCreate} disabled={mcpCreating || !mcpNewName.trim()}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50 whitespace-nowrap">
+                      <Plus className="w-4 h-4" /> {mcpCreating ? 'Creating…' : 'Create'}
+                    </button>
+                  </div>
+                </div>
+
+                {mcpTokens.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Your Tokens</p>
+                    {mcpTokens.map(t => (
+                      <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border"
+                        style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-primary)' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{t.name}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            <code className="font-mono">{t.token_prefix}…</code>
+                            {t.last_used && <span className="ml-3">Last used: {new Date(t.last_used).toLocaleDateString()}</span>}
+                            {t.expires_at && <span className="ml-3">Expires: {new Date(t.expires_at).toLocaleDateString()}</span>}
+                          </p>
+                        </div>
+                        <button onClick={() => handleMcpRevoke(t.id)}
+                          className="ml-3 p-1.5 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          style={{ color: 'var(--text-secondary)' }} title="Revoke token">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-lg p-4 border text-xs space-y-1" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
+                  <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>How to connect your AI client</p>
+                  <p>1. Create a service token above</p>
+                  <p>2. SSE URL: <code className="font-mono">https://trek.yourdomain.com/api/mcp</code></p>
+                  <p>3. Authorization header: <code className="font-mono">Bearer &lt;your-token&gt;</code></p>
+                </div>
+              </div>
+            </Section>
+          )}
 
           {/* Immich — only when Memories addon is enabled */}
           {memoriesEnabled && (

@@ -73,6 +73,7 @@
 - **Vacay** — Personal vacation day planner with calendar view, public holidays (100+ countries), company holidays, user fusion with live sync, and carry-over tracking
 - **Atlas** — Interactive world map with visited countries, bucket list with planned travel dates, travel stats, continent breakdown, streak tracking, and liquid glass UI effects
 - **Collab** — Chat with your group, share notes, create polls, and track who's signed up for each day's activities
+- **MCP Server** — Expose TREK to AI assistants (Claude, Cursor, etc.) via the Model Context Protocol with 35 tools covering trips, days, places, budgets, and packing
 - **Dashboard Widgets** — Currency converter and timezone clock, toggleable per user
 
 ### Customization & Admin
@@ -90,7 +91,8 @@
 - **PWA**: vite-plugin-pwa + Workbox
 - **Real-Time**: WebSocket (`ws`)
 - **State**: Zustand
-- **Auth**: JWT + OIDC + TOTP (MFA)
+- **Auth**: JWT + OIDC + TOTP (MFA) + MCP service tokens
+- **MCP**: `@modelcontextprotocol/sdk` (HTTP/SSE transport)
 - **Maps**: Leaflet + react-leaflet-cluster + Google Places API (optional)
 - **Weather**: Open-Meteo API (free, no key required)
 - **Icons**: lucide-react
@@ -221,6 +223,55 @@ trek.yourdomain.com {
 ```
 
 </details>
+
+## MCP (AI Integration)
+
+TREK has a native [Model Context Protocol](https://modelcontextprotocol.io) addon that lets AI assistants read and manage your trips directly.
+
+### Enabling
+
+1. Go to **Admin Panel → Addons** and toggle **MCP Server** on
+2. Each user goes to **Settings → AI / MCP**, clicks **Create**, names the token, and saves it — shown only once
+
+Admins can audit and revoke any user's tokens under **Admin Panel → Addons → MCP Server**.
+
+### Connecting a client
+
+| Setting | Value |
+|---------|-------|
+| Transport | SSE |
+| URL | `https://your-trek-instance/api/mcp` |
+| Auth header | `Authorization: Bearer trek_mcp_<token>` |
+
+**Claude Desktop** (`claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "trek": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/sdk", "sse-client"],
+      "env": {
+        "MCP_URL": "https://your-trek-instance/api/mcp",
+        "MCP_HEADERS": "{\"Authorization\": \"Bearer trek_mcp_<token>\"}"
+      }
+    }
+  }
+}
+```
+
+### Available tools (35 total)
+
+| Group | Tools |
+|-------|-------|
+| Trips | list, get, get_context, create, update, archive, delete, duplicate |
+| Days | list, get, create, update, delete |
+| Places | list, get, create, update, delete, assign_to_day, unassign_from_day |
+| Packing | list_items, create_item, toggle, delete, list_categories, set_assignee |
+| Budget | list, get_summary, create, update, delete |
+| Search | search (cross-entity) |
+| Tokens | list, create, revoke (own tokens; admins can revoke any) |
+
+Service tokens are scoped to the creating user — the AI assistant can only access trips that user has access to.
 
 ## Environment Variables
 

@@ -321,6 +321,24 @@ function runMigrations(db: Database.Database): void {
         UNIQUE(file_id, place_id)
       )`);
     },
+    () => {
+      // MCP service tokens
+      db.exec(`CREATE TABLE IF NOT EXISTS service_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        token_prefix TEXT NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        last_used DATETIME,
+        expires_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_service_tokens_prefix ON service_tokens(token_prefix)`);
+      // Add MCP addon (disabled by default)
+      try {
+        db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)").run('mcp', 'MCP Server', 'Model Context Protocol server for AI assistant access', 'global', 'Bot', 0, 20);
+      } catch {}
+    },
   ];
 
   if (currentVersion < migrations.length) {

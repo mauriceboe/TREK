@@ -163,6 +163,14 @@ export const adminApi = {
   listInvites: () => apiClient.get('/admin/invites').then(r => r.data),
   createInvite: (data: { max_uses: number; expires_in_days?: number }) => apiClient.post('/admin/invites', data).then(r => r.data),
   deleteInvite: (id: number) => apiClient.delete(`/admin/invites/${id}`).then(r => r.data),
+  listAllServiceTokens: () => apiClient.get('/admin/service-tokens').then(r => r.data),
+  revokeServiceToken: (id: number) => apiClient.delete(`/admin/service-tokens/${id}`).then(r => r.data),
+}
+
+export const mcpApi = {
+  listTokens: () => apiClient.get('/service-tokens').then(r => r.data),
+  createToken: (data: { name: string; expires_at?: string }) => apiClient.post('/service-tokens', data).then(r => r.data),
+  deleteToken: (id: number) => apiClient.delete(`/service-tokens/${id}`).then(r => r.data),
 }
 
 export const addonsApi = {

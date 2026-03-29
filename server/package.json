@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "archiver": "^6.0.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.8.0",
@@ -17,9 +18,9 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
+    "node-fetch": "^2.7.0",
     "otplib": "^12.0.1",
     "qrcode": "^1.5.4",
-    "node-fetch": "^2.7.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "unzipper": "^0.12.3",

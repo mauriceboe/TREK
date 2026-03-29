@@ -154,6 +154,13 @@ import atlasRoutes from './routes/atlas';
 app.use('/api/addons/atlas', atlasRoutes);
 import immichRoutes from './routes/immich';
 app.use('/api/integrations/immich', immichRoutes);
+import serviceTokenRoutes, { adminRouter as serviceTokenAdminRoutes } from './routes/service-tokens';
+app.use('/api/service-tokens', serviceTokenRoutes);
+app.use('/api/admin/service-tokens', serviceTokenAdminRoutes);
+import searchRoutes from './routes/search';
+app.use('/api/search', searchRoutes);
+import mcpTransportRoutes from './mcp/transport';
+app.use('/api/mcp', mcpTransportRoutes);
 
 app.use('/api/maps', mapsRoutes);
 app.use('/api/weather', weatherRoutes);

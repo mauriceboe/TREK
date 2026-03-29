@@ -13,6 +13,7 @@ import BackupPanel from '../components/Admin/BackupPanel'
 import GitHubPanel from '../components/Admin/GitHubPanel'
 import AddonManager from '../components/Admin/AddonManager'
 import PackingTemplateManager from '../components/Admin/PackingTemplateManager'
+import McpAddon from '../components/Admin/McpAddon'
 import { Users, Map, Briefcase, Shield, Trash2, Edit2, Camera, FileText, Eye, EyeOff, Save, CheckCircle, XCircle, Loader2, UserPlus, ArrowUpCircle, ExternalLink, Download, AlertTriangle, RefreshCw, GitBranch, Sun, Link2, Copy, Plus } from 'lucide-react'
 import CustomSelect from '../components/shared/CustomSelect'
 
@@ -662,6 +663,7 @@ export default function AdminPage(): React.ReactElement {
                 setBagTrackingEnabled(next)
                 try { await adminApi.updateBagTracking(next) } catch { setBagTrackingEnabled(!next) }
               }} />
+              <McpAddon />
             </div>
           )}
 

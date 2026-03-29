@@ -301,4 +301,68 @@ router.delete('/:id/members/:userId', authenticate, (req: Request, res: Response
   res.json({ success: true });
 });
 
+// GET /:id/context — full trip state in one call (for MCP)
+router.get('/:id/context', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { id } = req.params;
+  if (!canAccessTrip(id, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
+
+  const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(id);
+  const days = db.prepare('SELECT * FROM days WHERE trip_id = ? ORDER BY day_number').all(id);
+  const places = db.prepare(
+    `SELECT p.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+     FROM places p LEFT JOIN categories c ON c.id = p.category_id
+     WHERE p.trip_id = ? ORDER BY p.id`
+  ).all(id);
+  const assignments = db.prepare(
+    `SELECT da.*, d.day_number FROM day_assignments da
+     JOIN days d ON d.id = da.day_id WHERE d.trip_id = ? ORDER BY d.day_number, da.order_index`
+  ).all(id);
+  const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY category, sort_order').all(id);
+  const budget = db.prepare('SELECT * FROM budget_items WHERE trip_id = ? ORDER BY sort_order').all(id);
+  const members = db.prepare(
+    `SELECT u.id, u.username, u.email, u.avatar FROM trip_members tm
+     JOIN users u ON u.id = tm.user_id WHERE tm.trip_id = ?`
+  ).all(id);
+
+  res.json({ trip, days, places, assignments, packing, budget, members });
+});
+
+// POST /:id/duplicate — clone a trip with all days and places (no assignments)
+router.post('/:id/duplicate', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { id } = req.params;
+  if (!canAccessTrip(id, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
+
+  const original = db.prepare('SELECT * FROM trips WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!original) return res.status(404).json({ error: 'Trip not found' });
+
+  const newTitle = (req.body.title as string) || `${original.title} (copy)`;
+
+  const tripResult = db.prepare(
+    `INSERT INTO trips (user_id, title, description, start_date, end_date, currency, cover_image)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(authReq.user.id, newTitle, original.description, original.start_date, original.end_date, original.currency, original.cover_image);
+
+  const newTripId = tripResult.lastInsertRowid;
+
+  // Clone days
+  const days = db.prepare('SELECT * FROM days WHERE trip_id = ? ORDER BY day_number').all(id) as Array<Record<string, unknown>>;
+  for (const day of days) {
+    db.prepare('INSERT INTO days (trip_id, day_number, date, notes, title) VALUES (?, ?, ?, ?, ?)').run(newTripId, day.day_number, day.date, day.notes, day.title);
+  }
+
+  // Clone places (unassigned)
+  const places = db.prepare('SELECT * FROM places WHERE trip_id = ?').all(id) as Array<Record<string, unknown>>;
+  for (const p of places) {
+    db.prepare(
+      `INSERT INTO places (trip_id, name, lat, lng, address, category_id, price, currency, notes, image_url, website, phone, transport_mode, duration_minutes, place_time, end_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(newTripId, p.name, p.lat, p.lng, p.address, p.category_id, p.price, p.currency, p.notes, p.image_url, p.website, p.phone, p.transport_mode, p.duration_minutes, p.place_time, p.end_time);
+  }
+
+  const newTrip = db.prepare('SELECT * FROM trips WHERE id = ?').get(newTripId);
+  res.status(201).json({ trip: newTrip });
+});
+
 export default router;

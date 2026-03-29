@@ -298,3 +298,14 @@ export interface Participant {
   username: string;
   avatar?: string | null;
 }
+
+export interface ServiceToken {
+  id: number;
+  name: string;
+  token_hash: string;
+  token_prefix: string;
+  created_by: number;
+  last_used?: string | null;
+  expires_at?: string | null;
+  created_at?: string;
+}
