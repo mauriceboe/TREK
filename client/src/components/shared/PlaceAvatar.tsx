@@ -16,8 +16,18 @@ interface PlaceAvatarProps {
 
 const photoCache = new Map<string, string | null>()
 const photoInFlight = new Set<string>()
+// Event-based notification instead of polling intervals
+const photoListeners = new Map<string, Set<(url: string | null) => void>>()
 
-export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarProps) {
+function notifyListeners(key: string, url: string | null) {
+  const listeners = photoListeners.get(key)
+  if (listeners) {
+    listeners.forEach(fn => fn(url))
+    photoListeners.delete(key)
+  }
+}
+
+export default React.memo(function PlaceAvatar({ place, size = 32, category }: PlaceAvatarProps) {
   const [photoSrc, setPhotoSrc] = useState<string | null>(place.image_url || null)
 
   useEffect(() => {
@@ -33,28 +43,27 @@ export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarP
     }
 
     if (photoInFlight.has(cacheKey)) {
-      // Another instance is already fetching, wait for it
-      const check = setInterval(() => {
-        if (photoCache.has(cacheKey)) {
-          clearInterval(check)
-          const cached = photoCache.get(cacheKey)
-          if (cached) setPhotoSrc(cached)
-        }
-      }, 200)
-      return () => clearInterval(check)
+      // Subscribe to notification instead of polling
+      if (!photoListeners.has(cacheKey)) photoListeners.set(cacheKey, new Set())
+      const handler = (url: string | null) => { if (url) setPhotoSrc(url) }
+      photoListeners.get(cacheKey)!.add(handler)
+      return () => { photoListeners.get(cacheKey)?.delete(handler) }
     }
+
     photoInFlight.add(cacheKey)
     mapsApi.placePhoto(photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
       .then((data: { photoUrl?: string }) => {
-        if (data.photoUrl) {
-          photoCache.set(cacheKey, data.photoUrl)
-          setPhotoSrc(data.photoUrl)
-        } else {
-          photoCache.set(cacheKey, null)
-        }
+        const url = data.photoUrl || null
+        photoCache.set(cacheKey, url)
+        if (url) setPhotoSrc(url)
+        notifyListeners(cacheKey, url)
         photoInFlight.delete(cacheKey)
       })
-      .catch(() => { photoCache.set(cacheKey, null); photoInFlight.delete(cacheKey) })
+      .catch(() => {
+        photoCache.set(cacheKey, null)
+        notifyListeners(cacheKey, null)
+        photoInFlight.delete(cacheKey)
+      })
   }, [place.id, place.image_url, place.google_place_id, place.osm_id])
 
   const bgColor = category?.color || '#6366f1'
@@ -76,6 +85,7 @@ export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarP
         <img
           src={photoSrc}
           alt={place.name}
+          loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setPhotoSrc(null)}
         />
@@ -88,4 +98,4 @@ export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarP
       <IconComp size={iconSize} strokeWidth={1.8} color="rgba(255,255,255,0.92)" />
     </div>
   )
-}
+})

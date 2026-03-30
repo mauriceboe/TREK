@@ -1,7 +1,8 @@
+import React from 'react'
 import ReactDOM from 'react-dom'
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, useCallback } from 'react'
 import DOM from 'react-dom'
-import { Search, Plus, X, CalendarDays, Pencil, Trash2, ExternalLink, Navigation, Upload } from 'lucide-react'
+import { Search, Plus, X, CalendarDays, Pencil, Trash2, ExternalLink, Navigation, Upload, ChevronDown, Check } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { useTranslation } from '../../i18n'
@@ -53,26 +54,32 @@ export default function PlacesSidebar({
   }
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
-  const [categoryFilter, setCategoryFilterLocal] = useState('')
+  const [categoryFilters, setCategoryFiltersLocal] = useState<Set<string>>(new Set())
 
-  const setCategoryFilter = (val: string) => {
-    setCategoryFilterLocal(val)
-    onCategoryFilterChange?.(val)
+  const toggleCategoryFilter = (catId: string) => {
+    setCategoryFiltersLocal(prev => {
+      const next = new Set(prev)
+      if (next.has(catId)) next.delete(catId); else next.add(catId)
+      // Notify parent with first selected or empty
+      onCategoryFilterChange?.(next.size === 1 ? [...next][0] : '')
+      return next
+    })
   }
   const [dayPickerPlace, setDayPickerPlace] = useState(null)
+  const [catDropOpen, setCatDropOpen] = useState(false)
 
   // Alle geplanten Ort-IDs abrufen (einem Tag zugewiesen)
   const plannedIds = new Set(
     Object.values(assignments).flatMap(da => da.map(a => a.place?.id).filter(Boolean))
   )
 
-  const filtered = places.filter(p => {
+  const filtered = useMemo(() => places.filter(p => {
     if (filter === 'unplanned' && plannedIds.has(p.id)) return false
-    if (categoryFilter && String(p.category_id) !== String(categoryFilter)) return false
+    if (categoryFilters.size > 0 && !categoryFilters.has(String(p.category_id))) return false
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
         !(p.address || '').toLowerCase().includes(search.toLowerCase())) return false
     return true
-  })
+  }), [places, filter, categoryFilters, search, plannedIds.size])
 
   const isAssignedToSelectedDay = (placeId) =>
     selectedDayId && (assignments[String(selectedDayId)] || []).some(a => a.place?.id === placeId)
@@ -139,21 +146,69 @@ export default function PlacesSidebar({
           )}
         </div>
 
-        {/* Kategoriefilter */}
-        {categories.length > 0 && (
-          <div style={{ marginTop: 6 }}>
-            <CustomSelect
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              placeholder={t('places.allCategories')}
-              size="sm"
-              options={[
-                { value: '', label: t('places.allCategories') },
-                ...categories.map(c => ({ value: String(c.id), label: c.name }))
-              ]}
-            />
-          </div>
-        )}
+        {/* Category multi-select dropdown */}
+        {categories.length > 0 && (() => {
+          const label = categoryFilters.size === 0
+            ? t('places.allCategories')
+            : categoryFilters.size === 1
+              ? categories.find(c => categoryFilters.has(String(c.id)))?.name || t('places.allCategories')
+              : `${categoryFilters.size} ${t('places.categoriesSelected')}`
+          return (
+            <div style={{ marginTop: 6, position: 'relative' }}>
+              <button onClick={() => setCatDropOpen(v => !v)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
+                background: 'var(--bg-card)', fontSize: 12, color: 'var(--text-primary)',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--text-faint)', transform: catDropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+              </button>
+              {catDropOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4,
+                  background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, maxHeight: 200, overflowY: 'auto',
+                }}>
+                  {categories.map(c => {
+                    const active = categoryFilters.has(String(c.id))
+                    const CatIcon = getCategoryIcon(c.icon)
+                    return (
+                      <button key={c.id} onClick={() => toggleCategoryFilter(String(c.id))} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                        padding: '6px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: active ? 'var(--bg-hover)' : 'transparent',
+                        fontFamily: 'inherit', fontSize: 12, color: 'var(--text-primary)',
+                        textAlign: 'left',
+                      }}>
+                        <div style={{
+                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                          border: active ? 'none' : '1.5px solid var(--border-primary)',
+                          background: active ? (c.color || 'var(--accent)') : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {active && <Check size={10} strokeWidth={3} color="white" />}
+                        </div>
+                        <CatIcon size={12} strokeWidth={2} color={c.color || 'var(--text-muted)'} />
+                        <span style={{ flex: 1 }}>{c.name}</span>
+                      </button>
+                    )
+                  })}
+                  {categoryFilters.size > 0 && (
+                    <button onClick={() => { setCategoryFiltersLocal(new Set()); onCategoryFilterChange?.('') }} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      width: '100%', padding: '6px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                      background: 'transparent', fontFamily: 'inherit', fontSize: 11, color: 'var(--text-faint)',
+                      marginTop: 2, borderTop: '1px solid var(--border-faint)',
+                    }}>
+                      <X size={10} /> {t('places.clearFilter')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Anzahl */}
@@ -211,6 +266,8 @@ export default function PlacesSidebar({
                   background: isSelected ? 'var(--border-faint)' : 'transparent',
                   borderBottom: '1px solid var(--border-faint)',
                   transition: 'background 0.1s',
+                  contentVisibility: 'auto',
+                  containIntrinsicSize: '0 52px',
                 }}
                 onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)' }}
                 onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}

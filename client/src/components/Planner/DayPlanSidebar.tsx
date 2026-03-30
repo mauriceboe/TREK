@@ -793,6 +793,18 @@ export default function DayPlanSidebar({
                       </button>
                       {(() => {
                         const dayAccs = accommodations.filter(a => day.id >= a.start_day_id && day.id <= a.end_day_id)
+                          // Sort: check-out first, then ongoing stays, then check-in last
+                          .sort((a, b) => {
+                            const aIsOut = a.end_day_id === day.id && a.start_day_id !== day.id
+                            const bIsOut = b.end_day_id === day.id && b.start_day_id !== day.id
+                            const aIsIn = a.start_day_id === day.id
+                            const bIsIn = b.start_day_id === day.id
+                            if (aIsOut && !bIsOut) return -1
+                            if (!aIsOut && bIsOut) return 1
+                            if (aIsIn && !bIsIn) return 1
+                            if (!aIsIn && bIsIn) return -1
+                            return 0
+                          })
                         if (dayAccs.length === 0) return null
                         return dayAccs.map(acc => {
                           const isCheckIn = acc.start_day_id === day.id

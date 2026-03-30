@@ -647,6 +647,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'places.unplanned': 'Unplanned',
   'places.search': 'Search places...',
   'places.allCategories': 'All Categories',
+  'places.categoriesSelected': 'categories',
+  'places.clearFilter': 'Clear filter',
   'places.count': '{count} places',
   'places.countSingular': '1 place',
   'places.allPlanned': 'All places are planned',

@@ -65,7 +65,7 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
         cursor:pointer;flex-shrink:0;position:relative;
       ">
         <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;">
-          <img src="${escAttr(place.image_url)}" style="width:100%;height:100%;object-fit:cover;" />
+          <img src="${escAttr(place.image_url)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />
         </div>
         ${badgeHtml}
       </div>`,
@@ -360,33 +360,48 @@ export function MapView({
   }, [leftWidth, rightWidth, hasInspector])
   const [photoUrls, setPhotoUrls] = useState({})
 
-  // Fetch photos for places (Google or Wikimedia Commons fallback)
+  // Fetch photos for places with concurrency limit to avoid blocking map rendering
   useEffect(() => {
-    places.forEach(place => {
-      if (place.image_url) return
+    const queue = places.filter(place => {
+      if (place.image_url) return false
       const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
-      if (!cacheKey) return
+      if (!cacheKey) return false
       if (mapPhotoCache.has(cacheKey)) {
         const cached = mapPhotoCache.get(cacheKey)
         if (cached) setPhotoUrls(prev => prev[cacheKey] === cached ? prev : ({ ...prev, [cacheKey]: cached }))
-        return
+        return false
       }
-      if (mapPhotoInFlight.has(cacheKey)) return
+      if (mapPhotoInFlight.has(cacheKey)) return false
       const photoId = place.google_place_id || place.osm_id
-      if (!photoId && !(place.lat && place.lng)) return
-      mapPhotoInFlight.add(cacheKey)
-      mapsApi.placePhoto(photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
-        .then(data => {
-          if (data.photoUrl) {
-            mapPhotoCache.set(cacheKey, data.photoUrl)
-            setPhotoUrls(prev => ({ ...prev, [cacheKey]: data.photoUrl }))
-          } else {
-            mapPhotoCache.set(cacheKey, null)
-          }
-          mapPhotoInFlight.delete(cacheKey)
-        })
-        .catch(() => { mapPhotoCache.set(cacheKey, null); mapPhotoInFlight.delete(cacheKey) })
+      if (!photoId && !(place.lat && place.lng)) return false
+      return true
     })
+
+    let active = 0
+    const MAX_CONCURRENT = 3
+    let idx = 0
+
+    const fetchNext = () => {
+      while (active < MAX_CONCURRENT && idx < queue.length) {
+        const place = queue[idx++]
+        const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
+        const photoId = place.google_place_id || place.osm_id
+        mapPhotoInFlight.add(cacheKey)
+        active++
+        mapsApi.placePhoto(photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
+          .then(data => {
+            if (data.photoUrl) {
+              mapPhotoCache.set(cacheKey, data.photoUrl)
+              setPhotoUrls(prev => ({ ...prev, [cacheKey]: data.photoUrl }))
+            } else {
+              mapPhotoCache.set(cacheKey, null)
+            }
+          })
+          .catch(() => { mapPhotoCache.set(cacheKey, null) })
+          .finally(() => { mapPhotoInFlight.delete(cacheKey); active--; fetchNext() })
+      }
+    }
+    fetchNext()
   }, [places])
 
   return (
