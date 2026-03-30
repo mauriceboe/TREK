@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import fetch from 'node-fetch';
 import { db, getPlaceWithTags } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { requireTripAccess } from '../middleware/tripAccess';

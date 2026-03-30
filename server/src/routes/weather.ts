@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import fetch from 'node-fetch';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
@@ -113,7 +112,7 @@ async function fetchJSON(
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
           try {
-            const res = await fetch(url, { signal: controller.signal as any });
+            const res = await fetch(url, { signal: controller.signal });
             const body = await res.json();
             return { ok: res.ok, status: res.status, body };
           } finally {

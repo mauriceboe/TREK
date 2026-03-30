@@ -486,11 +486,10 @@ router.get('/link-preview', authenticate, async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Private/internal URLs are not allowed' });
     }
 
-    const nodeFetch = require('node-fetch');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    nodeFetch(url, { redirect: 'error',
+    fetch(url, { redirect: 'error',
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NOMAD/1.0; +https://github.com/mauriceboe/NOMAD)' },
     })
