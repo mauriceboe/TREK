@@ -109,13 +109,14 @@ if (DEBUG) {
 }
 
 // Avatars are public (shown on login, sharing screens)
+import { authenticate } from './middleware/auth';
 app.use('/uploads/avatars', express.static(path.join(__dirname, '../uploads/avatars')));
 app.use('/uploads/covers', express.static(path.join(__dirname, '../uploads/covers')));
 
-// All other uploads require authentication
-app.get('/uploads/:type/:filename', (req: Request, res: Response) => {
+// Files and photos require authentication (covers and avatars are public — served statically above)
+app.get('/uploads/:type/:filename', authenticate, (req: Request, res: Response) => {
   const { type, filename } = req.params;
-  const allowedTypes = ['covers', 'files', 'photos'];
+  const allowedTypes = ['files', 'photos'];
   if (!allowedTypes.includes(type)) return res.status(404).send('Not found');
 
   // Prevent path traversal
