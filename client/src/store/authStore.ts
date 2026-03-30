@@ -29,7 +29,7 @@ interface AuthState {
 
   login: (email: string, password: string) => Promise<LoginResult>
   completeMfaLogin: (mfaToken: string, code: string) => Promise<AuthResponse>
-  register: (username: string, email: string, password: string) => Promise<AuthResponse>
+  register: (username: string, email: string, password: string, invite_token?: string) => Promise<AuthResponse>
   logout: () => void
   /** Pass `{ silent: true }` to refresh the user without toggling global isLoading (avoids unmounting protected routes). */
   loadUser: (opts?: { silent?: boolean }) => Promise<void>
@@ -126,6 +126,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     disconnect()
     localStorage.removeItem('auth_token')
+    // Clear service worker caches containing sensitive data
+    if ('caches' in window) {
+      caches.delete('api-data').catch(() => {})
+      caches.delete('user-uploads').catch(() => {})
+    }
     set({
       user: null,
       token: null,
@@ -151,13 +156,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       })
       connect(token)
     } catch (err: unknown) {
-      localStorage.removeItem('auth_token')
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      })
+      // Only clear auth state on 401 (invalid/expired token), not on network errors
+      const isAuthError = err && typeof err === 'object' && 'response' in err &&
+        (err as { response?: { status?: number } }).response?.status === 401
+      if (isAuthError) {
+        localStorage.removeItem('auth_token')
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+        })
+      } else {
+        set({ isLoading: false })
+      }
     }
   },
 
