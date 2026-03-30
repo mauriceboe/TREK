@@ -232,9 +232,20 @@
 - Major dependency upgrades (express 5, React 19, zustand 5, etc.)
 - `serialize-javascript` vulnerability fix requires vite-plugin-pwa major upgrade
 
+### Additional Findings (from exhaustive scan)
+
+- **MEDIUM** — `server/src/index.ts:121-136`: Upload files (`/uploads/:type/:filename`) served without authentication. UUIDs are unguessable but this is security-through-obscurity. **REQUIRES MANUAL REVIEW** — adding auth would break shared trip image URLs.
+- **MEDIUM** — `server/src/routes/oidc.ts:194`: OIDC token exchange error was logging full token response (potentially including access tokens). **FIXED** — now logs only HTTP status.
+- **MEDIUM** — `server/src/services/notifications.ts:194-196`: Email body is not HTML-escaped. User-generated content (trip names, usernames) interpolated directly into HTML email template. Potential stored XSS in email clients. **DOCUMENTED** — needs HTML entity escaping.
+- **LOW** — `server/src/demo/demo-seed.ts:7-9`: Hardcoded demo credentials (`demo12345`, `admin12345`). Intentional for demo mode but dangerous if DEMO_MODE accidentally left on in production. Already has startup warning.
+- **LOW** — `server/src/routes/auth.ts:742`: MFA setup returns plaintext TOTP secret to client. This is standard TOTP enrollment flow — users need the secret for manual entry. Must be served over HTTPS.
+- **LOW** — `server/src/routes/auth.ts:473`: Admin settings GET returns API keys in full (not masked). Only accessible to admins.
+- **LOW** — `server/src/routes/auth.ts:564`: SMTP password stored as plaintext in `app_settings` table. Masked in API response but unencrypted at rest.
+
 ### Accepted Risks (Documented)
 
 - WebSocket token in URL query string (browser limitation)
 - 24h JWT expiry without refresh tokens (acceptable for self-hosted)
 - MFA encryption key derived from JWT_SECRET (noted coupling)
 - localStorage for token storage (standard SPA pattern)
+- Upload files served without auth (UUID-based obscurity, needed for shared trips)

@@ -191,7 +191,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     const tokenData = await tokenRes.json() as OidcTokenResponse;
     if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('[OIDC] Token exchange failed:', tokenData);
+      console.error('[OIDC] Token exchange failed: status', tokenRes.status);
       return res.redirect(frontendUrl('/login?oidc_error=token_failed'));
     }
 
