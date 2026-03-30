@@ -56,10 +56,94 @@ interface OpenMeteoForecast {
   };
 }
 
+// ─── HTTP helpers: deduplication, archive concurrency + pacing, retry ─────────
+
+const FETCH_TIMEOUT_MS  = 12_000;
+const ARCHIVE_CONCURRENCY = 2;
+const ARCHIVE_GAP_MS    = 300;   // min ms between successive archive request starts
+const RETRY_DELAYS_MS   = [500, 1500, 4000] as const; // 3 retries with backoff
+
+// Deduplicate identical concurrent requests: same URL → same promise
+const inFlightFetches = new Map<string, Promise<{ ok: boolean; status: number; body: unknown }>>();
+
+// Semaphore for archive API (transfer-based: no count drift on wake-up)
+let _archiveSlots = ARCHIVE_CONCURRENCY;
+let _archiveLastStart = 0;
+const _archiveWaiters: Array<() => void> = [];
+
+async function archiveAcquire(): Promise<void> {
+  if (_archiveSlots <= 0) {
+    await new Promise<void>(resolve => _archiveWaiters.push(resolve));
+    // slot transferred directly by archiveRelease — count is unchanged
+  } else {
+    _archiveSlots--;
+  }
+  // Pace: enforce minimum gap between successive archive request starts
+  const wait = (_archiveLastStart + ARCHIVE_GAP_MS) - Date.now();
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _archiveLastStart = Date.now();
+}
+
+function archiveRelease(): void {
+  const next = _archiveWaiters.shift();
+  if (next) {
+    next(); // transfer slot — _archiveSlots count stays the same
+  } else {
+    _archiveSlots++;
+  }
+}
+
+async function fetchJSON(
+  url: string,
+  useArchive = false,
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  // Return an existing in-flight request for the same URL instead of firing a new one
+  const existing = inFlightFetches.get(url);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    if (useArchive) await archiveAcquire();
+    try {
+      let lastErr: unknown;
+      for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+        if (attempt > 0) {
+          await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
+        }
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+          try {
+            const res = await fetch(url, { signal: controller.signal as any });
+            const body = await res.json();
+            return { ok: res.ok, status: res.status, body };
+          } finally {
+            clearTimeout(timer);
+          }
+        } catch (err: any) {
+          const isRetryable =
+            err.name === 'AbortError' ||
+            (err.type === 'system' && ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND']
+              .includes(err.code ?? err.errno));
+          if (!isRetryable || attempt === RETRY_DELAYS_MS.length) throw err;
+          lastErr = err;
+        }
+      }
+      throw lastErr; // unreachable but satisfies TS
+    } finally {
+      if (useArchive) archiveRelease();
+    }
+  })().finally(() => inFlightFetches.delete(url));
+
+  inFlightFetches.set(url, promise);
+  return promise;
+}
+
+// ─── Weather cache ─────────────────────────────────────────────────────────────
+
 const weatherCache = new Map<string, { data: WeatherResult; expiresAt: number }>();
 const CACHE_MAX_ENTRIES = 1000;
 const CACHE_PRUNE_TARGET = 500;
-const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
@@ -73,9 +157,9 @@ setInterval(() => {
   }
 }, CACHE_CLEANUP_INTERVAL);
 
-const TTL_FORECAST_MS = 60 * 60 * 1000;      // 1 hour
-const TTL_CURRENT_MS  = 15 * 60 * 1000;      // 15 minutes
-const TTL_CLIMATE_MS  = 24 * 60 * 60 * 1000; // 24 hours
+const TTL_FORECAST_MS = 60 * 60 * 1000;
+const TTL_CURRENT_MS  = 15 * 60 * 1000;
+const TTL_CLIMATE_MS  = 24 * 60 * 60 * 1000;
 
 function cacheKey(lat: string, lng: string, date?: string): string {
   const rlat = parseFloat(lat).toFixed(2);
@@ -96,6 +180,8 @@ function getCached(key: string) {
 function setCache(key: string, data: WeatherResult, ttlMs: number) {
   weatherCache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
+
+// ─── WMO code tables ───────────────────────────────────────────────────────────
 
 const WMO_MAP: Record<number, string> = {
   0: 'Clear', 1: 'Clear', 2: 'Clouds', 3: 'Clouds',
@@ -141,6 +227,8 @@ function estimateCondition(tempAvg: number, precipMm: number): string {
   return tempAvg > 15 ? 'Clear' : 'Clouds';
 }
 
+// ─── Routes ────────────────────────────────────────────────────────────────────
+
 router.get('/', authenticate, async (req: Request, res: Response) => {
   const { lat, lng, date, lang = 'de' } = req.query as { lat: string; lng: string; date?: string; lang?: string };
 
@@ -161,11 +249,11 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
       if (diffDays >= -1 && diffDays <= 16) {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`;
-        const response = await fetch(url);
-        const data = await response.json() as OpenMeteoForecast;
+        const { ok, status, body } = await fetchJSON(url);
+        const data = body as OpenMeteoForecast;
 
-        if (!response.ok || data.error) {
-          return res.status(response.status || 500).json({ error: data.reason || 'Open-Meteo API error' });
+        if (!ok || data.error) {
+          return res.status(status || 500).json({ error: data.reason || 'Open-Meteo API error' });
         }
 
         const dateStr = targetDate.toISOString().slice(0, 10);
@@ -199,11 +287,11 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
         const endStr = endDate.toISOString().slice(0, 10);
 
         const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`;
-        const response = await fetch(url);
-        const data = await response.json() as OpenMeteoForecast;
+        const { ok, status, body } = await fetchJSON(url, true);
+        const data = body as OpenMeteoForecast;
 
-        if (!response.ok || data.error) {
-          return res.status(response.status || 500).json({ error: data.reason || 'Open-Meteo Climate API error' });
+        if (!ok || data.error) {
+          return res.status(status || 500).json({ error: data.reason || 'Open-Meteo Climate API error' });
         }
 
         const daily = data.daily;
@@ -251,11 +339,11 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
     if (cached) return res.json(cached);
 
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode&timezone=auto`;
-    const response = await fetch(url);
-    const data = await response.json() as OpenMeteoForecast;
+    const { ok, status, body } = await fetchJSON(url);
+    const data = body as OpenMeteoForecast;
 
-    if (!response.ok || data.error) {
-      return res.status(response.status || 500).json({ error: data.reason || 'Open-Meteo API error' });
+    if (!ok || data.error) {
+      return res.status(status || 500).json({ error: data.reason || 'Open-Meteo API error' });
     }
 
     const code = data.current.weathercode;
@@ -304,11 +392,11 @@ router.get('/detailed', authenticate, async (req: Request, res: Response) => {
         + `&hourly=temperature_2m,precipitation,weathercode,windspeed_10m,relativehumidity_2m`
         + `&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,windspeed_10m_max,sunrise,sunset`
         + `&timezone=auto`;
-      const response = await fetch(url);
-      const data = await response.json() as OpenMeteoForecast;
+      const { ok, status, body } = await fetchJSON(url, true);
+      const data = body as OpenMeteoForecast;
 
-      if (!response.ok || data.error) {
-        return res.status(response.status || 500).json({ error: data.reason || 'Open-Meteo Climate API error' });
+      if (!ok || data.error) {
+        return res.status(status || 500).json({ error: data.reason || 'Open-Meteo Climate API error' });
       }
 
       const daily = data.daily;
@@ -366,11 +454,11 @@ router.get('/detailed', authenticate, async (req: Request, res: Response) => {
       + `&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset,precipitation_probability_max,precipitation_sum,windspeed_10m_max`
       + `&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
 
-    const response = await fetch(url);
-    const data = await response.json() as OpenMeteoForecast;
+    const { ok, status, body } = await fetchJSON(url);
+    const data = body as OpenMeteoForecast;
 
-    if (!response.ok || data.error) {
-      return res.status(response.status || 500).json({ error: data.reason || 'Open-Meteo API error' });
+    if (!ok || data.error) {
+      return res.status(status || 500).json({ error: data.reason || 'Open-Meteo API error' });
     }
 
     const daily = data.daily;

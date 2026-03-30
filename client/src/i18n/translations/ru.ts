@@ -1100,6 +1100,7 @@ const ru: Record<string, string> = {
   'day.hourlyForecast': 'Почасовой прогноз',
   'day.climateHint': 'Исторические средние — реальный прогноз доступен за 16 дней до этой даты.',
   'day.noWeather': 'Данные о погоде недоступны. Добавьте место с координатами.',
+  'day.weatherUnavailable': 'Данные о погоде временно недоступны.',
   'day.overview': 'Обзор дня',
   'day.accommodation': 'Жильё',
   'day.addAccommodation': 'Добавить жильё',

@@ -60,6 +60,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const unit = isFahrenheit ? '°F' : '°C'
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [weatherFetchFailed, setWeatherFetchFailed] = useState(false)
   const [accommodation, setAccommodation] = useState(null)
   const [dayAccommodations, setDayAccommodations] = useState<any[]>([])
   const [accommodations, setAccommodations] = useState([])
@@ -69,11 +70,15 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const [hotelForm, setHotelForm] = useState({ check_in: '', check_out: '', confirmation: '', place_id: null })
 
   useEffect(() => {
-    if (!day?.date || !lat || !lng) { setWeather(null); return }
+    if (!day?.date || !lat || !lng) { setWeather(null); setWeatherFetchFailed(false); return }
     setLoading(true)
+    setWeatherFetchFailed(false)
     weatherApi.getDetailed(lat, lng, day.date, language)
-      .then(data => setWeather(data.error ? null : data))
-      .catch(() => setWeather(null))
+      .then(data => {
+        if (data.error) { setWeather(null); setWeatherFetchFailed(true) }
+        else setWeather(data)
+      })
+      .catch(() => { setWeather(null); setWeatherFetchFailed(true) })
       .finally(() => setLoading(false))
   }, [day?.date, lat, lng, language])
 
@@ -244,7 +249,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                 )}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>{t('day.noWeather')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>{weatherFetchFailed ? t('day.weatherUnavailable') : t('day.noWeather')}</div>
             )
           )}
 

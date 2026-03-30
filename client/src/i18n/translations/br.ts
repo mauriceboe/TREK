@@ -1109,6 +1109,7 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'day.hourlyForecast': 'Previsão por hora',
   'day.climateHint': 'Médias históricas — previsão real disponível até 16 dias desta data.',
   'day.noWeather': 'Sem dados meteorológicos. Adicione um lugar com coordenadas.',
+  'day.weatherUnavailable': 'Dados meteorológicos temporariamente indisponíveis.',
   'day.overview': 'Resumo do dia',
   'day.accommodation': 'Hospedagem',
   'day.addAccommodation': 'Adicionar hospedagem',

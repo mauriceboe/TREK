@@ -1100,6 +1100,7 @@ const zh: Record<string, string> = {
   'day.hourlyForecast': '逐小时预报',
   'day.climateHint': '历史平均值——实际预报在该日期前 16 天内可用。',
   'day.noWeather': '无天气数据。请添加有坐标的地点。',
+  'day.weatherUnavailable': '天气数据暂时无法获取。',
   'day.overview': '每日概览',
   'day.accommodation': '住宿',
   'day.addAccommodation': '添加住宿',
