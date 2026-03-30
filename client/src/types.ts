@@ -130,7 +130,8 @@ export interface KostenExpense {
   amount: number
   currency: string
   exchange_rate: number
-  paid_by: number
+  paid_by: number | null
+  paid_by_name: string | null
   paid_by_username: string
   paid_by_avatar_url: string | null
   category: string

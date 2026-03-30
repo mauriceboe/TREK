@@ -66,6 +66,7 @@ interface ExpenseFormData {
   currency: string
   exchange_rate: string
   paid_by: number | null
+  paid_by_name: string | null
   category: string
   expense_date: string
   note: string
@@ -74,8 +75,14 @@ interface ExpenseFormData {
   share_values: Record<number, string>
 }
 
+function payerOptionKey(paid_by: number | null, paid_by_name: string | null): string {
+  if (paid_by_name) return `c:${paid_by_name}`
+  if (paid_by) return `u:${paid_by}`
+  return ''
+}
+
 function ExpenseFormModal({
-  isOpen, onClose, onSave, expense, tripMembers, tripId, tripCurrency, locale, customCategories, onAddCategory,
+  isOpen, onClose, onSave, expense, tripMembers, tripId, tripCurrency, locale, customCategories, onAddCategory, customPayers, onAddPayer,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -87,11 +94,13 @@ function ExpenseFormModal({
   locale: string
   customCategories: string[]
   onAddCategory: (cat: string) => void
+  customPayers: string[]
+  onAddPayer: (name: string) => void
 }) {
   const { t } = useTranslation()
   const [form, setForm] = useState<ExpenseFormData>({
     title: '', amount: '', currency: tripCurrency, exchange_rate: '1',
-    paid_by: tripMembers[0]?.id ?? null, category: 'Sonstiges',
+    paid_by: tripMembers[0]?.id ?? null, paid_by_name: null, category: 'Sonstiges',
     expense_date: '', note: '', split_type: 'equal',
     participant_ids: tripMembers.map(m => m.id), share_values: {},
   })
@@ -99,6 +108,8 @@ function ExpenseFormModal({
   const [fetchingRate, setFetchingRate] = useState(false)
   const [showAddCat, setShowAddCat] = useState(false)
   const [newCatInput, setNewCatInput] = useState('')
+  const [showAddPayer, setShowAddPayer] = useState(false)
+  const [newPayerInput, setNewPayerInput] = useState('')
   const allCategories = [...CATEGORIES, ...customCategories]
 
   // Reset when expense changes
@@ -110,7 +121,8 @@ function ExpenseFormModal({
         amount: String(expense.amount),
         currency: expense.currency,
         exchange_rate: String(expense.exchange_rate),
-        paid_by: expense.paid_by,
+        paid_by: expense.paid_by ?? null,
+        paid_by_name: expense.paid_by_name ?? null,
         category: expense.category,
         expense_date: expense.expense_date || '',
         note: expense.note || '',
@@ -121,7 +133,7 @@ function ExpenseFormModal({
     } else {
       setForm({
         title: '', amount: '', currency: tripCurrency, exchange_rate: '1',
-        paid_by: tripMembers[0]?.id ?? null, category: 'Sonstiges',
+        paid_by: tripMembers[0]?.id ?? null, paid_by_name: null, category: 'Sonstiges',
         expense_date: '', note: '', split_type: 'equal',
         participant_ids: tripMembers.map(m => m.id), share_values: {},
       })
@@ -168,7 +180,7 @@ function ExpenseFormModal({
   }, [form.split_type, form.participant_ids, form.share_values])
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.amount || !form.paid_by) return
+    if (!form.title.trim() || !form.amount || (!form.paid_by && !form.paid_by_name)) return
     setSaving(true)
     try { await onSave(form) } finally { setSaving(false) }
   }
@@ -188,11 +200,11 @@ function ExpenseFormModal({
       <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-card)', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
         {t('common.cancel')}
       </button>
-      <button onClick={handleSave} disabled={!form.title.trim() || !form.amount || !form.paid_by || saving} style={{
+      <button onClick={handleSave} disabled={!form.title.trim() || !form.amount || (!form.paid_by && !form.paid_by_name) || saving} style={{
         padding: '7px 16px', borderRadius: 8, border: 'none',
         background: 'var(--accent)', color: 'var(--accent-text)',
         fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
-        opacity: (!form.title.trim() || !form.amount || !form.paid_by || saving) ? 0.5 : 1,
+        opacity: (!form.title.trim() || !form.amount || (!form.paid_by && !form.paid_by_name) || saving) ? 0.5 : 1,
       }}>
         {saving ? t('common.saving') : t('common.save')}
       </button>
@@ -248,12 +260,59 @@ function ExpenseFormModal({
         )}
 
         {/* Paid by + Category */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <label style={labelStyle}>{t('kosten.paidBy')} *</label>
-            <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.paid_by ?? ''} onChange={e => setField('paid_by', Number(e.target.value))}>
-              {tripMembers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>{t('kosten.paidBy')} *</label>
+              <button
+                type="button"
+                onClick={() => { setShowAddPayer(s => !s); setNewPayerInput('') }}
+                style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
+              >{t('kosten.addPayer')}</button>
+            </div>
+            <select
+              style={{ ...inputStyle, cursor: 'pointer' }}
+              value={payerOptionKey(form.paid_by, form.paid_by_name)}
+              onChange={e => {
+                const val = e.target.value
+                if (val.startsWith('u:')) setForm(f => ({ ...f, paid_by: Number(val.slice(2)), paid_by_name: null }))
+                else if (val.startsWith('c:')) setForm(f => ({ ...f, paid_by: null, paid_by_name: val.slice(2) }))
+              }}
+            >
+              {tripMembers.map(m => <option key={`u:${m.id}`} value={`u:${m.id}`}>{m.username}</option>)}
+              {customPayers.map(name => <option key={`c:${name}`} value={`c:${name}`}>{name}</option>)}
             </select>
+            {showAddPayer && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <input
+                  style={{ ...inputStyle, flex: 1, padding: '6px 8px' }}
+                  value={newPayerInput}
+                  onChange={e => setNewPayerInput(e.target.value)}
+                  placeholder={t('kosten.newPayerPlaceholder')}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newPayerInput.trim()) {
+                      onAddPayer(newPayerInput.trim())
+                      setForm(f => ({ ...f, paid_by: null, paid_by_name: newPayerInput.trim() }))
+                      setNewPayerInput('')
+                      setShowAddPayer(false)
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newPayerInput.trim()) {
+                      onAddPayer(newPayerInput.trim())
+                      setForm(f => ({ ...f, paid_by: null, paid_by_name: newPayerInput.trim() }))
+                      setNewPayerInput('')
+                      setShowAddPayer(false)
+                    }
+                  }}
+                  style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                >+</button>
+              </div>
+            )}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -302,7 +361,7 @@ function ExpenseFormModal({
         </div>
 
         {/* Date + Note */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label style={labelStyle}>{t('kosten.date')}</label>
             <input style={inputStyle} type="date" value={form.expense_date} onChange={e => setField('expense_date', e.target.value)} />
@@ -473,7 +532,7 @@ function SettlementFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('kosten.addSettlement')} size="md" footer={footerButtons}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label style={labelStyle}>{t('kosten.fromUser')}</label>
             <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.from_user_id ?? ''} onChange={e => setForm(f => ({ ...f, from_user_id: Number(e.target.value) }))}>
@@ -612,11 +671,15 @@ function exportPDF(expenses: KostenExpense[], settlements: KostenSettlement[], b
 
   </body></html>`
 
-  const win = window.open('', '_blank')
-  if (!win) return
-  win.document.write(html)
-  win.document.close()
-  setTimeout(() => { win.focus(); win.print() }, 400)
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${tripTitle || 'kosten'}-bericht.html`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
@@ -656,6 +719,17 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
     })
   }, [tripId])
 
+  const [customPayers, setCustomPayers] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`kosten-custom-payers-${tripId}`) || '[]') } catch { return [] }
+  })
+  const handleAddPayer = useCallback((name: string) => {
+    setCustomPayers(prev => {
+      const next = prev.includes(name) ? prev : [...prev, name]
+      localStorage.setItem(`kosten-custom-payers-${tripId}`, JSON.stringify(next))
+      return next
+    })
+  }, [tripId])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -684,6 +758,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
       currency: form.currency,
       exchange_rate: parsedRate,
       paid_by: form.paid_by,
+      paid_by_name: form.paid_by_name || null,
       category: form.category,
       expense_date: form.expense_date || null,
       note: form.note || null,
@@ -806,7 +881,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
       {/* ── Main content ───────────────────────────────────────────────────── */}
       <div style={{ flex: 1, minWidth: 0, padding: '16px 16px 16px 16px', overflowY: 'auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Receipt size={18} style={{ color: 'var(--text-primary)' }} />
           </div>
@@ -1037,6 +1112,8 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
         locale={locale}
         customCategories={customCategories}
         onAddCategory={handleAddCategory}
+        customPayers={customPayers}
+        onAddPayer={handleAddPayer}
       />
 
       <SettlementFormModal

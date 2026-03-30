@@ -366,6 +366,35 @@ function runMigrations(db: Database.Database): void {
         db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES ('kosten', 'Kosten', 'Split expenses and settle debts between trip members', 'trip', 'Receipt', 1, 4)").run();
       } catch {}
     },
+    () => {
+      // Make paid_by nullable + add paid_by_name for external (non-registered) payers
+      db.exec('PRAGMA foreign_keys = OFF');
+      db.exec(`
+        CREATE TABLE kosten_expenses_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          amount REAL NOT NULL DEFAULT 0,
+          currency TEXT NOT NULL DEFAULT 'EUR',
+          exchange_rate REAL NOT NULL DEFAULT 1,
+          paid_by INTEGER,
+          paid_by_name TEXT,
+          category TEXT NOT NULL DEFAULT 'Sonstiges',
+          expense_date TEXT,
+          note TEXT,
+          split_type TEXT NOT NULL DEFAULT 'equal',
+          sort_order INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO kosten_expenses_v2 (id, trip_id, title, amount, currency, exchange_rate, paid_by, category, expense_date, note, split_type, sort_order, created_at)
+          SELECT id, trip_id, title, amount, currency, exchange_rate, paid_by, category, expense_date, note, split_type, sort_order, created_at FROM kosten_expenses;
+        DROP TABLE kosten_expenses;
+        ALTER TABLE kosten_expenses_v2 RENAME TO kosten_expenses;
+        CREATE INDEX IF NOT EXISTS idx_kosten_expenses_trip ON kosten_expenses(trip_id);
+        CREATE INDEX IF NOT EXISTS idx_kosten_expenses_paid_by ON kosten_expenses(paid_by);
+      `);
+      db.exec('PRAGMA foreign_keys = ON');
+    },
   ];
 
   if (currentVersion < migrations.length) {

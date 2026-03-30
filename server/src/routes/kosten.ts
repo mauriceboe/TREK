@@ -41,8 +41,8 @@ function loadExpenseShares(expenseId: number | string): ShareRow[] {
 
 function loadFullExpense(id: number | string) {
   const expense = db.prepare(`
-    SELECT ke.*, u.username as paid_by_username, u.avatar as paid_by_avatar
-    FROM kosten_expenses ke JOIN users u ON ke.paid_by = u.id
+    SELECT ke.*, COALESCE(ke.paid_by_name, u.username) as paid_by_username, u.avatar as paid_by_avatar
+    FROM kosten_expenses ke LEFT JOIN users u ON ke.paid_by = u.id
     WHERE ke.id = ?
   `).get(id) as any;
   if (!expense) return undefined;
@@ -58,8 +58,8 @@ router.get('/', authenticate, (req: Request, res: Response) => {
   if (!canAccessTrip(tripId, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
 
   const expenses = db.prepare(`
-    SELECT ke.*, u.username as paid_by_username, u.avatar as paid_by_avatar
-    FROM kosten_expenses ke JOIN users u ON ke.paid_by = u.id
+    SELECT ke.*, COALESCE(ke.paid_by_name, u.username) as paid_by_username, u.avatar as paid_by_avatar
+    FROM kosten_expenses ke LEFT JOIN users u ON ke.paid_by = u.id
     WHERE ke.trip_id = ?
     ORDER BY CASE WHEN ke.expense_date IS NULL THEN 1 ELSE 0 END, ke.expense_date DESC, ke.created_at DESC
   `).all(tripId) as any[];
@@ -93,18 +93,18 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   const { tripId } = req.params;
   if (!canAccessTrip(tripId, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
 
-  const { title, amount, currency, exchange_rate = 1, paid_by, category = 'Sonstiges', expense_date, note, split_type = 'equal', participant_ids } = req.body;
-  if (!title || amount === undefined || amount === null || !paid_by) {
-    return res.status(400).json({ error: 'title, amount and paid_by are required' });
+  const { title, amount, currency, exchange_rate = 1, paid_by, paid_by_name, category = 'Sonstiges', expense_date, note, split_type = 'equal', participant_ids } = req.body;
+  if (!title || amount === undefined || amount === null || (!paid_by && !paid_by_name)) {
+    return res.status(400).json({ error: 'title, amount and (paid_by or paid_by_name) are required' });
   }
 
   const trip = db.prepare('SELECT currency FROM trips WHERE id = ?').get(tripId) as { currency: string } | undefined;
   const tripCurrency = trip?.currency || 'EUR';
 
   const result = db.prepare(`
-    INSERT INTO kosten_expenses (trip_id, title, amount, currency, exchange_rate, paid_by, category, expense_date, note, split_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(tripId, title, Number(amount), currency || tripCurrency, Number(exchange_rate), Number(paid_by), category, expense_date || null, note || null, split_type);
+    INSERT INTO kosten_expenses (trip_id, title, amount, currency, exchange_rate, paid_by, paid_by_name, category, expense_date, note, split_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(tripId, title, Number(amount), currency || tripCurrency, Number(exchange_rate), paid_by ? Number(paid_by) : null, paid_by_name || null, category, expense_date || null, note || null, split_type);
 
   const expenseId = result.lastInsertRowid as number;
 
@@ -136,8 +136,8 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   if (!existing) return res.status(404).json({ error: 'Expense not found' });
 
   const numberFields = new Set(['amount', 'exchange_rate', 'paid_by']);
-  const nullableFields = new Set(['expense_date', 'note']);
-  const allowed = ['title', 'amount', 'currency', 'exchange_rate', 'paid_by', 'category', 'expense_date', 'note', 'split_type'] as const;
+  const nullableFields = new Set(['expense_date', 'note', 'paid_by', 'paid_by_name']);
+  const allowed = ['title', 'amount', 'currency', 'exchange_rate', 'paid_by', 'paid_by_name', 'category', 'expense_date', 'note', 'split_type'] as const;
 
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -204,7 +204,7 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
 
   const expenses = db.prepare(`
     SELECT id, amount, exchange_rate, paid_by, split_type
-    FROM kosten_expenses WHERE trip_id = ?
+    FROM kosten_expenses WHERE trip_id = ? AND paid_by IS NOT NULL
   `).all(tripId) as { id: number; amount: number; exchange_rate: number; paid_by: number; split_type: string }[];
 
   const allShareRows = db.prepare(`
