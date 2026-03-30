@@ -333,7 +333,7 @@ export default function AdminPage(): React.ReactElement {
               <Shield className="w-5 h-5 text-slate-700" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Administration</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{t('admin.title')}</h1>
               <p className="text-slate-500 text-sm">{t('admin.subtitle')}</p>
             </div>
           </div>
