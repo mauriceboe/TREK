@@ -4,7 +4,9 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "node --import tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "archiver": "^6.0.1",
@@ -17,9 +19,9 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
+    "node-fetch": "^2.7.0",
     "otplib": "^12.0.1",
     "qrcode": "^1.5.4",
-    "node-fetch": "^2.7.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "unzipper": "^0.12.3",
@@ -40,6 +42,7 @@
     "@types/unzipper": "^0.10.11",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "vitest": "^4.1.2"
   }
 }
