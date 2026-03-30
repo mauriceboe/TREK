@@ -581,6 +581,8 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'kosten.cat.activities': 'Aktivitäten',
   'kosten.cat.shopping': 'Einkaufen',
   'kosten.cat.other': 'Sonstiges',
+  'kosten.addCategory': '+ Kategorie',
+  'kosten.newCategoryPlaceholder': 'Neue Kategorie…',
 
   // Atlas addon
   'atlas.subtitle': 'Dein Reise-Fußabdruck auf der Welt',

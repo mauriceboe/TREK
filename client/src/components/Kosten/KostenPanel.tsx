@@ -75,7 +75,7 @@ interface ExpenseFormData {
 }
 
 function ExpenseFormModal({
-  isOpen, onClose, onSave, expense, tripMembers, tripId, tripCurrency, locale,
+  isOpen, onClose, onSave, expense, tripMembers, tripId, tripCurrency, locale, customCategories, onAddCategory,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -85,6 +85,8 @@ function ExpenseFormModal({
   tripId: string
   tripCurrency: string
   locale: string
+  customCategories: string[]
+  onAddCategory: (cat: string) => void
 }) {
   const { t } = useTranslation()
   const [form, setForm] = useState<ExpenseFormData>({
@@ -95,6 +97,9 @@ function ExpenseFormModal({
   })
   const [saving, setSaving] = useState(false)
   const [fetchingRate, setFetchingRate] = useState(false)
+  const [showAddCat, setShowAddCat] = useState(false)
+  const [newCatInput, setNewCatInput] = useState('')
+  const allCategories = [...CATEGORIES, ...customCategories]
 
   // Reset when expense changes
   useEffect(() => {
@@ -171,7 +176,7 @@ function ExpenseFormModal({
   const setField = <K extends keyof ExpenseFormData>(k: K, v: ExpenseFormData[K]) => setForm(f => ({ ...f, [k]: v }))
 
   const inputStyle = {
-    width: '100%', padding: '7px 10px', borderRadius: 8,
+    width: '100%', padding: '9px 10px', borderRadius: 8,
     border: '1px solid var(--border-primary)',
     background: 'var(--bg-input)', color: 'var(--text-primary)',
     fontSize: 13, fontFamily: 'inherit', outline: 'none',
@@ -251,10 +256,48 @@ function ExpenseFormModal({
             </select>
           </div>
           <div>
-            <label style={labelStyle}>{t('kosten.category')}</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>{t('kosten.category')}</label>
+              <button
+                type="button"
+                onClick={() => { setShowAddCat(s => !s); setNewCatInput('') }}
+                style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
+              >{t('kosten.addCategory')}</button>
+            </div>
             <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.category} onChange={e => setField('category', e.target.value)}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{t(CATEGORY_KEYS[c]) || c}</option>)}
+              {allCategories.map(c => <option key={c} value={c}>{CATEGORY_KEYS[c] ? t(CATEGORY_KEYS[c]) : c}</option>)}
             </select>
+            {showAddCat && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <input
+                  style={{ ...inputStyle, flex: 1, padding: '6px 8px' }}
+                  value={newCatInput}
+                  onChange={e => setNewCatInput(e.target.value)}
+                  placeholder={t('kosten.newCategoryPlaceholder')}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newCatInput.trim()) {
+                      onAddCategory(newCatInput.trim())
+                      setField('category', newCatInput.trim())
+                      setNewCatInput('')
+                      setShowAddCat(false)
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newCatInput.trim()) {
+                      onAddCategory(newCatInput.trim())
+                      setField('category', newCatInput.trim())
+                      setNewCatInput('')
+                      setShowAddCat(false)
+                    }
+                  }}
+                  style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                >+</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -413,7 +456,7 @@ function SettlementFormModal({
     try { await onSave(form) } finally { setSaving(false) }
   }
 
-  const inputStyle = { width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
+  const inputStyle = { width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }
   const labelStyle = { display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 4 }
 
   const footerButtons = (
@@ -601,6 +644,17 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
   const [showSettlementForm, setShowSettlementForm] = useState(false)
   const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: number; to_user_id: number; amount: number } | null>(null)
   const [deleteSettlementId, setDeleteSettlementId] = useState<number | null>(null)
+
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`kosten-custom-cats-${tripId}`) || '[]') } catch { return [] }
+  })
+  const handleAddCategory = useCallback((cat: string) => {
+    setCustomCategories(prev => {
+      const next = [...prev, cat]
+      localStorage.setItem(`kosten-custom-cats-${tripId}`, JSON.stringify(next))
+      return next
+    })
+  }, [tripId])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -981,6 +1035,8 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
         tripId={tripId}
         tripCurrency={tripCurrency}
         locale={locale}
+        customCategories={customCategories}
+        onAddCategory={handleAddCategory}
       />
 
       <SettlementFormModal

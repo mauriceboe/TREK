@@ -583,6 +583,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'kosten.cat.activities': 'Activities',
   'kosten.cat.shopping': 'Shopping',
   'kosten.cat.other': 'Other',
+  'kosten.addCategory': '+ Category',
+  'kosten.newCategoryPlaceholder': 'New category…',
 
   // Atlas addon
   'atlas.subtitle': 'Your travel footprint around the world',
