@@ -20,8 +20,8 @@ interface PlacesSidebarProps {
   onAssignToDay: (placeId: number, dayId: number) => void
   onEditPlace: (place: Place) => void
   onDeletePlace: (placeId: number) => void
-  days: Day[]
-  isMobile: boolean
+  days?: Day[]
+  isMobile?: boolean
   onCategoryFilterChange?: (categoryId: string) => void
 }
 
@@ -202,6 +202,30 @@ export default function PlacesSidebar({
                   )}
                 </div>
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); onEditPlace(place) }}
+                    title={t('common.edit')}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: 6, marginRight: 6,
+                      background: 'var(--bg-hover)', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-faint)', padding: 0, transition: 'background 0.15s, color 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-faint)' }}
+                  ><Pencil size={11} strokeWidth={2.3} /></button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDeletePlace(place.id) }}
+                    title={t('common.delete')}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: 6, marginRight: selectedDayId ? 6 : 0,
+                      background: 'var(--bg-hover)', border: 'none', cursor: 'pointer',
+                      color: '#ef4444', padding: 0, transition: 'background 0.15s, color 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#dc2626' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = '#ef4444' }}
+                  ><Trash2 size={11} strokeWidth={2.3} /></button>
                   {!inDay && selectedDayId && (
                     <button
                       onClick={e => { e.stopPropagation(); onAssignToDay(place.id) }}
