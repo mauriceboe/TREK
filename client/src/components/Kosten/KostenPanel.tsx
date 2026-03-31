@@ -1111,7 +1111,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 2 }}>{t('kosten.totalSpent')}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{fmtAmt(totalSpent, tripCurrency, locale)}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{expenses.length} {t('kosten.tabExpenses').toLowerCase()}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{expenses.length} {expenses.length === 1 ? 'Ausgabe' : 'Ausgaben'}</div>
               </div>
               {pieSegments && pieSegments.length > 0 && (
                 <div style={{ width: 56, height: 56, borderRadius: '50%', background: `conic-gradient(${pieGradient})`, flexShrink: 0, position: 'relative' }}>
@@ -1238,6 +1238,15 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                         <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{fmtAmt(d.amount, tripCurrency, locale)}</span>
+                        <button
+                          onClick={() => {
+                            setSettlementPrefill({ from_user_id: d.from_user_id, from_name: d.from_name, to_user_id: d.to_user_id, to_name: d.to_name, amount: d.amount })
+                            setShowSettlementForm(true)
+                          }}
+                          style={{ padding: '6px 10px', fontSize: 12, borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Begleichen
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1290,7 +1299,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
         <div style={{ padding: '16px', borderRadius: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginBottom: 4 }}>{t('kosten.totalSpent')}</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{fmtAmt(totalSpent, tripCurrency, locale)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{expenses.length} Ausgaben</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{expenses.length} {expenses.length === 1 ? 'Ausgabe' : 'Ausgaben'}</div>
         </div>
 
         {/* Pie chart */}
