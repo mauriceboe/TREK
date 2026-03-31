@@ -5,18 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  GHCR_REGISTRY: ghcr.io
-  GHCR_IMAGE: ${{ github.repository_owner }}/trek
-
 jobs:
   build:
     runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -33,72 +24,37 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build and push by digest (Docker Hub)
-        id: build-dockerhub
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=mauriceboe/trek,push-by-digest=true,name-canonical=true,push=true
-          provenance: false
           no-cache: true
 
-      - name: Build and push by digest (GHCR)
-        id: build-ghcr
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Export digests
+      - name: Export digest
         run: |
-          mkdir -p /tmp/digests-dockerhub /tmp/digests-ghcr
-          dh_digest="${{ steps.build-dockerhub.outputs.digest }}"
-          touch "/tmp/digests-dockerhub/${dh_digest#sha256:}"
-          ghcr_digest="${{ steps.build-ghcr.outputs.digest }}"
-          touch "/tmp/digests-ghcr/${ghcr_digest#sha256:}"
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
 
-      - name: Upload Docker Hub digest
+      - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
-          name: digests-dockerhub-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests-dockerhub/*
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload GHCR digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-ghcr-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests-ghcr/*
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -106,37 +62,22 @@ jobs:
         id: version
         run: echo "VERSION=$(node -p "require('./server/package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Download build digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Download Docker Hub digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests-dockerhub
-          pattern: digests-dockerhub-*
-          merge-multiple: true
-
-      - name: Download GHCR digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests-ghcr
-          pattern: digests-ghcr-*
-          merge-multiple: true
-
-      - name: Create and push Docker Hub multi-arch manifest
-        working-directory: /tmp/digests-dockerhub
+      - name: Create and push multi-arch manifest
+        working-directory: /tmp/digests
         run: |
           mapfile -t digests < <(printf 'mauriceboe/trek@sha256:%s\n' *)
           docker buildx imagetools create \
@@ -146,16 +87,5 @@ jobs:
             -t mauriceboe/nomad:${{ steps.version.outputs.VERSION }} \
             "${digests[@]}"
 
-      - name: Create and push GHCR multi-arch manifest
-        working-directory: /tmp/digests-ghcr
-        run: |
-          mapfile -t digests < <(printf '${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}@sha256:%s\n' *)
-          docker buildx imagetools create \
-            -t ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}:latest \
-            -t ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.VERSION }} \
-            "${digests[@]}"
-
-      - name: Inspect manifests
-        run: |
-          docker buildx imagetools inspect mauriceboe/trek:latest
-          docker buildx imagetools inspect ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE }}:latest
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect mauriceboe/trek:latest
