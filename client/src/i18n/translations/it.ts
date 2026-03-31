@@ -656,7 +656,6 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'atlas.markVisitedHint': 'Aggiungi questo paese alla tua lista dei visitati',
   'atlas.addToBucket': 'Aggiungi alla lista desideri',
   'atlas.addPoi': 'Aggiungi luogo',
-  'atlas.bucketNamePlaceholder': 'Nome (paese, città, luogo...)',
   'atlas.month': 'Mese',
   'atlas.addToBucketHint': 'Salvalo come luogo che vuoi visitare',
   'atlas.bucketWhen': 'Quando pensi di visitarlo?',

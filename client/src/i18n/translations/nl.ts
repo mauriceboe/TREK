@@ -1,4 +1,4 @@
-const nl: Record<string, string> = {
+const nl: Record<string, string | { name: string; category: string }[]> = {
   // Common
   'common.save': 'Opslaan',
   'common.cancel': 'Annuleren',
@@ -657,7 +657,6 @@ const nl: Record<string, string> = {
   'atlas.nextTrip': 'Volgende reis',
   'atlas.daysLeft': 'dagen te gaan',
   'atlas.streak': 'Reeks',
-  'atlas.year': 'jaar',
   'atlas.years': 'jaar',
   'atlas.yearInRow': 'jaar op rij',
   'atlas.yearsInRow': 'jaar op rij',
@@ -680,7 +679,6 @@ const nl: Record<string, string> = {
   'atlas.statsTab': 'Statistieken',
   'atlas.bucketTab': 'Bucket List',
   'atlas.addBucket': 'Toevoegen aan bucket list',
-  'atlas.bucketNamePlaceholder': 'Plaats of bestemming...',
   'atlas.bucketNotesPlaceholder': 'Notities (optioneel)',
   'atlas.bucketEmpty': 'Je bucket list is leeg',
   'atlas.bucketEmptyHint': 'Voeg plekken toe die je wilt bezoeken',

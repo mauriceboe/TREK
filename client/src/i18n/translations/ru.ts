@@ -1,4 +1,4 @@
-const ru: Record<string, string> = {
+const ru: Record<string, string | { name: string; category: string }[]> = {
   // Common
   'common.save': 'Сохранить',
   'common.cancel': 'Отмена',
@@ -657,7 +657,6 @@ const ru: Record<string, string> = {
   'atlas.nextTrip': 'Следующая поездка',
   'atlas.daysLeft': 'дней осталось',
   'atlas.streak': 'Серия',
-  'atlas.year': 'год',
   'atlas.years': 'лет',
   'atlas.yearInRow': 'год подряд',
   'atlas.yearsInRow': 'лет подряд',
@@ -680,7 +679,6 @@ const ru: Record<string, string> = {
   'atlas.statsTab': 'Статистика',
   'atlas.bucketTab': 'Список желаний',
   'atlas.addBucket': 'Добавить в список желаний',
-  'atlas.bucketNamePlaceholder': 'Место или направление...',
   'atlas.bucketNotesPlaceholder': 'Заметки (необязательно)',
   'atlas.bucketEmpty': 'Ваш список желаний пуст',
   'atlas.bucketEmptyHint': 'Добавьте места, которые мечтаете посетить',
