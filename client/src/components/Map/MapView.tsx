@@ -422,6 +422,8 @@ export const MapView = memo(function MapView({
     })
   }, [])
 
+  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
   const markers = useMemo(() => places.map((place) => {
     const isSelected = place.id === selectedPlaceId
     const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
@@ -444,6 +446,7 @@ export const MapView = memo(function MapView({
           offset={[0, 0]}
           opacity={1}
           className="map-tooltip"
+          permanent={isTouchDevice && isSelected}
         >
           <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
             <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
@@ -467,7 +470,7 @@ export const MapView = memo(function MapView({
         </Tooltip>
       </Marker>
     )
-  }), [places, selectedPlaceId, dayOrderMap, photoUrls, onMarkerClick])
+  }), [places, selectedPlaceId, dayOrderMap, photoUrls, onMarkerClick, isTouchDevice])
 
   return (
     <MapContainer
