@@ -169,7 +169,7 @@ function ExpenseFormModal({
     setFetchingRate(true)
     try {
       const data = await kostenApi.getExchangeRate(tripId, form.currency, tripCurrency)
-      setForm(f => ({ ...f, exchange_rate: String(data.rate) }))
+      if (data && data.rate !== undefined) setForm(f => ({ ...f, exchange_rate: String(data.rate) }))
     } catch { /* ignore */ }
     finally { setFetchingRate(false) }
   }
@@ -200,13 +200,17 @@ function ExpenseFormModal({
   const numParticipants = (form.participant_ids.length + form.participant_names.length) || 1
   const equalShare = amountInTripCurrency / numParticipants
 
-  // Percent sum validation
-  const percentSum = useMemo(() => {
-    if (form.split_type !== 'unequal_percent') return 0
-    let sum = 0
-    for (const id of form.participant_ids) sum += parseFloat(form.share_values[`u:${id}`] || '0') || 0
-    for (const name of form.participant_names) sum += parseFloat(form.share_values[`c:${name}`] || '0') || 0
-    return sum
+  // Validation sums
+  const { percentSum, amountSum } = useMemo(() => {
+    let pSum = 0, aSum = 0
+    if (form.split_type === 'unequal_percent') {
+      for (const id of form.participant_ids) pSum += parseFloat((form.share_values[`u:${id}`] || '0').replace(',', '.')) || 0
+      for (const name of form.participant_names) pSum += parseFloat((form.share_values[`c:${name}`] || '0').replace(',', '.')) || 0
+    } else if (form.split_type === 'unequal_amount') {
+      for (const id of form.participant_ids) aSum += parseFloat((form.share_values[`u:${id}`] || '0').replace(',', '.')) || 0
+      for (const name of form.participant_names) aSum += parseFloat((form.share_values[`c:${name}`] || '0').replace(',', '.')) || 0
+    }
+    return { percentSum: pSum, amountSum: aSum }
   }, [form.split_type, form.participant_ids, form.participant_names, form.share_values])
 
   const handleSave = async () => {
@@ -432,7 +436,19 @@ function ExpenseFormModal({
               const active = form.participant_ids.includes(m.id)
               const shareKey = `u:${m.id}`
               const share = form.share_values[shareKey] || ''
+              const shareVal = parseFloat(share.replace(',', '.')) || 0
               const equalShareAmt = active ? equalShare : 0
+              
+              let hintText = ''
+              if (active) {
+                if (form.split_type === 'unequal_percent') {
+                  const amt = (shareVal / 100) * parsedAmount
+                  hintText = `= ${fmtAmt(amt, form.currency, locale)}`
+                } else if (form.split_type === 'unequal_amount' && parsedAmount > 0) {
+                  const pct = (shareVal / parsedAmount) * 100
+                  hintText = `≙ ${pct.toFixed(1)}%`
+                }
+              }
 
               return (
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: active ? 'var(--bg-secondary)' : 'transparent', border: '1px solid', borderColor: active ? 'var(--border-primary)' : 'transparent' }}>
@@ -454,6 +470,7 @@ function ExpenseFormModal({
                   )}
                   {active && form.split_type !== 'equal' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>{hintText}</span>
                       <input
                         type="text" inputMode="decimal"
                         value={share}
@@ -462,6 +479,7 @@ function ExpenseFormModal({
                         style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'inherit', textAlign: 'right', outline: 'none' }}
                       />
                       {form.split_type === 'unequal_percent' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>%</span>}
+                      {form.split_type === 'unequal_amount' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{form.currency}</span>}
                     </div>
                   )}
                 </div>
@@ -472,7 +490,19 @@ function ExpenseFormModal({
               const active = form.participant_names.includes(name)
               const shareKey = `c:${name}`
               const share = form.share_values[shareKey] || ''
+              const shareVal = parseFloat(share.replace(',', '.')) || 0
               const equalShareAmt = active ? equalShare : 0
+
+              let hintText = ''
+              if (active) {
+                if (form.split_type === 'unequal_percent') {
+                  const amt = (shareVal / 100) * parsedAmount
+                  hintText = `= ${fmtAmt(amt, form.currency, locale)}`
+                } else if (form.split_type === 'unequal_amount' && parsedAmount > 0) {
+                  const pct = (shareVal / parsedAmount) * 100
+                  hintText = `≙ ${pct.toFixed(1)}%`
+                }
+              }
 
               return (
                 <div key={`c:${name}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: active ? 'var(--bg-secondary)' : 'transparent', border: '1px solid', borderColor: active ? 'var(--border-primary)' : 'transparent' }}>
@@ -494,6 +524,7 @@ function ExpenseFormModal({
                   )}
                   {active && form.split_type !== 'equal' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>{hintText}</span>
                       <input
                         type="text" inputMode="decimal"
                         value={share}
@@ -502,6 +533,7 @@ function ExpenseFormModal({
                         style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'inherit', textAlign: 'right', outline: 'none' }}
                       />
                       {form.split_type === 'unequal_percent' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>%</span>}
+                      {form.split_type === 'unequal_amount' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{form.currency}</span>}
                     </div>
                   )}
                 </div>
@@ -511,6 +543,11 @@ function ExpenseFormModal({
           {form.split_type === 'unequal_percent' && (
             <div style={{ fontSize: 12, marginTop: 6, color: Math.abs(percentSum - 100) < 0.5 ? '#10b981' : '#ef4444' }}>
               Summe: {percentSum.toFixed(1)}% {Math.abs(percentSum - 100) < 0.5 ? '✓' : '(muss 100% ergeben)'}
+            </div>
+          )}
+          {form.split_type === 'unequal_amount' && (
+            <div style={{ fontSize: 12, marginTop: 6, color: Math.abs(amountSum - parsedAmount) < 0.05 ? '#10b981' : '#ef4444' }}>
+              Summe: {fmtAmt(amountSum, form.currency, locale)} {Math.abs(amountSum - parsedAmount) < 0.05 ? '✓' : `(muss ${fmtAmt(parsedAmount, form.currency, locale)} ergeben)`}
             </div>
           )}
         </div>
@@ -587,7 +624,7 @@ function SettlementFormModal({
     setFetchingRate(true)
     try {
       const data = await kostenApi.getExchangeRate(tripId, form.currency, tripCurrency)
-      setForm(f => ({ ...f, exchange_rate: String(data.rate) }))
+      if (data && data.rate !== undefined) setForm(f => ({ ...f, exchange_rate: String(data.rate) }))
     } catch { /* ignore */ }
     finally { setFetchingRate(false) }
   }
@@ -907,11 +944,21 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
     const buildShares = () => {
       const shares: { user_id?: number | null; user_name?: string | null; share_value: number | null }[] = []
       for (const uid of form.participant_ids) {
-        const sv = form.split_type !== 'equal' ? (parseFloat(form.share_values[`u:${uid}`] || '0') || null) : null
+        let sv = null
+        if (form.split_type !== 'equal') {
+          const val = form.share_values[`u:${uid}`]
+          sv = val ? parseFloat(String(val).replace(',', '.')) : 0
+          if (isNaN(sv)) sv = 0
+        }
         shares.push({ user_id: uid, user_name: null, share_value: sv })
       }
       for (const name of form.participant_names) {
-        const sv = form.split_type !== 'equal' ? (parseFloat(form.share_values[`c:${name}`] || '0') || null) : null
+        let sv = null
+        if (form.split_type !== 'equal') {
+          const val = form.share_values[`c:${name}`]
+          sv = val ? parseFloat(String(val).replace(',', '.')) : 0
+          if (isNaN(sv)) sv = 0
+        }
         shares.push({ user_id: null, user_name: name, share_value: sv })
       }
       return shares
@@ -1386,16 +1433,32 @@ function ExpenseCard({ expense, tripCurrency, locale, t, allCategories, onEdit, 
           {/* Participants */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {expense.shares.slice(0, 4).map(s => (
-              <AvatarChip key={s.user_id} username={s.username} avatarUrl={s.avatar_url} size={20} />
+              <AvatarChip key={s.user_id || s.user_name || Math.random()} username={s.username} avatarUrl={s.avatar_url} size={20} />
             ))}
             {expense.shares.length > 4 && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 2 }}>+{expense.shares.length - 4}</span>}
           </div>
 
-          {/* Equal share hint */}
+          {/* Share hint */}
           {expense.split_type === 'equal' && numParticipants > 1 && (
             <>
               <span style={{ color: 'var(--border-primary)', fontSize: 11 }}>·</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>÷{numParticipants} = {fmtAmt(amtInTripCurrency / numParticipants, tripCurrency, locale)} {t('kosten.perPerson')}</span>
+            </>
+          )}
+          {expense.split_type === 'unequal_percent' && numParticipants > 0 && (
+            <>
+              <span style={{ color: 'var(--border-primary)', fontSize: 11 }}>·</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {expense.shares.map(s => `${s.username}: ${s.share_value || 0}%`).join(', ')}
+              </span>
+            </>
+          )}
+          {expense.split_type === 'unequal_amount' && numParticipants > 0 && (
+            <>
+              <span style={{ color: 'var(--border-primary)', fontSize: 11 }}>·</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {expense.shares.map(s => `${s.username}: ${fmtAmt(s.share_value || 0, expense.currency, locale)}`).join(', ')}
+              </span>
             </>
           )}
         </div>
