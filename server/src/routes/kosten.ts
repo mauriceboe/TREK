@@ -272,8 +272,8 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
     const amt = s.amount * (s.exchange_rate || 1);
     const fromKey = shareKey(s.from_user_id, s.from_name);
     const toKey = shareKey(s.to_user_id, s.to_name);
-    if (fromKey) balances[fromKey] = (balances[fromKey] || 0) - amt;
-    if (toKey) balances[toKey] = (balances[toKey] || 0) + amt;
+    if (fromKey) balances[fromKey] = (balances[fromKey] || 0) + amt;
+    if (toKey) balances[toKey] = (balances[toKey] || 0) - amt;
   }
 
   // Fetch user info for registered users
