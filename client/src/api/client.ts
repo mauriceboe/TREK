@@ -258,7 +258,7 @@ export const kostenApi = {
   create: (tripId: number | string, data: Record<string, unknown>) => apiClient.post(`/trips/${tripId}/kosten`, data).then(r => r.data),
   update: (tripId: number | string, id: number, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/kosten/${id}`, data).then(r => r.data),
   delete: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/kosten/${id}`).then(r => r.data),
-  setShares: (tripId: number | string, id: number, shares: { user_id: number; share_value?: number | null }[]) => apiClient.put(`/trips/${tripId}/kosten/${id}/shares`, { shares }).then(r => r.data),
+  setShares: (tripId: number | string, id: number, shares: { user_id?: number | null; user_name?: string | null; share_value?: number | null }[]) => apiClient.put(`/trips/${tripId}/kosten/${id}/shares`, { shares }).then(r => r.data),
   getBalances: (tripId: number | string) => apiClient.get(`/trips/${tripId}/kosten/balances`).then(r => r.data),
   listSettlements: (tripId: number | string) => apiClient.get(`/trips/${tripId}/kosten/settlements`).then(r => r.data),
   createSettlement: (tripId: number | string, data: Record<string, unknown>) => apiClient.post(`/trips/${tripId}/kosten/settlements`, data).then(r => r.data),

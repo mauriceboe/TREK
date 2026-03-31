@@ -72,7 +72,8 @@ interface ExpenseFormData {
   note: string
   split_type: 'equal' | 'unequal_amount' | 'unequal_percent'
   participant_ids: number[]
-  share_values: Record<number, string>
+  participant_names: string[]
+  share_values: Record<string, string>
 }
 
 function payerOptionKey(paid_by: number | null, paid_by_name: string | null): string {
@@ -102,20 +103,29 @@ function ExpenseFormModal({
     title: '', amount: '', currency: tripCurrency, exchange_rate: '1',
     paid_by: tripMembers[0]?.id ?? null, paid_by_name: null, category: 'Sonstiges',
     expense_date: new Date().toISOString().slice(0, 10), note: '', split_type: 'equal',
-    participant_ids: tripMembers.map(m => m.id), share_values: {},
+    participant_ids: tripMembers.map(m => m.id), participant_names: [], share_values: {},
   })
   const [saving, setSaving] = useState(false)
   const [fetchingRate, setFetchingRate] = useState(false)
   const [showAddCat, setShowAddCat] = useState(false)
   const [newCatInput, setNewCatInput] = useState('')
-  const [showAddPayer, setShowAddPayer] = useState(false)
-  const [newPayerInput, setNewPayerInput] = useState('')
+  const [showAddPerson, setShowAddPerson] = useState(false)
+  const [newPersonInput, setNewPersonInput] = useState('')
   const allCategories = [...CATEGORIES, ...customCategories]
 
   // Reset when expense changes
   useEffect(() => {
     if (!isOpen) return
     if (expense) {
+      const userShares = expense.shares.filter(s => s.user_id != null)
+      const customShares = expense.shares.filter(s => s.user_id == null && s.user_name)
+      const shareVals: Record<string, string> = {}
+      for (const s of userShares) {
+        shareVals[`u:${s.user_id}`] = s.share_value != null ? String(s.share_value) : ''
+      }
+      for (const s of customShares) {
+        shareVals[`c:${s.user_name}`] = s.share_value != null ? String(s.share_value) : ''
+      }
       setForm({
         title: expense.title,
         amount: String(expense.amount),
@@ -127,15 +137,20 @@ function ExpenseFormModal({
         expense_date: expense.expense_date || '',
         note: expense.note || '',
         split_type: expense.split_type,
-        participant_ids: expense.shares.map(s => s.user_id),
-        share_values: Object.fromEntries(expense.shares.map(s => [s.user_id, s.share_value != null ? String(s.share_value) : ''])),
+        participant_ids: userShares.map(s => s.user_id!),
+        participant_names: customShares.map(s => s.user_name!),
+        share_values: shareVals,
       })
+      // Ensure custom person names are in the payers list
+      for (const s of customShares) {
+        if (s.user_name && !customPayers.includes(s.user_name)) onAddPayer(s.user_name)
+      }
     } else {
       setForm({
         title: '', amount: '', currency: tripCurrency, exchange_rate: '1',
         paid_by: tripMembers[0]?.id ?? null, paid_by_name: null, category: 'Sonstiges',
         expense_date: new Date().toISOString().slice(0, 10), note: '', split_type: 'equal',
-        participant_ids: tripMembers.map(m => m.id), share_values: {},
+        participant_ids: tripMembers.map(m => m.id), participant_names: [], share_values: {},
       })
     }
   }, [isOpen, expense, tripMembers, tripCurrency])
@@ -169,15 +184,26 @@ function ExpenseFormModal({
     })
   }
 
+  const toggleCustomParticipant = (name: string) => {
+    setForm(f => {
+      const has = f.participant_names.includes(name)
+      const newNames = has ? f.participant_names.filter(x => x !== name) : [...f.participant_names, name]
+      return { ...f, participant_names: newNames }
+    })
+  }
+
   // Computed equal share display
-  const numParticipants = form.participant_ids.length || 1
+  const numParticipants = (form.participant_ids.length + form.participant_names.length) || 1
   const equalShare = amountInTripCurrency / numParticipants
 
   // Percent sum validation
   const percentSum = useMemo(() => {
     if (form.split_type !== 'unequal_percent') return 0
-    return form.participant_ids.reduce((s, id) => s + (parseFloat(form.share_values[id] || '0') || 0), 0)
-  }, [form.split_type, form.participant_ids, form.share_values])
+    let sum = 0
+    for (const id of form.participant_ids) sum += parseFloat(form.share_values[`u:${id}`] || '0') || 0
+    for (const name of form.participant_names) sum += parseFloat(form.share_values[`c:${name}`] || '0') || 0
+    return sum
+  }, [form.split_type, form.participant_ids, form.participant_names, form.share_values])
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.amount || (!form.paid_by && !form.paid_by_name)) return
@@ -262,14 +288,7 @@ function ExpenseFormModal({
         {/* Paid by + Category */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>{t('kosten.paidBy')} *</label>
-              <button
-                type="button"
-                onClick={() => { setShowAddPayer(s => !s); setNewPayerInput('') }}
-                style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
-              >{t('kosten.addPayer')}</button>
-            </div>
+            <label style={labelStyle}>{t('kosten.paidBy')} *</label>
             <select
               style={{ ...inputStyle, cursor: 'pointer' }}
               value={payerOptionKey(form.paid_by, form.paid_by_name)}
@@ -282,37 +301,6 @@ function ExpenseFormModal({
               {tripMembers.map(m => <option key={`u:${m.id}`} value={`u:${m.id}`}>{m.username}</option>)}
               {customPayers.map(name => <option key={`c:${name}`} value={`c:${name}`}>{name}</option>)}
             </select>
-            {showAddPayer && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                <input
-                  style={{ ...inputStyle, flex: 1, padding: '6px 8px' }}
-                  value={newPayerInput}
-                  onChange={e => setNewPayerInput(e.target.value)}
-                  placeholder={t('kosten.newPayerPlaceholder')}
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && newPayerInput.trim()) {
-                      onAddPayer(newPayerInput.trim())
-                      setForm(f => ({ ...f, paid_by: null, paid_by_name: newPayerInput.trim() }))
-                      setNewPayerInput('')
-                      setShowAddPayer(false)
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (newPayerInput.trim()) {
-                      onAddPayer(newPayerInput.trim())
-                      setForm(f => ({ ...f, paid_by: null, paid_by_name: newPayerInput.trim() }))
-                      setNewPayerInput('')
-                      setShowAddPayer(false)
-                    }
-                  }}
-                  style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
-                >+</button>
-              </div>
-            )}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -364,7 +352,7 @@ function ExpenseFormModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label style={labelStyle}>{t('kosten.date')}</label>
-            <input style={{ ...inputStyle, textAlign: 'left' }} type="date" value={form.expense_date} onChange={e => setField('expense_date', e.target.value)} />
+            <input style={{ ...inputStyle, textAlign: 'left', boxSizing: 'border-box', maxWidth: '100%' }} type="date" value={form.expense_date} onChange={e => setField('expense_date', e.target.value)} />
           </div>
           <div>
             <label style={labelStyle}>{t('kosten.note')}</label>
@@ -392,11 +380,52 @@ function ExpenseFormModal({
 
         {/* Participants */}
         <div>
-          <label style={labelStyle}>{t('kosten.participants')}</label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>{t('kosten.participants')}</label>
+            <button
+              type="button"
+              onClick={() => { setShowAddPerson(s => !s); setNewPersonInput('') }}
+              style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
+            >{t('kosten.addPerson')}</button>
+          </div>
+          {showAddPerson && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              <input
+                style={{ ...inputStyle, flex: 1, padding: '6px 8px' }}
+                value={newPersonInput}
+                onChange={e => setNewPersonInput(e.target.value)}
+                placeholder={t('kosten.newPersonPlaceholder')}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newPersonInput.trim()) {
+                    const name = newPersonInput.trim()
+                    onAddPayer(name)
+                    setForm(f => ({ ...f, participant_names: f.participant_names.includes(name) ? f.participant_names : [...f.participant_names, name] }))
+                    setNewPersonInput('')
+                    setShowAddPerson(false)
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newPersonInput.trim()) {
+                    const name = newPersonInput.trim()
+                    onAddPayer(name)
+                    setForm(f => ({ ...f, participant_names: f.participant_names.includes(name) ? f.participant_names : [...f.participant_names, name] }))
+                    setNewPersonInput('')
+                    setShowAddPerson(false)
+                  }
+                }}
+                style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              >+</button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {tripMembers.map(m => {
               const active = form.participant_ids.includes(m.id)
-              const share = form.share_values[m.id] || ''
+              const shareKey = `u:${m.id}`
+              const share = form.share_values[shareKey] || ''
               const equalShareAmt = active ? equalShare : 0
 
               return (
@@ -422,7 +451,7 @@ function ExpenseFormModal({
                       <input
                         type="text" inputMode="decimal"
                         value={share}
-                        onChange={e => setForm(f => ({ ...f, share_values: { ...f.share_values, [m.id]: e.target.value } }))}
+                        onChange={e => setForm(f => ({ ...f, share_values: { ...f.share_values, [shareKey]: e.target.value } }))}
                         placeholder={form.split_type === 'unequal_percent' ? '%' : '0.00'}
                         style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'inherit', textAlign: 'right', outline: 'none' }}
                       />
@@ -432,15 +461,46 @@ function ExpenseFormModal({
                 </div>
               )
             })}
-            {/* External (non-registered) payer row — read-only, shows who paid */}
-            {form.paid_by_name && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)', opacity: 0.8 }}>
-                <div style={{ width: 18, height: 18, borderRadius: 4, border: '2px solid var(--border-faint)', background: 'transparent', flexShrink: 0 }} />
-                <AvatarChip username={form.paid_by_name} avatarUrl={null} size={24} />
-                <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{form.paid_by_name}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('kosten.paidBy')}</span>
-              </div>
-            )}
+            {/* Custom (non-registered) persons */}
+            {customPayers.map(name => {
+              const active = form.participant_names.includes(name)
+              const shareKey = `c:${name}`
+              const share = form.share_values[shareKey] || ''
+              const equalShareAmt = active ? equalShare : 0
+
+              return (
+                <div key={`c:${name}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: active ? 'var(--bg-secondary)' : 'transparent', border: '1px solid', borderColor: active ? 'var(--border-primary)' : 'transparent' }}>
+                  <button onClick={() => toggleCustomParticipant(name)} style={{
+                    width: 18, height: 18, borderRadius: 4, border: '2px solid',
+                    borderColor: active ? 'var(--accent)' : 'var(--border-primary)',
+                    background: active ? 'var(--accent)' : 'transparent',
+                    cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {active && <CheckCircle2 size={12} style={{ color: 'var(--accent-text)' }} />}
+                  </button>
+                  <AvatarChip username={name} avatarUrl={null} size={24} />
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{name}</span>
+
+                  {active && form.split_type === 'equal' && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {fmtAmt(equalShareAmt, tripCurrency, locale)}
+                    </span>
+                  )}
+                  {active && form.split_type !== 'equal' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="text" inputMode="decimal"
+                        value={share}
+                        onChange={e => setForm(f => ({ ...f, share_values: { ...f.share_values, [shareKey]: e.target.value } }))}
+                        placeholder={form.split_type === 'unequal_percent' ? '%' : '0.00'}
+                        style={{ width: 80, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'inherit', textAlign: 'right', outline: 'none' }}
+                      />
+                      {form.split_type === 'unequal_percent' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>%</span>}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
           {form.split_type === 'unequal_percent' && (
             <div style={{ fontSize: 12, marginTop: 6, color: Math.abs(percentSum - 100) < 0.5 ? '#10b981' : '#ef4444' }}>
@@ -475,7 +535,7 @@ function SettlementFormModal({
   tripMembers: TripMember[]
   tripId: string
   tripCurrency: string
-  prefill?: { from_user_id: number; to_user_id: number; amount: number } | null
+  prefill?: { from_user_id: number | null; from_name: string | null; to_user_id: number | null; to_name: string | null; amount: number } | null
   locale: string
   customPayers: string[]
 }) {
@@ -496,7 +556,9 @@ function SettlementFormModal({
       setForm(f => ({
         ...f,
         from_user_id: prefill.from_user_id,
+        from_name: prefill.from_name || null,
         to_user_id: prefill.to_user_id,
+        to_name: prefill.to_name || null,
         amount: String(prefill.amount),
         currency: tripCurrency,
         exchange_rate: '1',
@@ -737,7 +799,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
   const [editingExpense, setEditingExpense] = useState<KostenExpense | null>(null)
   const [deleteExpenseId, setDeleteExpenseId] = useState<number | null>(null)
   const [showSettlementForm, setShowSettlementForm] = useState(false)
-  const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: number; to_user_id: number; amount: number } | null>(null)
+  const [settlementPrefill, setSettlementPrefill] = useState<{ from_user_id: number | null; from_name: string | null; to_user_id: number | null; to_name: string | null; amount: number } | null>(null)
   const [deleteSettlementId, setDeleteSettlementId] = useState<number | null>(null)
 
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
@@ -797,26 +859,32 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
       split_type: form.split_type,
     }
 
+    // Build shares array with both user IDs and custom names
+    const buildShares = () => {
+      const shares: { user_id?: number | null; user_name?: string | null; share_value: number | null }[] = []
+      for (const uid of form.participant_ids) {
+        const sv = form.split_type !== 'equal' ? (parseFloat(form.share_values[`u:${uid}`] || '0') || null) : null
+        shares.push({ user_id: uid, user_name: null, share_value: sv })
+      }
+      for (const name of form.participant_names) {
+        const sv = form.split_type !== 'equal' ? (parseFloat(form.share_values[`c:${name}`] || '0') || null) : null
+        shares.push({ user_id: null, user_name: name, share_value: sv })
+      }
+      return shares
+    }
+
     if (editingExpense) {
       await kostenApi.update(tripId, editingExpense.id, baseData)
-      // Update shares separately
-      const shares = form.participant_ids.map(uid => ({
-        user_id: uid,
-        share_value: form.split_type !== 'equal' ? (parseFloat(form.share_values[uid] || '0').toString() !== '' ? parseFloat(form.share_values[uid] || '0') : null) : null,
-      }))
-      await kostenApi.setShares(tripId, editingExpense.id, shares)
+      await kostenApi.setShares(tripId, editingExpense.id, buildShares())
     } else {
       const result = await kostenApi.create(tripId, {
         ...baseData,
         participant_ids: form.participant_ids,
+        participant_names: form.participant_names,
       })
-      // If split is unequal, update shares
+      // If split is unequal, update shares with values
       if (form.split_type !== 'equal' && result.expense) {
-        const shares = form.participant_ids.map((uid: number) => ({
-          user_id: uid,
-          share_value: parseFloat(form.share_values[uid] || '0') || null,
-        }))
-        await kostenApi.setShares(tripId, result.expense.id, shares)
+        await kostenApi.setShares(tripId, result.expense.id, buildShares())
       }
     }
 
@@ -939,25 +1007,35 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
           </div>
         </div>
 
-        {/* Mobile stats strip — visible below lg where sidebar is hidden */}
+        {/* Mobile stats — visible below lg where sidebar is hidden */}
         {expenses.length > 0 && (
-          <div className="flex lg:hidden gap-2 overflow-x-auto mb-4" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-            <div style={{ flexShrink: 0, padding: '10px 14px', borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 3 }}>{t('kosten.totalSpent')}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{fmtAmt(totalSpent, tripCurrency, locale)}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{expenses.length} {t('kosten.tabExpenses').toLowerCase()}</div>
-            </div>
-            {balances.map(b => (
-              <div key={b.user_id} style={{ flexShrink: 0, padding: '10px 14px', borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <AvatarChip username={b.username} avatarUrl={b.avatar_url} size={20} />
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{b.username}</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: b.balance >= 0 ? '#10b981' : '#ef4444' }}>
-                  {b.balance >= 0 ? '+' : ''}{fmtAmt(b.balance, tripCurrency, locale)}
-                </div>
+          <div className="flex lg:hidden flex-col gap-2 mb-4">
+            {/* Total + pie chart inline */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 2 }}>{t('kosten.totalSpent')}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{fmtAmt(totalSpent, tripCurrency, locale)}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{expenses.length} {t('kosten.tabExpenses').toLowerCase()}</div>
               </div>
-            ))}
+              {pieSegments && pieSegments.length > 0 && (
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: `conic-gradient(${pieGradient})`, flexShrink: 0, position: 'relative' }}>
+                  <div style={{ position: 'absolute', inset: '28%', borderRadius: '50%', background: 'var(--bg-secondary)' }} />
+                </div>
+              )}
+            </div>
+            {/* Per-person balances row */}
+            {balances.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+                {balances.map(b => (
+                  <div key={b.user_id ?? `c:${b.user_name}`} style={{ flexShrink: 0, padding: '8px 12px', borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AvatarChip username={b.username} avatarUrl={b.avatar_url} size={20} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: b.balance >= 0 ? '#10b981' : '#ef4444', whiteSpace: 'nowrap' }}>
+                      {b.balance >= 0 ? '+' : ''}{fmtAmt(b.balance, tripCurrency, locale)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1027,7 +1105,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                   {balances.map(b => (
-                    <div key={b.user_id} style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-faint)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div key={b.user_id ?? `c:${b.user_name}`} style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-faint)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <AvatarChip username={b.username} avatarUrl={b.avatar_url} size={28} />
                         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.username}</span>
@@ -1061,7 +1139,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
                       <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, flex: 1 }}>{d.to_username}</span>
                       <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginRight: 8 }}>{fmtAmt(d.amount, tripCurrency, locale)}</span>
                       <button
-                        onClick={() => { setSettlementPrefill({ from_user_id: d.from_user_id, to_user_id: d.to_user_id, amount: d.amount }); setShowSettlementForm(true) }}
+                        onClick={() => { setSettlementPrefill({ from_user_id: d.from_user_id, from_name: d.from_name, to_user_id: d.to_user_id, to_name: d.to_name, amount: d.amount }); setShowSettlementForm(true) }}
                         style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                       >
                         {t('kosten.settleUp')}
@@ -1143,7 +1221,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginBottom: 8 }}>{t('kosten.perPersonTitle')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {balances.map(b => (
-                <div key={b.user_id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div key={b.user_id ?? `c:${b.user_name}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <AvatarChip username={b.username} avatarUrl={b.avatar_url} size={22} />
                   <span style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.username}</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: b.balance >= 0 ? '#10b981' : '#ef4444' }}>

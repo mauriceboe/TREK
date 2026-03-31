@@ -585,8 +585,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'kosten.cat.other': 'Other',
   'kosten.addCategory': '+ Category',
   'kosten.newCategoryPlaceholder': 'New category…',
-  'kosten.addPayer': '+ Payer',
-  'kosten.newPayerPlaceholder': 'Payer name…',
+  'kosten.addPerson': '+ Person',
+  'kosten.newPersonPlaceholder': 'Person name…',
 
   // Atlas addon
   'atlas.subtitle': 'Your travel footprint around the world',

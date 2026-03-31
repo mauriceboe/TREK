@@ -117,7 +117,8 @@ export interface BudgetMember {
 // ── Kosten (expense splitting) ────────────────────────────────────────────────
 
 export interface KostenShare {
-  user_id: number
+  user_id: number | null
+  user_name: string | null
   share_value: number | null
   username: string
   avatar_url: string | null
@@ -162,17 +163,20 @@ export interface KostenSettlement {
 }
 
 export interface KostenBalance {
-  user_id: number
+  user_id: number | null
+  user_name: string | null
   username: string
   avatar_url: string | null
   balance: number
 }
 
 export interface KostenDebt {
-  from_user_id: number
+  from_user_id: number | null
+  from_name: string | null
   from_username: string
   from_avatar_url: string | null
-  to_user_id: number
+  to_user_id: number | null
+  to_name: string | null
   to_username: string
   to_avatar_url: string | null
   amount: number

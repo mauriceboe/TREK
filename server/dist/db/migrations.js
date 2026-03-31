@@ -1,46 +1,44 @@
-import Database from 'better-sqlite3';
-
-function runMigrations(db: Database.Database): void {
-  db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
-  const versionRow = db.prepare('SELECT version FROM schema_version').get() as { version: number } | undefined;
-  let currentVersion = versionRow?.version ?? 0;
-
-  if (currentVersion === 0) {
-    const hasUnsplash = db.prepare(
-      "SELECT 1 FROM pragma_table_info('users') WHERE name = 'unsplash_api_key'"
-    ).get();
-    if (hasUnsplash) {
-      currentVersion = 19;
-      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(currentVersion);
-      console.log('[DB] Schema already up-to-date, setting version to', currentVersion);
-    } else {
-      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(0);
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runMigrations = runMigrations;
+function runMigrations(db) {
+    db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
+    const versionRow = db.prepare('SELECT version FROM schema_version').get();
+    let currentVersion = versionRow?.version ?? 0;
+    if (currentVersion === 0) {
+        const hasUnsplash = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'unsplash_api_key'").get();
+        if (hasUnsplash) {
+            currentVersion = 19;
+            db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(currentVersion);
+            console.log('[DB] Schema already up-to-date, setting version to', currentVersion);
+        }
+        else {
+            db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(0);
+        }
     }
-  }
-
-  const migrations: Array<() => void> = [
-    () => db.exec('ALTER TABLE users ADD COLUMN unsplash_api_key TEXT'),
-    () => db.exec('ALTER TABLE users ADD COLUMN openweather_api_key TEXT'),
-    () => db.exec('ALTER TABLE places ADD COLUMN duration_minutes INTEGER DEFAULT 60'),
-    () => db.exec('ALTER TABLE places ADD COLUMN notes TEXT'),
-    () => db.exec('ALTER TABLE places ADD COLUMN image_url TEXT'),
-    () => db.exec("ALTER TABLE places ADD COLUMN transport_mode TEXT DEFAULT 'walking'"),
-    () => db.exec('ALTER TABLE days ADD COLUMN title TEXT'),
-    () => db.exec("ALTER TABLE reservations ADD COLUMN status TEXT DEFAULT 'pending'"),
-    () => db.exec('ALTER TABLE trip_files ADD COLUMN reservation_id INTEGER REFERENCES reservations(id) ON DELETE SET NULL'),
-    () => db.exec("ALTER TABLE reservations ADD COLUMN type TEXT DEFAULT 'other'"),
-    () => db.exec('ALTER TABLE trips ADD COLUMN cover_image TEXT'),
-    () => db.exec("ALTER TABLE day_notes ADD COLUMN icon TEXT DEFAULT '📝'"),
-    () => db.exec('ALTER TABLE trips ADD COLUMN is_archived INTEGER DEFAULT 0'),
-    () => db.exec('ALTER TABLE categories ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL'),
-    () => db.exec('ALTER TABLE users ADD COLUMN avatar TEXT'),
-    () => db.exec('ALTER TABLE users ADD COLUMN oidc_sub TEXT'),
-    () => db.exec('ALTER TABLE users ADD COLUMN oidc_issuer TEXT'),
-    () => db.exec('ALTER TABLE users ADD COLUMN last_login DATETIME'),
-    () => {
-      const schema = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'budget_items'").get() as { sql: string } | undefined;
-      if (schema?.sql?.includes('NOT NULL DEFAULT 1')) {
-        db.exec(`
+    const migrations = [
+        () => db.exec('ALTER TABLE users ADD COLUMN unsplash_api_key TEXT'),
+        () => db.exec('ALTER TABLE users ADD COLUMN openweather_api_key TEXT'),
+        () => db.exec('ALTER TABLE places ADD COLUMN duration_minutes INTEGER DEFAULT 60'),
+        () => db.exec('ALTER TABLE places ADD COLUMN notes TEXT'),
+        () => db.exec('ALTER TABLE places ADD COLUMN image_url TEXT'),
+        () => db.exec("ALTER TABLE places ADD COLUMN transport_mode TEXT DEFAULT 'walking'"),
+        () => db.exec('ALTER TABLE days ADD COLUMN title TEXT'),
+        () => db.exec("ALTER TABLE reservations ADD COLUMN status TEXT DEFAULT 'pending'"),
+        () => db.exec('ALTER TABLE trip_files ADD COLUMN reservation_id INTEGER REFERENCES reservations(id) ON DELETE SET NULL'),
+        () => db.exec("ALTER TABLE reservations ADD COLUMN type TEXT DEFAULT 'other'"),
+        () => db.exec('ALTER TABLE trips ADD COLUMN cover_image TEXT'),
+        () => db.exec("ALTER TABLE day_notes ADD COLUMN icon TEXT DEFAULT '📝'"),
+        () => db.exec('ALTER TABLE trips ADD COLUMN is_archived INTEGER DEFAULT 0'),
+        () => db.exec('ALTER TABLE categories ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL'),
+        () => db.exec('ALTER TABLE users ADD COLUMN avatar TEXT'),
+        () => db.exec('ALTER TABLE users ADD COLUMN oidc_sub TEXT'),
+        () => db.exec('ALTER TABLE users ADD COLUMN oidc_issuer TEXT'),
+        () => db.exec('ALTER TABLE users ADD COLUMN last_login DATETIME'),
+        () => {
+            const schema = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'budget_items'").get();
+            if (schema?.sql?.includes('NOT NULL DEFAULT 1')) {
+                db.exec(`
           CREATE TABLE budget_items_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -57,38 +55,63 @@ function runMigrations(db: Database.Database): void {
           DROP TABLE budget_items;
           ALTER TABLE budget_items_new RENAME TO budget_items;
         `);
-      }
-    },
-    () => {
-      try { db.exec('ALTER TABLE day_accommodations ADD COLUMN check_in TEXT'); } catch {}
-      try { db.exec('ALTER TABLE day_accommodations ADD COLUMN check_out TEXT'); } catch {}
-      try { db.exec('ALTER TABLE day_accommodations ADD COLUMN confirmation TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE places ADD COLUMN end_time TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_status TEXT DEFAULT \'none\''); } catch {}
-      try { db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_notes TEXT'); } catch {}
-      try { db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_datetime TEXT'); } catch {}
-      try {
-        db.exec(`
+            }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE day_accommodations ADD COLUMN check_in TEXT');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE day_accommodations ADD COLUMN check_out TEXT');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE day_accommodations ADD COLUMN confirmation TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE places ADD COLUMN end_time TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_status TEXT DEFAULT \'none\'');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_notes TEXT');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE day_assignments ADD COLUMN reservation_datetime TEXT');
+            }
+            catch { }
+            try {
+                db.exec(`
           UPDATE day_assignments SET
             reservation_status = (SELECT reservation_status FROM places WHERE places.id = day_assignments.place_id),
             reservation_notes = (SELECT reservation_notes FROM places WHERE places.id = day_assignments.place_id),
             reservation_datetime = (SELECT reservation_datetime FROM places WHERE places.id = day_assignments.place_id)
           WHERE place_id IN (SELECT id FROM places WHERE reservation_status IS NOT NULL AND reservation_status != 'none')
         `);
-        console.log('[DB] Migrated reservation data from places to day_assignments');
-      } catch (e: unknown) {
-        console.error('[DB] Migration 22 data copy error:', e instanceof Error ? e.message : e);
-      }
-    },
-    () => {
-      try { db.exec('ALTER TABLE reservations ADD COLUMN assignment_id INTEGER REFERENCES day_assignments(id) ON DELETE SET NULL'); } catch {}
-    },
-    () => {
-      db.exec(`
+                console.log('[DB] Migrated reservation data from places to day_assignments');
+            }
+            catch (e) {
+                console.error('[DB] Migration 22 data copy error:', e instanceof Error ? e.message : e);
+            }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE reservations ADD COLUMN assignment_id INTEGER REFERENCES day_assignments(id) ON DELETE SET NULL');
+            }
+            catch { }
+        },
+        () => {
+            db.exec(`
         CREATE TABLE IF NOT EXISTS assignment_participants (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           assignment_id INTEGER NOT NULL REFERENCES day_assignments(id) ON DELETE CASCADE,
@@ -96,9 +119,9 @@ function runMigrations(db: Database.Database): void {
           UNIQUE(assignment_id, user_id)
         )
       `);
-    },
-    () => {
-      db.exec(`
+        },
+        () => {
+            db.exec(`
         CREATE TABLE IF NOT EXISTS collab_notes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -142,23 +165,31 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_collab_polls_trip ON collab_polls(trip_id);
         CREATE INDEX IF NOT EXISTS idx_collab_messages_trip ON collab_messages(trip_id);
       `);
-      try {
-        db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES ('collab', 'Collab', 'Notes, polls, and live chat for trip collaboration', 'trip', 'Users', 1, 6)").run();
-      } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE day_assignments ADD COLUMN assignment_time TEXT'); } catch {}
-      try { db.exec('ALTER TABLE day_assignments ADD COLUMN assignment_end_time TEXT'); } catch {}
-      try {
-        db.exec(`
+            try {
+                db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES ('collab', 'Collab', 'Notes, polls, and live chat for trip collaboration', 'trip', 'Users', 1, 6)").run();
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE day_assignments ADD COLUMN assignment_time TEXT');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE day_assignments ADD COLUMN assignment_end_time TEXT');
+            }
+            catch { }
+            try {
+                db.exec(`
           UPDATE day_assignments SET
             assignment_time = (SELECT place_time FROM places WHERE places.id = day_assignments.place_id),
             assignment_end_time = (SELECT end_time FROM places WHERE places.id = day_assignments.place_id)
         `);
-      } catch {}
-    },
-    () => {
-      db.exec(`
+            }
+            catch { }
+        },
+        () => {
+            db.exec(`
         CREATE TABLE IF NOT EXISTS budget_item_members (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           budget_item_id INTEGER NOT NULL REFERENCES budget_items(id) ON DELETE CASCADE,
@@ -169,9 +200,9 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_budget_item_members_item ON budget_item_members(budget_item_id);
         CREATE INDEX IF NOT EXISTS idx_budget_item_members_user ON budget_item_members(user_id);
       `);
-    },
-    () => {
-      db.exec(`
+        },
+        () => {
+            db.exec(`
         CREATE TABLE IF NOT EXISTS collab_message_reactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           message_id INTEGER NOT NULL REFERENCES collab_messages(id) ON DELETE CASCADE,
@@ -182,31 +213,61 @@ function runMigrations(db: Database.Database): void {
         );
         CREATE INDEX IF NOT EXISTS idx_collab_reactions_msg ON collab_message_reactions(message_id);
       `);
-    },
-    () => {
-      try { db.exec('ALTER TABLE collab_messages ADD COLUMN deleted INTEGER DEFAULT 0'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE trip_files ADD COLUMN note_id INTEGER REFERENCES collab_notes(id) ON DELETE SET NULL'); } catch {}
-      try { db.exec('ALTER TABLE collab_notes ADD COLUMN website TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE reservations ADD COLUMN reservation_end_time TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE places ADD COLUMN osm_id TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE trip_files ADD COLUMN uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL'); } catch {}
-      try { db.exec('ALTER TABLE trip_files ADD COLUMN starred INTEGER DEFAULT 0'); } catch {}
-      try { db.exec('ALTER TABLE trip_files ADD COLUMN deleted_at TEXT'); } catch {}
-    },
-    () => {
-      try { db.exec('ALTER TABLE reservations ADD COLUMN accommodation_id INTEGER REFERENCES day_accommodations(id) ON DELETE SET NULL'); } catch {}
-      try { db.exec('ALTER TABLE reservations ADD COLUMN metadata TEXT'); } catch {}
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS invite_tokens (
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE collab_messages ADD COLUMN deleted INTEGER DEFAULT 0');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE trip_files ADD COLUMN note_id INTEGER REFERENCES collab_notes(id) ON DELETE SET NULL');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE collab_notes ADD COLUMN website TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE reservations ADD COLUMN reservation_end_time TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE places ADD COLUMN osm_id TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE trip_files ADD COLUMN uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE trip_files ADD COLUMN starred INTEGER DEFAULT 0');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE trip_files ADD COLUMN deleted_at TEXT');
+            }
+            catch { }
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE reservations ADD COLUMN accommodation_id INTEGER REFERENCES day_accommodations(id) ON DELETE SET NULL');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE reservations ADD COLUMN metadata TEXT');
+            }
+            catch { }
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS invite_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         token TEXT UNIQUE NOT NULL,
         max_uses INTEGER NOT NULL DEFAULT 1,
@@ -215,44 +276,53 @@ function runMigrations(db: Database.Database): void {
         created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
-    },
-    () => {
-      try { db.exec('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0'); } catch {}
-      try { db.exec('ALTER TABLE users ADD COLUMN mfa_secret TEXT'); } catch {}
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS packing_category_assignees (
+        },
+        () => {
+            try {
+                db.exec('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE users ADD COLUMN mfa_secret TEXT');
+            }
+            catch { }
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS packing_category_assignees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
         category_name TEXT NOT NULL,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         UNIQUE(trip_id, category_name, user_id)
       )`);
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS packing_templates (
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS packing_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
-      db.exec(`CREATE TABLE IF NOT EXISTS packing_template_categories (
+            db.exec(`CREATE TABLE IF NOT EXISTS packing_template_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         template_id INTEGER NOT NULL REFERENCES packing_templates(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0
       )`);
-      // Recreate items table with category_id FK (replaces old template_id-based schema)
-      try { db.exec('DROP TABLE IF EXISTS packing_template_items'); } catch {}
-      db.exec(`CREATE TABLE packing_template_items (
+            // Recreate items table with category_id FK (replaces old template_id-based schema)
+            try {
+                db.exec('DROP TABLE IF EXISTS packing_template_items');
+            }
+            catch { }
+            db.exec(`CREATE TABLE packing_template_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER NOT NULL REFERENCES packing_template_categories(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0
       )`);
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS packing_bags (
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS packing_bags (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -261,20 +331,26 @@ function runMigrations(db: Database.Database): void {
         sort_order INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
-      try { db.exec('ALTER TABLE packing_items ADD COLUMN weight_grams INTEGER'); } catch {}
-      try { db.exec('ALTER TABLE packing_items ADD COLUMN bag_id INTEGER REFERENCES packing_bags(id) ON DELETE SET NULL'); } catch {}
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS visited_countries (
+            try {
+                db.exec('ALTER TABLE packing_items ADD COLUMN weight_grams INTEGER');
+            }
+            catch { }
+            try {
+                db.exec('ALTER TABLE packing_items ADD COLUMN bag_id INTEGER REFERENCES packing_bags(id) ON DELETE SET NULL');
+            }
+            catch { }
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS visited_countries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         country_code TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, country_code)
       )`);
-    },
-    () => {
-      db.exec(`CREATE TABLE IF NOT EXISTS bucket_list (
+        },
+        () => {
+            db.exec(`CREATE TABLE IF NOT EXISTS bucket_list (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -284,16 +360,25 @@ function runMigrations(db: Database.Database): void {
         notes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
-    },
-    () => {
-      // Configurable weekend days
-      try { db.exec("ALTER TABLE vacay_plans ADD COLUMN weekend_days TEXT DEFAULT '0,6'"); } catch {}
-    },
-    () => {
-      // Immich integration
-      try { db.exec("ALTER TABLE users ADD COLUMN immich_url TEXT"); } catch {}
-      try { db.exec("ALTER TABLE users ADD COLUMN immich_api_key TEXT"); } catch {}
-      db.exec(`CREATE TABLE IF NOT EXISTS trip_photos (
+        },
+        () => {
+            // Configurable weekend days
+            try {
+                db.exec("ALTER TABLE vacay_plans ADD COLUMN weekend_days TEXT DEFAULT '0,6'");
+            }
+            catch { }
+        },
+        () => {
+            // Immich integration
+            try {
+                db.exec("ALTER TABLE users ADD COLUMN immich_url TEXT");
+            }
+            catch { }
+            try {
+                db.exec("ALTER TABLE users ADD COLUMN immich_api_key TEXT");
+            }
+            catch { }
+            db.exec(`CREATE TABLE IF NOT EXISTS trip_photos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -302,14 +387,15 @@ function runMigrations(db: Database.Database): void {
         added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(trip_id, user_id, immich_asset_id)
       )`);
-      // Add memories addon
-      try {
-        db.prepare("INSERT INTO addons (id, name, type, icon, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?)").run('memories', 'Photos', 'trip', 'Image', 0, 7);
-      } catch {}
-    },
-    () => {
-      // Allow files to be linked to multiple reservations/assignments
-      db.exec(`CREATE TABLE IF NOT EXISTS file_links (
+            // Add memories addon
+            try {
+                db.prepare("INSERT INTO addons (id, name, type, icon, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?)").run('memories', 'Photos', 'trip', 'Image', 0, 7);
+            }
+            catch { }
+        },
+        () => {
+            // Allow files to be linked to multiple reservations/assignments
+            db.exec(`CREATE TABLE IF NOT EXISTS file_links (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         file_id INTEGER NOT NULL REFERENCES trip_files(id) ON DELETE CASCADE,
         reservation_id INTEGER REFERENCES reservations(id) ON DELETE CASCADE,
@@ -320,10 +406,10 @@ function runMigrations(db: Database.Database): void {
         UNIQUE(file_id, assignment_id),
         UNIQUE(file_id, place_id)
       )`);
-    },
-    () => {
-      // Kosten: expense splitting addon
-      db.exec(`
+        },
+        () => {
+            // Kosten: expense splitting addon
+            db.exec(`
         CREATE TABLE IF NOT EXISTS kosten_expenses (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -362,14 +448,15 @@ function runMigrations(db: Database.Database): void {
         );
         CREATE INDEX IF NOT EXISTS idx_kosten_settlements_trip ON kosten_settlements(trip_id);
       `);
-      try {
-        db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES ('kosten', 'Kosten', 'Split expenses and settle debts between trip members', 'trip', 'Receipt', 1, 4)").run();
-      } catch {}
-    },
-    () => {
-      // Make paid_by nullable + add paid_by_name for external (non-registered) payers
-      db.exec('PRAGMA foreign_keys = OFF');
-      db.exec(`
+            try {
+                db.prepare("INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES ('kosten', 'Kosten', 'Split expenses and settle debts between trip members', 'trip', 'Receipt', 1, 4)").run();
+            }
+            catch { }
+        },
+        () => {
+            // Make paid_by nullable + add paid_by_name for external (non-registered) payers
+            db.exec('PRAGMA foreign_keys = OFF');
+            db.exec(`
         CREATE TABLE kosten_expenses_v2 (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           trip_id INTEGER NOT NULL,
@@ -393,12 +480,12 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_kosten_expenses_trip ON kosten_expenses(trip_id);
         CREATE INDEX IF NOT EXISTS idx_kosten_expenses_paid_by ON kosten_expenses(paid_by);
       `);
-      db.exec('PRAGMA foreign_keys = ON');
-    },
-    () => {
-      // Make kosten_settlements from/to user IDs nullable + add name fields for external (non-registered) payers
-      db.exec('PRAGMA foreign_keys = OFF');
-      db.exec(`
+            db.exec('PRAGMA foreign_keys = ON');
+        },
+        () => {
+            // Make kosten_settlements from/to user IDs nullable + add name fields for external (non-registered) payers
+            db.exec('PRAGMA foreign_keys = OFF');
+            db.exec(`
         CREATE TABLE kosten_settlements_v2 (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           trip_id INTEGER NOT NULL,
@@ -418,16 +505,16 @@ function runMigrations(db: Database.Database): void {
         ALTER TABLE kosten_settlements_v2 RENAME TO kosten_settlements;
         CREATE INDEX IF NOT EXISTS idx_kosten_settlements_trip ON kosten_settlements(trip_id);
       `);
-      db.exec('PRAGMA foreign_keys = ON');
-    },
-    () => {
-      // Make kosten_shares.user_id nullable + add user_name for custom (non-registered) persons
-      db.exec('PRAGMA foreign_keys = OFF');
-      db.exec(`
+            db.exec('PRAGMA foreign_keys = ON');
+        },
+        () => {
+            // Make kosten_shares user_id nullable + add user_name
+            db.exec('PRAGMA foreign_keys = OFF');
+            db.exec(`
         CREATE TABLE kosten_shares_v2 (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           expense_id INTEGER NOT NULL REFERENCES kosten_expenses(id) ON DELETE CASCADE,
-          user_id INTEGER,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           user_name TEXT,
           share_value REAL
         );
@@ -437,18 +524,16 @@ function runMigrations(db: Database.Database): void {
         ALTER TABLE kosten_shares_v2 RENAME TO kosten_shares;
         CREATE INDEX IF NOT EXISTS idx_kosten_shares_expense ON kosten_shares(expense_id);
       `);
-      db.exec('PRAGMA foreign_keys = ON');
-    },
-  ];
-
-  if (currentVersion < migrations.length) {
-    for (let i = currentVersion; i < migrations.length; i++) {
-      console.log(`[DB] Running migration ${i + 1}/${migrations.length}`);
-      migrations[i]();
+            db.exec('PRAGMA foreign_keys = ON');
+        },
+    ];
+    if (currentVersion < migrations.length) {
+        for (let i = currentVersion; i < migrations.length; i++) {
+            console.log(`[DB] Running migration ${i + 1}/${migrations.length}`);
+            migrations[i]();
+        }
+        db.prepare('UPDATE schema_version SET version = ?').run(migrations.length);
+        console.log(`[DB] Migrations complete — schema version ${migrations.length}`);
     }
-    db.prepare('UPDATE schema_version SET version = ?').run(migrations.length);
-    console.log(`[DB] Migrations complete — schema version ${migrations.length}`);
-  }
 }
-
-export { runMigrations };
+//# sourceMappingURL=migrations.js.map

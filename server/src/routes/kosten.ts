@@ -29,12 +29,12 @@ function getTripMembers(tripId: string | number): TripMemberRow[] {
   return all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
 }
 
-interface ShareRow { user_id: number; share_value: number | null; username: string; avatar: string | null }
+interface ShareRow { user_id: number | null; user_name: string | null; share_value: number | null; username: string; avatar: string | null }
 
 function loadExpenseShares(expenseId: number | string): ShareRow[] {
   return db.prepare(`
-    SELECT ks.user_id, ks.share_value, u.username, u.avatar
-    FROM kosten_shares ks JOIN users u ON ks.user_id = u.id
+    SELECT ks.user_id, ks.user_name, ks.share_value, COALESCE(u.username, ks.user_name) as username, u.avatar
+    FROM kosten_shares ks LEFT JOIN users u ON ks.user_id = u.id
     WHERE ks.expense_id = ?
   `).all(expenseId) as ShareRow[];
 }
@@ -46,7 +46,7 @@ function loadFullExpense(id: number | string) {
     WHERE ke.id = ?
   `).get(id) as any;
   if (!expense) return undefined;
-  expense.shares = loadExpenseShares(expense.id).map((s: ShareRow) => ({ ...s, avatar_url: avatarUrl(s) }));
+  expense.shares = loadExpenseShares(expense.id).map((s: ShareRow) => ({ ...s, avatar_url: avatarUrl(s), user_name: s.user_name || null }));
   expense.paid_by_avatar_url = avatarUrl({ avatar: expense.paid_by_avatar });
   return expense;
 }
@@ -67,15 +67,15 @@ router.get('/', authenticate, (req: Request, res: Response) => {
   const expenseIds = expenses.map((e: any) => e.id);
   if (expenseIds.length > 0) {
     const allShares = db.prepare(`
-      SELECT ks.expense_id, ks.user_id, ks.share_value, u.username, u.avatar
-      FROM kosten_shares ks JOIN users u ON ks.user_id = u.id
+      SELECT ks.expense_id, ks.user_id, ks.user_name, ks.share_value, COALESCE(u.username, ks.user_name) as username, u.avatar
+      FROM kosten_shares ks LEFT JOIN users u ON ks.user_id = u.id
       WHERE ks.expense_id IN (${expenseIds.map(() => '?').join(',')})
     `).all(...expenseIds) as (ShareRow & { expense_id: number })[];
 
     const sharesByExpense: Record<number, any[]> = {};
     for (const s of allShares) {
       if (!sharesByExpense[s.expense_id]) sharesByExpense[s.expense_id] = [];
-      sharesByExpense[s.expense_id].push({ ...s, avatar_url: avatarUrl(s) });
+      sharesByExpense[s.expense_id].push({ ...s, avatar_url: avatarUrl(s), user_name: s.user_name || null });
     }
     expenses.forEach((e: any) => {
       e.shares = sharesByExpense[e.id] || [];
@@ -93,7 +93,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   const { tripId } = req.params;
   if (!canAccessTrip(tripId, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
 
-  const { title, amount, currency, exchange_rate = 1, paid_by, paid_by_name, category = 'Sonstiges', expense_date, note, split_type = 'equal', participant_ids } = req.body;
+  const { title, amount, currency, exchange_rate = 1, paid_by, paid_by_name, category = 'Sonstiges', expense_date, note, split_type = 'equal', participant_ids, participant_names } = req.body;
   if (!title || amount === undefined || amount === null || (!paid_by && !paid_by_name)) {
     return res.status(400).json({ error: 'title, amount and (paid_by or paid_by_name) are required' });
   }
@@ -108,7 +108,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
 
   const expenseId = result.lastInsertRowid as number;
 
-  // Participants: use provided list or all trip members
+  // Participants: user IDs
   let participants: number[];
   if (participant_ids && Array.isArray(participant_ids) && participant_ids.length > 0) {
     participants = participant_ids.map(Number);
@@ -116,9 +116,16 @@ router.post('/', authenticate, (req: Request, res: Response) => {
     participants = getTripMembers(tripId).map(m => m.id);
   }
 
-  const insertShare = db.prepare('INSERT OR IGNORE INTO kosten_shares (expense_id, user_id, share_value) VALUES (?, ?, ?)');
+  const insertShare = db.prepare('INSERT INTO kosten_shares (expense_id, user_id, user_name, share_value) VALUES (?, ?, ?, ?)');
   for (const uid of participants) {
-    insertShare.run(expenseId, uid, null);
+    insertShare.run(expenseId, uid, null, null);
+  }
+
+  // Custom (non-registered) person participants
+  if (participant_names && Array.isArray(participant_names)) {
+    for (const name of participant_names) {
+      if (name && typeof name === 'string') insertShare.run(expenseId, null, name.trim(), null);
+    }
   }
 
   const expense = loadFullExpense(expenseId);
@@ -185,10 +192,10 @@ router.put('/:id/shares', authenticate, (req: Request, res: Response) => {
   if (!Array.isArray(shares)) return res.status(400).json({ error: 'shares must be an array' });
 
   db.prepare('DELETE FROM kosten_shares WHERE expense_id = ?').run(id);
-  const insertShare = db.prepare('INSERT INTO kosten_shares (expense_id, user_id, share_value) VALUES (?, ?, ?)');
+  const insertShare = db.prepare('INSERT INTO kosten_shares (expense_id, user_id, user_name, share_value) VALUES (?, ?, ?, ?)');
   for (const s of shares) {
-    if (!s.user_id) continue;
-    insertShare.run(id, Number(s.user_id), s.share_value != null ? Number(s.share_value) : null);
+    if (!s.user_id && !s.user_name) continue;
+    insertShare.run(id, s.user_id ? Number(s.user_id) : null, s.user_name || null, s.share_value != null ? Number(s.share_value) : null);
   }
 
   const expense = loadFullExpense(Number(id));
@@ -203,29 +210,36 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
   if (!canAccessTrip(tripId, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
 
   const expenses = db.prepare(`
-    SELECT id, amount, exchange_rate, paid_by, split_type
-    FROM kosten_expenses WHERE trip_id = ? AND paid_by IS NOT NULL
-  `).all(tripId) as { id: number; amount: number; exchange_rate: number; paid_by: number; split_type: string }[];
+    SELECT id, amount, exchange_rate, paid_by, paid_by_name, split_type
+    FROM kosten_expenses WHERE trip_id = ?
+  `).all(tripId) as { id: number; amount: number; exchange_rate: number; paid_by: number | null; paid_by_name: string | null; split_type: string }[];
 
   const allShareRows = db.prepare(`
-    SELECT ks.expense_id, ks.user_id, ks.share_value
+    SELECT ks.expense_id, ks.user_id, ks.user_name, ks.share_value
     FROM kosten_shares ks JOIN kosten_expenses ke ON ks.expense_id = ke.id
     WHERE ke.trip_id = ?
-  `).all(tripId) as { expense_id: number; user_id: number; share_value: number | null }[];
+  `).all(tripId) as { expense_id: number; user_id: number | null; user_name: string | null; share_value: number | null }[];
 
-  const sharesByExpense: Record<number, { user_id: number; share_value: number | null }[]> = {};
+  const sharesByExpense: Record<number, { user_id: number | null; user_name: string | null; share_value: number | null }[]> = {};
   for (const s of allShareRows) {
     if (!sharesByExpense[s.expense_id]) sharesByExpense[s.expense_id] = [];
     sharesByExpense[s.expense_id].push(s);
   }
 
   const settlements = db.prepare(`
-    SELECT from_user_id, to_user_id, amount, exchange_rate
+    SELECT from_user_id, from_name, to_user_id, to_name, amount, exchange_rate
     FROM kosten_settlements WHERE trip_id = ?
-  `).all(tripId) as { from_user_id: number; to_user_id: number; amount: number; exchange_rate: number }[];
+  `).all(tripId) as { from_user_id: number | null; from_name: string | null; to_user_id: number | null; to_name: string | null; amount: number; exchange_rate: number }[];
+
+  // Use string keys: "u:ID" for registered users, "c:name" for custom persons
+  function shareKey(uid: number | null, uname: string | null): string {
+    if (uid) return `u:${uid}`;
+    if (uname) return `c:${uname}`;
+    return '';
+  }
 
   // Compute net balances in trip base currency
-  const balances: Record<number, number> = {};
+  const balances: Record<string, number> = {};
 
   for (const expense of expenses) {
     const amtInTripCurrency = expense.amount * (expense.exchange_rate || 1);
@@ -234,10 +248,13 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
     if (n === 0) continue;
 
     // Credit the payer
-    balances[expense.paid_by] = (balances[expense.paid_by] || 0) + amtInTripCurrency;
+    const payerKey = shareKey(expense.paid_by, expense.paid_by_name);
+    if (payerKey) balances[payerKey] = (balances[payerKey] || 0) + amtInTripCurrency;
 
     // Debit each participant
     for (const share of shares) {
+      const key = shareKey(share.user_id, share.user_name);
+      if (!key) continue;
       let owe = 0;
       if (expense.split_type === 'equal') {
         owe = amtInTripCurrency / n;
@@ -246,19 +263,25 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
       } else if (expense.split_type === 'unequal_percent') {
         owe = amtInTripCurrency * (share.share_value || 0) / 100;
       }
-      balances[share.user_id] = (balances[share.user_id] || 0) - owe;
+      balances[key] = (balances[key] || 0) - owe;
     }
   }
 
   // Apply settlements
   for (const s of settlements) {
     const amt = s.amount * (s.exchange_rate || 1);
-    balances[s.from_user_id] = (balances[s.from_user_id] || 0) - amt;
-    balances[s.to_user_id] = (balances[s.to_user_id] || 0) + amt;
+    const fromKey = shareKey(s.from_user_id, s.from_name);
+    const toKey = shareKey(s.to_user_id, s.to_name);
+    if (fromKey) balances[fromKey] = (balances[fromKey] || 0) - amt;
+    if (toKey) balances[toKey] = (balances[toKey] || 0) + amt;
   }
 
-  // Fetch user info for all relevant users
-  const allUserIds = [...new Set(Object.keys(balances).map(Number))];
+  // Fetch user info for registered users
+  const userIdSet = new Set<number>();
+  for (const key of Object.keys(balances)) {
+    if (key.startsWith('u:')) userIdSet.add(Number(key.slice(2)));
+  }
+  const allUserIds = [...userIdSet];
   const usersMap: Record<number, { username: string; avatar: string | null }> = {};
   if (allUserIds.length > 0) {
     const users = db.prepare(
@@ -268,12 +291,18 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
   }
 
   const balanceList = Object.entries(balances)
-    .map(([uid, bal]) => ({
-      user_id: Number(uid),
-      username: usersMap[Number(uid)]?.username || `User ${uid}`,
-      avatar_url: usersMap[Number(uid)]?.avatar ? `/uploads/avatars/${usersMap[Number(uid)].avatar}` : null,
-      balance: Math.round(bal * 100) / 100,
-    }))
+    .map(([key, bal]) => {
+      const isUser = key.startsWith('u:');
+      const uid = isUser ? Number(key.slice(2)) : null;
+      const customName = !isUser && key.startsWith('c:') ? key.slice(2) : null;
+      return {
+        user_id: uid,
+        user_name: customName,
+        username: isUser ? (usersMap[uid!]?.username || `User ${uid}`) : customName || 'Unknown',
+        avatar_url: isUser && usersMap[uid!]?.avatar ? `/uploads/avatars/${usersMap[uid!].avatar}` : null,
+        balance: Math.round(bal * 100) / 100,
+      };
+    })
     .filter(b => Math.abs(b.balance) > 0.005);
 
   // Simplified debts: greedy min-transactions algorithm
@@ -281,8 +310,8 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
   const debt = balanceList.filter(b => b.balance < 0).map(b => ({ ...b })).sort((a, b) => a.balance - b.balance);
 
   const debts: {
-    from_user_id: number; from_username: string; from_avatar_url: string | null;
-    to_user_id: number; to_username: string; to_avatar_url: string | null;
+    from_user_id: number | null; from_name: string | null; from_username: string; from_avatar_url: string | null;
+    to_user_id: number | null; to_name: string | null; to_username: string; to_avatar_url: string | null;
     amount: number;
   }[] = [];
 
@@ -292,8 +321,8 @@ router.get('/balances', authenticate, (req: Request, res: Response) => {
     const transfer = Math.min(c.balance, Math.abs(d.balance));
     if (transfer > 0.005) {
       debts.push({
-        from_user_id: d.user_id, from_username: d.username, from_avatar_url: d.avatar_url,
-        to_user_id: c.user_id, to_username: c.username, to_avatar_url: c.avatar_url,
+        from_user_id: d.user_id, from_name: d.user_name, from_username: d.username, from_avatar_url: d.avatar_url,
+        to_user_id: c.user_id, to_name: c.user_name, to_username: c.username, to_avatar_url: c.avatar_url,
         amount: Math.round(transfer * 100) / 100,
       });
     }
