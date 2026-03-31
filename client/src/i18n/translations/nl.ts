@@ -623,6 +623,7 @@ const nl: Record<string, string> = {
   'places.addPlace': 'Plaats/activiteit toevoegen',
   'places.assignToDay': 'Aan welke dag toevoegen?',
   'places.all': 'Alle',
+  'places.planned': 'Gepland',
   'places.unplanned': 'Ongepland',
   'places.search': 'Plaatsen zoeken...',
   'places.allCategories': 'Alle categorieën',

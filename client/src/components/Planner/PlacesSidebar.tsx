@@ -49,6 +49,7 @@ export default function PlacesSidebar({
   )
 
   const filtered = places.filter(p => {
+    if (filter === 'planned' && !plannedIds.has(p.id)) return false
     if (filter === 'unplanned' && plannedIds.has(p.id)) return false
     if (categoryFilter && String(p.category_id) !== String(categoryFilter)) return false
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -90,7 +91,7 @@ export default function PlacesSidebar({
 
         {/* Filter-Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-          {[{ id: 'all', label: t('places.all') }, { id: 'unplanned', label: t('places.unplanned') }].map(f => (
+          {[{ id: 'all', label: t('places.all') }, { id: 'planned', label: t('places.planned') }, { id: 'unplanned', label: t('places.unplanned') }].map(f => (
             <button key={f.id} onClick={() => setFilter(f.id)} style={{
               padding: '4px 10px', borderRadius: 20, border: 'none', cursor: 'pointer',
               fontSize: 11, fontWeight: 500, fontFamily: 'inherit',

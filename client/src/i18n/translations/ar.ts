@@ -629,6 +629,7 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'places.addPlace': 'إضافة مكان/نشاط',
   'places.assignToDay': 'إلى أي يوم تريد الإضافة؟',
   'places.all': 'الكل',
+  'places.planned': 'مخطط',
   'places.unplanned': 'غير مخطط',
   'places.search': 'ابحث عن أماكن...',
   'places.allCategories': 'كل الفئات',

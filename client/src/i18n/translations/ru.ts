@@ -623,6 +623,7 @@ const ru: Record<string, string> = {
   'places.addPlace': 'Добавить место/активность',
   'places.assignToDay': 'Добавить в какой день?',
   'places.all': 'Все',
+  'places.planned': 'Запланированные',
   'places.unplanned': 'Незапланированные',
   'places.search': 'Поиск мест...',
   'places.allCategories': 'Все категории',

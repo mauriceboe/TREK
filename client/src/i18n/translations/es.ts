@@ -602,6 +602,7 @@ const es: Record<string, string> = {
   'places.addPlace': 'Añadir lugar/actividad',
   'places.assignToDay': '¿A qué día añadirlo?',
   'places.all': 'Todo',
+  'places.planned': 'Planificados',
   'places.unplanned': 'Sin planificar',
   'places.search': 'Buscar lugares...',
   'places.allCategories': 'Todas las categorías',

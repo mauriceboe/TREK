@@ -623,6 +623,7 @@ const zh: Record<string, string> = {
   'places.addPlace': '添加地点/活动',
   'places.assignToDay': '添加到哪一天？',
   'places.all': '全部',
+  'places.planned': '已规划',
   'places.unplanned': '未规划',
   'places.search': '搜索地点...',
   'places.allCategories': '所有分类',
