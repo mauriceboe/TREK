@@ -229,11 +229,6 @@ Currency: CHF. Use get_trip_summary at the end and give me a quick recap
 of everything that was added.
 ```
 
-Database file: https://share.jubnl.ch/s/S7bBpj42mB
-
-Email: admin@admin.com \
-Password: admin123
-
 PDF of the generated trip: [./docs/TREK-Generated-by-MCP.pdf](./docs/TREK-Generated-by-MCP.pdf)
 
 ![trip](./docs/screenshot-trip-mcp.png)

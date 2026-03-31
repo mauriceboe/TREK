@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import './config';
+import { JWT_SECRET_IS_GENERATED } from './config';
 import express, { Request, Response, NextFunction } from 'express';
 import { enforceGlobalMfaPolicy } from './middleware/mfaPolicy';
 import cors from 'cors';
@@ -57,13 +57,21 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
-      connectSrc: ["'self'", "ws:", "wss:", "https:", "http:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: [
+        "'self'", "ws:", "wss:",
+        "https://nominatim.openstreetmap.org", "https://overpass-api.de",
+        "https://places.googleapis.com", "https://api.openweathermap.org",
+        "https://en.wikipedia.org", "https://commons.wikimedia.org",
+        "https://*.basemaps.cartocdn.com", "https://*.tile.openstreetmap.org",
+        "https://unpkg.com", "https://open-meteo.com", "https://api.open-meteo.com",
+        "https://geocoding-api.open-meteo.com",
+      ],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      objectSrc: ["'self'"],
-      frameSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'none'"],
       frameAncestors: ["'self'"],
       upgradeInsecureRequests: shouldForceHttps ? [] : null
     }
@@ -224,9 +232,13 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Global error handler
+// Global error handler — do not leak stack traces in production
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Unhandled error:', err);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Unhandled error:', err);
+  } else {
+    console.error('Unhandled error:', err.message);
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -237,6 +249,9 @@ const server = app.listen(PORT, () => {
   console.log(`TREK API running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Debug logs: ${DEBUG ? 'ENABLED' : 'disabled'}`);
+  if (JWT_SECRET_IS_GENERATED) {
+    console.warn('[SECURITY WARNING] JWT_SECRET was auto-generated. Sessions will not persist across restarts. Set JWT_SECRET env var for production use.');
+  }
   if (process.env.DEMO_MODE === 'true') console.log('Demo mode: ENABLED');
   if (process.env.DEMO_MODE === 'true' && process.env.NODE_ENV === 'production') {
     console.warn('[SECURITY WARNING] DEMO_MODE is enabled in production! Demo credentials are publicly exposed.');

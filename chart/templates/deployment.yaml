@@ -20,10 +20,16 @@ spec:
         - name: {{ .name }}
         {{- end }}
       {{- end }}
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: trek
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - containerPort: 3000
           envFrom:

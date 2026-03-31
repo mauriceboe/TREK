@@ -275,7 +275,9 @@ router.post('/:id/link', authenticate, (req: Request, res: Response) => {
     db.prepare('INSERT OR IGNORE INTO file_links (file_id, reservation_id, assignment_id, place_id) VALUES (?, ?, ?, ?)').run(
       id, reservation_id || null, assignment_id || null, place_id || null
     );
-  } catch {}
+  } catch (err) {
+    console.error('[Files] Error creating file link:', err instanceof Error ? err.message : err);
+  }
 
   const links = db.prepare('SELECT * FROM file_links WHERE file_id = ?').all(id);
   res.json({ success: true, links });

@@ -6,6 +6,29 @@ import { AuthRequest } from '../types';
 
 const router = express.Router();
 
+/** Validate that an asset ID is a safe UUID-like string (no path traversal). */
+function isValidAssetId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(id) && id.length <= 100;
+}
+
+/** Validate that an Immich URL is a safe HTTP(S) URL (no internal/metadata IPs). */
+function isValidImmichUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const hostname = url.hostname.toLowerCase();
+    // Block metadata endpoints and localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') return false;
+    // Block link-local and loopback ranges
+    if (hostname.startsWith('10.') || hostname.startsWith('172.') || hostname.startsWith('192.168.')) return false;
+    if (hostname.endsWith('.internal') || hostname.endsWith('.local')) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Immich Connection Settings ──────────────────────────────────────────────
 
 router.get('/settings', authenticate, (req: Request, res: Response) => {
@@ -20,6 +43,9 @@ router.get('/settings', authenticate, (req: Request, res: Response) => {
 router.put('/settings', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { immich_url, immich_api_key } = req.body;
+  if (immich_url && !isValidImmichUrl(immich_url.trim())) {
+    return res.status(400).json({ error: 'Invalid Immich URL. Must be a valid HTTP(S) URL.' });
+  }
   db.prepare('UPDATE users SET immich_url = ?, immich_api_key = ? WHERE id = ?').run(
     immich_url?.trim() || null,
     immich_api_key?.trim() || null,
@@ -189,10 +215,10 @@ router.put('/trips/:tripId/photos/:assetId/sharing', authenticate, (req: Request
 router.get('/assets/:assetId/info', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
-  const { userId } = req.query;
+  if (!isValidAssetId(assetId)) return res.status(400).json({ error: 'Invalid asset ID' });
 
-  const targetUserId = userId ? Number(userId) : authReq.user.id;
-  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(targetUserId) as any;
+  // Only allow accessing own Immich credentials — prevent leaking other users' API keys
+  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(authReq.user.id) as any;
   if (!user?.immich_url || !user?.immich_api_key) return res.status(404).json({ error: 'Not found' });
 
   try {
@@ -240,10 +266,10 @@ function authFromQuery(req: Request, res: Response, next: Function) {
 router.get('/assets/:assetId/thumbnail', authFromQuery, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
-  const { userId } = req.query;
+  if (!isValidAssetId(assetId)) return res.status(400).send('Invalid asset ID');
 
-  const targetUserId = userId ? Number(userId) : authReq.user.id;
-  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(targetUserId) as any;
+  // Only allow accessing own Immich credentials — prevent leaking other users' API keys
+  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(authReq.user.id) as any;
   if (!user?.immich_url || !user?.immich_api_key) return res.status(404).send('Not found');
 
   try {
@@ -264,10 +290,10 @@ router.get('/assets/:assetId/thumbnail', authFromQuery, async (req: Request, res
 router.get('/assets/:assetId/original', authFromQuery, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
-  const { userId } = req.query;
+  if (!isValidAssetId(assetId)) return res.status(400).send('Invalid asset ID');
 
-  const targetUserId = userId ? Number(userId) : authReq.user.id;
-  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(targetUserId) as any;
+  // Only allow accessing own Immich credentials — prevent leaking other users' API keys
+  const user = db.prepare('SELECT immich_url, immich_api_key FROM users WHERE id = ?').get(authReq.user.id) as any;
   if (!user?.immich_url || !user?.immich_api_key) return res.status(404).send('Not found');
 
   try {

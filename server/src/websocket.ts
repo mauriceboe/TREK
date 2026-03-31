@@ -24,9 +24,28 @@ let nextSocketId = 1;
 
 let wss: WebSocketServer | null = null;
 
+// Per-connection message rate limiting
+const WS_MSG_LIMIT = 30;        // max messages
+const WS_MSG_WINDOW = 10_000;   // per 10 seconds
+const socketMsgCounts = new WeakMap<NomadWebSocket, { count: number; windowStart: number }>();
+
 /** Attaches a WebSocket server with JWT auth, room-based trip channels, and heartbeat keep-alive. */
 function setupWebSocket(server: http.Server): void {
-  wss = new WebSocketServer({ server, path: '/ws' });
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : null;
+
+  wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    maxPayload: 64 * 1024, // 64 KB max message size
+    verifyClient: allowedOrigins
+      ? ({ origin }, cb) => {
+          if (!origin || allowedOrigins.includes(origin)) cb(true);
+          else cb(false, 403, 'Origin not allowed');
+        }
+      : undefined,
+  });
 
   const HEARTBEAT_INTERVAL = 30000; // 30 seconds
   const heartbeat = setInterval(() => {
@@ -53,7 +72,7 @@ function setupWebSocket(server: http.Server): void {
 
     let user: User | undefined;
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
       user = db.prepare(
         'SELECT id, username, email, role, mfa_enabled FROM users WHERE id = ?'
       ).get(decoded.id) as User | undefined;
@@ -81,13 +100,32 @@ function setupWebSocket(server: http.Server): void {
 
     nws.on('pong', () => { nws.isAlive = true; });
 
+    socketMsgCounts.set(nws, { count: 0, windowStart: Date.now() });
+
     nws.on('message', (data) => {
+      // Rate limiting
+      const rate = socketMsgCounts.get(nws)!;
+      const now = Date.now();
+      if (now - rate.windowStart > WS_MSG_WINDOW) {
+        rate.count = 1;
+        rate.windowStart = now;
+      } else {
+        rate.count++;
+        if (rate.count > WS_MSG_LIMIT) {
+          nws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }));
+          return;
+        }
+      }
+
       let msg: { type: string; tripId?: number | string };
       try {
         msg = JSON.parse(data.toString());
       } catch {
-        return;
+        return; // Malformed JSON, ignore
       }
+
+      // Basic validation
+      if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
 
       if (msg.type === 'join' && msg.tripId) {
         const tripId = Number(msg.tripId);

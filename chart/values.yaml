@@ -38,7 +38,13 @@ persistence:
   uploads:
     size: 1Gi
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 ingress:
   enabled: false

@@ -39,5 +39,8 @@ ENV PORT=3000
 
 EXPOSE 3000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
+
 # Entrypoint: fix volume permissions then start as node
 CMD ["sh", "-c", "chown -R node:node /app/data /app/uploads 2>/dev/null; exec su-exec node node --import tsx src/index.ts"]

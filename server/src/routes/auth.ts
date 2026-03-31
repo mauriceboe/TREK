@@ -158,7 +158,7 @@ function generateToken(user: { id: number | bigint }) {
   return jwt.sign(
     { id: user.id },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: '24h', algorithm: 'HS256' }
   );
 }
 
@@ -315,7 +315,7 @@ router.post('/login', authLimiter, (req: Request, res: Response) => {
     const mfa_token = jwt.sign(
       { id: Number(user.id), purpose: 'mfa_login' },
       JWT_SECRET,
-      { expiresIn: '5m' }
+      { expiresIn: '5m', algorithm: 'HS256' }
     );
     return res.json({ mfa_required: true, mfa_token });
   }
@@ -686,7 +686,7 @@ router.post('/mfa/verify-login', authLimiter, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Verification token and code are required' });
   }
   try {
-    const decoded = jwt.verify(mfa_token, JWT_SECRET) as { id: number; purpose?: string };
+    const decoded = jwt.verify(mfa_token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number; purpose?: string };
     if (decoded.purpose !== 'mfa_login') {
       return res.status(401).json({ error: 'Invalid verification token' });
     }
