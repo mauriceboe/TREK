@@ -98,6 +98,14 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<'left' | 'right' | null>(null)
   const [deletePlaceId, setDeletePlaceId] = useState<number | null>(null)
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   // Load trip + files (needed for place inspector file section)
   useEffect(() => {
     if (tripId) {
@@ -544,8 +552,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
                   lng={geoPlace?.lng}
                   onClose={() => setShowDayDetail(null)}
                   onAccommodationChange={loadAccommodations}
-                  leftWidth={leftCollapsed ? 0 : leftWidth}
-                  rightWidth={rightCollapsed ? 0 : rightWidth}
+                  leftWidth={isMobile ? 0 : (leftCollapsed ? 0 : leftWidth)}
+                  rightWidth={isMobile ? 0 : (rightCollapsed ? 0 : rightWidth)}
                 />
               )
             })()}
