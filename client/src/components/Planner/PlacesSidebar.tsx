@@ -21,6 +21,7 @@ interface PlacesSidebarProps {
   onRemoveAssignment?: (dayId: number, assignmentId: number) => void
   onEditPlace: (place: Place) => void
   onDeletePlace: (placeId: number) => void
+  onSelectDay?: (dayId: number | null) => void
   days?: Day[]
   isMobile?: boolean
   onCategoryFilterChange?: (categoryId: string) => void
@@ -28,7 +29,7 @@ interface PlacesSidebarProps {
 
 export default function PlacesSidebar({
   places, categories, assignments, selectedDayId, selectedPlaceId,
-  onPlaceClick, onAddPlace, onAssignToDay, onRemoveAssignment, onEditPlace, onDeletePlace, days, isMobile, onCategoryFilterChange,
+  onPlaceClick, onAddPlace, onAssignToDay, onRemoveAssignment, onEditPlace, onDeletePlace, onSelectDay, days, isMobile, onCategoryFilterChange,
 }: PlacesSidebarProps) {
   const { t } = useTranslation()
   const ctxMenu = useContextMenu()
@@ -66,18 +67,13 @@ export default function PlacesSidebar({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
       {/* Kopfbereich */}
       <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-faint)', flexShrink: 0 }}>
-        {selectedDayLabel && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            marginBottom: 12, padding: '10px 12px', borderRadius: 12,
-            background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            fontSize: 13, fontWeight: 600,
-          }}>
-            <CalendarDays size={16} color="var(--accent)" />
-            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {selectedDayLabel}
-            </span>
+        {selectedDayLabel && days && (
+          <div style={{ marginBottom: 12 }}>
+            <CustomSelect
+              value={String(selectedDayId)}
+              onChange={(val) => onSelectDay?.(Number(val))}
+              options={days.map((d, i) => ({ value: String(d.id), label: d.title || t('dayplan.dayN', { n: i + 1 }), icon: <CalendarDays size={14} color="var(--accent)" /> }))}
+            />
           </div>
         )}
         <button
