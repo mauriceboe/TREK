@@ -208,8 +208,12 @@ export default function TripPlannerPage(): React.ReactElement | null {
         }
       }
       toast.success(t('trip.toast.placeAdded'))
+      setSelectedPlaceId(null)
+      setShowDayDetail(null)
+      setRightCollapsed(false)
+      if (window.innerWidth < 768) setMobileSidebarOpen('right')
     }
-  }, [editingPlace, editingAssignmentId, tripId, tripStore, toast])
+  }, [editingPlace, editingAssignmentId, tripId, tripStore, toast, t, setSelectedPlaceId, setRightCollapsed])
 
   const handleDeletePlace = useCallback((placeId) => {
     setDeletePlaceId(placeId)
