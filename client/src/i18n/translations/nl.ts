@@ -1,4 +1,4 @@
-const nl: Record<string, string> = {
+const nl: Record<string, string | { name: string; category: string }[]> = {
   // Common
   'common.save': 'Opslaan',
   'common.cancel': 'Annuleren',
@@ -680,7 +680,6 @@ const nl: Record<string, string> = {
   'atlas.statsTab': 'Statistieken',
   'atlas.bucketTab': 'Bucket List',
   'atlas.addBucket': 'Toevoegen aan bucket list',
-  'atlas.bucketNamePlaceholder': 'Plaats of bestemming...',
   'atlas.bucketNotesPlaceholder': 'Notities (optioneel)',
   'atlas.bucketEmpty': 'Je bucket list is leeg',
   'atlas.bucketEmptyHint': 'Voeg plekken toe die je wilt bezoeken',
@@ -693,7 +692,6 @@ const nl: Record<string, string> = {
   'atlas.addPoi': 'Plaats toevoegen',
   'atlas.bucketNamePlaceholder': 'Naam (land, stad, plek…)',
   'atlas.month': 'Maand',
-  'atlas.year': 'Jaar',
   'atlas.addToBucketHint': 'Opslaan als plek die je wilt bezoeken',
   'atlas.bucketWhen': 'Wanneer ben je van plan te gaan?',
 
@@ -829,6 +827,9 @@ const nl: Record<string, string> = {
   'reservations.datetime': 'Datum en tijd',
   'reservations.startTime': 'Starttijd',
   'reservations.endTime': 'Eindtijd',
+  'reservations.arrivalDate': 'Aankomstdatum',
+  'reservations.arrivalDay': 'Aankomstdag',
+  'reservations.arrivalTime': 'Aankomsttijd',
   'reservations.date': 'Datum',
   'reservations.time': 'Tijd',
   'reservations.timeAlt': 'Tijd (alternatief, bijv. 19:30)',
@@ -851,6 +852,10 @@ const nl: Record<string, string> = {
   'reservations.meta.fromDay': 'Van',
   'reservations.meta.toDay': 'Tot',
   'reservations.meta.selectDay': 'Selecteer dag',
+  'reservations.fillManually': 'Handmatig invullen',
+  'reservations.backToSearch': 'Terug naar vlucht zoeken',
+  'reservations.flightFound': 'Vluchtgegevens opgehaald!',
+  'reservations.flightNotFound': 'Vlucht niet gevonden.',
   'reservations.type.flight': 'Vlucht',
   'reservations.type.hotel': 'Accommodatie',
   'reservations.type.restaurant': 'Restaurant',

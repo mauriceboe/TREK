@@ -7,6 +7,8 @@ export interface User {
   role: 'admin' | 'user'
   avatar_url: string | null
   maps_api_key: string | null
+  openweather_api_key: string | null
+  rapidapi_key: string | null
   created_at: string
   /** Present after load; true when TOTP MFA is enabled for password login */
   mfa_enabled?: boolean
@@ -28,6 +30,7 @@ export interface Trip {
 export interface Day {
   id: number
   trip_id: number
+  day_number: number
   date: string
   title: string | null
   notes: string | null
@@ -44,6 +47,9 @@ export interface Place {
   lng: number | null
   address: string | null
   category_id: number | null
+  category_name?: string | null
+  category_color?: string | null
+  category_icon?: string | null
   icon: string | null
   price: string | null
   image_url: string | null
@@ -51,6 +57,10 @@ export interface Place {
   osm_id: string | null
   place_time: string | null
   end_time: string | null
+  duration_minutes?: number | null
+  transport_mode?: string | null
+  website?: string | null
+  phone?: string | null
   created_at: string
 }
 
@@ -90,6 +100,7 @@ export interface Tag {
 }
 
 export interface Category {
+  color: string
   id: number
   name: string
   icon: string | null
@@ -129,6 +140,7 @@ export interface Reservation {
   notes: string | null
   url: string | null
   day_id?: number | null
+  end_day_id?: number | null
   place_id?: number | null
   assignment_id?: number | null
   accommodation_id?: number | null
@@ -156,6 +168,7 @@ export interface TripFile {
   created_at: string
   reservation_title?: string
   linked_reservation_ids?: number[]
+  linked_place_ids?: number[]
   url?: string
 }
 
@@ -214,6 +227,9 @@ export interface UserWithOidc extends User {
 export interface Accommodation {
   id: number
   trip_id: number
+  place_id: number
+  start_day_id: number
+  end_day_id: number
   name: string
   address: string | null
   check_in: string | null

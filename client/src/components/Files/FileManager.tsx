@@ -7,12 +7,12 @@ import { useTranslation } from '../../i18n'
 import { filesApi } from '../../api/client'
 import type { Place, Reservation, TripFile, Day, AssignmentsMap } from '../../types'
 
-function isImage(mimeType) {
+function isImage(mimeType: string | null | undefined) {
   if (!mimeType) return false
   return mimeType.startsWith('image/')
 }
 
-function getFileIcon(mimeType) {
+function getFileIcon(mimeType: string | null | undefined) {
   if (!mimeType) return File
   if (mimeType === 'application/pdf') return FileText
   if (isImage(mimeType)) return FileImage
@@ -70,7 +70,7 @@ function ImageLightbox({ file, onClose }: ImageLightboxProps) {
 
 // Source badge
 interface SourceBadgeProps {
-  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>
+  icon: any
   label: string
 }
 
@@ -136,13 +136,13 @@ interface FileManagerProps {
   files?: TripFile[]
   onUpload: (fd: FormData) => Promise<any>
   onDelete: (fileId: number) => Promise<void>
-  onUpdate: (fileId: number, data: Partial<TripFile>) => Promise<void>
+  onUpdate?: (fileId: number, data: Partial<TripFile>) => Promise<void>
   places: Place[]
   days?: Day[]
   assignments?: AssignmentsMap
   reservations?: Reservation[]
-  tripId: number
-  allowedFileTypes: Record<string, string[]>
+  tripId: number | string
+  allowedFileTypes?: string | Record<string, string[]>
 }
 
 export default function FileManager({ files = [], onUpload, onDelete, onUpdate, places, days = [], assignments = {}, reservations = [], tripId, allowedFileTypes }: FileManagerProps) {
@@ -215,7 +215,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
 
   const [lastUploadedIds, setLastUploadedIds] = useState<number[]>([])
 
-  const onDrop = useCallback(async (acceptedFiles) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return
     setUploading(true)
     const uploadedIds: number[] = []
@@ -246,11 +246,11 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
     noClick: false,
   })
 
-  const handlePaste = useCallback((e) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items
     if (!items) return
-    const pastedFiles = []
-    for (const item of Array.from(items)) {
+    const pastedFiles: File[] = []
+    for (const item of Array.from(items) as DataTransferItem[]) {
       if (item.kind === 'file') {
         const file = item.getAsFile()
         if (file) pastedFiles.push(file)
@@ -271,7 +271,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
     return true
   })
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     try {
       await onDelete(id)
       toast.success(t('files.toast.trashed') || 'Moved to trash')
@@ -283,7 +283,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
   const [previewFile, setPreviewFile] = useState(null)
   const [assignFileId, setAssignFileId] = useState<number | null>(null)
 
-  const handleAssign = async (fileId: number, data: { place_id?: number | null; reservation_id?: number | null }) => {
+  const handleAssign = async (fileId: number, data: Partial<TripFile>) => {
     try {
       await filesApi.update(tripId, fileId, data)
       refreshFiles()
@@ -292,7 +292,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
     }
   }
 
-  const openFile = (file) => {
+  const openFile = (file: TripFile) => {
     if (isImage(file.mime_type)) {
       setLightboxFile(file)
     } else {
@@ -336,14 +336,14 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
           {isImage(file.mime_type)
             ? <img src={fileUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : (() => {
-                const ext = (file.original_name || '').split('.').pop()?.toUpperCase() || '?'
-                const isPdf = file.mime_type === 'application/pdf'
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', background: isPdf ? '#ef44441a' : 'var(--bg-tertiary)' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: isPdf ? '#ef4444' : 'var(--text-muted)', letterSpacing: 0.3 }}>{ext}</span>
-                  </div>
-                )
-              })()
+              const ext = (file.original_name || '').split('.').pop()?.toUpperCase() || '?'
+              const isPdf = file.mime_type === 'application/pdf'
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', background: isPdf ? '#ef44441a' : 'var(--bg-tertiary)' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isPdf ? '#ef4444' : 'var(--text-muted)', letterSpacing: 0.3 }}>{ext}</span>
+                </div>
+              )
+            })()
           }
         </div>
 
@@ -456,7 +456,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                   const val = e.target.value.trim()
                   const file = files.find(f => f.id === assignFileId)
                   if (file && val !== (file.description || '')) {
-                    handleAssign(file.id, { description: val } as any)
+                    handleAssign(file.id, { description: val })
                   }
                 }}
                 onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
@@ -495,7 +495,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                             const link = (linksRes.links || []).find((l: any) => l.place_id === p.id)
                             if (link) await filesApi.removeLink(tripId, file.id, link.id)
                             refreshFiles()
-                          } catch {}
+                          } catch { }
                         }
                       } else {
                         if (!file.place_id) {
@@ -504,7 +504,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                           try {
                             await filesApi.addLink(tripId, file.id, { place_id: p.id })
                             refreshFiles()
-                          } catch {}
+                          } catch { }
                         }
                       }
                     }} style={{
@@ -563,7 +563,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                                 const link = (linksRes.links || []).find((l: any) => l.reservation_id === r.id)
                                 if (link) await filesApi.removeLink(tripId, file.id, link.id)
                                 refreshFiles()
-                              } catch {}
+                              } catch { }
                             }
                           } else {
                             // Link: if no primary, set it; otherwise use file_links
@@ -573,7 +573,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                               try {
                                 await filesApi.addLink(tripId, file.id, { reservation_id: r.id })
                                 refreshFiles()
-                              } catch {}
+                              } catch { }
                             }
                           }
                         }} style={{
@@ -725,7 +725,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, margin: 0 }}>{t('files.dropzone')}</p>
                 <p style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 3 }}>{t('files.dropzoneHint')}</p>
                 <p style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 6, opacity: 0.7 }}>
-                  {(allowedFileTypes || 'jpg,jpeg,png,gif,webp,heic,pdf,doc,docx,xls,xlsx,txt,csv').toUpperCase().split(',').join(', ')} · Max 50 MB
+                  {(typeof allowedFileTypes === 'string' ? allowedFileTypes : 'jpg,jpeg,png,gif,webp,heic,pdf,doc,docx,xls,xlsx,txt,csv').toUpperCase().split(',').join(', ')} · Max 50 MB
                 </p>
               </>
             )}

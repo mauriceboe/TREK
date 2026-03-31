@@ -44,8 +44,8 @@ export default function FilesPage(): React.ReactElement {
     setFiles(tripStore.files)
   }, [tripStore.files])
 
-  const handleUpload = async (formData: FormData): Promise<void> => {
-    await tripStore.addFile(tripId, formData)
+  const handleUpload = async (formData: FormData): Promise<TripFile> => {
+    return await tripStore.addFile(tripId as string, formData)
   }
 
   const handleDelete = async (fileId: number): Promise<void> => {

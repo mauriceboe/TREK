@@ -71,6 +71,7 @@ function stripUserForClient(user: User): Record<string, unknown> {
     password_hash: _p,
     maps_api_key: _m,
     openweather_api_key: _o,
+    rapidapi_key: _r,
     unsplash_api_key: _u,
     mfa_secret: _mf,
     mfa_backup_codes: _mbc,
@@ -396,23 +397,35 @@ router.put('/me/maps-key', authenticate, (req: Request, res: Response) => {
 
 router.put('/me/api-keys', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { maps_api_key, openweather_api_key } = req.body;
-  const current = db.prepare('SELECT maps_api_key, openweather_api_key FROM users WHERE id = ?').get(authReq.user.id) as Pick<User, 'maps_api_key' | 'openweather_api_key'> | undefined;
+  const { maps_api_key, openweather_api_key, rapidapi_key } = req.body;
+  const current = db.prepare('SELECT maps_api_key, openweather_api_key, rapidapi_key FROM users WHERE id = ?').get(authReq.user.id) as Pick<User, 'maps_api_key' | 'openweather_api_key' | 'rapidapi_key'> | undefined;
+
+  const isMasked = (key: string | undefined | null) => key?.startsWith('••••');
 
   db.prepare(
-    'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, rapidapi_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run(
-    maps_api_key !== undefined ? (maps_api_key || null) : current.maps_api_key,
-    openweather_api_key !== undefined ? (openweather_api_key || null) : current.openweather_api_key,
+    (maps_api_key !== undefined && !isMasked(maps_api_key)) ? (maps_api_key || null) : current.maps_api_key,
+    (openweather_api_key !== undefined && !isMasked(openweather_api_key)) ? (openweather_api_key || null) : current.openweather_api_key,
+    (rapidapi_key !== undefined && !isMasked(rapidapi_key)) ? (rapidapi_key || null) : current.rapidapi_key,
     authReq.user.id
   );
 
   const updated = db.prepare(
-    'SELECT id, username, email, role, maps_api_key, openweather_api_key, avatar, mfa_enabled FROM users WHERE id = ?'
-  ).get(authReq.user.id) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'avatar' | 'mfa_enabled'> | undefined;
+    'SELECT id, username, email, role, maps_api_key, openweather_api_key, rapidapi_key, avatar, mfa_enabled FROM users WHERE id = ?'
+  ).get(authReq.user.id) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'rapidapi_key' | 'avatar' | 'mfa_enabled'> | undefined;
 
   const u = updated ? { ...updated, mfa_enabled: !!(updated.mfa_enabled === 1 || updated.mfa_enabled === true) } : undefined;
-  res.json({ success: true, user: { ...u, maps_api_key: maskKey(u?.maps_api_key), openweather_api_key: maskKey(u?.openweather_api_key), avatar_url: avatarUrl(updated || {}) } });
+  res.json({
+    success: true,
+    user: {
+      ...u,
+      maps_api_key: maskKey(u?.maps_api_key),
+      openweather_api_key: maskKey(u?.openweather_api_key),
+      rapidapi_key: maskKey(u?.rapidapi_key),
+      avatar_url: avatarUrl(updated || {})
+    }
+  });
 });
 
 router.put('/me/settings', authenticate, (req: Request, res: Response) => {
@@ -446,6 +459,7 @@ router.put('/me/settings', authenticate, (req: Request, res: Response) => {
 
   if (maps_api_key !== undefined) { updates.push('maps_api_key = ?'); params.push(maps_api_key || null); }
   if (openweather_api_key !== undefined) { updates.push('openweather_api_key = ?'); params.push(openweather_api_key || null); }
+  if (req.body.rapidapi_key !== undefined) { updates.push('rapidapi_key = ?'); params.push(req.body.rapidapi_key || null); }
   if (username !== undefined) { updates.push('username = ?'); params.push(username.trim()); }
   if (email !== undefined) { updates.push('email = ?'); params.push(email.trim()); }
 
@@ -466,11 +480,17 @@ router.put('/me/settings', authenticate, (req: Request, res: Response) => {
 router.get('/me/settings', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const user = db.prepare(
-    'SELECT role, maps_api_key, openweather_api_key FROM users WHERE id = ?'
-  ).get(authReq.user.id) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key'> | undefined;
+    'SELECT role, maps_api_key, openweather_api_key, rapidapi_key FROM users WHERE id = ?'
+  ).get(authReq.user.id) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'rapidapi_key'> | undefined;
   if (user?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
 
-  res.json({ settings: { maps_api_key: user.maps_api_key, openweather_api_key: user.openweather_api_key } });
+  res.json({
+    settings: {
+      maps_api_key: user.maps_api_key,
+      openweather_api_key: user.openweather_api_key,
+      rapidapi_key: user.rapidapi_key
+    }
+  });
 });
 
 router.post('/avatar', authenticate, demoUploadBlock, avatarUpload.single('avatar'), (req: Request, res: Response) => {
@@ -512,10 +532,10 @@ router.get('/users', authenticate, (req: Request, res: Response) => {
 
 router.get('/validate-keys', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const user = db.prepare('SELECT role, maps_api_key, openweather_api_key FROM users WHERE id = ?').get(authReq.user.id) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key'> | undefined;
+  const user = db.prepare('SELECT role, maps_api_key, openweather_api_key, rapidapi_key FROM users WHERE id = ?').get(authReq.user.id) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'rapidapi_key'> | undefined;
   if (user?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
 
-  const result = { maps: false, weather: false };
+  const result = { maps: false, weather: false, rapidapi: false };
 
   if (user.maps_api_key) {
     try {
@@ -545,6 +565,24 @@ router.get('/validate-keys', authenticate, async (req: Request, res: Response) =
       result.weather = weatherRes.status === 200;
     } catch (err: unknown) {
       result.weather = false;
+    }
+  }
+
+  if (user.rapidapi_key) {
+    try {
+      const rapidapiRes = await fetch(
+        `https://aerodatabox.p.rapidapi.com/subscriptions/webhook`,
+        {
+          headers: {
+            'x-rapidapi-key': user.rapidapi_key,
+            'x-rapidapi-host': 'aerodatabox.p.rapidapi.com'
+          }
+        }
+      );
+      // Valid if not 401/403. Webhook endpoint might return 401/403 if key is bad.
+      result.rapidapi = rapidapiRes.status !== 401 && rapidapiRes.status !== 403;
+    } catch (err: unknown) {
+      result.rapidapi = false;
     }
   }
 

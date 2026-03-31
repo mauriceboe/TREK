@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import apiClient from '../../api/client'
+import apiClient, { flightsApi } from '../../api/client'
 import { useTripStore } from '../../store/tripStore'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
-import { Plane, Hotel, Utensils, Train, Car, Ship, Ticket, FileText, Users, Paperclip, X, ExternalLink, Link2 } from 'lucide-react'
+import { Plane, Hotel, Utensils, Train, Car, Ship, Ticket, FileText, Users, Paperclip, X, ExternalLink, Link2, Loader2 } from 'lucide-react'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
@@ -52,7 +52,7 @@ function buildAssignmentOptions(days, assignments, t, locale) {
 interface ReservationModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Record<string, string | number | null>) => Promise<void> | void
+  onSave: (data: Record<string, any>) => Promise<any>
   reservation: Reservation | null
   days: Day[]
   places: Place[]
@@ -76,10 +76,17 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
     reservation_time: '', reservation_end_time: '', location: '', confirmation_number: '',
     notes: '', assignment_id: '', accommodation_id: '',
     meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
+    meta_departure_lat: 0, meta_departure_lng: 0, meta_arrival_lat: 0, meta_arrival_lng: 0,
     meta_train_number: '', meta_platform: '', meta_seat: '',
     meta_check_in_time: '', meta_check_out_time: '',
     hotel_place_id: '', hotel_start_day: '', hotel_end_day: '',
+    day_id: null as number | null,
+    end_day_id: null as number | null,
   })
+  const [flightSearchNumber, setFlightSearchNumber] = useState('')
+  const [flightSearchDate, setFlightSearchDate] = useState('')
+  const [isSearchingFlight, setIsSearchingFlight] = useState(false)
+  const [showManualFlight, setShowManualFlight] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [pendingFiles, setPendingFiles] = useState([])
@@ -104,47 +111,105 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         location: reservation.location || '',
         confirmation_number: reservation.confirmation_number || '',
         notes: reservation.notes || '',
-        assignment_id: reservation.assignment_id || '',
-        accommodation_id: reservation.accommodation_id || '',
+        day_id: reservation.day_id || null,
+        end_day_id: reservation.end_day_id || null,
+        assignment_id: String(reservation.assignment_id || ''),
+        accommodation_id: String(reservation.accommodation_id || ''),
         meta_airline: meta.airline || '',
         meta_flight_number: meta.flight_number || '',
         meta_departure_airport: meta.departure_airport || '',
         meta_arrival_airport: meta.arrival_airport || '',
+        meta_departure_lat: Number(meta.departure_lat) || 0,
+        meta_departure_lng: Number(meta.departure_lng) || 0,
+        meta_arrival_lat: Number(meta.arrival_lat) || 0,
+        meta_arrival_lng: Number(meta.arrival_lng) || 0,
         meta_train_number: meta.train_number || '',
         meta_platform: meta.platform || '',
         meta_seat: meta.seat || '',
         meta_check_in_time: meta.check_in_time || '',
         meta_check_out_time: meta.check_out_time || '',
-        hotel_place_id: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.place_id || '' })(),
-        hotel_start_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.start_day_id || '' })(),
-        hotel_end_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.end_day_id || '' })(),
+        hotel_place_id: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return String(acc?.place_id || '') })(),
+        hotel_start_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return String(acc?.start_day_id || '') })(),
+        hotel_end_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return String(acc?.end_day_id || '') })(),
       })
+      setShowManualFlight(true)
+      setFlightSearchNumber(meta.flight_number || '')
+      setFlightSearchDate(reservation.reservation_time ? reservation.reservation_time.split('T')[0] : '')
     } else {
       setForm({
         title: '', type: 'other', status: 'pending',
         reservation_time: '', reservation_end_time: '', location: '', confirmation_number: '',
         notes: '', assignment_id: '', accommodation_id: '',
         meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
+        meta_departure_lat: 0, meta_departure_lng: 0, meta_arrival_lat: 0, meta_arrival_lng: 0,
         meta_train_number: '', meta_platform: '', meta_seat: '',
         meta_check_in_time: '', meta_check_out_time: '',
+        hotel_place_id: '', hotel_start_day: '', hotel_end_day: '',
+        day_id: selectedDayId || null,
+        end_day_id: null,
       })
       setPendingFiles([])
+      setShowManualFlight(false)
+      setFlightSearchNumber('')
+      setFlightSearchDate('')
     }
   }, [reservation, isOpen, selectedDayId])
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
 
-  const handleSubmit = async (e) => {
+  const handleFlightSearch = async () => {
+    if (!flightSearchNumber || !flightSearchDate) return
+    setIsSearchingFlight(true)
+    try {
+      const data = await flightsApi.search(flightSearchNumber, flightSearchDate)
+      if (data.flights && data.flights.length > 0) {
+        const f = data.flights[0] // Take the first result
+        const arrivalDate = f.arrival.time ? f.arrival.time.slice(0, 10) : null
+        const endDay = arrivalDate ? days.find(d => d.date === arrivalDate) : null
+
+        setForm(prev => ({
+          ...prev,
+          title: `Flight ${f.number}`,
+          meta_airline: f.airline,
+          meta_flight_number: f.number,
+          meta_departure_airport: f.departure.iata || f.departure.airport,
+          meta_arrival_airport: f.arrival.iata || f.arrival.airport,
+          meta_departure_lat: f.departure.lat,
+          meta_departure_lng: f.departure.lng,
+          meta_arrival_lat: f.arrival.lat,
+          meta_arrival_lng: f.arrival.lng,
+          reservation_time: f.departure.time ? f.departure.time.slice(0, 16) : prev.reservation_time,
+          reservation_end_time: f.arrival.time ? f.arrival.time.slice(0, 16) : prev.reservation_end_time,
+          end_day_id: endDay?.id || prev.end_day_id,
+          location: f.departure.airport,
+        }))
+        setShowManualFlight(false)
+        toast.success(t('reservations.flightFound') || 'Flight data populated!')
+      } else {
+        toast.error(t('reservations.flightNotFound') || 'Flight not found.')
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to fetch flight data.')
+    } finally {
+      setIsSearchingFlight(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim()) return
     setIsSaving(true)
     try {
-      const metadata: Record<string, string> = {}
+      const metadata: Record<string, any> = {}
       if (form.type === 'flight') {
         if (form.meta_airline) metadata.airline = form.meta_airline
         if (form.meta_flight_number) metadata.flight_number = form.meta_flight_number
         if (form.meta_departure_airport) metadata.departure_airport = form.meta_departure_airport
         if (form.meta_arrival_airport) metadata.arrival_airport = form.meta_arrival_airport
+        if (form.meta_departure_lat) metadata.departure_lat = form.meta_departure_lat
+        if (form.meta_departure_lng) metadata.departure_lng = form.meta_departure_lng
+        if (form.meta_arrival_lat) metadata.arrival_lat = form.meta_arrival_lat
+        if (form.meta_arrival_lng) metadata.arrival_lng = form.meta_arrival_lng
       } else if (form.type === 'hotel') {
         if (form.meta_check_in_time) metadata.check_in_time = form.meta_check_in_time
         if (form.meta_check_out_time) metadata.check_out_time = form.meta_check_out_time
@@ -178,7 +243,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         for (const file of pendingFiles) {
           const fd = new FormData()
           fd.append('file', file)
-          fd.append('reservation_id', saved.id)
+          fd.append('reservation_id', String(saved.id))
           fd.append('description', form.title)
           await onFileUpload(fd)
         }
@@ -196,8 +261,8 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
       try {
         const fd = new FormData()
         fd.append('file', file)
-        fd.append('reservation_id', reservation.id)
-        fd.append('description', reservation.title)
+        fd.append('reservation_id', String(reservation.id))
+        fd.append('description', reservation.title || '')
         await onFileUpload(fd)
         toast.success(t('reservations.toast.fileUploaded'))
       } catch {
@@ -223,7 +288,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
   const inputStyle = {
     width: '100%', border: '1px solid var(--border-primary)', borderRadius: 10,
     padding: '8px 12px', fontSize: 13, fontFamily: 'inherit',
-    outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)', background: 'var(--bg-input)',
+    outline: 'none', boxSizing: 'border-box' as const, color: 'var(--text-primary)', background: 'var(--bg-input)',
   }
   const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.03em' }
 
@@ -257,20 +322,105 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             placeholder={t('reservations.titlePlaceholder')} style={inputStyle} />
         </div>
 
-        {/* Assignment Picker + Date (hidden for hotels) */}
-        {form.type !== 'hotel' && (
+        {/* Flight Search / Details Section */}
+        {form.type === 'flight' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px', background: 'var(--bg-secondary)', borderRadius: 12, border: '1px solid var(--border-primary)' }}>
+            {!showManualFlight && !form.meta_flight_number && !reservation ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>{t('reservations.meta.flightNumber')}</label>
+                    <input type="text" value={flightSearchNumber} onChange={e => setFlightSearchNumber(e.target.value)}
+                      placeholder="LH123" style={inputStyle} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>{t('reservations.date')}</label>
+                    <CustomDatePicker value={flightSearchDate} onChange={setFlightSearchDate} />
+                  </div>
+                  <button type="button" onClick={handleFlightSearch} disabled={isSearchingFlight || !flightSearchNumber || !flightSearchDate}
+                    style={{ ...inputStyle, width: 'auto', background: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer', opacity: isSearchingFlight ? 0.6 : 1 }}>
+                    {isSearchingFlight ? <Loader2 size={14} className="animate-spin" /> : (t('common.search'))}
+                  </button>
+                </div>
+                <button type="button" onClick={() => setShowManualFlight(true)} style={{ fontSize: 11, color: 'var(--text-faint)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                  {t('reservations.fillManually')}
+                </button>
+              </div>
+            ) : showManualFlight ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.airline')}</label>
+                    <input type="text" value={form.meta_airline} onChange={e => set('meta_airline', e.target.value)}
+                      placeholder="Lufthansa" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.flightNumber')}</label>
+                    <input type="text" value={form.meta_flight_number} onChange={e => set('meta_flight_number', e.target.value)}
+                      placeholder="LH 123" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.from')}</label>
+                    <input type="text" value={form.meta_departure_airport} onChange={e => set('meta_departure_airport', e.target.value)}
+                      placeholder="FRA" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.to')}</label>
+                    <input type="text" value={form.meta_arrival_airport} onChange={e => set('meta_arrival_airport', e.target.value)}
+                      placeholder="NRT" style={inputStyle} />
+                  </div>
+                </div>
+                {!reservation && (
+                  <button type="button" onClick={() => setShowManualFlight(false)} style={{ fontSize: 11, color: 'var(--text-faint)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                    {t('reservations.backToSearch')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              // Flight found or editing existing, show overview
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.airline')}</label>
+                    <div style={{ ...inputStyle, background: 'var(--bg-tertiary)', opacity: 0.8 }}>{form.meta_airline}</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.flightNumber')}</label>
+                    <div style={{ ...inputStyle, background: 'var(--bg-tertiary)', opacity: 0.8 }}>{form.meta_flight_number}</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.from')}</label>
+                    <div style={{ ...inputStyle, background: 'var(--bg-tertiary)', opacity: 0.8 }}>{form.meta_departure_airport}</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{t('reservations.meta.to')}</label>
+                    <div style={{ ...inputStyle, background: 'var(--bg-tertiary)', opacity: 0.8 }}>{form.meta_arrival_airport}</div>
+                  </div>
+                </div>
+                {!reservation && (
+                  <button type="button" onClick={() => { set('meta_flight_number', ''); setShowManualFlight(false); }} style={{ fontSize: 11, color: 'var(--text-faint)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                    {t('reservations.backToSearch')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Assignment Picker + Date (hidden for flights until searched/manual) */}
+        {(form.type !== 'flight' || showManualFlight || !!form.meta_flight_number || !!reservation) && (
         <div style={{ display: 'flex', gap: 8 }}>
-          {assignmentOptions.length > 0 && (
+          {form.type !== 'hotel' && assignmentOptions.length > 0 && (
             <div style={{ flex: 1, minWidth: 0 }}>
               <label style={labelStyle}>
                 <Link2 size={10} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
                 {t('reservations.linkAssignment')}
               </label>
               <CustomSelect
-                value={form.assignment_id}
+                value={String(form.assignment_id)}
                 onChange={value => {
                   set('assignment_id', value)
-                  const opt = assignmentOptions.find(o => o.value === value)
+                  const opt = assignmentOptions.find(o => String(o.value) === String(value))
                   if (opt?.dayDate) {
                     setForm(prev => {
                       if (prev.reservation_time) return prev
@@ -281,13 +431,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
                 placeholder={t('reservations.pickAssignment')}
                 options={[
                   { value: '', label: t('reservations.noAssignment') },
-                  ...assignmentOptions,
+                  ...assignmentOptions.map(o => ({ ...o, value: String(o.value) })),
                 ]}
                 searchable
                 size="sm"
               />
             </div>
           )}
+          {form.type !== 'hotel' && (
           <div style={{ flex: 1, minWidth: 0 }}>
             <label style={labelStyle}>{t('reservations.date')}</label>
             <CustomDatePicker
@@ -295,13 +446,50 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               onChange={d => {
                 const [, t] = (form.reservation_time || '').split('T')
                 set('reservation_time', d ? (t ? `${d}T${t}` : d) : '')
+                // Also set end date if not set yet for flights
+                if (form.type === 'flight' && d && !form.reservation_end_time) {
+                  set('reservation_end_time', d)
+                }
               }}
             />
           </div>
+          )}
+          {form.type === 'flight' && (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={labelStyle}>{t('reservations.arrivalDate') || 'Arrival Date'}</label>
+            <CustomDatePicker
+              value={(() => { const [d] = (form.reservation_end_time || '').split('T'); return d || '' })()}
+              onChange={d => {
+                const [, t] = (form.reservation_end_time || '').split('T')
+                set('reservation_end_time', d ? (t ? `${d}T${t}` : d) : '')
+                // Auto-set end_day_id if date matches a day
+                if (d) {
+                  const foundDay = days.find(day => day.date === d)
+                  if (foundDay) set('end_day_id', foundDay.id)
+                }
+              }}
+            />
+          </div>
+          )}
+          {form.type === 'flight' && (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={labelStyle}>{t('reservations.arrivalDay') || 'Arrival Day'}</label>
+            <CustomSelect
+              value={String(form.end_day_id || '')}
+              onChange={value => set('end_day_id', value ? Number(value) : null)}
+              options={[
+                { value: '', label: '—' },
+                ...days.map(d => ({ value: String(d.id), label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))
+              ]}
+              size="sm"
+            />
+          </div>
+          )}
         </div>
         )}
 
-        {/* Start Time + End Time + Status */}
+        {/* Start Time + End Time + Status (hidden for flights until searched/manual) */}
+        {(form.type !== 'flight' || showManualFlight || !!form.meta_flight_number || !!reservation) && (
         <div style={{ display: 'flex', gap: 8 }}>
           {form.type !== 'hotel' && (
             <>
@@ -318,7 +506,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <label style={labelStyle}>{t('reservations.endTime')}</label>
-                <CustomTimePicker value={form.reservation_end_time} onChange={v => set('reservation_end_time', v)} />
+                <CustomTimePicker
+                  value={(() => { const [, t] = (form.reservation_end_time || '').split('T'); return t || (form.reservation_end_time?.includes(':') ? form.reservation_end_time : '') })()}
+                  onChange={t => {
+                    const [d] = (form.reservation_end_time || '').split('T')
+                    const date = d || (form.reservation_time ? form.reservation_time.split('T')[0] : new Date().toISOString().split('T')[0])
+                    set('reservation_end_time', t ? (date.includes('-') ? `${date}T${t}` : t) : date)
+                  }}
+                />
               </div>
             </>
           )}
@@ -335,8 +530,10 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             />
           </div>
         </div>
+        )}
 
-        {/* Location + Booking Code */}
+        {/* Location + Booking Code (hidden for flights until searched/manual) */}
+        {((form.type !== 'flight' || showManualFlight || !!form.meta_flight_number || !!reservation)) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label style={labelStyle}>{t('reservations.locationAddress')}</label>
@@ -349,31 +546,6 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               placeholder={t('reservations.confirmationPlaceholder')} style={inputStyle} />
           </div>
         </div>
-
-        {/* Type-specific fields */}
-        {form.type === 'flight' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.airline') || 'Airline'}</label>
-              <input type="text" value={form.meta_airline} onChange={e => set('meta_airline', e.target.value)}
-                placeholder="Lufthansa" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.flightNumber') || 'Flight No.'}</label>
-              <input type="text" value={form.meta_flight_number} onChange={e => set('meta_flight_number', e.target.value)}
-                placeholder="LH 123" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.from') || 'From'}</label>
-              <input type="text" value={form.meta_departure_airport} onChange={e => set('meta_departure_airport', e.target.value)}
-                placeholder="FRA" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.to') || 'To'}</label>
-              <input type="text" value={form.meta_arrival_airport} onChange={e => set('meta_arrival_airport', e.target.value)}
-                placeholder="NRT" style={inputStyle} />
-            </div>
-          </div>
         )}
 
         {form.type === 'hotel' && (
@@ -383,10 +555,10 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div>
                 <label style={labelStyle}>{t('reservations.meta.hotelPlace')}</label>
                 <CustomSelect
-                  value={form.hotel_place_id}
+                  value={String(form.hotel_place_id)}
                   onChange={value => {
                     set('hotel_place_id', value)
-                    const p = places.find(pl => pl.id === value)
+                    const p = places.find(pl => String(pl.id) === String(value))
                     if (p) {
                       if (!form.title) set('title', p.name)
                       if (!form.location && p.address) set('location', p.address)
@@ -395,7 +567,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
                   placeholder={t('reservations.meta.pickHotel')}
                   options={[
                     { value: '', label: '—' },
-                    ...places.map(p => ({ value: p.id, label: p.name })),
+                    ...places.map(p => ({ value: String(p.id), label: p.name })),
                   ]}
                   searchable
                   size="sm"
@@ -404,20 +576,20 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div>
                 <label style={labelStyle}>{t('reservations.meta.fromDay')}</label>
                 <CustomSelect
-                  value={form.hotel_start_day}
+                  value={String(form.hotel_start_day)}
                   onChange={value => set('hotel_start_day', value)}
                   placeholder={t('reservations.meta.selectDay')}
-                  options={days.map(d => ({ value: d.id, label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
+                  options={days.map(d => ({ value: String(d.id), label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
                   size="sm"
                 />
               </div>
               <div>
                 <label style={labelStyle}>{t('reservations.meta.toDay')}</label>
                 <CustomSelect
-                  value={form.hotel_end_day}
+                  value={String(form.hotel_end_day)}
                   onChange={value => set('hotel_end_day', value)}
                   placeholder={t('reservations.meta.selectDay')}
-                  options={days.map(d => ({ value: d.id, label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
+                  options={days.map(d => ({ value: String(d.id), label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
                   size="sm"
                 />
               </div>
@@ -439,122 +611,126 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         {form.type === 'train' && (
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label style={labelStyle}>{t('reservations.meta.trainNumber') || 'Train No.'}</label>
+              <label style={labelStyle}>{t('reservations.meta.trainNumber')}</label>
               <input type="text" value={form.meta_train_number} onChange={e => set('meta_train_number', e.target.value)}
                 placeholder="ICE 123" style={inputStyle} />
             </div>
             <div>
-              <label style={labelStyle}>{t('reservations.meta.platform') || 'Platform'}</label>
+              <label style={labelStyle}>{t('reservations.meta.platform')}</label>
               <input type="text" value={form.meta_platform} onChange={e => set('meta_platform', e.target.value)}
                 placeholder="12" style={inputStyle} />
             </div>
             <div>
-              <label style={labelStyle}>{t('reservations.meta.seat') || 'Seat'}</label>
+              <label style={labelStyle}>{t('reservations.meta.seat')}</label>
               <input type="text" value={form.meta_seat} onChange={e => set('meta_seat', e.target.value)}
                 placeholder="42A" style={inputStyle} />
             </div>
           </div>
         )}
 
-        {/* Notes */}
-        <div>
-          <label style={labelStyle}>{t('reservations.notes')}</label>
-          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-            placeholder={t('reservations.notesPlaceholder')}
-            style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }} />
-        </div>
+        {(form.type !== 'flight' || showManualFlight || !!form.meta_flight_number || !!reservation) && (
+        <>
+          {/* Notes */}
+          <div>
+            <label style={labelStyle}>{t('reservations.notes')}</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+              placeholder={t('reservations.notesPlaceholder')}
+              style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }} />
+          </div>
 
-        {/* Files */}
-        <div>
-          <label style={labelStyle}>{t('files.title')}</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {attachedFiles.map(f => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
-                <a href={f.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}><ExternalLink size={11} /></a>
-                <button type="button" onClick={async () => {
-                  // Always unlink, never delete the file
-                  // Clear primary reservation_id if it points to this reservation
-                  if (f.reservation_id === reservation?.id) {
-                    try { await apiClient.put(`/trips/${tripId}/files/${f.id}`, { reservation_id: null }) } catch {}
-                  }
-                  // Remove from file_links if linked there
-                  try {
-                    const linksRes = await apiClient.get(`/trips/${tripId}/files/${f.id}/links`)
-                    const link = (linksRes.data.links || []).find((l: any) => l.reservation_id === reservation?.id)
-                    if (link) await apiClient.delete(`/trips/${tripId}/files/${f.id}/link/${link.id}`)
-                  } catch {}
-                  setLinkedFileIds(prev => prev.filter(id => id !== f.id))
-                  if (tripId) loadFiles(tripId)
-                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
-                  <X size={11} />
-                </button>
-              </div>
-            ))}
-            {pendingFiles.map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-                <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
-                  <X size={11} />
-                </button>
-              </div>
-            ))}
-            <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }} onChange={handleFileChange} />
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-                border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
-                fontSize: 11, color: 'var(--text-faint)', cursor: uploadingFile ? 'default' : 'pointer', fontFamily: 'inherit',
-              }}>
-                <Paperclip size={11} />
-                {uploadingFile ? t('reservations.uploading') : t('reservations.attachFile')}
-              </button>
-              {/* Link existing file picker */}
-              {reservation?.id && files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).length > 0 && (
-                <div style={{ position: 'relative' }}>
-                  <button type="button" onClick={() => setShowFilePicker(v => !v)} style={{
-                    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
-                    border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
-                    fontSize: 11, color: 'var(--text-faint)', cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
-                    <Link2 size={11} /> {t('reservations.linkExisting')}
+          {/* Files */}
+          <div>
+            <label style={labelStyle}>{t('files.title')}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {attachedFiles.map(f => (
+                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                  <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
+                  <a href={f.url} target="_blank" rel="noreferrer" style={{ color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}><ExternalLink size={11} /></a>
+                  <button type="button" onClick={async () => {
+                    // Always unlink, never delete the file
+                    // Clear primary reservation_id if it points to this reservation
+                    if (f.reservation_id === reservation?.id) {
+                      try { await apiClient.put(`/trips/${tripId}/files/${f.id}`, { reservation_id: null }) } catch {}
+                    }
+                    // Remove from file_links if linked there
+                    try {
+                      const linksRes = await apiClient.get(`/trips/${tripId}/files/${f.id}/links`)
+                      const link = (linksRes.data.links || []).find((l: any) => l.reservation_id === reservation?.id)
+                      if (link) await apiClient.delete(`/trips/${tripId}/files/${f.id}/link/${link.id}`)
+                    } catch {}
+                    setLinkedFileIds(prev => prev.filter(id => id !== f.id))
+                    if (tripId) loadFiles(tripId)
+                  }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
+                    <X size={11} />
                   </button>
-                  {showFilePicker && (
-                    <div style={{
-                      position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50,
-                      background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 220, maxHeight: 200, overflowY: 'auto',
-                    }}>
-                      {files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).map(f => (
-                        <button key={f.id} type="button" onClick={async () => {
-                          try {
-                            await apiClient.post(`/trips/${tripId}/files/${f.id}/link`, { reservation_id: reservation.id })
-                            setLinkedFileIds(prev => [...prev, f.id])
-                            setShowFilePicker(false)
-                            if (tripId) loadFiles(tripId)
-                          } catch {}
-                        }}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                            background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
-                            color: 'var(--text-secondary)', borderRadius: 7, textAlign: 'left',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                          <FileText size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              )}
+              ))}
+              {pendingFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                  <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+                  border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
+                  fontSize: 11, color: 'var(--text-faint)', cursor: uploadingFile ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                  <Paperclip size={11} />
+                  {uploadingFile ? t('reservations.uploading') : t('reservations.attachFile')}
+                </button>
+                {/* Link existing file picker */}
+                {reservation?.id && files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).length > 0 && (
+                  <div style={{ position: 'relative' }}>
+                    <button type="button" onClick={() => setShowFilePicker(v => !v)} style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+                      border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
+                      fontSize: 11, color: 'var(--text-faint)', cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      <Link2 size={11} /> {t('reservations.linkExisting')}
+                    </button>
+                    {showFilePicker && (
+                      <div style={{
+                        position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50,
+                        background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 220, maxHeight: 200, overflowY: 'auto',
+                      }}>
+                        {files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).map(f => (
+                          <button key={f.id} type="button" onClick={async () => {
+                            try {
+                              await apiClient.post(`/trips/${tripId}/files/${f.id}/link`, { reservation_id: reservation.id })
+                              setLinkedFileIds(prev => [...prev, f.id])
+                              setShowFilePicker(false)
+                              if (tripId) loadFiles(tripId)
+                            } catch {}
+                          }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                              background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                              color: 'var(--text-secondary)', borderRadius: 7, textAlign: 'left',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                            <FileText size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
+        )}
 
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4, borderTop: '1px solid var(--border-secondary)' }}>

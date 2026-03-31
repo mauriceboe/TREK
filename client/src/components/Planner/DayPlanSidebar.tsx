@@ -20,7 +20,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
 import { useDayNotes } from '../../hooks/useDayNotes'
-import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult } from '../../types'
+import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult, Accommodation, DayNote } from '../../types'
 
 const NOTE_ICONS = [
   { id: 'FileText', Icon: FileText },
@@ -62,19 +62,19 @@ interface DayPlanSidebarProps {
   selectedDayId: number | null
   selectedPlaceId: number | null
   selectedAssignmentId: number | null
-  onSelectDay: (dayId: number | null) => void
-  onPlaceClick: (placeId: number) => void
+  onSelectDay: (dayId: number | null, isAssignment?: boolean) => void
+  onPlaceClick: (placeId: number | null, assignmentId?: number | null) => void
   onDayDetail: (day: Day) => void
-  accommodations?: Assignment[]
+  accommodations?: Accommodation[]
   onReorder: (dayId: number, orderedIds: number[]) => void
   onUpdateDayTitle: (dayId: number, title: string) => void
   onRouteCalculated: (dayId: number, route: RouteResult | null) => void
-  onAssignToDay: (placeId: number, dayId: number) => void
+  onAssignToDay: (placeId: number, dayId: number, position?: number) => void
   onRemoveAssignment: (assignmentId: number, dayId: number) => void
-  onEditPlace: (place: Place) => void
+  onEditPlace: (place: Place, assignmentId?: number) => void
   onDeletePlace: (placeId: number) => void
   reservations?: Reservation[]
-  onAddReservation: () => void
+  onAddReservation: (dayId: number) => void
   onNavigateToFiles?: () => void
 }
 
@@ -101,7 +101,7 @@ export default function DayPlanSidebar({
     try {
       const saved = sessionStorage.getItem(`day-expanded-${tripId}`)
       if (saved) return new Set(JSON.parse(saved))
-    } catch {}
+    } catch { }
     return new Set(days.map(d => d.id))
   })
   const [editingDayId, setEditingDayId] = useState(null)
@@ -128,7 +128,7 @@ export default function DayPlanSidebar({
   const dragDataRef = useRef(null)
   const initedTransportIds = useRef(new Set<number>()) // Speichert Drag-Daten als Backup (dataTransfer geht bei Re-Render verloren)
 
-  const currency = trip?.currency || 'EUR'
+  const currency = (trip as any)?.currency || 'EUR'
 
   // Drag-Daten aus dataTransfer, Ref oder window lesen (dataTransfer geht bei Re-Render verloren)
   const getDragData = (e) => {
@@ -156,7 +156,7 @@ export default function DayPlanSidebar({
       setExpandedDays(prev => {
         const n = new Set(prev)
         days.forEach(d => { if (!prev.has(d.id)) n.add(d.id) })
-        try { sessionStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...n])) } catch {}
+        try { sessionStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...n])) } catch { }
         return n
       })
     }
@@ -185,7 +185,7 @@ export default function DayPlanSidebar({
     setExpandedDays(prev => {
       const n = new Set(prev)
       n.has(dayId) ? n.delete(dayId) : n.add(dayId)
-      try { sessionStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...n])) } catch {}
+      try { sessionStorage.setItem(`day-expanded-${tripId}`, JSON.stringify([...n])) } catch { }
       return n
     })
   }
@@ -196,9 +196,16 @@ export default function DayPlanSidebar({
     const day = days.find(d => d.id === dayId)
     if (!day?.date) return []
     return reservations.filter(r => {
-      if (!r.reservation_time || !TRANSPORT_TYPES.has(r.type)) return false
-      const resDate = r.reservation_time.split('T')[0]
-      return resDate === day.date
+      if (!TRANSPORT_TYPES.has(r.type)) return false
+      
+      const idMatch = (r.day_id && Number(r.day_id) === Number(dayId)) || 
+                      (r.end_day_id && Number(r.end_day_id) === Number(dayId))
+      if (idMatch) return true
+      
+      const startMatch = r.reservation_time && r.reservation_time.split('T')[0] === day.date
+      const endMatch = r.reservation_end_time && r.reservation_end_time.split('T')[0] === day.date
+      
+      return startMatch || endMatch
     })
   }
 
@@ -253,7 +260,7 @@ export default function DayPlanSidebar({
       if (res) res.day_plan_position = p.day_plan_position
     }
     // Persist to server (fire and forget)
-    reservationsApi.updatePositions(tripId, positions).catch(() => {})
+    reservationsApi.updatePositions(tripId, positions).catch(() => { })
   }
 
   const getMergedItems = (dayId) => {
@@ -289,7 +296,7 @@ export default function DayPlanSidebar({
     // Insert timed items among base items using time-to-position mapping.
     // Each timed item finds the last base place whose order_index corresponds
     // to a reasonable position, then gets a fractional sortKey after it.
-    const result = [...baseItems]
+    const result: { type: 'place' | 'note' | 'transport', sortKey: number, data: any }[] = [...baseItems]
     for (let ti = 0; ti < allTimed.length; ti++) {
       const timed = allTimed[ti]
       const minutes = timed.minutes
@@ -573,9 +580,9 @@ export default function DayPlanSidebar({
     try {
       const result = await calculateRoute(waypoints, 'walking')
       // Luftlinien zwischen Wegpunkten anzeigen
-      const lineCoords = waypoints.map(p => [p.lat, p.lng])
+      const lineCoords = waypoints.map(p => [p.lat, p.lng] as [number, number])
       setRouteInfo({ distance: result.distanceText, duration: result.durationText })
-      onRouteCalculated?.({ ...result, coordinates: lineCoords })
+      onRouteCalculated?.(selectedDayId, { ...result, coordinates: lineCoords })
     } catch { toast.error(t('dayplan.toast.routeError')) }
     finally { setIsCalculating(false) }
   }
@@ -606,7 +613,7 @@ export default function DayPlanSidebar({
     const unlockedWithCoords = unlocked.filter(a => a.place?.lat && a.place?.lng)
     const unlockedNoCoords = unlocked.filter(a => !a.place?.lat || !a.place?.lng)
     const optimizedAssignments = unlockedWithCoords.length >= 2
-      ? optimizeRoute(unlockedWithCoords.map(a => ({ ...a.place, _assignmentId: a.id }))).map(p => unlockedWithCoords.find(a => a.id === p._assignmentId)).filter(Boolean)
+      ? optimizeRoute(unlockedWithCoords.map(a => ({ ...a.place, _assignmentId: a.id } as any))).map(p => unlockedWithCoords.find(a => a.id === (p as any)._assignmentId)).filter(Boolean) as Assignment[]
       : unlockedWithCoords
     const optimizedQueue = [...optimizedAssignments, ...unlockedNoCoords]
 
@@ -683,7 +690,7 @@ export default function DayPlanSidebar({
       <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border-faint)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', lineHeight: '1.3' }}>{trip?.title}</div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', lineHeight: '1.3' }}>{trip?.name}</div>
             {(trip?.start_date || trip?.end_date) && (
               <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3 }}>
                 {[trip.start_date, trip.end_date].filter(Boolean).map(d => new Date(d + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })).join(' – ')}
@@ -697,8 +704,8 @@ export default function DayPlanSidebar({
                 notes.map(n => ({ ...n, day_id: Number(dayId) }))
               )
               try {
-                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale })
-              } catch (e) {
+                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes as any, reservations, t, locale })
+              } catch (e: any) {
                 console.error('PDF error:', e)
                 toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
               }
@@ -725,7 +732,7 @@ export default function DayPlanSidebar({
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url
-                a.download = `${trip?.title || 'trip'}.ics`
+                a.download = `${trip?.name || 'trip'}.ics`
                 a.click()
                 URL.revokeObjectURL(url)
               } catch { toast.error('ICS export failed') }
@@ -765,7 +772,7 @@ export default function DayPlanSidebar({
               <div
                 onClick={() => { onSelectDay(day.id); if (onDayDetail) onDayDetail(day) }}
                 onDragOver={e => { e.preventDefault(); setDragOverDayId(day.id) }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDayId(null) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDayId(null) }}
                 onDrop={e => handleDropOnDay(e, day.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -843,7 +850,7 @@ export default function DayPlanSidebar({
                           return (
                             <span key={acc.id} onClick={e => { e.stopPropagation(); onPlaceClick(acc.place_id) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 5, background: bg, border: `1px solid ${border}`, flexShrink: 1, minWidth: 0, maxWidth: '40%', cursor: 'pointer' }}>
                               <Hotel size={8} style={{ color: iconColor, flexShrink: 0 }} />
-                              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.place_name}</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
                             </span>
                           )
                         })
@@ -855,13 +862,22 @@ export default function DayPlanSidebar({
                     {cost && <span style={{ fontSize: 11, color: '#059669' }}>{cost}</span>}
                     {day.date && anyGeoPlace && <span style={{ width: 1, height: 10, background: 'var(--text-faint)', opacity: 0.3, flexShrink: 0 }} />}
                     {day.date && anyGeoPlace && (() => {
-                      const wLat = loc?.place.lat ?? anyGeoPlace?.place?.lat ?? anyGeoPlace?.lat
-                      const wLng = loc?.place.lng ?? anyGeoPlace?.place?.lng ?? anyGeoPlace?.lng
+                      const wLat = loc?.place?.lat ?? (anyGeoPlace as any)?.place?.lat ?? (anyGeoPlace as any)?.lat
+                      const wLng = loc?.place?.lng ?? (anyGeoPlace as any)?.place?.lng ?? (anyGeoPlace as any)?.lng
                       return <WeatherWidget lat={wLat} lng={wLng} date={day.date} compact />
                     })()}
                   </div>
                 </div>
 
+                <button
+                  onClick={e => { e.stopPropagation(); onAddReservation(day.id) }}
+                  title={t('reservations.addReservation')}
+                  style={{ flexShrink: 0, background: 'none', border: 'none', padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-faint)' }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
+                >
+                  <Ticket size={13} strokeWidth={2} />
+                </button>
                 <button
                   onClick={e => openAddNote(day.id, e)}
                   title={t('dayplan.addNote')}
@@ -932,7 +948,8 @@ export default function DayPlanSidebar({
                     <div
                       onDragOver={e => { e.preventDefault(); setDragOverDayId(day.id) }}
                       onDrop={e => handleDropOnDay(e, day.id)}
-                      style={{ padding: '16px', textAlign: 'center', borderRadius: 8,
+                      style={{
+                        padding: '16px', textAlign: 'center', borderRadius: 8,
                         background: dragOverDayId === day.id ? 'rgba(17,24,39,0.05)' : 'transparent',
                         border: dragOverDayId === day.id ? '2px dashed rgba(17,24,39,0.2)' : '2px dashed transparent',
                       }}
@@ -963,7 +980,7 @@ export default function DayPlanSidebar({
 
                           // Build new order: swap this item with its neighbor in the merged list
                           const newOrder = [...m]
-                          ;[newOrder[myIdx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[myIdx]]
+                            ;[newOrder[myIdx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[myIdx]]
 
                           // Check chronological order of all timed items in the new order
                           const placeTime = place.place_time
@@ -991,179 +1008,180 @@ export default function DayPlanSidebar({
                         return (
                           <React.Fragment key={`place-${assignment.id}`}>
                             {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
-                          <div
-                            draggable
-                            onDragStart={e => {
-                              e.dataTransfer.setData('assignmentId', String(assignment.id))
-                              e.dataTransfer.setData('fromDayId', String(day.id))
-                              e.dataTransfer.effectAllowed = 'move'
-                              dragDataRef.current = { assignmentId: String(assignment.id), fromDayId: String(day.id) }
-                              setDraggingId(assignment.id)
-                            }}
-                            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverDayId(null); if (dropTargetKey !== `place-${assignment.id}`) setDropTargetKey(`place-${assignment.id}`) }}
-                            onDrop={e => {
-                              e.preventDefault(); e.stopPropagation()
-                              const { placeId, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
-                              if (placeId) {
-                                const pos = placeItems.findIndex(i => i.data.id === assignment.id)
-                                onAssignToDay?.(parseInt(placeId), day.id, pos >= 0 ? pos : undefined)
-                                setDropTargetKey(null); window.__dragData = null
-                              } else if (fromAssignmentId && fromDayId !== day.id) {
-                                const toIdx = getDayAssignments(day.id).findIndex(a => a.id === assignment.id)
-                                tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                                setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
-                              } else if (fromAssignmentId) {
-                                handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'place', assignment.id)
-                              } else if (noteId && fromDayId !== day.id) {
-                                const tm = getMergedItems(day.id)
-                                const toIdx = tm.findIndex(i => i.type === 'place' && i.data.id === assignment.id)
-                                const so = toIdx <= 0 ? (tm[0]?.sortKey ?? 0) - 1 : (tm[toIdx - 1].sortKey + tm[toIdx].sortKey) / 2
-                                tripStore.moveDayNote(tripId, fromDayId, day.id, Number(noteId), so).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                                setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
-                              } else if (noteId) {
-                                handleMergedDrop(day.id, 'note', Number(noteId), 'place', assignment.id)
-                              }
-                            }}
-                            onDragEnd={() => { setDraggingId(null); setDragOverDayId(null); setDropTargetKey(null); dragDataRef.current = null }}
-                            onClick={() => { onPlaceClick(isPlaceSelected ? null : place.id, isPlaceSelected ? null : assignment.id); if (!isPlaceSelected) onSelectDay(day.id, true) }}
-                            onContextMenu={e => ctxMenu.open(e, [
-                              onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id) },
-                              onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id, assignment.id) },
-                              place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
-                              (place.lat && place.lng) && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`, '_blank') },
-                              { divider: true },
-                              onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
-                            ])}
-                            onMouseEnter={() => setHoveredId(assignment.id)}
-                            onMouseLeave={() => setHoveredId(null)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 8,
-                              padding: '7px 8px 7px 10px',
-                              cursor: 'pointer',
-                              background: lockedIds.has(assignment.id)
-                                ? 'rgba(220,38,38,0.08)'
-                                : isPlaceSelected ? 'var(--bg-hover)' : (isHovered ? 'var(--bg-hover)' : 'transparent'),
-                              borderLeft: lockedIds.has(assignment.id)
-                                ? '3px solid #dc2626'
-                                : '3px solid transparent',
-                              transition: 'background 0.15s, border-color 0.15s',
-                              opacity: isDraggingThis ? 0.4 : 1,
-                            }}
-                          >
-                            <div style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: isHovered ? 1 : 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
-                              <GripVertical size={13} strokeWidth={1.8} />
-                            </div>
                             <div
-                              onClick={e => { e.stopPropagation(); toggleLock(assignment.id) }}
-                              onMouseEnter={e => { e.stopPropagation(); setLockHoverId(assignment.id) }}
-                              onMouseLeave={() => setLockHoverId(null)}
-                              style={{ position: 'relative', flexShrink: 0, cursor: 'pointer' }}
+                              draggable
+                              onDragStart={e => {
+                                e.dataTransfer.setData('assignmentId', String(assignment.id))
+                                e.dataTransfer.setData('fromDayId', String(day.id))
+                                e.dataTransfer.effectAllowed = 'move'
+                                dragDataRef.current = { assignmentId: String(assignment.id), fromDayId: String(day.id) }
+                                setDraggingId(assignment.id)
+                              }}
+                              onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverDayId(null); if (dropTargetKey !== `place-${assignment.id}`) setDropTargetKey(`place-${assignment.id}`) }}
+                              onDrop={e => {
+                                e.preventDefault(); e.stopPropagation()
+                                const { placeId, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
+                                if (placeId) {
+                                  const pos = placeItems.findIndex(i => i.data.id === assignment.id)
+                                  onAssignToDay?.(parseInt(placeId), day.id, pos >= 0 ? pos : undefined)
+                                  setDropTargetKey(null); window.__dragData = null
+                                } else if (fromAssignmentId && fromDayId !== day.id) {
+                                  const toIdx = getDayAssignments(day.id).findIndex(a => a.id === assignment.id)
+                                  tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                  setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
+                                } else if (fromAssignmentId) {
+                                  handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'place', assignment.id)
+                                } else if (noteId && fromDayId !== day.id) {
+                                  const tm = getMergedItems(day.id)
+                                  const toIdx = tm.findIndex(i => i.type === 'place' && i.data.id === assignment.id)
+                                  const so = toIdx <= 0 ? (tm[0]?.sortKey ?? 0) - 1 : (tm[toIdx - 1].sortKey + tm[toIdx].sortKey) / 2
+                                  tripStore.moveDayNote(tripId, fromDayId, day.id, Number(noteId), so).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                  setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
+                                } else if (noteId) {
+                                  handleMergedDrop(day.id, 'note', Number(noteId), 'place', assignment.id)
+                                }
+                              }}
+                              onDragEnd={() => { setDraggingId(null); setDragOverDayId(null); setDropTargetKey(null); dragDataRef.current = null }}
+                              onClick={() => { onPlaceClick(isPlaceSelected ? null : place.id, isPlaceSelected ? null : (assignment as any).id); if (!isPlaceSelected) onSelectDay(day.id, true) }}
+                              onContextMenu={e => ctxMenu.open(e, [
+                                onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id) },
+                                onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id, assignment.id) },
+                                place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
+                                (place.lat && place.lng) && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`, '_blank') },
+                                { divider: true },
+                                onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
+                              ])}
+                              onMouseEnter={() => setHoveredId(assignment.id)}
+                              onMouseLeave={() => setHoveredId(null)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '7px 8px 7px 10px',
+                                cursor: 'pointer',
+                                background: lockedIds.has(assignment.id)
+                                  ? 'rgba(220,38,38,0.08)'
+                                  : isPlaceSelected ? 'var(--bg-hover)' : (isHovered ? 'var(--bg-hover)' : 'transparent'),
+                                borderLeft: lockedIds.has(assignment.id)
+                                  ? '3px solid #dc2626'
+                                  : '3px solid transparent',
+                                transition: 'background 0.15s, border-color 0.15s',
+                                opacity: isDraggingThis ? 0.4 : 1,
+                              }}
                             >
-                              <PlaceAvatar place={place} category={cat} size={28} />
-                              {/* Hover/locked overlay */}
-                              {(lockHoverId === assignment.id || lockedIds.has(assignment.id)) && (
-                                <div style={{
-                                  position: 'absolute', inset: 0, borderRadius: '50%',
-                                  background: lockedIds.has(assignment.id) ? 'rgba(220,38,38,0.6)' : 'rgba(220,38,38,0.4)',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'background 0.15s',
-                                }}>
-                                  <Lock size={14} strokeWidth={2.5} style={{ color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
-                                </div>
-                              )}
-                              {/* Custom tooltip */}
-                              {lockHoverId === assignment.id && (
-                                <div style={{
-                                  position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)',
-                                  marginLeft: 8, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 50,
-                                  background: 'var(--bg-card, white)', color: 'var(--text-primary, #111827)',
-                                  fontSize: 11, fontWeight: 500, padding: '5px 10px', borderRadius: 8,
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--border-faint, #e5e7eb)',
-                                }}>
-                                  {lockedIds.has(assignment.id)
-                                    ? t('planner.clickToUnlock')
-                                    : t('planner.keepPosition')}
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                                {cat && (() => {
-                                  const CatIcon = getCategoryIcon(cat.icon)
-                                  return <CatIcon size={10} strokeWidth={2} color={cat.color || 'var(--text-muted)'} title={cat.name} style={{ flexShrink: 0 }} />
-                                })()}
-                                <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
-                                  {place.name}
-                                </span>
-                                {place.place_time && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, fontSize: 10, color: 'var(--text-faint)', fontWeight: 400, marginLeft: 6 }}>
-                                    <Clock size={9} strokeWidth={2} />
-                                    {formatTime(place.place_time, locale, timeFormat)}{place.end_time ? ` – ${formatTime(place.end_time, locale, timeFormat)}` : ''}
-                                  </span>
+                              <div style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: isHovered ? 1 : 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                                <GripVertical size={13} strokeWidth={1.8} />
+                              </div>
+                              <div
+                                onClick={e => { e.stopPropagation(); toggleLock(assignment.id) }}
+                                onMouseEnter={e => { e.stopPropagation(); setLockHoverId(assignment.id) }}
+                                onMouseLeave={() => setLockHoverId(null)}
+                                style={{ position: 'relative', flexShrink: 0, cursor: 'pointer' }}
+                              >
+                                <PlaceAvatar place={place} category={cat} size={28} />
+                                {/* Hover/locked overlay */}
+                                {(lockHoverId === assignment.id || lockedIds.has(assignment.id)) && (
+                                  <div style={{
+                                    position: 'absolute', inset: 0, borderRadius: '50%',
+                                    background: lockedIds.has(assignment.id) ? 'rgba(220,38,38,0.6)' : 'rgba(220,38,38,0.4)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'background 0.15s',
+                                  }}>
+                                    <Lock size={14} strokeWidth={2.5} style={{ color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+                                  </div>
+                                )}
+                                {/* Custom tooltip */}
+                                {lockHoverId === assignment.id && (
+                                  <div style={{
+                                    position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)',
+                                    marginLeft: 8, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 50,
+                                    background: 'var(--bg-card, white)', color: 'var(--text-primary, #111827)',
+                                    fontSize: 11, fontWeight: 500, padding: '5px 10px', borderRadius: 8,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid var(--border-faint, #e5e7eb)',
+                                  }}>
+                                    {lockedIds.has(assignment.id)
+                                      ? t('planner.clickToUnlock')
+                                      : t('planner.keepPosition')}
+                                  </div>
                                 )}
                               </div>
-                              {(place.description || place.address || cat?.name) && (
-                                <div style={{ marginTop: 2 }}>
-                                  <span style={{ fontSize: 10, color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.2 }}>
-                                    {place.description || place.address || cat?.name}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                                  {cat && (() => {
+                                    const CatIcon = getCategoryIcon(cat.icon)
+                                    return <CatIcon size={10} strokeWidth={2} color={cat.color ?? 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                                  })()}
+                                  <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                                    {place.name}
                                   </span>
-                                </div>
-                              )}
-                              {(() => {
-                                const res = reservations.find(r => r.assignment_id === assignment.id)
-                                if (!res) return null
-                                const confirmed = res.status === 'confirmed'
-                                return (
-                                  <div style={{ marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', borderRadius: 5, fontSize: 9, fontWeight: 600,
-                                    background: confirmed ? 'rgba(22,163,74,0.1)' : 'rgba(217,119,6,0.1)',
-                                    color: confirmed ? '#16a34a' : '#d97706',
-                                  }}>
-                                    {(() => { const RI = RES_ICONS[res.type] || Ticket; return <RI size={8} /> })()}
-                                    <span className="hidden sm:inline">{confirmed ? t('planner.resConfirmed') : t('planner.resPending')}</span>
-                                    {res.reservation_time?.includes('T') && (
-                                      <span style={{ fontWeight: 400 }}>
-                                        {new Date(res.reservation_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}
-                                        {res.reservation_end_time && ` – ${res.reservation_end_time}`}
-                                      </span>
-                                    )}
-                                    {(() => {
-                                      const meta = typeof res.metadata === 'string' ? JSON.parse(res.metadata || '{}') : (res.metadata || {})
-                                      if (!meta) return null
-                                      if (meta.airline && meta.flight_number) return <span style={{ fontWeight: 400 }}>{meta.airline} {meta.flight_number}</span>
-                                      if (meta.flight_number) return <span style={{ fontWeight: 400 }}>{meta.flight_number}</span>
-                                      if (meta.train_number) return <span style={{ fontWeight: 400 }}>{meta.train_number}</span>
-                                      return null
-                                    })()}
-                                  </div>
-                                )
-                              })()}
-                              {assignment.participants?.length > 0 && (
-                                <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: -4 }}>
-                                  {assignment.participants.slice(0, 5).map((p, pi) => (
-                                    <div key={p.user_id} style={{
-                                      width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-tertiary)', border: '1.5px solid var(--bg-card)',
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 700, color: 'var(--text-muted)',
-                                      marginLeft: pi > 0 ? -4 : 0, flexShrink: 0,
-                                      overflow: 'hidden',
-                                    }}>
-                                      {p.avatar ? <img src={`/uploads/avatars/${p.avatar}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.username?.[0]?.toUpperCase()}
-                                    </div>
-                                  ))}
-                                  {assignment.participants.length > 5 && (
-                                    <span style={{ fontSize: 8, color: 'var(--text-faint)', marginLeft: 2 }}>+{assignment.participants.length - 5}</span>
+                                  {place.place_time && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, fontSize: 10, color: 'var(--text-faint)', fontWeight: 400, marginLeft: 6 }}>
+                                      <Clock size={9} strokeWidth={2} />
+                                      {formatTime(place.place_time, locale, timeFormat)}{place.end_time ? ` – ${formatTime(place.end_time, locale, timeFormat)}` : ''}
+                                    </span>
                                   )}
                                 </div>
-                              )}
+                                {(place.description || place.address || cat?.name) && (
+                                  <div style={{ marginTop: 2 }}>
+                                    <span style={{ fontSize: 10, color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', lineHeight: 1.2 }}>
+                                      {place.description || place.address || cat?.name}
+                                    </span>
+                                  </div>
+                                )}
+                                {(() => {
+                                  const res = reservations.find(r => r.assignment_id === assignment.id)
+                                  if (!res) return null
+                                  const confirmed = res.status === 'confirmed'
+                                  return (
+                                    <div style={{
+                                      marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', borderRadius: 5, fontSize: 9, fontWeight: 600,
+                                      background: confirmed ? 'rgba(22,163,74,0.1)' : 'rgba(217,119,6,0.1)',
+                                      color: confirmed ? '#16a34a' : '#d97706',
+                                    }}>
+                                      {(() => { const RI = RES_ICONS[res.type] || Ticket; return <RI size={8} /> })()}
+                                      <span className="hidden sm:inline">{confirmed ? t('planner.resConfirmed') : t('planner.resPending')}</span>
+                                      {res.reservation_time?.includes('T') && (
+                                        <span style={{ fontWeight: 400 }}>
+                                          {new Date(res.reservation_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}
+                                          {res.reservation_end_time && ` – ${res.reservation_end_time}`}
+                                        </span>
+                                      )}
+                                      {(() => {
+                                        const meta = typeof res.metadata === 'string' ? JSON.parse(res.metadata || '{}') : (res.metadata || {})
+                                        if (!meta) return null
+                                        if (meta.airline && meta.flight_number) return <span style={{ fontWeight: 400 }}>{meta.airline} {meta.flight_number}</span>
+                                        if (meta.flight_number) return <span style={{ fontWeight: 400 }}>{meta.flight_number}</span>
+                                        if (meta.train_number) return <span style={{ fontWeight: 400 }}>{meta.train_number}</span>
+                                        return null
+                                      })()}
+                                    </div>
+                                  )
+                                })()}
+                                {assignment.participants?.length > 0 && (
+                                  <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: -4 }}>
+                                    {assignment.participants.slice(0, 5).map((p, pi) => (
+                                      <div key={p.user_id} style={{
+                                        width: 16, height: 16, borderRadius: '50%', background: 'var(--bg-tertiary)', border: '1.5px solid var(--bg-card)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 700, color: 'var(--text-muted)',
+                                        marginLeft: pi > 0 ? -4 : 0, flexShrink: 0,
+                                        overflow: 'hidden',
+                                      }}>
+                                        {p.avatar ? <img src={`/uploads/avatars/${p.avatar}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : p.username?.[0]?.toUpperCase()}
+                                      </div>
+                                    ))}
+                                    {assignment.participants.length > 5 && (
+                                      <span style={{ fontSize: 8, color: 'var(--text-faint)', marginLeft: 2 }}>+{assignment.participants.length - 5}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
+                                <button onClick={moveUp} disabled={idx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
+                                  <ChevronUp size={12} strokeWidth={2} />
+                                </button>
+                                <button onClick={moveDown} disabled={idx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === merged.length - 1 ? 'default' : 'pointer', color: idx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
+                                  <ChevronDown size={12} strokeWidth={2} />
+                                </button>
+                              </div>
                             </div>
-                            <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
-                              <button onClick={moveUp} disabled={idx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
-                                <ChevronUp size={12} strokeWidth={2} />
-                              </button>
-                              <button onClick={moveDown} disabled={idx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === merged.length - 1 ? 'default' : 'pointer', color: idx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
-                                <ChevronDown size={12} strokeWidth={2} />
-                              </button>
-                            </div>
-                          </div>
                           </React.Fragment>
                         )
                       }
@@ -1189,65 +1207,65 @@ export default function DayPlanSidebar({
 
                         return (
                           <React.Fragment key={`transport-${res.id}`}>
-                          {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
-                          <div
-                            onClick={() => setTransportDetail(res)}
-                            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetKey(`transport-${res.id}`) }}
-                            onDrop={e => {
-                              e.preventDefault(); e.stopPropagation()
-                              const { placeId, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
-                              if (placeId) {
-                                onAssignToDay?.(parseInt(placeId), day.id)
-                              } else if (fromAssignmentId && fromDayId !== day.id) {
-                                tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                              } else if (fromAssignmentId) {
-                                handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'transport', res.id)
-                              } else if (noteId && fromDayId !== day.id) {
-                                tripStore.moveDayNote(tripId, fromDayId, day.id, Number(noteId)).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                              } else if (noteId) {
-                                handleMergedDrop(day.id, 'note', Number(noteId), 'transport', res.id)
-                              }
-                              setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null; window.__dragData = null
-                            }}
-                            onMouseEnter={() => setHoveredId(`transport-${res.id}`)}
-                            onMouseLeave={() => setHoveredId(null)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 8,
-                              padding: '7px 8px 7px 10px',
-                              margin: '1px 8px',
-                              borderRadius: 6,
-                              border: `1px solid ${color}33`,
-                              background: isTransportHovered ? `${color}12` : `${color}08`,
-                              cursor: 'pointer', userSelect: 'none',
-                              transition: 'background 0.1s',
-                            }}
-                          >
-                            <div style={{
-                              width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              borderRadius: '50%', background: `${color}18`,
-                            }}>
-                              <TransportIcon size={14} strokeWidth={1.8} color={color} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {res.title}
-                                </span>
-                                {res.reservation_time?.includes('T') && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, fontSize: 10, color: 'var(--text-faint)', fontWeight: 400, marginLeft: 6 }}>
-                                    <Clock size={9} strokeWidth={2} />
-                                    {new Date(res.reservation_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}
-                                    {res.reservation_end_time?.includes('T') && ` – ${new Date(res.reservation_end_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}`}
+                            {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
+                            <div
+                              onClick={() => setTransportDetail(res)}
+                              onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetKey(`transport-${res.id}`) }}
+                              onDrop={e => {
+                                e.preventDefault(); e.stopPropagation()
+                                const { placeId, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
+                                if (placeId) {
+                                  onAssignToDay?.(parseInt(placeId), day.id)
+                                } else if (fromAssignmentId && fromDayId !== day.id) {
+                                  tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                } else if (fromAssignmentId) {
+                                  handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'transport', res.id)
+                                } else if (noteId && fromDayId !== day.id) {
+                                  tripStore.moveDayNote(tripId, fromDayId, day.id, Number(noteId)).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                } else if (noteId) {
+                                  handleMergedDrop(day.id, 'note', Number(noteId), 'transport', res.id)
+                                }
+                                setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null; window.__dragData = null
+                              }}
+                              onMouseEnter={() => setHoveredId(`transport-${res.id}`)}
+                              onMouseLeave={() => setHoveredId(null)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '7px 8px 7px 10px',
+                                margin: '1px 8px',
+                                borderRadius: 6,
+                                border: `1px solid ${color}33`,
+                                background: isTransportHovered ? `${color}12` : `${color}08`,
+                                cursor: 'pointer', userSelect: 'none',
+                                transition: 'background 0.1s',
+                              }}
+                            >
+                              <div style={{
+                                width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: '50%', background: `${color}18`,
+                              }}>
+                                <TransportIcon size={14} strokeWidth={1.8} color={color} />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {res.title}
                                   </span>
+                                  {res.reservation_time?.includes('T') && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, fontSize: 10, color: 'var(--text-faint)', fontWeight: 400, marginLeft: 6 }}>
+                                      <Clock size={9} strokeWidth={2} />
+                                      {new Date(res.reservation_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}
+                                      {res.reservation_end_time?.includes('T') && ` – ${new Date(res.reservation_end_time).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: timeFormat === '12h' })}`}
+                                    </span>
+                                  )}
+                                </div>
+                                {subtitle && (
+                                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {subtitle}
+                                  </div>
                                 )}
                               </div>
-                              {subtitle && (
-                                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {subtitle}
-                                </div>
-                              )}
                             </div>
-                          </div>
                           </React.Fragment>
                         )
                       }
@@ -1260,73 +1278,73 @@ export default function DayPlanSidebar({
                       return (
                         <React.Fragment key={`note-${note.id}`}>
                           {showDropLine && <div style={{ height: 2, background: 'var(--text-primary)', borderRadius: 1, margin: '2px 8px' }} />}
-                        <div
-                          draggable
-                          onDragStart={e => { e.dataTransfer.setData('noteId', String(note.id)); e.dataTransfer.setData('fromDayId', String(day.id)); e.dataTransfer.effectAllowed = 'move'; dragDataRef.current = { noteId: String(note.id), fromDayId: String(day.id) }; setDraggingId(`note-${note.id}`) }}
-                          onDragEnd={() => { setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null }}
-                          onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dropTargetKey !== `note-${note.id}`) setDropTargetKey(`note-${note.id}`) }}
-                          onDrop={e => {
-                            e.preventDefault(); e.stopPropagation()
-                            const { noteId: fromNoteId, assignmentId: fromAssignmentId, fromDayId } = getDragData(e)
-                            if (fromNoteId && fromDayId !== day.id) {
-                              const tm = getMergedItems(day.id)
-                              const toIdx = tm.findIndex(i => i.type === 'note' && i.data.id === note.id)
-                              const so = toIdx <= 0 ? (tm[0]?.sortKey ?? 0) - 1 : (tm[toIdx - 1].sortKey + tm[toIdx].sortKey) / 2
-                              tripStore.moveDayNote(tripId, fromDayId, day.id, Number(fromNoteId), so).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                              setDraggingId(null); setDropTargetKey(null)
-                            } else if (fromNoteId && fromNoteId !== String(note.id)) {
-                              handleMergedDrop(day.id, 'note', Number(fromNoteId), 'note', note.id)
-                            } else if (fromAssignmentId && fromDayId !== day.id) {
-                              const tm = getMergedItems(day.id)
-                              const noteIdx = tm.findIndex(i => i.type === 'note' && i.data.id === note.id)
-                              const toIdx = tm.slice(0, noteIdx).filter(i => i.type === 'place').length
-                              tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
-                              setDraggingId(null); setDropTargetKey(null)
-                            } else if (fromAssignmentId) {
-                              handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'note', note.id)
-                            }
-                          }}
-                          onContextMenu={e => ctxMenu.open(e, [
-                            { label: t('common.edit'), icon: Pencil, onClick: () => openEditNote(day.id, note) },
-                            { divider: true },
-                            { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => deleteNote(day.id, note.id) },
-                          ])}
-                          onMouseEnter={() => setHoveredId(`note-${note.id}`)}
-                          onMouseLeave={() => setHoveredId(null)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '7px 8px 7px 2px',
-                            margin: '1px 8px',
-                            borderRadius: 6,
-                            border: '1px solid var(--border-faint)',
-                            background: isNoteHovered ? 'var(--bg-hover)' : 'var(--bg-hover)',
-                            opacity: draggingId === `note-${note.id}` ? 0.4 : 1,
-                            transition: 'background 0.1s', cursor: 'grab', userSelect: 'none',
-                          }}
-                        >
-                          <div style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: isNoteHovered ? 1 : 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
-                            <GripVertical size={13} strokeWidth={1.8} />
+                          <div
+                            draggable
+                            onDragStart={e => { e.dataTransfer.setData('noteId', String(note.id)); e.dataTransfer.setData('fromDayId', String(day.id)); e.dataTransfer.effectAllowed = 'move'; dragDataRef.current = { noteId: String(note.id), fromDayId: String(day.id) }; setDraggingId(`note-${note.id}`) }}
+                            onDragEnd={() => { setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null }}
+                            onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dropTargetKey !== `note-${note.id}`) setDropTargetKey(`note-${note.id}`) }}
+                            onDrop={e => {
+                              e.preventDefault(); e.stopPropagation()
+                              const { noteId: fromNoteId, assignmentId: fromAssignmentId, fromDayId } = getDragData(e)
+                              if (fromNoteId && fromDayId !== day.id) {
+                                const tm = getMergedItems(day.id)
+                                const toIdx = tm.findIndex(i => i.type === 'note' && i.data.id === note.id)
+                                const so = toIdx <= 0 ? (tm[0]?.sortKey ?? 0) - 1 : (tm[toIdx - 1].sortKey + tm[toIdx].sortKey) / 2
+                                tripStore.moveDayNote(tripId, fromDayId, day.id, Number(fromNoteId), so).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                setDraggingId(null); setDropTargetKey(null)
+                              } else if (fromNoteId && fromNoteId !== String(note.id)) {
+                                handleMergedDrop(day.id, 'note', Number(fromNoteId), 'note', note.id)
+                              } else if (fromAssignmentId && fromDayId !== day.id) {
+                                const tm = getMergedItems(day.id)
+                                const noteIdx = tm.findIndex(i => i.type === 'note' && i.data.id === note.id)
+                                const toIdx = tm.slice(0, noteIdx).filter(i => i.type === 'place').length
+                                tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+                                setDraggingId(null); setDropTargetKey(null)
+                              } else if (fromAssignmentId) {
+                                handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'note', note.id)
+                              }
+                            }}
+                            onContextMenu={e => ctxMenu.open(e, [
+                              { label: t('common.edit'), icon: Pencil, onClick: () => openEditNote(day.id, note, null) },
+                              { divider: true },
+                              { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => deleteNote(day.id, note.id, null) },
+                            ])}
+                            onMouseEnter={() => setHoveredId(`note-${note.id}`)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '7px 8px 7px 2px',
+                              margin: '1px 8px',
+                              borderRadius: 6,
+                              border: '1px solid var(--border-faint)',
+                              background: isNoteHovered ? 'var(--bg-hover)' : 'var(--bg-hover)',
+                              opacity: draggingId === `note-${note.id}` ? 0.4 : 1,
+                              transition: 'background 0.1s', cursor: 'grab', userSelect: 'none',
+                            }}
+                          >
+                            <div style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: isNoteHovered ? 1 : 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                              <GripVertical size={13} strokeWidth={1.8} />
+                            </div>
+                            <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--bg-hover)', overflow: 'hidden' }}>
+                              <NoteIcon size={13} strokeWidth={1.8} color="var(--text-muted)" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                                {note.text}
+                              </span>
+                              {note.time && (
+                                <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-faint)', lineHeight: '1.3', marginTop: 2, wordBreak: 'break-word' }}>{note.time}</div>
+                              )}
+                            </div>
+                            <div className="note-edit-buttons" style={{ display: 'flex', gap: 1, flexShrink: 0, opacity: isNoteHovered ? 1 : 0, transition: 'opacity 0.15s' }}>
+                              <button onClick={e => openEditNote(day.id, note, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Pencil size={10} /></button>
+                              <button onClick={e => deleteNote(day.id, note.id, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Trash2 size={10} /></button>
+                            </div>
+                            <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isNoteHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
+                              <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'up') }} disabled={noteIdx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === 0 ? 'default' : 'pointer', color: noteIdx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronUp size={12} strokeWidth={2} /></button>
+                              <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'down') }} disabled={noteIdx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === merged.length - 1 ? 'default' : 'pointer', color: noteIdx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronDown size={12} strokeWidth={2} /></button>
+                            </div>
                           </div>
-                          <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--bg-hover)', overflow: 'hidden' }}>
-                            <NoteIcon size={13} strokeWidth={1.8} color="var(--text-muted)" />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', wordBreak: 'break-word' }}>
-                              {note.text}
-                            </span>
-                            {note.time && (
-                              <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-faint)', lineHeight: '1.3', marginTop: 2, wordBreak: 'break-word' }}>{note.time}</div>
-                            )}
-                          </div>
-                          <div className="note-edit-buttons" style={{ display: 'flex', gap: 1, flexShrink: 0, opacity: isNoteHovered ? 1 : 0, transition: 'opacity 0.15s' }}>
-                            <button onClick={e => openEditNote(day.id, note, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Pencil size={10} /></button>
-                            <button onClick={e => deleteNote(day.id, note.id, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Trash2 size={10} /></button>
-                          </div>
-                          <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isNoteHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
-                            <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'up') }} disabled={noteIdx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === 0 ? 'default' : 'pointer', color: noteIdx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronUp size={12} strokeWidth={2} /></button>
-                            <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'down') }} disabled={noteIdx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === merged.length - 1 ? 'default' : 'pointer', color: noteIdx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronDown size={12} strokeWidth={2} /></button>
-                          </div>
-                        </div>
                         </React.Fragment>
                       )
                     })

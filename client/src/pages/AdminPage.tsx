@@ -111,6 +111,7 @@ export default function AdminPage(): React.ReactElement {
   // API Keys
   const [mapsKey, setMapsKey] = useState<string>('')
   const [weatherKey, setWeatherKey] = useState<string>('')
+  const [rapidapiKey, setRapidapiKey] = useState<string>('')
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [savingKeys, setSavingKeys] = useState<boolean>(false)
   const [validating, setValidating] = useState<Record<string, boolean>>({})
@@ -170,6 +171,7 @@ export default function AdminPage(): React.ReactElement {
       const data = await authApi.getSettings()
       setMapsKey(data.settings?.maps_api_key || '')
       setWeatherKey(data.settings?.openweather_api_key || '')
+      setRapidapiKey(data.settings?.rapidapi_key || '')
     } catch (err: unknown) {
       // ignore
     }
@@ -223,11 +225,14 @@ export default function AdminPage(): React.ReactElement {
 
   const handleSaveApiKeys = async () => {
     setSavingKeys(true)
+    const isMasked = (k: string) => k.startsWith('••••')
     try {
-      await updateApiKeys({
-        maps_api_key: mapsKey,
-        openweather_api_key: weatherKey,
-      })
+      const payload: Record<string, string | null> = {}
+      if (!isMasked(mapsKey)) payload.maps_api_key = mapsKey
+      if (!isMasked(weatherKey)) payload.openweather_api_key = weatherKey
+      if (!isMasked(rapidapiKey)) payload.rapidapi_key = rapidapiKey
+
+      await updateApiKeys(payload)
       toast.success(t('admin.keySaved'))
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Unknown error')
@@ -237,10 +242,16 @@ export default function AdminPage(): React.ReactElement {
   }
 
   const handleValidateKeys = async () => {
-    setValidating({ maps: true, weather: true })
+    setValidating({ maps: true, weather: true, rapidapi: true })
+    const isMasked = (k: string) => k.startsWith('••••')
     try {
+      const payload: Record<string, string | null> = {}
+      if (!isMasked(mapsKey)) payload.maps_api_key = mapsKey
+      if (!isMasked(weatherKey)) payload.openweather_api_key = weatherKey
+      if (!isMasked(rapidapiKey)) payload.rapidapi_key = rapidapiKey
+
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey })
+      await updateApiKeys(payload)
       const result = await authApi.validateKeys()
       setValidation(result)
     } catch (err: unknown) {
@@ -252,9 +263,15 @@ export default function AdminPage(): React.ReactElement {
 
   const handleValidateKey = async (keyType) => {
     setValidating(prev => ({ ...prev, [keyType]: true }))
+    const isMasked = (k: string) => k.startsWith('••••')
     try {
+      const payload: Record<string, string | null> = {}
+      if (!isMasked(mapsKey)) payload.maps_api_key = mapsKey
+      if (!isMasked(weatherKey)) payload.openweather_api_key = weatherKey
+      if (!isMasked(rapidapiKey)) payload.rapidapi_key = rapidapiKey
+
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey })
+      await updateApiKeys(payload)
       const result = await authApi.validateKeys()
       setValidation(prev => ({ ...prev, [keyType]: result[keyType] }))
     } catch (err: unknown) {
@@ -836,6 +853,59 @@ export default function AdminPage(): React.ReactElement {
                       </p>
                     )}
                     {validation.maps === false && (
+                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span>
+                        {t('admin.keyInvalid')}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* RapidAPI Key */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+                      RapidAPI Key (AeroDataBox)
+                      <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-blue-100 text-blue-700">Flight Data</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showKeys.rapidapi ? 'text' : 'password'}
+                          value={rapidapiKey}
+                          onChange={e => setRapidapiKey(e.target.value)}
+                          placeholder="Your RapidAPI Key"
+                          className="w-full pr-10 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleKey('rapidapi')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          {showKeys.rapidapi ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => handleValidateKey('rapidapi')}
+                        disabled={!rapidapiKey || validating.rapidapi}
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      >
+                        {validating.rapidapi ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : validation.rapidapi === true ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        ) : validation.rapidapi === false ? (
+                          <XCircle className="w-4 h-4 text-red-500" />
+                        ) : null}
+                        {t('admin.validateKey')}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">Get your key from <a href="https://rapidapi.com/aerodatabox/api/aerodatabox/" target="_blank" rel="noopener noreferrer" className="text-slate-600 underline">RapidAPI AeroDataBox</a>.</p>
+                    {validation.rapidapi === true && (
+                      <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>
+                        {t('admin.keyValid')}
+                      </p>
+                    )}
+                    {validation.rapidapi === false && (
                       <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                         <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span>
                         {t('admin.keyInvalid')}

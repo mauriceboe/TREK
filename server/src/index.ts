@@ -137,6 +137,7 @@ app.get('/uploads/:type/:filename', (req: Request, res: Response) => {
 
 // Routes
 import authRoutes from './routes/auth';
+import flightsRoutes from './routes/flights';
 import tripsRoutes from './routes/trips';
 import daysRoutes, { accommodationsRouter as accommodationsRoutes } from './routes/days';
 import placesRoutes from './routes/places';
@@ -156,6 +157,7 @@ import collabRoutes from './routes/collab';
 import backupRoutes from './routes/backup';
 import oidcRoutes from './routes/oidc';
 app.use('/api/auth', authRoutes);
+app.use('/api/flights', flightsRoutes);
 app.use('/api/auth/oidc', oidcRoutes);
 app.use('/api/trips', tripsRoutes);
 app.use('/api/trips/:tripId/days', daysRoutes);

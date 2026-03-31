@@ -427,6 +427,22 @@ function runMigrations(db: Database.Database): void {
         db.prepare("UPDATE addons SET type = 'integration' WHERE id = 'mcp'").run();
       } catch {}
     },
+    // Add rapidapi_key to users table
+    () => {
+      try { db.exec('ALTER TABLE users ADD COLUMN rapidapi_key TEXT'); } catch {}
+      // Copy existing key from app_settings to all admins
+      try {
+        const row = db.prepare("SELECT value FROM app_settings WHERE key = 'rapidapi_key'").get() as { value: string } | undefined;
+        if (row?.value) {
+          db.prepare("UPDATE users SET rapidapi_key = ? WHERE role = 'admin' AND (rapidapi_key IS NULL OR rapidapi_key = '')").run(row.value);
+        }
+      } catch (e) {
+        console.error('[DB] Migration: Failed to copy rapidapi_key:', e);
+      }
+    },
+    () => {
+      try { db.exec('ALTER TABLE reservations ADD COLUMN end_day_id INTEGER REFERENCES days(id) ON DELETE SET NULL'); } catch {}
+    },
   ];
 
   if (currentVersion < migrations.length) {

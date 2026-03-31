@@ -3,14 +3,17 @@ import DOM from 'react-dom'
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, CircleMarker, Circle, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
-import 'leaflet.markercluster/dist/MarkerCluster.css'
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+// @ts-ignore
+import 'react-leaflet-cluster/lib/assets/MarkerCluster.css'
+// @ts-ignore
+import 'react-leaflet-cluster/lib/assets/MarkerCluster.Default.css'
 import { mapsApi } from '../../api/client'
 import { getCategoryIcon } from '../shared/categoryIcons'
-import type { Place } from '../../types'
+import { useTranslation } from '../../i18n'
+import type { Place, Reservation, Day } from '../../types'
 
 // Fix default marker icons for vite
-delete L.Icon.Default.prototype._getIconUrl
+delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
@@ -98,7 +101,7 @@ interface SelectionControllerProps {
   places: Place[]
   selectedPlaceId: number | null
   dayPlaces: Place[]
-  paddingOpts: Record<string, number>
+  paddingOpts: L.FitBoundsOptions
 }
 
 function SelectionController({ places, selectedPlaceId, dayPlaces, paddingOpts }: SelectionControllerProps) {
@@ -142,7 +145,7 @@ function MapController({ center, zoom }: MapControllerProps) {
 interface BoundsControllerProps {
   places: Place[]
   fitKey: number
-  paddingOpts: Record<string, number>
+  paddingOpts: L.FitBoundsOptions
 }
 
 function BoundsController({ places, fitKey, paddingOpts }: BoundsControllerProps) {
@@ -156,7 +159,7 @@ function BoundsController({ places, fitKey, paddingOpts }: BoundsControllerProps
     try {
       const bounds = L.latLngBounds(places.map(p => [p.lat, p.lng]))
       if (bounds.isValid()) map.fitBounds(bounds, { ...paddingOpts, maxZoom: 16, animate: true })
-    } catch {}
+    } catch { }
   }, [fitKey, places, paddingOpts, map])
 
   return null
@@ -171,7 +174,7 @@ function MapClickHandler({ onClick }: MapClickHandlerProps) {
   useEffect(() => {
     if (!onClick) return
     map.on('click', onClick)
-    return () => map.off('click', onClick)
+    return () => { map.off('click', onClick) }
   }, [map, onClick])
   return null
 }
@@ -181,16 +184,18 @@ function MapContextMenuHandler({ onContextMenu }: { onContextMenu: ((e: L.Leafle
   useEffect(() => {
     if (!onContextMenu) return
     map.on('contextmenu', onContextMenu)
-    return () => map.off('contextmenu', onContextMenu)
+    return () => { map.off('contextmenu', onContextMenu) }
   }, [map, onContextMenu])
   return null
 }
 
 // ── Route travel time label ──
 interface RouteLabelProps {
-  midpoint: [number, number]
+  midpoint: L.LatLngExpression
   walkingText: string
   drivingText: string
+  from?: any
+  to?: any
 }
 
 function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
@@ -202,7 +207,7 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
     const check = () => setVisible(map.getZoom() >= 12)
     check()
     map.on('zoomend', check)
-    return () => map.off('zoomend', check)
+    return () => { map.off('zoomend', check) }
   }, [map])
 
   if (!visible || !midpoint) return null
@@ -234,6 +239,45 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
   })
 
   return <Marker position={midpoint} icon={icon} interactive={false} zIndexOffset={2000} />
+}
+
+/**
+ * Generate points for a curved path (arc) between start and end.
+ * Uses a quadratic Bezier curve with a subtle offset.
+ */
+function getArcPoints(start: [number, number], end: [number, number], pointsCount = 50): [number, number][] {
+  const lat1 = Number(start[0])
+  const lon1 = Number(start[1])
+  const lat2 = Number(end[0])
+  const lon2 = Number(end[1])
+
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return []
+
+  // Calculate midpoint
+  const midLat = (lat1 + lat2) / 2
+  const midLon = (lon1 + lon2) / 2
+
+  // Calculate perpendicular offset for the curve
+  const dLat = lat2 - lat1
+  const dLon = lon2 - lon1
+  const distance = Math.sqrt(dLat * dLat + dLon * dLon)
+  if (distance === 0) return [[lat1, lon1], [lat2, lon2]]
+
+  const curvature = 0.2 // Adjust for more/less curve
+
+  const cpLat = midLat + dLon * curvature
+  const cpLon = midLon - dLat * curvature
+
+  const points: [number, number][] = []
+  for (let i = 0; i <= pointsCount; i++) {
+    const t = i / pointsCount
+    const lat = Math.pow(1 - t, 2) * lat1 + 2 * (1 - t) * t * cpLat + Math.pow(t, 2) * lat2
+    const lon = Math.pow(1 - t, 2) * lon1 + 2 * (1 - t) * t * cpLon + Math.pow(t, 2) * lon2
+    if (!isNaN(lat) && !isNaN(lon)) {
+      points.push([lat, lon])
+    }
+  }
+  return points
 }
 
 // Module-level photo cache shared with PlaceAvatar
@@ -347,18 +391,42 @@ export function MapView({
   leftWidth = 0,
   rightWidth = 0,
   hasInspector = false,
+  reservations = [],
+  selectedDayId = null,
+  days = [],
+}: {
+  places?: Place[]
+  dayPlaces?: Place[]
+  route?: [number, number][] | null
+  routeSegments?: any[]
+  selectedPlaceId?: number | null
+  onMarkerClick?: (id: number) => void
+  onMapClick?: (e: L.LeafletMouseEvent) => void
+  onMapContextMenu?: ((e: L.LeafletMouseEvent) => void) | null
+  center?: [number, number]
+  zoom?: number
+  tileUrl?: string
+  fitKey?: number
+  dayOrderMap?: Record<number, number[]>
+  leftWidth?: number
+  rightWidth?: number
+  hasInspector?: boolean
+  reservations?: Reservation[]
+  selectedDayId?: number | null
+  days?: Day[]
 }) {
   // Dynamic padding: account for sidebars + bottom inspector
   const paddingOpts = useMemo(() => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-    if (isMobile) return { padding: [40, 20] }
+    if (isMobile) return { padding: [40, 20] as [number, number] }
     const top = 60
     const bottom = hasInspector ? 320 : 60
     const left = leftWidth + 40
     const right = rightWidth + 40
-    return { paddingTopLeft: [left, top], paddingBottomRight: [right, bottom] }
+    return { paddingTopLeft: [left, top] as [number, number], paddingBottomRight: [right, bottom] as [number, number] }
   }, [leftWidth, rightWidth, hasInspector])
   const [photoUrls, setPhotoUrls] = useState({})
+  const { t } = useTranslation()
 
   // Fetch photos for places with concurrency limit to avoid blocking map rendering
   useEffect(() => {
@@ -406,7 +474,7 @@ export function MapView({
 
   return (
     <MapContainer
-      center={center}
+      center={center as L.LatLngExpression}
       zoom={zoom}
       zoomControl={false}
       className="w-full h-full"
@@ -418,7 +486,7 @@ export function MapView({
         maxZoom={19}
       />
 
-      <MapController center={center} zoom={zoom} />
+      <MapController center={center as [number, number]} zoom={zoom} />
       <BoundsController places={dayPlaces.length > 0 ? dayPlaces : places} fitKey={fitKey} paddingOpts={paddingOpts} />
       <SelectionController places={places} selectedPlaceId={selectedPlaceId} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
       <MapClickHandler onClick={onMapClick} />
@@ -508,6 +576,60 @@ export function MapView({
           ))}
         </>
       )}
+
+      {/* Flight Polylines (Curved + Conditional) */}
+      {(() => {
+        const flights = reservations.filter(r => r.type === 'flight')
+        const currentDay = days.find(d => Number(d.id) === Number(selectedDayId))
+        const dayDate = currentDay?.date // YYYY-MM-DD
+
+        return flights
+          .filter(r => {
+            // Match by explicit day_id or end_day_id
+            if (r.day_id && Number(r.day_id) === Number(selectedDayId)) return true
+            if (r.end_day_id && Number(r.end_day_id) === Number(selectedDayId)) return true
+            
+            // Match by date if day_id is missing and date matches departure or arrival
+            if (dayDate) {
+              const startMatch = r.reservation_time?.startsWith(dayDate)
+              const endMatch = r.reservation_end_time?.startsWith(dayDate)
+              return startMatch || endMatch
+            }
+            return false
+          })
+          .map(r => {
+            let meta: any = {}
+            try {
+              meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata || '{}') : (r.metadata || {})
+            } catch (err) {
+              console.error('Error parsing flight metadata:', err)
+            }
+
+            if (meta.departure_lat && meta.departure_lng && meta.arrival_lat && meta.arrival_lng) {
+              const arcPoints = getArcPoints(
+                [meta.departure_lat, meta.departure_lng],
+                [meta.arrival_lat, meta.arrival_lng]
+              )
+              return (
+                <Polyline
+                  key={`flight-${r.id}`}
+                  positions={arcPoints}
+                  color="#3b82f6"
+                  weight={2.5}
+                  opacity={0.7}
+                  dashArray="10, 8"
+                >
+                  <Tooltip sticky opacity={1} className="map-tooltip">
+                    <div style={{ fontSize: 11, fontWeight: 600 }}>
+                      ✈️ {r.title || t('reservations.type.flight')}
+                    </div>
+                  </Tooltip>
+                </Polyline>
+              )
+            }
+            return null
+          })
+      })()}
     </MapContainer>
   )
 }

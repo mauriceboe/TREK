@@ -1,4 +1,4 @@
-const zh: Record<string, string> = {
+const zh: Record<string, string | { name: string; category: string }[]> = {
   // Common
   'common.save': '保存',
   'common.cancel': '取消',
@@ -657,7 +657,6 @@ const zh: Record<string, string> = {
   'atlas.nextTrip': '下次旅行',
   'atlas.daysLeft': '天后出发',
   'atlas.streak': '连续',
-  'atlas.year': '年',
   'atlas.years': '年',
   'atlas.yearInRow': '年连续',
   'atlas.yearsInRow': '年连续',
@@ -680,7 +679,6 @@ const zh: Record<string, string> = {
   'atlas.statsTab': '统计',
   'atlas.bucketTab': '心愿单',
   'atlas.addBucket': '添加到心愿单',
-  'atlas.bucketNamePlaceholder': '地点或目的地...',
   'atlas.bucketNotesPlaceholder': '备注（可选）',
   'atlas.bucketEmpty': '你的心愿单是空的',
   'atlas.bucketEmptyHint': '添加你梦想去的地方',
@@ -829,6 +827,9 @@ const zh: Record<string, string> = {
   'reservations.datetime': '日期和时间',
   'reservations.startTime': '开始时间',
   'reservations.endTime': '结束时间',
+  'reservations.arrivalDate': '到达日期',
+  'reservations.arrivalDay': '到达天',
+  'reservations.arrivalTime': '到达时间',
   'reservations.date': '日期',
   'reservations.time': '时间',
   'reservations.timeAlt': '时间（备选，如 19:30）',

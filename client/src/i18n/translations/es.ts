@@ -1,4 +1,4 @@
-const es: Record<string, string> = {
+const es: Record<string, string | { name: string; category: string }[]> = {
   // Common
   'common.save': 'Guardar',
   'common.cancel': 'Cancelar',
@@ -634,7 +634,6 @@ const es: Record<string, string> = {
   'atlas.nextTrip': 'Próximo viaje',
   'atlas.daysLeft': 'días restantes',
   'atlas.streak': 'Racha',
-  'atlas.year': 'año',
   'atlas.years': 'años',
   'atlas.yearInRow': 'año seguido',
   'atlas.yearsInRow': 'años seguidos',
@@ -657,7 +656,6 @@ const es: Record<string, string> = {
   'atlas.statsTab': 'Estadísticas',
   'atlas.bucketTab': 'Lista de deseos',
   'atlas.addBucket': 'Añadir a lista de deseos',
-  'atlas.bucketNamePlaceholder': 'Lugar o destino...',
   'atlas.bucketNotesPlaceholder': 'Notas (opcional)',
   'atlas.bucketEmpty': 'Tu lista de deseos está vacía',
   'atlas.bucketEmptyHint': 'Añade lugares que sueñas con visitar',
@@ -807,6 +805,9 @@ const es: Record<string, string> = {
   'reservations.datetime': 'Fecha y hora',
   'reservations.startTime': 'Hora de inicio',
   'reservations.endTime': 'Hora de fin',
+  'reservations.arrivalDate': 'Fecha de llegada',
+  'reservations.arrivalDay': 'Día de llegada',
+  'reservations.arrivalTime': 'Hora de llegada',
   'reservations.date': 'Fecha',
   'reservations.time': 'Hora',
   'reservations.timeAlt': 'Hora (alternativa, p. ej. 19:30)',

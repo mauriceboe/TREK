@@ -9,6 +9,7 @@ export interface User {
   maps_api_key?: string | null;
   unsplash_api_key?: string | null;
   openweather_api_key?: string | null;
+  rapidapi_key?: string | null;
   avatar?: string | null;
   oidc_sub?: string | null;
   oidc_issuer?: string | null;
@@ -139,6 +140,7 @@ export interface Reservation {
   id: number;
   trip_id: number;
   day_id?: number | null;
+  end_day_id?: number | null;
   place_id?: number | null;
   assignment_id?: number | null;
   title: string;
