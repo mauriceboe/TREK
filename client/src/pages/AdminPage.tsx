@@ -708,14 +708,12 @@ export default function AdminPage(): React.ReactElement {
                     </div>
                     <button
                       onClick={() => handleToggleRegistration(!allowRegistration)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        allowRegistration ? 'bg-slate-900' : 'bg-slate-300'
-                      }`}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: allowRegistration ? 'var(--text-primary)' : 'var(--border-primary)' }}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          allowRegistration ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                        style={{ transform: allowRegistration ? 'translateX(20px)' : 'translateX(0)' }}
                       />
                     </button>
                   </div>
@@ -736,14 +734,12 @@ export default function AdminPage(): React.ReactElement {
                     <button
                       type="button"
                       onClick={() => handleToggleRequireMfa(!requireMfa)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        requireMfa ? 'bg-slate-900' : 'bg-slate-300'
-                      }`}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: requireMfa ? 'var(--text-primary)' : 'var(--border-primary)' }}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          requireMfa ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                        style={{ transform: requireMfa ? 'translateX(20px)' : 'translateX(0)' }}
                       />
                     </button>
                   </div>
@@ -940,14 +936,12 @@ export default function AdminPage(): React.ReactElement {
                     </div>
                     <button
                       onClick={() => setOidcConfig(c => ({ ...c, oidc_only: !c.oidc_only }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
-                        oidcConfig.oidc_only ? 'bg-slate-900' : 'bg-slate-300'
-                      }`}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-4"
+                      style={{ background: oidcConfig.oidc_only ? 'var(--text-primary)' : 'var(--border-primary)' }}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          oidcConfig.oidc_only ? 'translate-x-6' : 'translate-x-1'
-                        }`}
+                        className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                        style={{ transform: oidcConfig.oidc_only ? 'translateX(20px)' : 'translateX(0)' }}
                       />
                     </button>
                   </div>
@@ -1027,9 +1021,11 @@ export default function AdminPage(): React.ReactElement {
                                 const newVal = isOn ? 'false' : 'true'
                                 setSmtpValues(prev => ({ ...prev, [opt.key]: newVal }))
                               }}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isOn ? 'bg-slate-900' : 'bg-slate-300'}`}
+                              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                              style={{ background: isOn ? 'var(--text-primary)' : 'var(--border-primary)' }}
                             >
-                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOn ? 'translate-x-6' : 'translate-x-1'}`} />
+                              <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                                style={{ transform: isOn ? 'translateX(20px)' : 'translateX(0)' }} />
                             </button>
                           </div>
                         )
@@ -1069,8 +1065,10 @@ export default function AdminPage(): React.ReactElement {
                           const newVal = smtpValues.smtp_skip_tls_verify === 'true' ? 'false' : 'true'
                           setSmtpValues(prev => ({ ...prev, smtp_skip_tls_verify: newVal }))
                         }}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${smtpValues.smtp_skip_tls_verify === 'true' ? 'bg-slate-900' : 'bg-slate-300'}`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${smtpValues.smtp_skip_tls_verify === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
+                          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                          style={{ background: smtpValues.smtp_skip_tls_verify === 'true' ? 'var(--text-primary)' : 'var(--border-primary)' }}>
+                          <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                            style={{ transform: smtpValues.smtp_skip_tls_verify === 'true' ? 'translateX(20px)' : 'translateX(0)' }} />
                         </button>
                       </div>
                     </div>

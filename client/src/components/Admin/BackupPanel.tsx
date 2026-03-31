@@ -324,9 +324,11 @@ export default function BackupPanel() {
             </div>
             <button
               onClick={() => handleAutoSettingsChange('enabled', !autoSettings.enabled)}
-              className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSettings.enabled ? 'bg-slate-900 dark:bg-slate-100' : 'bg-gray-200 dark:bg-gray-600'}`}
+              className="relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              style={{ background: autoSettings.enabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
             >
-              <span className={`absolute left-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${autoSettings.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+                style={{ transform: autoSettings.enabled ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </label>
 
