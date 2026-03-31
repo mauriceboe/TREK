@@ -157,7 +157,7 @@ function ExpenseFormModal({
         participant_ids: tripMembers.map(m => m.id), participant_names: customPayers, share_values: {},
       })
     }
-  }, [isOpen, expense, tripMembers, tripCurrency, customPayers])
+  }, [isOpen, expense, tripMembers, tripCurrency])
 
   const needsExchangeRate = form.currency !== tripCurrency
   const parsedAmount = parseFloat(form.amount.replace(',', '.')) || 0
