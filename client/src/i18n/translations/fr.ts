@@ -631,6 +631,7 @@ const fr: Record<string, string> = {
   'places.addPlace': 'Ajouter un lieu ou une activité',
   'places.assignToDay': 'Ajouter à quel jour ?',
   'places.all': 'Tous',
+  'places.planned': 'Planifiés',
   'places.unplanned': 'Non planifiés',
   'places.search': 'Rechercher des lieux…',
   'places.allCategories': 'Toutes les catégories',
