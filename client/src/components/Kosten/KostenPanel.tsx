@@ -1189,7 +1189,7 @@ export default function KostenPanel({ tripId, tripTitle = '', tripMembers, tripC
       </div>
 
       {/* ── Right sidebar ─────────────────────────────────────────────────── */}
-      <div style={{ width: 220, flexShrink: 0, padding: '16px 16px 16px 0', display: 'flex', flexDirection: 'column', gap: 12 }} className="hidden lg:flex">
+      <div style={{ width: 220, flexShrink: 0, padding: '16px 16px 16px 0', gap: 12 }} className="hidden lg:flex flex-col">
         {/* Total */}
         <div style={{ padding: '16px', borderRadius: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-faint)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginBottom: 4 }}>{t('kosten.totalSpent')}</div>
