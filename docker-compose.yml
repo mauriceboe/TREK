@@ -26,6 +26,7 @@ services:
       # - ALLOWED_ORIGINS=https://yourdomain.com  # Optional: restrict CORS to specific origins
       - PORT=3000
       - TZ=${TZ:-UTC}
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
