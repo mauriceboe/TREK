@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import fetch from 'node-fetch';
+
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';

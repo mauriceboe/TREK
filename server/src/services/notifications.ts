@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import fetch from 'node-fetch';
+
 import { db } from '../db/database';
 
 // ── Types ──────────────────────────────────────────────────────────────────

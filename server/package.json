@@ -18,7 +18,6 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "node-fetch": "^2.7.0",
     "nodemailer": "^8.0.4",
     "otplib": "^12.0.1",
     "qrcode": "^1.5.4",

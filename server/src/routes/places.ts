@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import fetch from 'node-fetch';
+
 import multer from 'multer';
 import { db, getPlaceWithTags } from '../db/database';
 import { authenticate } from '../middleware/auth';

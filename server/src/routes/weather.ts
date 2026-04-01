@@ -1,8 +1,11 @@
 import express, { Request, Response } from 'express';
-import fetch from 'node-fetch';
+import dns from 'dns';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
+
+// Force IPv4 to prevent ETIMEDOUT on Docker bridge networks where IPv6 is unroutable.
+dns.setDefaultResultOrder('ipv4first');
 
 interface WeatherResult {
   temp: number;

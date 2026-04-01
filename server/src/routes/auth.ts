@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
-import fetch from 'node-fetch';
+
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import { db } from '../db/database';
