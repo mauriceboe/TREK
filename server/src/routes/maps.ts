@@ -426,7 +426,8 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
     const attribution = photo.authorAttributions?.[0]?.displayName || null;
 
     const mediaRes = await fetch(
-      `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&key=${apiKey}&skipHttpRedirect=true`
+      `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&skipHttpRedirect=true`,
+      { headers: { 'X-Goog-Api-Key': apiKey } }
     );
     const mediaData = await mediaRes.json() as { photoUri?: string };
     const photoUrl = mediaData.photoUri;

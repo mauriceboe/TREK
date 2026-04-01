@@ -51,7 +51,7 @@ export function enforceGlobalMfaPolicy(req: Request, res: Response, next: NextFu
 
   let userId: number;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
     userId = decoded.id;
   } catch {
     next();

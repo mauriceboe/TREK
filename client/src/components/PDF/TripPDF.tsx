@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark } from 'lucide-react'
 import { mapsApi } from '../../api/client'
-import type { Trip, Day, Place, Category, AssignmentsMap, DayNotesMap } from '../../types'
+import type { Trip, Day, Place, Category, AssignmentsMap, DayNotesMap, RouteLeg, RouteDirection } from '../../types'
 
 const NOTE_ICON_MAP = { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark }
 function noteIconSvg(iconId) {
@@ -96,6 +96,57 @@ async function fetchPlacePhotos(assignments) {
   return photoMap
 }
 
+// Road trip formatting helpers (mirrors roadtripFormatters.ts for inline HTML generation)
+function pdfFormatDistance(meters: number, unitSystem: string): string {
+  if (unitSystem === 'imperial') {
+    const miles = meters / 1609.344
+    return `${miles.toFixed(1)} mi`
+  }
+  return `${(meters / 1000).toFixed(1)} km`
+}
+
+function pdfFormatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.round((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m} min`
+}
+
+function pdfFormatFuelCost(cost: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency', currency: currency || 'USD',
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    }).format(cost)
+  } catch { return `${cost.toFixed(2)} ${currency || 'USD'}` }
+}
+
+function maneuverSymbol(maneuver: string, instruction: string): string {
+  if (maneuver === 'depart') return '→'
+  if (maneuver === 'arrive') return '●'
+  if (maneuver === 'roundabout' || maneuver === 'rotary') return '↻'
+  if (maneuver === 'merge') return '⇢'
+  if (maneuver === 'on ramp') return '↗'
+  if (maneuver === 'off ramp') return '↳'
+  if (maneuver === 'new name') return '↑'
+  if (maneuver === 'fork') {
+    if (instruction.includes('left')) return '⤵'
+    return '⤴'
+  }
+  // turn or end of road
+  if (instruction.includes('left')) return '↰'
+  if (instruction.includes('right')) return '↱'
+  return '↑'
+}
+
+function parseDirections(routeMetadata: string | null): RouteDirection[] {
+  if (!routeMetadata) return []
+  try {
+    const meta = JSON.parse(routeMetadata)
+    return meta.directions || []
+  } catch { return [] }
+}
+
 interface downloadTripPDFProps {
   trip: Trip
   days: Day[]
@@ -104,11 +155,17 @@ interface downloadTripPDFProps {
   categories: Category[]
   dayNotes: DayNotesMap
   reservations?: any[]
+  routeLegs?: RouteLeg[]
+  unitSystem?: string
+  fuelCurrency?: string
+  maxDrivingHours?: number | null
+  restIntervalHours?: number | null
+  restDurationMinutes?: number | null
   t: (key: string, params?: Record<string, string | number>) => string
   locale: string
 }
 
-export async function downloadTripPDF({ trip, days, places, assignments, categories, dayNotes, reservations = [], t: _t, locale: _locale }: downloadTripPDFProps) {
+export async function downloadTripPDF({ trip, days, places, assignments, categories, dayNotes, reservations = [], routeLegs = [], unitSystem: _unitSystem, fuelCurrency: _fuelCurrency, maxDrivingHours, restIntervalHours, restDurationMinutes, t: _t, locale: _locale }: downloadTripPDFProps) {
   await ensureRenderer()
   const loc = _locale || undefined
   const tr = _t || (k => k)
@@ -225,6 +282,73 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
             </div>`
         }).join('')
 
+    // Road trip driving summary for this day
+    const us = _unitSystem || 'metric'
+    const fc = _fuelCurrency || 'USD'
+    const dayLegs = (routeLegs || []).filter(l => l.is_road_trip && l.day_index === di)
+    let drivingHtml = ''
+    if (dayLegs.length > 0) {
+      const totalDist = dayLegs.reduce((s, l) => s + (l.distance_meters || 0), 0)
+      const totalDur = dayLegs.reduce((s, l) => s + (l.duration_seconds || 0), 0)
+      const totalFuel = dayLegs.reduce((s, l) => s + (l.fuel_cost || 0), 0)
+      const drivingHours = totalDur / 3600
+
+      const summaryParts = [pdfFormatDistance(totalDist, us), pdfFormatDuration(totalDur)]
+      if (totalFuel > 0) summaryParts.push(pdfFormatFuelCost(totalFuel, fc) + ' fuel')
+
+      // Rest breaks
+      let dayRestBreaks = 0
+      if (restIntervalHours && restDurationMinutes) {
+        for (const leg of dayLegs) {
+          const lh = (leg.duration_seconds || 0) / 3600
+          if (lh > restIntervalHours) dayRestBreaks += Math.floor(lh / restIntervalHours)
+        }
+      }
+
+      const legsHtml = dayLegs.map(l => {
+        const parts = [escHtml((l.from_place_name || '?') + ' → ' + (l.to_place_name || '?'))]
+        const details = []
+        if (l.distance_meters) details.push(pdfFormatDistance(l.distance_meters, us))
+        if (l.duration_seconds) details.push(pdfFormatDuration(l.duration_seconds))
+        if (l.fuel_cost) details.push(pdfFormatFuelCost(l.fuel_cost, fc))
+
+        // Turn-by-turn directions
+        let directionsHtml = ''
+        const directions = parseDirections(l.route_metadata)
+        if (directions.length > 0) {
+          if ((l.distance_meters || 0) > 800000) {
+            directionsHtml = `<div style="font-size:8px;color:#94a3b8;font-style:italic;padding:2px 0 2px 12px;">${escHtml(tr('roadtrip.directionsOmitted'))}</div>`
+          } else {
+            directionsHtml = directions.map(d => {
+              const sym = maneuverSymbol(d.maneuver, d.instruction)
+              const dist = d.distance_meters > 0 ? ` (${pdfFormatDistance(d.distance_meters, us)})` : ''
+              return `<div style="font-size:8px;color:#94a3b8;padding:1px 0 1px 12px;display:flex;align-items:center;gap:4px;">
+                <span style="width:12px;text-align:center;flex-shrink:0;font-size:10px;">${sym}</span>
+                <span>${escHtml(d.instruction)}${dist}</span>
+              </div>`
+            }).join('')
+          }
+        }
+
+        return `<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:#64748b;padding:2px 0;">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${parts[0]}</span>
+          <span style="flex-shrink:0;white-space:nowrap;color:#94a3b8;">${details.join(' · ')}</span>
+        </div>${directionsHtml}`
+      }).join('')
+
+      drivingHtml = `
+        <div class="note-card" style="border-left:3px solid #3b82f6;flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="note-icon">${transportIconSvg('car')}</span>
+            <span style="font-size:9.5px;font-weight:600;color:#334155;">${escHtml(tr('roadtrip.pdfDrivingSummary'))}</span>
+            <span style="font-size:9px;color:#64748b;margin-left:auto;">${summaryParts.join(' · ')}</span>
+          </div>
+          ${legsHtml}
+          ${dayRestBreaks > 0 ? `<div style="font-size:8.5px;color:#94a3b8;">☕ ${escHtml(tr('roadtrip.restBreaks', { count: String(dayRestBreaks), minutes: String(dayRestBreaks * (restDurationMinutes || 0)) }))}</div>` : ''}
+          ${maxDrivingHours && drivingHours > maxDrivingHours ? `<div style="font-size:8.5px;color:#d97706;">⚠ ${escHtml(tr('roadtrip.drivingTimeWarning', { actual: pdfFormatDuration(totalDur), limit: maxDrivingHours + 'h' }))}</div>` : ''}
+        </div>`
+    }
+
     return `
       <div class="day-section${di > 0 ? ' page-break' : ''}">
         <div class="day-header">
@@ -233,7 +357,7 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
           ${day.date ? `<span class="day-date">${shortDate(day.date, loc)}</span>` : ''}
           ${cost ? `<span class="day-cost">${cost}</span>` : ''}
         </div>
-        <div class="day-body">${itemsHtml}</div>
+        <div class="day-body">${itemsHtml}${drivingHtml}</div>
       </div>`
   }).join('')
 
@@ -425,6 +549,30 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
 
 <!-- Days -->
 ${daysHtml}
+
+${(() => {
+  const allLegs = (routeLegs || []).filter(l => l.is_road_trip)
+  if (allLegs.length === 0) return ''
+  const us = _unitSystem || 'metric'
+  const fc = _fuelCurrency || 'USD'
+  const totalDist = allLegs.reduce((s, l) => s + (l.distance_meters || 0), 0)
+  const totalDur = allLegs.reduce((s, l) => s + (l.duration_seconds || 0), 0)
+  const totalFuel = allLegs.reduce((s, l) => s + (l.fuel_cost || 0), 0)
+  return `
+    <div class="day-section page-break">
+      <div class="day-header">
+        <span class="day-tag">${escHtml(tr('roadtrip.pdfTripTotal')).toUpperCase()}</span>
+        <span class="day-title">${escHtml(tr('roadtrip.summary'))}</span>
+      </div>
+      <div class="day-body" style="padding:16px 28px;">
+        <div style="display:flex;gap:28px;margin-bottom:14px;">
+          <div><div style="font-size:22px;font-weight:700;color:#1e293b;">${pdfFormatDistance(totalDist, us)}</div><div style="font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">${escHtml(tr('roadtrip.totalDistance'))}</div></div>
+          <div><div style="font-size:22px;font-weight:700;color:#1e293b;">${pdfFormatDuration(totalDur)}</div><div style="font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">${escHtml(tr('roadtrip.totalTime'))}</div></div>
+          ${totalFuel > 0 ? `<div><div style="font-size:22px;font-weight:700;color:#1e293b;">${pdfFormatFuelCost(totalFuel, fc)}</div><div style="font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">${escHtml(tr('roadtrip.totalFuel'))}</div></div>` : ''}
+        </div>
+      </div>
+    </div>`
+})()}
 
 </body></html>`
 

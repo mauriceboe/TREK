@@ -172,6 +172,23 @@ export interface Settings {
   show_place_description: boolean
   route_calculation?: boolean
   blur_booking_codes?: boolean
+  roadtrip_unit_system?: string
+  roadtrip_fuel_price?: string
+  roadtrip_fuel_currency?: string
+  roadtrip_fuel_consumption?: string
+  roadtrip_tank_size?: string
+  roadtrip_max_driving_hours?: string
+  roadtrip_rest_interval_hours?: string
+  roadtrip_rest_duration_minutes?: string
+  roadtrip_daylight_only?: string
+  roadtrip_road_preference?: string
+  roadtrip_avoid_ferries?: string
+  roadtrip_prefer_highways?: string
+  roadtrip_truck_safe?: string
+  roadtrip_max_speed?: string
+  roadtrip_stop_source?: string
+  roadtrip_fuel_type?: string
+  roadtrip_fuel_brand?: string
 }
 
 export interface AssignmentsMap {
@@ -348,6 +365,54 @@ export interface HolidayInfo {
 
 export interface HolidaysMap {
   [date: string]: HolidayInfo
+}
+
+// Road Trip found stop (real POI)
+export interface FoundStop {
+  name: string
+  lat: number
+  lng: number
+  type: 'fuel' | 'rest'
+  distance_along_route_meters: number
+  distance_from_route_meters: number
+  source: 'osm' | 'google'
+  brand?: string | null
+  rating?: number | null
+  opening_hours?: string | null
+  osm_id?: string | null
+  place_id?: string | null
+}
+
+// Road Trip direction step
+export interface RouteDirection {
+  instruction: string
+  distance_meters: number
+  duration_seconds: number
+  maneuver: string
+  road_name: string
+}
+
+// Road Trip route leg
+export interface RouteLeg {
+  id: number
+  trip_id: string
+  day_index: number
+  from_place_id: string
+  to_place_id: string
+  from_place_name?: string
+  to_place_name?: string
+  from_lat?: number
+  from_lng?: number
+  to_lat?: number
+  to_lng?: number
+  is_road_trip: boolean
+  route_geometry: string | null
+  distance_meters: number | null
+  duration_seconds: number | null
+  fuel_cost: number | null
+  route_metadata: string | null
+  route_profile: string
+  calculated_at: string | null
 }
 
 // API error shape from axios

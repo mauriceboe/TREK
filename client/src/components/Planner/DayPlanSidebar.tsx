@@ -4,7 +4,7 @@ declare global { interface Window { __dragData: DragDataPayload | null } }
 
 import React, { useState, useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom'
-import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Check, Trash2, Info, MapPin, Star, Heart, Camera, Lightbulb, Flag, Bookmark, Train, Bus, Plane, Car, Ship, Coffee, ShoppingBag, AlertTriangle, FileDown, Lock, Hotel, Utensils, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Check, Trash2, Info, MapPin, Star, Heart, Camera, Lightbulb, Flag, Bookmark, Train, Bus, Plane, Car, Ship, Coffee, ShoppingBag, AlertTriangle, FileDown, Lock, Hotel, Utensils, Users, Fuel, Search } from 'lucide-react'
 
 const RES_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 import { assignmentsApi, reservationsApi } from '../../api/client'
@@ -17,9 +17,14 @@ import { useToast } from '../shared/Toast'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { useTripStore } from '../../store/tripStore'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useAddonStore } from '../../store/addonStore'
+import { useRoadtripStore } from '../../store/roadtripStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
+import { formatDistance, formatDuration, formatFuelCost, calculateVehicleRange, calculateDaylightDriving, checkDaylightBookings } from '../../utils/roadtripFormatters'
+import { calculateSunriseSunset, formatSolarTime } from '../../utils/solarCalculation'
 import { useDayNotes } from '../../hooks/useDayNotes'
+import RoadTripSummary from '../Trip/RoadTripSummary'
 import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult } from '../../types'
 
 const NOTE_ICONS = [
@@ -94,6 +99,25 @@ export default function DayPlanSidebar({
   const ctxMenu = useContextMenu()
   const timeFormat = useSettingsStore(s => s.settings.time_format) || '24h'
   const tripStore = useTripStore()
+  const roadtripEnabled = useAddonStore(s => s.isEnabled('roadtrip'))
+  const roadtripStore = useRoadtripStore()
+  const rtUnitSystem = useSettingsStore(s => s.settings.roadtrip_unit_system) || 'metric'
+  const rtFuelCurrency = useSettingsStore(s => s.settings.roadtrip_fuel_currency) || useSettingsStore(s => s.settings.default_currency) || 'USD'
+  const rtTankSize = useSettingsStore(s => s.settings.roadtrip_tank_size)
+  const rtFuelConsumptionForRange = useSettingsStore(s => s.settings.roadtrip_fuel_consumption)
+  const vehicleRangeMeters = (() => {
+    if (!rtTankSize || !rtFuelConsumptionForRange) return null
+    const tank = parseFloat(rtTankSize)
+    const consumption = parseFloat(rtFuelConsumptionForRange)
+    if (!tank || !consumption) return null
+    const us = rtUnitSystem as 'metric' | 'imperial'
+    return calculateVehicleRange(tank, consumption, us) * (us === 'imperial' ? 1609.344 : 1000)
+  })()
+  const rtMaxDrivingHours = useSettingsStore(s => s.settings.roadtrip_max_driving_hours)
+  const rtRestIntervalHours = useSettingsStore(s => s.settings.roadtrip_rest_interval_hours)
+  const rtRestDurationMinutes = useSettingsStore(s => s.settings.roadtrip_rest_duration_minutes)
+  const rtDaylightOnly = useSettingsStore(s => s.settings.roadtrip_daylight_only) === 'true'
+  const findingStopsLegIds = useRoadtripStore(s => s.findingStopsLegIds)
 
   const { noteUi, setNoteUi, noteInputRef, dayNotes, openAddNote: _openAddNote, openEditNote: _openEditNote, cancelNote, saveNote, deleteNote: _deleteNote, moveNote: _moveNote } = useDayNotes(tripId)
 
@@ -698,7 +722,16 @@ export default function DayPlanSidebar({
                 notes.map(n => ({ ...n, day_id: Number(dayId) }))
               )
               try {
-                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale })
+                const allLegs = Object.values(roadtripStore.routeLegs).flat()
+                await downloadTripPDF({
+                  trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale,
+                  routeLegs: roadtripEnabled ? allLegs : [],
+                  unitSystem: rtUnitSystem,
+                  fuelCurrency: rtFuelCurrency,
+                  maxDrivingHours: rtMaxDrivingHours ? parseFloat(rtMaxDrivingHours) : null,
+                  restIntervalHours: rtRestIntervalHours ? parseFloat(rtRestIntervalHours) : null,
+                  restDurationMinutes: rtRestDurationMinutes ? parseFloat(rtRestDurationMinutes) : null,
+                })
               } catch (e) {
                 console.error('PDF error:', e)
                 toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
@@ -879,6 +912,103 @@ export default function DayPlanSidebar({
                   {isExpanded ? <ChevronDown size={15} strokeWidth={2} /> : <ChevronRight size={15} strokeWidth={2} />}
                 </button>
               </div>
+
+              {/* Road trip day warnings */}
+              {roadtripEnabled && isExpanded && (() => {
+                const dayNum = days.findIndex(d => d.id === day.id)
+                const dayTotals = roadtripStore.getDayTotals(String(tripId), dayNum)
+                if (dayTotals.durationSeconds === 0) return null
+                const drivingHours = dayTotals.durationSeconds / 3600
+                const maxHours = rtMaxDrivingHours ? parseFloat(rtMaxDrivingHours) : null
+                const exceedsMax = maxHours && drivingHours > maxHours
+
+                // Daylight calculation with departure/arrival recommendations
+                let daylightDriving: ReturnType<typeof calculateDaylightDriving> | null = null
+                if (rtDaylightOnly && day.date) {
+                  const firstGeo = da.find(a => a.place?.lat && a.place?.lng)
+                  const lastGeo = [...da].reverse().find(a => a.place?.lat && a.place?.lng)
+                  if (firstGeo?.place && lastGeo?.place) {
+                    const restInterval = rtRestIntervalHours ? parseFloat(rtRestIntervalHours) : null
+                    const restDuration = rtRestDurationMinutes ? parseFloat(rtRestDurationMinutes) : null
+                    let totalRestSeconds = 0
+                    if (restInterval && restDuration) {
+                      const legs = roadtripStore.getLegsForDay(String(tripId), dayNum).filter(l => l.is_road_trip)
+                      for (const l of legs) {
+                        const lh = (l.duration_seconds || 0) / 3600
+                        if (lh > restInterval) totalRestSeconds += Math.floor(lh / restInterval) * restDuration * 60
+                      }
+                    }
+                    daylightDriving = calculateDaylightDriving(
+                      firstGeo.place.lat!, firstGeo.place.lng!,
+                      lastGeo.place.lat!, lastGeo.place.lng!,
+                      new Date(day.date + 'T12:00:00'),
+                      dayTotals.durationSeconds, totalRestSeconds
+                    )
+                  }
+                }
+
+                if (!exceedsMax && !daylightDriving) return null
+                return (
+                  <div style={{ padding: '0 14px 4px' }}>
+                    {exceedsMax && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
+                        borderRadius: 8, fontSize: 10, fontWeight: 500,
+                        background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)',
+                        color: '#b45309',
+                      }}>
+                        <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
+                        <span>{t('roadtrip.drivingTimeWarning', { actual: formatDuration(dayTotals.durationSeconds), limit: `${maxHours}h` })}</span>
+                      </div>
+                    )}
+                    {daylightDriving && (() => {
+                      const dayAccs = accommodations.filter((a: any) => day.id >= a.start_day_id && day.id <= a.end_day_id)
+                      const originAccom = dayAccs.find((a: any) => a.end_day_id === day.id)
+                      const destAccom = dayAccs.find((a: any) => a.start_day_id === day.id && a.id !== originAccom?.id) || dayAccs.find((a: any) => a.start_day_id === day.id)
+                      const booking = checkDaylightBookings(daylightDriving, originAccom?.check_out, destAccom?.check_in)
+                      if (booking.allSafe) {
+                        return (
+                          <div style={{ fontSize: 10, color: '#16a34a', marginTop: exceedsMax ? 4 : 0, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+                            <span>&#10003;</span>
+                            <span>{t('roadtrip.daylightOk')}</span>
+                          </div>
+                        )
+                      }
+                      return (
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: exceedsMax ? 4 : 0, padding: '4px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>☀️</span>
+                            <span>{formatSolarTime(daylightDriving.sunrise, timeFormat)} – {formatSolarTime(daylightDriving.sunset, timeFormat)} ({daylightDriving.availableHours.toFixed(1)}h)</span>
+                          </div>
+                          {booking.originSafe === false && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#b45309', fontWeight: 500 }}>
+                              <AlertTriangle size={10} strokeWidth={2} />
+                              <span>{t('roadtrip.checkoutTooEarly', { time: booking.originCheckout!, safe: formatSolarTime(daylightDriving.recommendedDeparture, timeFormat) })}</span>
+                            </div>
+                          )}
+                          {booking.destSafe === false && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#b45309', fontWeight: 500 }}>
+                              <AlertTriangle size={10} strokeWidth={2} />
+                              <span>{t('roadtrip.checkinTooLate', { time: booking.destCheckin!, safe: formatSolarTime(daylightDriving.latestArrival, timeFormat) })}</span>
+                            </div>
+                          )}
+                          {booking.originSafe !== false && booking.destSafe !== false && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontWeight: 500 }}>
+                              <span>{t('roadtrip.departBy', { time: formatSolarTime(daylightDriving.hasSufficientDaylight ? daylightDriving.latestDepartureForArrival : daylightDriving.recommendedDeparture, timeFormat), arrival: formatSolarTime(daylightDriving.latestArrival, timeFormat) })}</span>
+                            </div>
+                          )}
+                          {!daylightDriving.hasSufficientDaylight && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#b45309', fontWeight: 500 }}>
+                              <AlertTriangle size={10} strokeWidth={2} />
+                              <span>{t('roadtrip.insufficientDaylight')}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })()}
 
               {/* Aufgeklappte Orte + Notizen */}
               {isExpanded && (
@@ -1111,6 +1241,122 @@ export default function DayPlanSidebar({
                                   </span>
                                 </div>
                               )}
+                              {/* Road trip leg info line */}
+                              {roadtripEnabled && placeIdx > 0 && (() => {
+                                const prevAssignment = placeItems[placeIdx - 1]?.data
+                                const prevPlace = prevAssignment?.place
+                                if (!prevPlace?.id || !place?.id) return null
+                                const dayNum = days.findIndex(d => d.id === day.id)
+                                const leg = roadtripStore.getLegBetween(String(tripId), dayNum, String(prevPlace.id), String(place.id))
+                                if (!leg?.is_road_trip || !leg.distance_meters) return null
+                                const exceedsRange = vehicleRangeMeters ? leg.distance_meters > vehicleRangeMeters : false
+                                // Rest break calculation
+                                const restInterval = rtRestIntervalHours ? parseFloat(rtRestIntervalHours) : null
+                                const restDuration = rtRestDurationMinutes ? parseFloat(rtRestDurationMinutes) : null
+                                const legHours = (leg.duration_seconds || 0) / 3600
+                                const restBreaks = restInterval && restDuration && legHours > restInterval
+                                  ? Math.floor(legHours / restInterval) : 0
+                                const totalRestMinutes = restBreaks * (restDuration || 0)
+                                // Parse found stops from route_metadata
+                                const foundStops = (() => {
+                                  if (!leg.route_metadata) return []
+                                  try {
+                                    const meta = JSON.parse(leg.route_metadata)
+                                    return Array.isArray(meta.found_stops) ? meta.found_stops : []
+                                  } catch { return [] }
+                                })()
+                                const fuelStops = foundStops.filter((s: { type: string }) => s.type === 'fuel')
+                                const restStops = foundStops.filter((s: { type: string }) => s.type === 'rest')
+                                // Classify critical fuel stops
+                                const criticalFuel: typeof fuelStops = []
+                                if (fuelStops.length > 0 && vehicleRangeMeters && leg.distance_meters) {
+                                  const sorted = [...fuelStops].sort((a, b) => a.distance_along_route_meters - b.distance_along_route_meters)
+                                  let lastRefuelAt = 0
+                                  while (lastRefuelAt + vehicleRangeMeters < leg.distance_meters) {
+                                    const reachable = sorted.filter(s =>
+                                      s.distance_along_route_meters > lastRefuelAt &&
+                                      s.distance_along_route_meters <= lastRefuelAt + vehicleRangeMeters
+                                    )
+                                    if (reachable.length === 0) break
+                                    const chosen = reachable[reachable.length - 1]
+                                    criticalFuel.push(chosen)
+                                    lastRefuelAt = chosen.distance_along_route_meters
+                                  }
+                                }
+                                const isFinding = findingStopsLegIds.has(leg.id)
+                                return (
+                                  <div style={{ marginTop: 3 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.2, flexWrap: 'wrap' }}>
+                                      <Car size={11} strokeWidth={2} style={{ flexShrink: 0, color: '#3b82f6' }} />
+                                      <span>{formatDistance(leg.distance_meters, rtUnitSystem)}</span>
+                                      <span style={{ opacity: 0.4 }}>·</span>
+                                      <span>{formatDuration(leg.duration_seconds || 0)}</span>
+                                      {leg.fuel_cost != null && (
+                                        <>
+                                          <span style={{ opacity: 0.4 }}>·</span>
+                                          <span>{formatFuelCost(leg.fuel_cost, rtFuelCurrency)}</span>
+                                        </>
+                                      )}
+                                      {restBreaks > 0 && (
+                                        <>
+                                          <span style={{ opacity: 0.4 }}>·</span>
+                                          <span>{t('roadtrip.restBreaks', { count: String(restBreaks), minutes: String(totalRestMinutes) })}</span>
+                                        </>
+                                      )}
+                                      {exceedsRange && (
+                                        <span title={t('roadtrip.rangeWarning', { distance: formatDistance(leg.distance_meters, rtUnitSystem), range: formatDistance(vehicleRangeMeters!, rtUnitSystem) })}>
+                                          <Fuel size={10} strokeWidth={2} style={{ color: '#d97706', flexShrink: 0 }} />
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Found stop indicators + loading */}
+                                    {isFinding ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>
+                                        <div style={{ width: 8, height: 8, border: '1.5px solid var(--text-faint)', borderTopColor: 'var(--text-muted)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                                        {t('roadtrip.findingStops')}
+                                      </div>
+                                    ) : foundStops.length > 0 ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-faint)', marginTop: 2, flexWrap: 'wrap' }}>
+                                        {criticalFuel.length > 0 && (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: '#16a34a' }}>
+                                            <Fuel size={9} strokeWidth={2} />
+                                            {criticalFuel.map(s => s.name).join(', ')}
+                                          </span>
+                                        )}
+                                        {fuelStops.length > 0 && criticalFuel.length === 0 && (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: '#16a34a' }}>
+                                            <Fuel size={9} strokeWidth={2} /> {fuelStops.length} {t('roadtrip.realFuelStop')}
+                                          </span>
+                                        )}
+                                        {restStops.length > 0 && (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: '#2563eb' }}>
+                                            <Coffee size={9} strokeWidth={2} /> {restStops.length} {t('roadtrip.realRestStop')}
+                                          </span>
+                                        )}
+                                        {/* Refresh Stops button — only when stops already exist */}
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation()
+                                            // Clear existing stops then re-search
+                                            await roadtripStore.autoFindStops(String(tripId), leg)
+                                          }}
+                                          style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 2,
+                                            padding: '1px 4px', borderRadius: 3,
+                                            border: '1px solid var(--border-faint)', background: 'none',
+                                            cursor: 'pointer', fontSize: 8, fontWeight: 500,
+                                            color: 'var(--text-faint)', fontFamily: 'inherit',
+                                          }}
+                                          title={t('roadtrip.refreshStops')}
+                                        >
+                                          <RotateCcw size={7} strokeWidth={2} />
+                                          {t('roadtrip.refreshStops')}
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )
+                              })()}
                               {(() => {
                                 const res = reservations.find(r => r.assignment_id === assignment.id)
                                 if (!res) return null
@@ -1157,6 +1403,36 @@ export default function DayPlanSidebar({
                                 </div>
                               )}
                             </div>
+                            {/* Road Trip toggle — only for non-first places when addon is enabled */}
+                            {roadtripEnabled && placeIdx > 0 && (() => {
+                              const prevAssignment = placeItems[placeIdx - 1]?.data
+                              const prevPlace = prevAssignment?.place
+                              if (!prevPlace?.id || !place?.id) return null
+                              const dayNum = days.findIndex(d => d.id === day.id)
+                              const leg = roadtripStore.getLegBetween(String(tripId), dayNum, String(prevPlace.id), String(place.id))
+                              const isRoadTrip = leg?.is_road_trip ?? false
+                              return (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    roadtripStore.toggleRoadTrip(
+                                      String(tripId), leg?.id ?? -1, !isRoadTrip,
+                                      dayNum, String(prevPlace.id), String(place.id)
+                                    )
+                                  }}
+                                  title={isRoadTrip ? t('roadtrip.legActive') : t('roadtrip.markLeg')}
+                                  style={{
+                                    flexShrink: 0, background: 'none', border: 'none', padding: '2px',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                    color: isRoadTrip ? '#3b82f6' : 'var(--text-faint)',
+                                    opacity: isRoadTrip ? 1 : (isHovered ? 0.6 : 0.3),
+                                    transition: 'opacity 0.15s, color 0.15s',
+                                  }}
+                                >
+                                  <Car size={13} strokeWidth={2} />
+                                </button>
+                              )
+                            })()}
                             <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
                               <button onClick={moveUp} disabled={idx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
                                 <ChevronUp size={12} strokeWidth={2} />
@@ -1388,6 +1664,42 @@ export default function DayPlanSidebar({
                           <RotateCcw size={12} strokeWidth={2} />
                           {t('dayplan.optimize')}
                         </button>
+                        {roadtripEnabled && (() => {
+                          const da = getDayAssignments(day.id)
+                          const dayNum = days.findIndex(d => d.id === day.id)
+                          const dayLegs = roadtripStore.getLegsForDay(String(tripId), dayNum)
+                          const allActive = da.length >= 2 && dayLegs.filter(l => l.is_road_trip).length >= da.length - 1
+                          return (
+                            <button
+                              onClick={async () => {
+                                const places = da.map(a => a.place).filter(p => p?.lat && p?.lng)
+                                if (places.length < 2) return
+                                for (let i = 0; i < places.length - 1; i++) {
+                                  const leg = roadtripStore.getLegBetween(String(tripId), dayNum, String(places[i].id), String(places[i + 1].id))
+                                  if (allActive && leg) {
+                                    await roadtripStore.toggleRoadTrip(String(tripId), leg.id, false)
+                                  } else if (!allActive) {
+                                    await roadtripStore.toggleRoadTrip(
+                                      String(tripId), leg?.id ?? -1, true,
+                                      dayNum, String(places[i].id), String(places[i + 1].id)
+                                    )
+                                  }
+                                }
+                              }}
+                              title={t('roadtrip.toggleAll')}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                padding: '6px 10px', fontSize: 11, fontWeight: 500, borderRadius: 8,
+                                border: allActive ? '1px solid #3b82f6' : '1px solid var(--border-faint)',
+                                background: allActive ? 'rgba(59,130,246,0.1)' : 'transparent',
+                                color: allActive ? '#3b82f6' : 'var(--text-secondary)',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              <Car size={12} strokeWidth={2} />
+                            </button>
+                          )
+                        })()}
                         <button onClick={handleGoogleMaps} style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           padding: '6px 10px', fontSize: 11, fontWeight: 500, borderRadius: 8,
@@ -1404,6 +1716,9 @@ export default function DayPlanSidebar({
           )
         })}
       </div>
+
+      {/* Road Trip Summary */}
+      <RoadTripSummary tripId={tripId} trip={trip} days={days} assignments={assignments} />
 
       {/* Notiz-Popup-Modal — über Portal gerendert, um den backdropFilter-Stapelkontext zu umgehen */}
       {Object.entries(noteUi).map(([dayId, ui]) => ui && ReactDOM.createPortal(

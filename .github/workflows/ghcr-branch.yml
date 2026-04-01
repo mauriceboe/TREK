@@ -1,0 +1,34 @@
+name: "GHCR: Build Branch"
+
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare image tag
+        id: tag
+        run: |
+          echo "IMAGE=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "TAG=$(echo '${{ github.ref_name }}' | sed 's|/|-|g')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ steps.tag.outputs.IMAGE }}:${{ steps.tag.outputs.TAG }}
+          provenance: false

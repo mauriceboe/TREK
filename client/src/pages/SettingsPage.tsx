@@ -6,7 +6,7 @@ import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n'
 import Navbar from '../components/Layout/Navbar'
 import CustomSelect from '../components/shared/CustomSelect'
 import { useToast } from '../components/shared/Toast'
-import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, AlertTriangle, Copy, Download, Printer, Terminal, Plus, Check } from 'lucide-react'
+import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, AlertTriangle, Copy, Download, Printer, Terminal, Plus, Check, Car } from 'lucide-react'
 import { authApi, adminApi, notificationsApi } from '../api/client'
 import apiClient from '../api/client'
 import { useAddonStore } from '../store/addonStore'
@@ -111,7 +111,7 @@ function NotificationPreferences({ t, memoriesEnabled }: { t: any; memoriesEnabl
 }
 
 export default function SettingsPage(): React.ReactElement {
-  const { user, updateProfile, uploadAvatar, deleteAvatar, logout, loadUser, demoMode, appRequireMfa } = useAuthStore()
+  const { user, updateProfile, uploadAvatar, deleteAvatar, logout, loadUser, demoMode, appRequireMfa, hasMapsKey } = useAuthStore()
   const [searchParams] = useSearchParams()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean | 'blocked'>(false)
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
@@ -126,6 +126,7 @@ export default function SettingsPage(): React.ReactElement {
   // Addon gating (derived from store)
   const memoriesEnabled = addonEnabled('memories')
   const mcpEnabled = addonEnabled('mcp')
+  const roadtripEnabled = addonEnabled('roadtrip')
   const [immichUrl, setImmichUrl] = useState('')
   const [immichApiKey, setImmichApiKey] = useState('')
   const [immichConnected, setImmichConnected] = useState(false)
@@ -666,6 +667,361 @@ export default function SettingsPage(): React.ReactElement {
               </div>
             </div>
           </Section>
+
+          {/* Road Trip — only when Road Trip addon is enabled */}
+          {roadtripEnabled && (
+            <Section title={t('settings.roadtrip.title')} icon={Car}>
+              {/* Unit System */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>{t('settings.roadtrip.unitSystem')}</label>
+                <div className="flex gap-3">
+                  {[
+                    { value: 'metric', label: t('settings.roadtrip.metric') },
+                    { value: 'imperial', label: t('settings.roadtrip.imperial') },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={async () => {
+                        try { await updateSetting('roadtrip_unit_system', opt.value) }
+                        catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Error') }
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
+                        fontFamily: 'inherit', fontSize: 14, fontWeight: 500,
+                        border: (settings.roadtrip_unit_system || 'metric') === opt.value ? '2px solid var(--text-primary)' : '2px solid var(--border-primary)',
+                        background: (settings.roadtrip_unit_system || 'metric') === opt.value ? 'var(--bg-hover)' : 'var(--bg-card)',
+                        color: 'var(--text-primary)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vehicle section */}
+              <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--border-secondary)' }}>
+                <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>{t('settings.roadtrip.vehicle')}</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {(settings.roadtrip_unit_system || 'metric') === 'metric' ? t('settings.roadtrip.fuelPricePerLitre') : t('settings.roadtrip.fuelPricePerGallon')}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={settings.roadtrip_fuel_price || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_fuel_price', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.fuelCurrency')}</label>
+                    <input
+                      type="text"
+                      value={settings.roadtrip_fuel_currency || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_fuel_currency', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder="AUD"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {(settings.roadtrip_unit_system || 'metric') === 'metric' ? t('settings.roadtrip.fuelConsumptionMetric') : t('settings.roadtrip.fuelConsumptionImperial')}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={settings.roadtrip_fuel_consumption || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_fuel_consumption', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder={(settings.roadtrip_unit_system || 'metric') === 'metric' ? '8.0' : '30'}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {(settings.roadtrip_unit_system || 'metric') === 'metric' ? t('settings.roadtrip.tankSizeLitres') : t('settings.roadtrip.tankSizeGallons')}
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={settings.roadtrip_tank_size || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_tank_size', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder={(settings.roadtrip_unit_system || 'metric') === 'metric' ? '60' : '16'}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                    {settings.roadtrip_tank_size && settings.roadtrip_fuel_consumption && (() => {
+                      const us = (settings.roadtrip_unit_system || 'metric') as 'metric' | 'imperial'
+                      const tank = parseFloat(settings.roadtrip_tank_size!)
+                      const consumption = parseFloat(settings.roadtrip_fuel_consumption!)
+                      if (!tank || !consumption) return null
+                      const rangeVal = us === 'imperial' ? tank * consumption : (tank / consumption) * 100
+                      const unit = us === 'imperial' ? 'mi' : 'km'
+                      return <div className="text-sm text-gray-500" style={{ marginTop: 4, fontSize: 11 }}>{t('roadtrip.estimatedRange', { range: `${Math.round(rangeVal)} ${unit}` })}</div>
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fuel Preferences */}
+              <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--border-secondary)' }}>
+                <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>{t('settings.roadtrip.fuelPreferences')}</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.fuelType')}</label>
+                    <select
+                      value={settings.roadtrip_fuel_type || 'any'}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_fuel_type', e.target.value) } catch {}
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                      style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', maxWidth: 200 }}
+                    >
+                      <option value="any">{t('settings.roadtrip.fuelTypeAny')}</option>
+                      <option value="diesel">{t('settings.roadtrip.fuelTypeDiesel')}</option>
+                      <option value="petrol">{t('settings.roadtrip.fuelTypePetrol')}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.fuelBrand')}</label>
+                    <div className="flex flex-wrap gap-2" style={{ marginTop: 4 }}>
+                      {[
+                        { value: 'any', label: t('settings.roadtrip.brandAny') },
+                        { value: 'Mobil', label: 'Mobil' },
+                        { value: 'Ampol', label: 'Ampol' },
+                        { value: 'BP', label: 'BP' },
+                        { value: 'Shell', label: 'Shell' },
+                        { value: '7-Eleven', label: '7-Eleven' },
+                      ].map(opt => {
+                        const current = settings.roadtrip_fuel_brand || 'any';
+                        const selectedBrands = current === 'any' ? [] : current.split(',');
+                        const isSelected = opt.value === 'any' ? current === 'any' : selectedBrands.includes(opt.value);
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={async () => {
+                              let newValue: string;
+                              if (opt.value === 'any') {
+                                newValue = 'any';
+                              } else if (isSelected) {
+                                const remaining = selectedBrands.filter(b => b !== opt.value);
+                                newValue = remaining.length > 0 ? remaining.join(',') : 'any';
+                              } else {
+                                newValue = [...selectedBrands, opt.value].join(',');
+                              }
+                              try { await updateSetting('roadtrip_fuel_brand', newValue) } catch {}
+                            }}
+                            style={{
+                              padding: '4px 12px', borderRadius: 8, cursor: 'pointer',
+                              fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                              border: isSelected ? '2px solid var(--text-primary)' : '2px solid var(--border-primary)',
+                              background: isSelected ? 'var(--bg-hover)' : 'var(--bg-card)',
+                              color: 'var(--text-primary)',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {settings.roadtrip_fuel_brand && settings.roadtrip_fuel_brand !== 'any' && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>{t('settings.roadtrip.brandPreferred')}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Driving Preferences */}
+              <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--border-secondary)' }}>
+                <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>{t('settings.roadtrip.drivingPreferences')}</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.maxDrivingHours')}</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="24"
+                      value={settings.roadtrip_max_driving_hours || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_max_driving_hours', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder="8"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.restInterval')}</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="12"
+                      value={settings.roadtrip_rest_interval_hours || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_rest_interval_hours', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder="2"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{t('settings.roadtrip.restDuration')}</label>
+                    <input
+                      type="number"
+                      step="5"
+                      min="5"
+                      max="120"
+                      value={settings.roadtrip_rest_duration_minutes || ''}
+                      onChange={async (e) => {
+                        try { await updateSetting('roadtrip_rest_duration_minutes', e.target.value) }
+                        catch {}
+                      }}
+                      placeholder="15"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {(settings.roadtrip_unit_system || 'metric') === 'metric' ? t('settings.roadtrip.maxSpeed') : t('settings.roadtrip.maxSpeed')}
+                  </label>
+                  <input
+                    type="number"
+                    step="5"
+                    min="1"
+                    max="999"
+                    value={settings.roadtrip_max_speed || ''}
+                    onChange={async (e) => {
+                      try { await updateSetting('roadtrip_max_speed', e.target.value) }
+                      catch {}
+                    }}
+                    placeholder={(settings.roadtrip_unit_system || 'metric') === 'metric' ? 'km/h' : 'mph'}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+                    style={{ maxWidth: 200 }}
+                  />
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>{t('settings.roadtrip.maxSpeedHelp')}</p>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {t('settings.roadtrip.stopSource')}
+                  </label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'osm', label: t('roadtrip.stopSourceOsm') },
+                      { value: 'google', label: t('roadtrip.stopSourceGoogle') },
+                    ].map(opt => {
+                      const disabled = opt.value === 'google' && !hasMapsKey
+                      return (
+                        <button
+                          key={opt.value}
+                          disabled={disabled}
+                          onClick={async () => {
+                            if (disabled) return
+                            try { await updateSetting('roadtrip_stop_source', opt.value) }
+                            catch {}
+                          }}
+                          title={disabled ? t('roadtrip.stopSourceGoogleDisabled') : undefined}
+                          style={{
+                            padding: '4px 12px', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+                            fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                            border: (settings.roadtrip_stop_source || 'osm') === opt.value ? '2px solid var(--text-primary)' : '2px solid var(--border-primary)',
+                            background: (settings.roadtrip_stop_source || 'osm') === opt.value ? 'var(--bg-hover)' : 'var(--bg-card)',
+                            color: disabled ? 'var(--text-faint)' : 'var(--text-primary)',
+                            opacity: disabled ? 0.5 : 1,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>{t('roadtrip.stopSourceHelp')}</p>
+                </div>
+              </div>
+
+              {/* Route Preferences */}
+              <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--border-secondary)' }}>
+                <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>{t('settings.roadtrip.routePreferences')}</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Daylight Only */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{t('settings.roadtrip.daylightOnly')}</span>
+                    <button onClick={async () => {
+                      const newVal = settings.roadtrip_daylight_only === 'true' ? 'false' : 'true';
+                      try { await updateSetting('roadtrip_daylight_only', newVal) } catch {}
+                    }}
+                      style={{
+                        position: 'relative', width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                        background: settings.roadtrip_daylight_only === 'true' ? 'var(--accent, #111827)' : 'var(--border-primary, #d1d5db)',
+                        transition: 'background 0.2s',
+                      }}>
+                      <span style={{
+                        position: 'absolute', top: 2, left: settings.roadtrip_daylight_only === 'true' ? 22 : 2,
+                        width: 20, height: 20, borderRadius: '50%', background: 'white',
+                        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </button>
+                  </div>
+
+                  {/* Road Preference */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{t('settings.roadtrip.roadPreference')}</span>
+                    <div className="flex gap-2">
+                      {[
+                        { value: 'any', label: t('settings.roadtrip.anyRoad') },
+                        { value: 'sealed_only', label: t('settings.roadtrip.sealedOnly') },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={async () => {
+                            try { await updateSetting('roadtrip_road_preference', opt.value) }
+                            catch {}
+                          }}
+                          style={{
+                            padding: '4px 12px', borderRadius: 8, cursor: 'pointer',
+                            fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                            border: (settings.roadtrip_road_preference || 'any') === opt.value ? '2px solid var(--text-primary)' : '2px solid var(--border-primary)',
+                            background: (settings.roadtrip_road_preference || 'any') === opt.value ? 'var(--bg-hover)' : 'var(--bg-card)',
+                            color: 'var(--text-primary)',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {settings.roadtrip_road_preference === 'sealed_only' && (
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: -4 }}>{t('roadtrip.sealedOnlyHelp')}</div>
+                  )}
+
+                </div>
+              </div>
+            </Section>
+          )}
 
           {/* Notifications */}
           <Section title={t('settings.notifications')} icon={Lock}>

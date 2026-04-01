@@ -80,11 +80,11 @@ async function discover(issuer: string) {
   return doc;
 }
 
-function generateToken(user: { id: number; username: string; email: string; role: string }) {
+function generateToken(user: { id: number }) {
   return jwt.sign(
-    { id: user.id, username: user.username, email: user.email, role: user.role },
+    { id: user.id },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: '24h', algorithm: 'HS256' }
   );
 }
 
@@ -121,9 +121,15 @@ router.get('/login', async (req: Request, res: Response) => {
   try {
     const doc = await discover(config.issuer);
     const state = crypto.randomBytes(32).toString('hex');
-    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host;
-    const redirectUri = `${proto}://${host}/api/auth/oidc/callback`;
+    const appUrl = process.env.APP_URL || (db.prepare("SELECT value FROM app_settings WHERE key = 'app_url'").get() as { value: string } | undefined)?.value;
+    let redirectUri: string;
+    if (appUrl) {
+      redirectUri = `${appUrl.replace(/\/+$/, '')}/api/auth/oidc/callback`;
+    } else {
+      const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+      const host = (req.headers['x-forwarded-host'] as string) || req.headers.host;
+      redirectUri = `${proto}://${host}/api/auth/oidc/callback`;
+    }
     const inviteToken = req.query.invite as string | undefined;
 
     pendingStates.set(state, { createdAt: Date.now(), redirectUri, inviteToken });
@@ -185,7 +191,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     const tokenData = await tokenRes.json() as OidcTokenResponse;
     if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('[OIDC] Token exchange failed:', tokenData);
+      console.error('[OIDC] Token exchange failed: status', tokenRes.status);
       return res.redirect(frontendUrl('/login?oidc_error=token_failed'));
     }
 

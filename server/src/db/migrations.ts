@@ -427,6 +427,13 @@ function runMigrations(db: Database.Database): void {
         db.prepare("UPDATE addons SET type = 'integration' WHERE id = 'mcp'").run();
       } catch {}
     },
+    // Add route_metadata column to trip_route_legs for storing OSRM annotations
+    () => db.exec('ALTER TABLE trip_route_legs ADD COLUMN route_metadata TEXT'),
+    // Per-trip fuel price override for road trips
+    () => {
+      try { db.exec('ALTER TABLE trips ADD COLUMN roadtrip_fuel_price TEXT'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN roadtrip_fuel_currency TEXT'); } catch {}
+    },
   ];
 
   if (currentVersion < migrations.length) {

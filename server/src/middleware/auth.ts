@@ -14,7 +14,7 @@ const authenticate = (req: Request, res: Response, next: NextFunction): void => 
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
     const user = db.prepare(
       'SELECT id, username, email, role FROM users WHERE id = ?'
     ).get(decoded.id) as User | undefined;
@@ -39,7 +39,7 @@ const optionalAuth = (req: Request, res: Response, next: NextFunction): void => 
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
     const user = db.prepare(
       'SELECT id, username, email, role FROM users WHERE id = ?'
     ).get(decoded.id) as User | undefined;

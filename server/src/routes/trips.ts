@@ -174,7 +174,7 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const { title, description, start_date, end_date, currency, is_archived, cover_image } = req.body;
+  const { title, description, start_date, end_date, currency, is_archived, cover_image, roadtrip_fuel_price, roadtrip_fuel_currency } = req.body;
 
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
@@ -192,6 +192,14 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
       currency=?, is_archived=?, cover_image=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, req.params.id);
+
+  // Per-trip road trip fuel price override
+  if (roadtrip_fuel_price !== undefined) {
+    db.prepare('UPDATE trips SET roadtrip_fuel_price = ? WHERE id = ?').run(roadtrip_fuel_price || null, req.params.id);
+  }
+  if (roadtrip_fuel_currency !== undefined) {
+    db.prepare('UPDATE trips SET roadtrip_fuel_currency = ? WHERE id = ?').run(roadtrip_fuel_currency || null, req.params.id);
+  }
 
   if (newStart !== trip.start_date || newEnd !== trip.end_date)
     generateDays(req.params.id, newStart, newEnd);

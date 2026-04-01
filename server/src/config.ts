@@ -23,4 +23,6 @@ if (!JWT_SECRET) {
   }
 }
 
-export { JWT_SECRET };
+const JWT_SECRET_IS_GENERATED = !process.env.JWT_SECRET;
+
+export { JWT_SECRET, JWT_SECRET_IS_GENERATED };
