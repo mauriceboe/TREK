@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind, Droplets, Sunrise, Sunset, Hotel, Calendar, MapPin, LogIn, LogOut, Hash, Pencil, Plane, Utensils, Train, Car, Ship, Ticket, FileText, Users } from 'lucide-react'
+import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind, Droplets, Sunrise, Sunset, Hotel, Calendar, MapPin, LogIn, LogOut, Hash, Pencil, Plane, Utensils, Train, Car, Ship, Ticket, FileText, Users, AlertTriangle } from 'lucide-react'
 
 const RES_TYPE_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 const RES_TYPE_COLORS = { flight: '#3b82f6', hotel: '#8b5cf6', restaurant: '#ef4444', train: '#06b6d4', car: '#6b7280', cruise: '#0ea5e9', event: '#f59e0b', tour: '#10b981', other: '#6b7280' }
 import { weatherApi, accommodationsApi } from '../../api/client'
+import { useToast } from '../shared/Toast'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useAddonStore } from '../../store/addonStore'
+import { useRoadtripStore } from '../../store/roadtripStore'
 import { getLocaleForLanguage, useTranslation } from '../../i18n'
-import type { Day, Place, Category, Reservation, AssignmentsMap } from '../../types'
+import { formatDistance, formatDuration, formatFuelCost, calculateDaylightDriving, checkDaylightBookings } from '../../utils/roadtripFormatters'
+import { calculateSunriseSunset, formatSolarTime } from '../../utils/solarCalculation'
+import { parseDirections, dirSymbol } from '../../utils/directionFormatters'
+import type { Day, Place, Category, Reservation, AssignmentsMap, RouteDirection } from '../../types'
 
 const WEATHER_ICON_MAP = {
   Clear: Sun, Clouds: Cloud, Rain: CloudRain, Drizzle: CloudDrizzle,
@@ -38,6 +44,42 @@ function formatTime12(val, is12h) {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
 
+function LegDirections({ directions, unitSystem }: { directions: RouteDirection[]; unitSystem: string }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+  if (directions.length === 0) return null
+  return (
+    <div style={{ paddingLeft: 8 }}>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: 10, color: 'var(--text-faint)', fontFamily: 'inherit',
+          padding: '2px 0', display: 'flex', alignItems: 'center', gap: 4,
+        }}
+      >
+        <span style={{ fontSize: 8 }}>{expanded ? '▾' : '▸'}</span>
+        {t('roadtrip.directionCount', { count: String(directions.length) })}
+      </button>
+      {expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 4, marginTop: 2 }}>
+          {directions.map((d, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-faint)' }}>
+              <span style={{ width: 14, textAlign: 'center', flexShrink: 0, fontSize: 11 }}>{dirSymbol(d.maneuver, d.instruction)}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>{d.instruction}</span>
+              {d.distance_meters > 0 && (
+                <span style={{ flexShrink: 0, color: 'var(--text-faint)', opacity: 0.7 }}>
+                  {formatDistance(d.distance_meters, unitSystem)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface DayDetailPanelProps {
   day: Day
   days: Day[]
@@ -55,6 +97,7 @@ interface DayDetailPanelProps {
 }
 
 export default function DayDetailPanel({ day, days, places, categories = [], tripId, assignments, reservations = [], lat, lng, onClose, onAccommodationChange, leftWidth = 0, rightWidth = 0 }: DayDetailPanelProps) {
+  const toast = useToast()
   const { t, language, locale } = useTranslation()
   const isFahrenheit = useSettingsStore(s => s.settings.temperature_unit) === 'fahrenheit'
   const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
@@ -250,6 +293,224 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
               <div style={{ fontSize: 12, color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>{t('day.noWeather')}</div>
             )
           )}
+
+          {/* ── Road Trip ── */}
+          {(() => {
+            const roadtripEnabled = useAddonStore.getState().isEnabled('roadtrip')
+            if (!roadtripEnabled) return null
+            const dayIndex = days.indexOf(day)
+            if (dayIndex < 0) return null
+            const roadtripStore = useRoadtripStore.getState()
+            const legs = roadtripStore.getLegsForDay(String(tripId), dayIndex).filter(l => l.is_road_trip)
+            if (legs.length === 0) return null
+            const dayTotals = roadtripStore.getDayTotals(String(tripId), dayIndex)
+            // Skip warnings if any leg is still pending route calculation
+            const hasPendingLegs = legs.some(l => !l.duration_seconds)
+            const unitSystem = (useSettingsStore.getState().settings.roadtrip_unit_system || 'metric') as 'metric' | 'imperial'
+            const fuelCurrency = useSettingsStore.getState().settings.roadtrip_fuel_currency || useSettingsStore.getState().settings.default_currency || 'USD'
+            const timeFormat = useSettingsStore.getState().settings.time_format || '24h'
+            const maxHoursSetting = useSettingsStore.getState().settings.roadtrip_max_driving_hours
+            const maxHours = maxHoursSetting ? parseFloat(maxHoursSetting) : null
+            const drivingHours = dayTotals.durationSeconds / 3600
+            const exceedsMax = !hasPendingLegs && maxHours != null && drivingHours > maxHours
+            const daylightOnly = useSettingsStore.getState().settings.roadtrip_daylight_only === 'true'
+            const restIntervalHours = parseFloat(useSettingsStore.getState().settings.roadtrip_rest_interval_hours || '0') || null
+            const restDurationMinutes = parseFloat(useSettingsStore.getState().settings.roadtrip_rest_duration_minutes || '0') || null
+            const hasFuelCost = dayTotals.fuelCost > 0
+
+            // Daylight driving calculation with departure/arrival recommendations
+            let daylightDriving: ReturnType<typeof calculateDaylightDriving> | null = null
+            if (daylightOnly && day.date && !hasPendingLegs) {
+              const da = assignments[String(day.id)] || []
+              const firstGeo = da.find(a => a.place?.lat && a.place?.lng)
+              const lastGeo = [...da].reverse().find(a => a.place?.lat && a.place?.lng)
+              if (firstGeo?.place && lastGeo?.place) {
+                let totalRestSecs = 0
+                if (restIntervalHours && restDurationMinutes) {
+                  totalRestSecs = totalRestBreaks * restDurationMinutes * 60
+                }
+                daylightDriving = calculateDaylightDriving(
+                  firstGeo.place.lat!, firstGeo.place.lng!,
+                  lastGeo.place.lat!, lastGeo.place.lng!,
+                  new Date(day.date + 'T12:00:00'),
+                  dayTotals.durationSeconds, totalRestSecs
+                )
+              }
+            }
+
+            // Rest breaks per leg
+            let totalRestBreaks = 0
+            if (restIntervalHours && restDurationMinutes) {
+              for (const leg of legs) {
+                const legHours = (leg.duration_seconds || 0) / 3600
+                if (legHours > restIntervalHours) totalRestBreaks += Math.floor(legHours / restIntervalHours)
+              }
+            }
+            const totalRestMinutes = totalRestBreaks * (restDurationMinutes || 0)
+
+            return (
+              <div>
+                <div style={{ height: 1, background: 'var(--border-faint)', margin: '12px 0' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Car size={13} style={{ color: '#3b82f6' }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('roadtrip.driving')}</span>
+                </div>
+
+                {/* Summary chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {formatDistance(dayTotals.distanceMeters, unitSystem)}
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {formatDuration(dayTotals.durationSeconds)}
+                  </div>
+                  {hasFuelCost && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                      {formatFuelCost(dayTotals.fuelCost, fuelCurrency)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Daylight driving recommendations */}
+                {daylightDriving && (() => {
+                  const originAccom = dayAccommodations.find(a => a.end_day_id === day.id)
+                  const destAccom = dayAccommodations.find(a => a.start_day_id === day.id && a.id !== originAccom?.id) || dayAccommodations.find(a => a.start_day_id === day.id)
+                  const booking = checkDaylightBookings(daylightDriving, originAccom?.check_out, destAccom?.check_in)
+                  const formatDep = formatSolarTime(daylightDriving.hasSufficientDaylight ? daylightDriving.latestDepartureForArrival : daylightDriving.recommendedDeparture, timeFormat)
+                  const formatSafeDep = formatSolarTime(daylightDriving.recommendedDeparture, timeFormat)
+                  const formatArr = formatSolarTime(daylightDriving.latestArrival, timeFormat)
+                  const safeDepTimeHHMM = (() => {
+                    const d = daylightDriving.recommendedDeparture
+                    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                  })()
+                  const arrTimeHHMM = (() => {
+                    const d = daylightDriving.latestArrival
+                    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                  })()
+
+                  if (booking.allSafe) {
+                    return (
+                      <div style={{ padding: '8px 10px', borderRadius: 10, background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.15)', marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#16a34a', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Sunrise size={11} style={{ color: '#f59e0b' }} />
+                            <span style={{ color: 'var(--text-muted)' }}>{t('roadtrip.daylightWindow', { sunrise: formatSolarTime(daylightDriving.sunrise, timeFormat), sunset: formatSolarTime(daylightDriving.sunset, timeFormat), hours: daylightDriving.availableHours.toFixed(1) })}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+                            <span>&#10003;</span>
+                            <span>{t('roadtrip.bookingsSafe', { checkout: booking.originCheckout!, checkin: booking.destCheckin! })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div style={{ padding: '8px 10px', borderRadius: 10, background: 'var(--bg-secondary)', marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Sunrise size={11} style={{ color: '#f59e0b' }} />
+                          <span>{t('roadtrip.daylightWindow', { sunrise: formatSolarTime(daylightDriving.sunrise, timeFormat), sunset: formatSolarTime(daylightDriving.sunset, timeFormat), hours: daylightDriving.availableHours.toFixed(1) })}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Car size={11} style={{ color: '#3b82f6' }} />
+                          <span style={{ fontWeight: 500, color: booking.originSafe === false ? '#b45309' : 'var(--text-secondary)' }}>
+                            {t('roadtrip.recommendedDeparture')}: {formatDep}
+                          </span>
+                          {booking.originSafe === false && (
+                            <span style={{ fontSize: 9, color: '#b45309' }}>
+                              ({t('roadtrip.checkoutTooEarly', { time: booking.originCheckout!, safe: formatSafeDep })})
+                            </span>
+                          )}
+                          {originAccom && booking.originSafe !== true && (
+                            <button onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await accommodationsApi.update(tripId, originAccom.id, { check_out: safeDepTimeHHMM })
+                                toast.success(t('roadtrip.checkoutUpdated'))
+                                onAccommodationChange?.()
+                              } catch (err) { console.error('Failed to update checkout time:', err) }
+                            }} style={{ background: 'none', border: '1px solid var(--border-faint)', borderRadius: 4, cursor: 'pointer', padding: '1px 5px', fontSize: 9, color: 'var(--text-faint)', fontFamily: 'inherit' }}>
+                              {t('roadtrip.setCheckout')}
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <MapPin size={11} style={{ color: '#16a34a' }} />
+                          <span style={{ fontWeight: 500, color: booking.destSafe === false ? '#b45309' : 'var(--text-secondary)' }}>
+                            {t('roadtrip.arrivalBefore')}: {formatArr}
+                          </span>
+                          {booking.destSafe === false && (
+                            <span style={{ fontSize: 9, color: '#b45309' }}>
+                              ({t('roadtrip.checkinTooLate', { time: booking.destCheckin!, safe: formatArr })})
+                            </span>
+                          )}
+                          {destAccom && booking.destSafe !== true && (
+                            <button onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await accommodationsApi.update(tripId, destAccom.id, { check_in: arrTimeHHMM })
+                                toast.success(t('roadtrip.checkinUpdated'))
+                                onAccommodationChange?.()
+                              } catch (err) { console.error('Failed to update checkin time:', err) }
+                            }} style={{ background: 'none', border: '1px solid var(--border-faint)', borderRadius: 4, cursor: 'pointer', padding: '1px 5px', fontSize: 9, color: 'var(--text-faint)', fontFamily: 'inherit' }}>
+                              {t('roadtrip.setCheckin')}
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-faint)' }}>
+                          <span>{t('roadtrip.drivingWindow')}: {daylightDriving.availableHours.toFixed(1)}h</span>
+                        </div>
+                        {!daylightDriving.hasSufficientDaylight && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#b45309', fontWeight: 500 }}>
+                            <AlertTriangle size={11} strokeWidth={2} />
+                            <span>{t('roadtrip.insufficientDaylight')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Driving time warning */}
+                {exceedsMax && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#b45309', padding: '5px 8px', borderRadius: 8, background: 'rgba(217,119,6,0.08)', marginBottom: 6 }}>
+                    <AlertTriangle size={12} strokeWidth={2} />
+                    <span>{t('roadtrip.drivingTimeWarning', { actual: formatDuration(dayTotals.durationSeconds), limit: `${maxHours}h` })}</span>
+                  </div>
+                )}
+
+                {/* Individual legs */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {legs.map(leg => {
+                    const dirs = parseDirections(leg.route_metadata)
+                    return (
+                      <div key={leg.id}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', padding: '3px 0' }}>
+                          <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                            {leg.from_place_name || '?'} → {leg.to_place_name || '?'}
+                          </span>
+                          <span style={{ color: 'var(--text-faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {leg.distance_meters ? formatDistance(leg.distance_meters, unitSystem) : ''}
+                            {leg.duration_seconds ? ` · ${formatDuration(leg.duration_seconds)}` : ''}
+                            {leg.fuel_cost ? ` · ${formatFuelCost(leg.fuel_cost, fuelCurrency)}` : ''}
+                          </span>
+                        </div>
+                        <LegDirections directions={dirs} unitSystem={unitSystem} />
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Rest breaks */}
+                {totalRestBreaks > 0 && (
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 6 }}>
+                    ☕ {t('roadtrip.restBreaks', { count: String(totalRestBreaks), minutes: String(totalRestMinutes) })}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* ── Reservations for this day's assignments ── */}
           {(() => {

@@ -353,6 +353,27 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_collab_notes_trip ON collab_notes(trip_id);
     CREATE INDEX IF NOT EXISTS idx_collab_polls_trip ON collab_polls(trip_id);
     CREATE INDEX IF NOT EXISTS idx_collab_messages_trip ON collab_messages(trip_id);
+
+    -- Road Trip addon tables
+    CREATE TABLE IF NOT EXISTS trip_route_legs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      day_index INTEGER NOT NULL,
+      from_place_id INTEGER NOT NULL,
+      to_place_id INTEGER NOT NULL,
+      is_road_trip INTEGER DEFAULT 0,
+      route_geometry TEXT,
+      distance_meters REAL,
+      duration_seconds REAL,
+      fuel_cost REAL,
+      route_metadata TEXT,
+      route_profile TEXT DEFAULT 'driving',
+      calculated_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(trip_id, day_index, from_place_id, to_place_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_trip_route_legs_trip ON trip_route_legs(trip_id);
   `);
 
   db.exec(`

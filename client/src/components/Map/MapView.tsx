@@ -7,7 +7,13 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { mapsApi } from '../../api/client'
 import { getCategoryIcon } from '../shared/categoryIcons'
-import type { Place } from '../../types'
+import { useRoadtripStore } from '../../store/roadtripStore'
+import { useTranslation } from '../../i18n'
+import { useAddonStore } from '../../store/addonStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import RoadTripRoute, { decodePolyline } from './RoadTripRoute'
+import { calculateVehicleRange } from '../../utils/roadtripFormatters'
+import type { Place, RouteLeg } from '../../types'
 
 // Fix default marker icons for vite
 delete L.Icon.Default.prototype._getIconUrl
@@ -240,6 +246,71 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
 const mapPhotoCache = new Map()
 const mapPhotoInFlight = new Set()
 
+// Show Full Route button — fits all road trip legs on map
+function FullRouteButton({ tripId, allLegs, dayPlaces, paddingOpts, t }: {
+  tripId: string | null
+  allLegs: RouteLeg[]
+  dayPlaces: Place[]
+  paddingOpts: Record<string, any>
+  t: (key: string) => string
+}) {
+  const map = useMap()
+  const [isFullView, setIsFullView] = useState(false)
+
+  const legsWithGeometry = allLegs.filter(l => l.is_road_trip && l.route_geometry)
+  if (legsWithGeometry.length === 0) return null
+
+  const handleClick = () => {
+    if (isFullView) {
+      // Reset to day view
+      if (dayPlaces.length > 0) {
+        try {
+          const bounds = L.latLngBounds(dayPlaces.map(p => [p.lat!, p.lng!]))
+          if (bounds.isValid()) map.fitBounds(bounds, { ...paddingOpts, maxZoom: 16, animate: true })
+        } catch {}
+      }
+      setIsFullView(false)
+      return
+    }
+
+    // Collect all polyline coordinates
+    const allCoords: [number, number][] = []
+    for (const leg of legsWithGeometry) {
+      const coords = decodePolyline(leg.route_geometry!)
+      allCoords.push(...coords)
+    }
+    if (allCoords.length === 0) return
+
+    try {
+      const bounds = L.latLngBounds(allCoords)
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], animate: true })
+        setIsFullView(true)
+      }
+    } catch {}
+  }
+
+  return (
+    <div style={{ position: 'absolute', bottom: 62, right: 10, zIndex: 1000 }}>
+      <button onClick={handleClick} title={t('roadtrip.showFullRoute')} style={{
+        width: 36, height: 36, borderRadius: '50%',
+        border: 'none', cursor: 'pointer',
+        background: isFullView ? '#3b82f6' : 'var(--bg-card, white)',
+        color: isFullView ? 'white' : 'var(--text-muted, #6b7280)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.2s, color 0.2s',
+      }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 // Live location tracker — blue dot with pulse animation (like Apple/Google Maps)
 function LocationTracker() {
   const map = useMap()
@@ -347,7 +418,47 @@ export function MapView({
   leftWidth = 0,
   rightWidth = 0,
   hasInspector = false,
+  tripId = null,
+  selectedDayId = null,
+  days = [],
 }) {
+  const { t } = useTranslation()
+  const roadtripEnabled = useAddonStore(s => s.isEnabled('roadtrip'))
+  const roadtripStore = useRoadtripStore()
+  const unitSystem = useSettingsStore(s => s.settings.roadtrip_unit_system) || 'metric'
+  const fuelCurrency = useSettingsStore(s => s.settings.roadtrip_fuel_currency) || useSettingsStore(s => s.settings.default_currency) || 'USD'
+  const tankSizeVal = useSettingsStore(s => s.settings.roadtrip_tank_size)
+  const fuelConsumptionVal = useSettingsStore(s => s.settings.roadtrip_fuel_consumption)
+  const vehicleRangeMeters = (() => {
+    if (!tankSizeVal || !fuelConsumptionVal) return null
+    const tank = parseFloat(tankSizeVal)
+    const consumption = parseFloat(fuelConsumptionVal)
+    if (!tank || !consumption) return null
+    const us = unitSystem as 'metric' | 'imperial'
+    return calculateVehicleRange(tank, consumption, us) * (us === 'imperial' ? 1609.344 : 1000)
+  })()
+  const restIntervalHoursVal = useSettingsStore(s => s.settings.roadtrip_rest_interval_hours)
+  const restIntervalHours = restIntervalHoursVal ? parseFloat(restIntervalHoursVal) : null
+  const fuelBrandSetting = useSettingsStore(s => s.settings.roadtrip_fuel_brand) || 'any'
+  const preferredBrands = fuelBrandSetting === 'any' ? [] : fuelBrandSetting.split(',').map((b: string) => b.trim()).filter(Boolean)
+
+  // Get the day index for the selected day
+  const dayIndex = useMemo(() => {
+    if (!selectedDayId || !days.length) return -1
+    return days.findIndex(d => d.id === selectedDayId)
+  }, [selectedDayId, days])
+
+  // Get road trip legs for current day
+  const roadTripLegs: RouteLeg[] = useMemo(() => {
+    if (!roadtripEnabled || !tripId || dayIndex < 0) return []
+    return roadtripStore.getLegsForDay(String(tripId), dayIndex).filter(l => l.is_road_trip)
+  }, [roadtripEnabled, tripId, dayIndex, roadtripStore.routeLegs])
+
+  // All road trip legs across all days (for full route button)
+  const allRoadTripLegs: RouteLeg[] = useMemo(() => {
+    if (!roadtripEnabled || !tripId) return []
+    return (roadtripStore.routeLegs[String(tripId)] || []).filter(l => l.is_road_trip)
+  }, [roadtripEnabled, tripId, roadtripStore.routeLegs])
   // Dynamic padding: account for sidebars + bottom inspector
   const paddingOpts = useMemo(() => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -423,6 +534,7 @@ export function MapView({
       <SelectionController places={places} selectedPlaceId={selectedPlaceId} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
       <MapClickHandler onClick={onMapClick} />
       <MapContextMenuHandler onContextMenu={onMapContextMenu} />
+      {roadtripEnabled && <FullRouteButton tripId={tripId ? String(tripId) : null} allLegs={allRoadTripLegs} dayPlaces={dayPlaces} paddingOpts={paddingOpts} t={t} />}
       <LocationTracker />
 
       <MarkerClusterGroup
@@ -494,20 +606,35 @@ export function MapView({
         })}
       </MarkerClusterGroup>
 
-      {route && route.length > 1 && (
-        <>
-          <Polyline
-            positions={route}
-            color="#111827"
-            weight={3}
-            opacity={0.9}
-            dashArray="6, 5"
-          />
-          {routeSegments.map((seg, i) => (
-            <RouteLabel key={i} midpoint={seg.mid} from={seg.from} to={seg.to} walkingText={seg.walkingText} drivingText={seg.drivingText} />
-          ))}
-        </>
-      )}
+      {route && route.length > 1 && (() => {
+        // Build per-segment polylines, substituting road trip geometry where available
+        const segments: any[] = []
+        for (let i = 0; i < route.length - 1; i++) {
+          const from = route[i]
+          const to = route[i + 1]
+          // Check if this segment has a road trip leg
+          const leg = roadTripLegs.find(l => {
+            const fMatch = Math.abs((l.from_lat || 0) - from[0]) < 0.0001 && Math.abs((l.from_lng || 0) - from[1]) < 0.0001
+            const tMatch = Math.abs((l.to_lat || 0) - to[0]) < 0.0001 && Math.abs((l.to_lng || 0) - to[1]) < 0.0001
+            return fMatch && tMatch
+          })
+          if (leg) {
+            segments.push(<RoadTripRoute key={`rt-${i}`} leg={leg} unitSystem={unitSystem} vehicleRangeMeters={vehicleRangeMeters} fuelCurrency={fuelCurrency} exceedsRangeText="⚠️ Range" restIntervalHours={restIntervalHours} preferredBrands={preferredBrands} />)
+          } else {
+            segments.push(
+              <Polyline key={`seg-${i}`} positions={[from, to]} color="#111827" weight={3} opacity={0.9} dashArray="6, 5" />
+            )
+            // Show route label for non-road-trip segments
+            if (routeSegments[i]) {
+              const seg = routeSegments[i]
+              segments.push(
+                <RouteLabel key={`lbl-${i}`} midpoint={seg.mid} walkingText={seg.walkingText} drivingText={seg.drivingText} />
+              )
+            }
+          }
+        }
+        return <>{segments}</>
+      })()}
     </MapContainer>
   )
 }

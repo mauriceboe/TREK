@@ -5,9 +5,12 @@ import { useSettingsStore } from '../store/settingsStore'
 import Navbar from '../components/Layout/Navbar'
 import apiClient, { mapsApi } from '../api/client'
 import CustomSelect from '../components/shared/CustomSelect'
-import { Globe, MapPin, Briefcase, Calendar, Flag, ChevronRight, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search } from 'lucide-react'
+import { Globe, MapPin, Briefcase, Calendar, Flag, ChevronRight, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search, Car } from 'lucide-react'
 import L from 'leaflet'
 import type { AtlasPlace, GeoJsonFeatureCollection, TranslationFn } from '../types'
+import { useAddonStore } from '../store/addonStore'
+import { decodePolyline } from '../components/Map/RoadTripRoute'
+import { formatDistance, formatDuration, formatFuelCost } from '../utils/roadtripFormatters'
 
 // Convert country code to flag emoji
 interface AtlasCountry {
@@ -43,6 +46,38 @@ interface CountryDetail {
   trips: { id: number; title: string }[]
   manually_marked?: boolean
 }
+
+interface RoadTripLeg {
+  route_geometry: string
+  distance_meters: number | null
+  duration_seconds: number | null
+  from_name: string | null
+  to_name: string | null
+  day_index: number
+}
+
+interface RoadTripData {
+  trip_id: number
+  trip_title: string
+  start_date: string | null
+  end_date: string | null
+  total_distance_meters: number
+  total_duration_seconds: number
+  total_fuel_cost: number
+  legs: RoadTripLeg[]
+}
+
+interface RoadTripResponse {
+  trips: RoadTripData[]
+  totals: {
+    total_trips: number
+    total_distance_meters: number
+    total_fuel_cost: number
+    total_driving_seconds: number
+  }
+}
+
+const TRIP_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 function MobileStats({ data, stats, countries, resolveName, t, dark }: { data: AtlasData | null; stats: AtlasStats; countries: AtlasCountry[]; resolveName: (code: string) => string; t: TranslationFn; dark: boolean }): React.ReactElement {
   const tp = dark ? '#f1f5f9' : '#0f172a'
@@ -167,8 +202,14 @@ export default function AtlasPage(): React.ReactElement {
   const [bucketSearching, setBucketSearching] = useState(false)
   const [bucketPoiMonth, setBucketPoiMonth] = useState(0)
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
-  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket'>('stats')
+  const [bucketTab, setBucketTab] = useState<'stats' | 'bucket' | 'roadtrips'>('stats')
   const bucketMarkersRef = useRef<any>(null)
+  const roadtripEnabled = useAddonStore(s => s.isEnabled('roadtrip'))
+  const [roadTripData, setRoadTripData] = useState<RoadTripResponse | null>(null)
+  const [highlightedTrip, setHighlightedTrip] = useState<number | null>(null)
+  const roadtripLayerRef = useRef<L.LayerGroup | null>(null)
+  const rtUnitSystem = useSettingsStore(s => s.settings.roadtrip_unit_system) || 'metric'
+  const rtFuelCurrency = useSettingsStore(s => s.settings.roadtrip_fuel_currency) || useSettingsStore(s => s.settings.default_currency) || 'USD'
 
   // Load atlas data + bucket list
   useEffect(() => {
@@ -181,6 +222,12 @@ export default function AtlasPage(): React.ReactElement {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  // Load road trip data when addon is enabled
+  useEffect(() => {
+    if (!roadtripEnabled) return
+    apiClient.get('/addons/atlas/road-trips').then(r => setRoadTripData(r.data)).catch(() => {})
+  }, [roadtripEnabled])
 
   // Load GeoJSON world data (direct GeoJSON, no conversion needed)
   useEffect(() => {
@@ -466,6 +513,52 @@ export default function AtlasPage(): React.ReactElement {
     bucketMarkersRef.current = L.layerGroup(markers).addTo(mapInstance.current)
   }, [bucketList])
 
+  // Render road trip polylines on map
+  useEffect(() => {
+    if (!mapInstance.current) return
+    if (roadtripLayerRef.current) {
+      mapInstance.current.removeLayer(roadtripLayerRef.current)
+      roadtripLayerRef.current = null
+    }
+    if (bucketTab !== 'roadtrips' || !roadTripData?.trips?.length) return
+
+    const layers: L.Layer[] = []
+    roadTripData.trips.forEach((trip, ti) => {
+      const color = TRIP_COLORS[ti % TRIP_COLORS.length]
+      const isHighlighted = highlightedTrip === null || highlightedTrip === trip.trip_id
+      trip.legs.forEach(leg => {
+        const positions = decodePolyline(leg.route_geometry)
+        if (positions.length < 2) return
+        const polyline = L.polyline(positions, {
+          color,
+          weight: isHighlighted ? 4 : 2,
+          opacity: isHighlighted ? 0.85 : 0.2,
+        })
+        const tooltipHtml = `<div style="font-size:12px;font-weight:600">${trip.trip_title}</div>` +
+          (leg.from_name && leg.to_name ? `<div style="font-size:11px;opacity:0.7">${leg.from_name} → ${leg.to_name}</div>` : '') +
+          (leg.distance_meters ? `<div style="font-size:10px;opacity:0.6">${formatDistance(leg.distance_meters, rtUnitSystem)}</div>` : '') +
+          (trip.start_date ? `<div style="font-size:10px;opacity:0.5">${trip.start_date}</div>` : '')
+        polyline.bindTooltip(tooltipHtml, { sticky: true, className: 'atlas-tooltip', direction: 'top' })
+        polyline.on('click', () => navigate(`/trips/${trip.trip_id}`))
+        polyline.setStyle({ cursor: 'pointer' } as any)
+        layers.push(polyline)
+      })
+    })
+    roadtripLayerRef.current = L.layerGroup(layers).addTo(mapInstance.current)
+
+    // Fit bounds if highlighting a specific trip
+    if (highlightedTrip !== null) {
+      const trip = roadTripData.trips.find(t => t.trip_id === highlightedTrip)
+      if (trip) {
+        const allPositions = trip.legs.flatMap(l => decodePolyline(l.route_geometry))
+        if (allPositions.length > 0) {
+          const bounds = L.latLngBounds(allPositions.map(p => L.latLng(p[0], p[1])))
+          mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 10 })
+        }
+      }
+    }
+  }, [bucketTab, roadTripData, highlightedTrip, dark, rtUnitSystem])
+
   const loadCountryDetail = async (code: string): Promise<void> => {
     setSelectedCountry(code)
     try {
@@ -554,6 +647,10 @@ export default function AtlasPage(): React.ReactElement {
             bucketSearchResults={bucketSearchResults} bucketPoiMonth={bucketPoiMonth} setBucketPoiMonth={setBucketPoiMonth}
             bucketPoiYear={bucketPoiYear} setBucketPoiYear={setBucketPoiYear} bucketSearching={bucketSearching}
             bucketSearch={bucketSearch} setBucketSearch={setBucketSearch}
+            roadtripEnabled={roadtripEnabled} roadTripData={roadTripData}
+            highlightedTrip={highlightedTrip} setHighlightedTrip={setHighlightedTrip}
+            rtUnitSystem={rtUnitSystem} rtFuelCurrency={rtFuelCurrency}
+            onTripNavigate={(id) => navigate(`/trips/${id}`)}
             t={t} dark={dark}
           />
         </div>
@@ -706,8 +803,8 @@ interface SidebarContentProps {
   onTripClick: (id: number) => void
   onUnmarkCountry?: (code: string) => void
   bucketList: any[]
-  bucketTab: 'stats' | 'bucket'
-  setBucketTab: (tab: 'stats' | 'bucket') => void
+  bucketTab: 'stats' | 'bucket' | 'roadtrips'
+  setBucketTab: (tab: 'stats' | 'bucket' | 'roadtrips') => void
   showBucketAdd: boolean
   setShowBucketAdd: (v: boolean) => void
   bucketForm: { name: string; notes: string; lat: string; lng: string; target_date: string }
@@ -724,11 +821,18 @@ interface SidebarContentProps {
   bucketSearching: boolean
   bucketSearch: string
   setBucketSearch: (v: string) => void
+  roadtripEnabled: boolean
+  roadTripData: RoadTripResponse | null
+  highlightedTrip: number | null
+  setHighlightedTrip: (id: number | null) => void
+  rtUnitSystem: string
+  rtFuelCurrency: string
+  onTripNavigate: (id: number) => void
   t: TranslationFn
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onCountryClick, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onCountryClick, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, roadtripEnabled, roadTripData, highlightedTrip, setHighlightedTrip, rtUnitSystem, rtFuelCurrency, onTripNavigate, t, dark }: SidebarContentProps): React.ReactElement {
   const { language } = useTranslation()
   const bg = (o) => dark ? `rgba(255,255,255,${o})` : `rgba(0,0,0,${o})`
   const tp = dark ? '#f1f5f9' : '#0f172a'
@@ -745,7 +849,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
   // Tab switcher
   const tabBar = (
     <div style={{ display: 'flex', gap: 4, padding: '12px 16px 0', marginBottom: 4 }}>
-      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }].map(tab => (
+      {[{ id: 'stats', label: t('atlas.statsTab'), icon: Globe }, { id: 'bucket', label: t('atlas.bucketTab'), icon: Star }, ...(roadtripEnabled ? [{ id: 'roadtrips', label: t('atlas.roadTrips'), icon: Car }] : [])].map(tab => (
         <button key={tab.id} onClick={() => setBucketTab(tab.id as any)}
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -889,7 +993,7 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
     {tabBar}
     {/* Both tabs always rendered so the wider one sets the panel width */}
     <div style={{ display: 'grid' }}>
-    <div style={bucketTab === 'bucket' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+    <div style={bucketTab !== 'stats' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
     <div className="flex items-stretch justify-center">
 
       {/* ═══ SECTION 1: Numbers ═══ */}
@@ -993,10 +1097,129 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
       )}
     </div>
     </div>
-    <div style={bucketTab === 'stats' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+    <div style={bucketTab !== 'bucket' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
       {bucketContent}
     </div>
+    {roadtripEnabled && (
+    <div style={bucketTab !== 'roadtrips' ? { visibility: 'hidden' as const, gridArea: '1/1' } : { gridArea: '1/1' }}>
+      <RoadTripsTabContent
+        roadTripData={roadTripData} highlightedTrip={highlightedTrip}
+        setHighlightedTrip={setHighlightedTrip} onTripNavigate={onTripNavigate}
+        rtUnitSystem={rtUnitSystem} rtFuelCurrency={rtFuelCurrency} t={t} dark={dark}
+      />
+    </div>
+    )}
     </div>
     </>
+  )
+}
+
+function RoadTripsTabContent({ roadTripData, highlightedTrip, setHighlightedTrip, onTripNavigate, rtUnitSystem, rtFuelCurrency, t, dark }: {
+  roadTripData: RoadTripResponse | null; highlightedTrip: number | null; setHighlightedTrip: (id: number | null) => void;
+  onTripNavigate: (id: number) => void; rtUnitSystem: string; rtFuelCurrency: string; t: TranslationFn; dark: boolean
+}): React.ReactElement {
+  const tp = dark ? '#f1f5f9' : '#0f172a'
+  const tm = dark ? '#94a3b8' : '#64748b'
+  const tf = dark ? '#475569' : '#94a3b8'
+  const bg = (o: number) => dark ? `rgba(255,255,255,${o})` : `rgba(0,0,0,${o})`
+
+  if (!roadTripData?.trips?.length) {
+    return (
+      <div className="p-8 text-center" style={{ minWidth: 300 }}>
+        <Car size={28} className="mx-auto mb-2" style={{ color: tf, opacity: 0.4 }} />
+        <p className="text-sm font-medium" style={{ color: tm }}>{t('atlas.noRoadTrips')}</p>
+      </div>
+    )
+  }
+
+  const { totals, trips } = roadTripData
+
+  // Find longest trip and longest day
+  const longestTrip = trips.reduce((a, b) => a.total_distance_meters > b.total_distance_meters ? a : b)
+  const longestDay = (() => {
+    let best = { tripTitle: '', dayIndex: 0, distance: 0 }
+    for (const trip of trips) {
+      const dayDistances: Record<number, number> = {}
+      for (const leg of trip.legs) {
+        dayDistances[leg.day_index] = (dayDistances[leg.day_index] || 0) + (leg.distance_meters || 0)
+      }
+      for (const [di, dist] of Object.entries(dayDistances)) {
+        if (dist > best.distance) best = { tripTitle: trip.trip_title, dayIndex: Number(di) + 1, distance: dist }
+      }
+    }
+    return best
+  })()
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      {/* Stats */}
+      <div className="flex items-center gap-4 px-5 py-4 shrink-0">
+        <div className="text-center">
+          <p className="text-2xl font-black tabular-nums" style={{ color: tp }}>{totals.total_trips}</p>
+          <p className="text-[9px] font-semibold uppercase tracking-wide mt-1" style={{ color: tf }}>{t('atlas.totalRoadTrips')}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-black tabular-nums" style={{ color: tp }}>{formatDistance(totals.total_distance_meters, rtUnitSystem)}</p>
+          <p className="text-[9px] font-semibold uppercase tracking-wide mt-1" style={{ color: tf }}>{t('atlas.totalDriven')}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-black tabular-nums" style={{ color: tp }}>{formatDuration(totals.total_driving_seconds)}</p>
+          <p className="text-[9px] font-semibold uppercase tracking-wide mt-1" style={{ color: tf }}>{t('atlas.totalDrivingTime')}</p>
+        </div>
+        {totals.total_fuel_cost > 0 && (
+          <div className="text-center">
+            <p className="text-2xl font-black tabular-nums" style={{ color: tp }}>{formatFuelCost(totals.total_fuel_cost, rtFuelCurrency)}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-wide mt-1" style={{ color: tf }}>{t('atlas.totalFuelSpent')}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div style={{ width: 2, background: bg(0.08), margin: '12px 0' }} />
+
+      {/* Longest trip & day */}
+      <div className="flex items-center gap-4 px-5 py-4 shrink-0">
+        <button onClick={() => onTripNavigate(longestTrip.trip_id)} className="text-left transition-opacity hover:opacity-75">
+          <p className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: tf }}>{t('atlas.longestTrip')}</p>
+          <p className="text-[13px] font-bold" style={{ color: tp }}>{longestTrip.trip_title}</p>
+          <p className="text-[10px]" style={{ color: tm }}>{formatDistance(longestTrip.total_distance_meters, rtUnitSystem)}</p>
+        </button>
+        {longestDay.distance > 0 && (
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: tf }}>{t('atlas.longestDay')}</p>
+            <p className="text-[13px] font-bold" style={{ color: tp }}>{longestDay.tripTitle}</p>
+            <p className="text-[10px]" style={{ color: tm }}>Day {longestDay.dayIndex} · {formatDistance(longestDay.distance, rtUnitSystem)}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div style={{ width: 2, background: bg(0.08), margin: '12px 0' }} />
+
+      {/* Legend */}
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{ maxWidth: 400, overflowX: 'auto' }}>
+        <span className="text-[9px] font-semibold uppercase tracking-wide shrink-0" style={{ color: tf }}>{t('atlas.tripLegend')}</span>
+        {trips.map((trip, i) => {
+          const color = TRIP_COLORS[i % TRIP_COLORS.length]
+          const isActive = highlightedTrip === trip.trip_id
+          return (
+            <button
+              key={trip.trip_id}
+              onClick={() => setHighlightedTrip(isActive ? null : trip.trip_id)}
+              className="flex items-center gap-1.5 shrink-0 transition-opacity hover:opacity-80"
+              style={{
+                padding: '3px 8px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: isActive ? bg(0.12) : bg(0.04),
+                opacity: highlightedTrip !== null && !isActive ? 0.4 : 1,
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span className="text-[10px] font-semibold whitespace-nowrap" style={{ color: tp }}>{trip.trip_title}</span>
+              <span className="text-[9px]" style={{ color: tf }}>{formatDistance(trip.total_distance_meters, rtUnitSystem)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
