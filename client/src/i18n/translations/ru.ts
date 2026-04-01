@@ -788,6 +788,7 @@ const ru: Record<string, string> = {
   'places.googleListHint': 'Вставьте ссылку на общий список Google Maps для импорта всех мест.',
   'places.googleListImported': '{count} мест импортировано из "{list}"',
   'places.googleListError': 'Не удалось импортировать список Google Maps',
+  'places.viewDetails': 'Подробности',
   'places.urlResolved': 'Место импортировано из URL',
   'places.assignToDay': 'Добавить в какой день?',
   'places.all': 'Все',

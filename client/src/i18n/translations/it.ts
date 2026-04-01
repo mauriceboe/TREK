@@ -788,6 +788,7 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Incolla un link condiviso di una lista Google Maps per importare tutti i luoghi.',
   'places.googleListImported': '{count} luoghi importati da "{list}"',
   'places.googleListError': 'Importazione lista Google Maps non riuscita',
+  'places.viewDetails': 'Visualizza dettagli',
   'places.assignToDay': 'A quale giorno aggiungere?',
   'places.all': 'Tutti',
   'places.unplanned': 'Non pianificati',

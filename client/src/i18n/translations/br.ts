@@ -771,6 +771,7 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Cole um link compartilhado de uma lista do Google Maps para importar todos os lugares.',
   'places.googleListImported': '{count} lugares importados de "{list}"',
   'places.googleListError': 'Falha ao importar lista do Google Maps',
+  'places.viewDetails': 'Ver detalhes',
   'places.urlResolved': 'Lugar importado da URL',
   'places.assignToDay': 'Adicionar a qual dia?',
   'places.all': 'Todos',

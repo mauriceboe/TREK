@@ -792,6 +792,7 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Vložte sdílený odkaz na seznam Google Maps pro import všech míst.',
   'places.googleListImported': '{count} míst importováno ze seznamu "{list}"',
   'places.googleListError': 'Import seznamu Google Maps se nezdařil',
+  'places.viewDetails': 'Zobrazit detaily',
   'places.assignToDay': 'Přidat do kterého dne?',
   'places.all': 'Vše',
   'places.unplanned': 'Nezařazené',

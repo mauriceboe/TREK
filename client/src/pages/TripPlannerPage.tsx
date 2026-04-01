@@ -562,7 +562,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
               )
             })()}
 
-            {selectedPlace && (
+            {selectedPlace && !isMobile && (
               <PlaceInspector
                 place={selectedPlace}
                 categories={categories}
@@ -573,7 +573,6 @@ export default function TripPlannerPage(): React.ReactElement | null {
                 reservations={reservations}
                 onClose={() => setSelectedPlaceId(null)}
                 onEdit={() => {
-                  // When editing from assignment context, use assignment-level times
                   if (selectedAssignmentId) {
                     const assignmentObj = Object.values(assignments).flat().find(a => a.id === selectedAssignmentId)
                     const placeWithAssignmentTimes = assignmentObj?.place ? { ...selectedPlace, place_time: assignmentObj.place.place_time, end_time: assignmentObj.place.end_time } : selectedPlace
@@ -609,6 +608,58 @@ export default function TripPlannerPage(): React.ReactElement | null {
               />
             )}
 
+            {selectedPlace && isMobile && ReactDOM.createPortal(
+              <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }} onClick={() => setSelectedPlaceId(null)}>
+                <div style={{ width: '100%', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                  <PlaceInspector
+                    place={selectedPlace}
+                    categories={categories}
+                    days={days}
+                    selectedDayId={selectedDayId}
+                    selectedAssignmentId={selectedAssignmentId}
+                    assignments={assignments}
+                    reservations={reservations}
+                    onClose={() => setSelectedPlaceId(null)}
+                    onEdit={() => {
+                      if (selectedAssignmentId) {
+                        const assignmentObj = Object.values(assignments).flat().find(a => a.id === selectedAssignmentId)
+                        const placeWithAssignmentTimes = assignmentObj?.place ? { ...selectedPlace, place_time: assignmentObj.place.place_time, end_time: assignmentObj.place.end_time } : selectedPlace
+                        setEditingPlace(placeWithAssignmentTimes)
+                      } else {
+                        setEditingPlace(selectedPlace)
+                      }
+                      setEditingAssignmentId(selectedAssignmentId || null)
+                      setShowPlaceForm(true)
+                      setSelectedPlaceId(null)
+                    }}
+                    onDelete={() => { handleDeletePlace(selectedPlace.id); setSelectedPlaceId(null) }}
+                    onAssignToDay={handleAssignToDay}
+                    onRemoveAssignment={handleRemoveAssignment}
+                    files={files}
+                    onFileUpload={canUploadFiles ? (fd) => tripStore.addFile(tripId, fd) : undefined}
+                    tripMembers={tripMembers}
+                    onSetParticipants={async (assignmentId, dayId, userIds) => {
+                      try {
+                        const data = await assignmentsApi.setParticipants(tripId, assignmentId, userIds)
+                        useTripStore.setState(state => ({
+                          assignments: {
+                            ...state.assignments,
+                            [String(dayId)]: (state.assignments[String(dayId)] || []).map(a =>
+                              a.id === assignmentId ? { ...a, participants: data.participants } : a
+                            ),
+                          }
+                        }))
+                      } catch {}
+                    }}
+                    onUpdatePlace={async (placeId, data) => { try { await tripStore.updatePlace(tripId, placeId, data) } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error') } }}
+                    leftWidth={0}
+                    rightWidth={0}
+                  />
+                </div>
+              </div>,
+              document.body
+            )}
+
             {mobileSidebarOpen && ReactDOM.createPortal(
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 9999 }} onClick={() => setMobileSidebarOpen(null)}>
                 <div style={{ position: 'absolute', top: 'var(--nav-h)', left: 0, right: 0, bottom: 0, background: 'var(--bg-card)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
@@ -620,8 +671,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
                   </div>
                   <div style={{ flex: 1, overflow: 'auto' }}>
                     {mobileSidebarOpen === 'left'
-                      ? <DayPlanSidebar tripId={tripId} trip={trip} days={days} places={places} categories={categories} assignments={assignments} selectedDayId={selectedDayId} selectedPlaceId={selectedPlaceId} selectedAssignmentId={selectedAssignmentId} onSelectDay={(id) => { handleSelectDay(id); setMobileSidebarOpen(null) }} onPlaceClick={handlePlaceClick} onReorder={handleReorder} onUpdateDayTitle={handleUpdateDayTitle} onAssignToDay={handleAssignToDay} onRouteCalculated={(r) => { if (r) { setRoute(r.coordinates); setRouteInfo({ distance: r.distanceText, duration: r.durationText }) } }} reservations={reservations} onAddReservation={(dayId) => { setEditingReservation(null); tripStore.setSelectedDay(dayId); setShowReservationModal(true); setMobileSidebarOpen(null) }} onDayDetail={(day) => { setShowDayDetail(day); setSelectedPlaceId(null); setSelectedAssignmentId(null); setMobileSidebarOpen(null) }} accommodations={tripAccommodations} onNavigateToFiles={() => { setMobileSidebarOpen(null); handleTabChange('dateien') }} />
-                      : <PlacesSidebar tripId={tripId} places={places} categories={categories} assignments={assignments} selectedDayId={selectedDayId} selectedPlaceId={selectedPlaceId} onPlaceClick={handlePlaceClick} onAddPlace={() => { setEditingPlace(null); setShowPlaceForm(true); setMobileSidebarOpen(null) }} onAssignToDay={handleAssignToDay} days={days} isMobile onCategoryFilterChange={setMapCategoryFilter} />
+                      ? <DayPlanSidebar tripId={tripId} trip={trip} days={days} places={places} categories={categories} assignments={assignments} selectedDayId={selectedDayId} selectedPlaceId={selectedPlaceId} selectedAssignmentId={selectedAssignmentId} onSelectDay={(id) => { handleSelectDay(id); setMobileSidebarOpen(null) }} onPlaceClick={(placeId, assignmentId) => { handlePlaceClick(placeId, assignmentId); setMobileSidebarOpen(null) }} onReorder={handleReorder} onUpdateDayTitle={handleUpdateDayTitle} onAssignToDay={handleAssignToDay} onRouteCalculated={(r) => { if (r) { setRoute(r.coordinates); setRouteInfo({ distance: r.distanceText, duration: r.durationText }) } }} reservations={reservations} onAddReservation={(dayId) => { setEditingReservation(null); tripStore.setSelectedDay(dayId); setShowReservationModal(true); setMobileSidebarOpen(null) }} onDayDetail={(day) => { setShowDayDetail(day); setSelectedPlaceId(null); setSelectedAssignmentId(null); setMobileSidebarOpen(null) }} accommodations={tripAccommodations} onNavigateToFiles={() => { setMobileSidebarOpen(null); handleTabChange('dateien') }} />
+                      : <PlacesSidebar tripId={tripId} places={places} categories={categories} assignments={assignments} selectedDayId={selectedDayId} selectedPlaceId={selectedPlaceId} onPlaceClick={(placeId) => { handlePlaceClick(placeId); setMobileSidebarOpen(null) }} onAddPlace={() => { setEditingPlace(null); setShowPlaceForm(true); setMobileSidebarOpen(null) }} onAssignToDay={handleAssignToDay} onEditPlace={(place) => { setEditingPlace(place); setEditingAssignmentId(null); setShowPlaceForm(true); setMobileSidebarOpen(null) }} onDeletePlace={(placeId) => handleDeletePlace(placeId)} days={days} isMobile onCategoryFilterChange={setMapCategoryFilter} />
                     }
                   </div>
                 </div>

@@ -788,6 +788,7 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Illessz be egy megosztott Google Maps lista linket az osszes hely importalasahoz.',
   'places.googleListImported': '{count} hely importalva a(z) "{list}" listabol',
   'places.googleListError': 'Google Maps lista importalasa sikertelen',
+  'places.viewDetails': 'Részletek megtekintése',
   'places.assignToDay': 'Melyik naphoz adod?',
   'places.all': 'Összes',
   'places.unplanned': 'Nem tervezett',

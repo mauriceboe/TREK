@@ -788,6 +788,7 @@ const nl: Record<string, string> = {
   'places.googleListHint': 'Plak een gedeelde Google Maps lijstlink om alle plaatsen te importeren.',
   'places.googleListImported': '{count} plaatsen geimporteerd uit "{list}"',
   'places.googleListError': 'Google Maps lijst importeren mislukt',
+  'places.viewDetails': 'Details bekijken',
   'places.urlResolved': 'Plaats geïmporteerd van URL',
   'places.assignToDay': 'Aan welke dag toevoegen?',
   'places.all': 'Alle',

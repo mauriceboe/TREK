@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import { useState, useRef, useMemo, useCallback } from 'react'
 import DOM from 'react-dom'
-import { Search, Plus, X, CalendarDays, Pencil, Trash2, ExternalLink, Navigation, Upload, ChevronDown, Check, MapPin } from 'lucide-react'
+import { Search, Plus, X, CalendarDays, Pencil, Trash2, ExternalLink, Navigation, Upload, ChevronDown, Check, MapPin, Eye } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { useTranslation } from '../../i18n'
@@ -92,6 +92,7 @@ const PlacesSidebar = React.memo(function PlacesSidebar({
   }
   const [dayPickerPlace, setDayPickerPlace] = useState(null)
   const [catDropOpen, setCatDropOpen] = useState(false)
+  const [mobileShowDays, setMobileShowDays] = useState(false)
 
   // Alle geplanten Ort-IDs abrufen (einem Tag zugewiesen)
   const plannedIds = useMemo(() => new Set(
@@ -286,7 +287,7 @@ const PlacesSidebar = React.memo(function PlacesSidebar({
                   window.__dragData = { placeId: String(place.id) }
                 }}
                 onClick={() => {
-                  if (isMobile && days?.length > 0) {
+                  if (isMobile) {
                     setDayPickerPlace(place)
                   } else {
                     onPlaceClick(isSelected ? null : place.id)
@@ -353,49 +354,75 @@ const PlacesSidebar = React.memo(function PlacesSidebar({
         )}
       </div>
 
-      {dayPickerPlace && days?.length > 0 && ReactDOM.createPortal(
+      {dayPickerPlace && ReactDOM.createPortal(
         <div
-          onClick={() => setDayPickerPlace(null)}
+          onClick={() => { setDayPickerPlace(null); setMobileShowDays(false) }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: 'var(--bg-card)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 500, maxHeight: '60vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingBottom: 'env(safe-area-inset-bottom)' }}
+            style={{ background: 'var(--bg-card)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 500, maxHeight: '70vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-secondary)' }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{dayPickerPlace.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}>{t('places.assignToDay')}</div>
+              {dayPickerPlace.address && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}>{dayPickerPlace.address}</div>}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 16px' }}>
-              {days.map((day, i) => {
-                return (
+            <div style={{ overflowY: 'auto', padding: '8px 12px' }}>
+              {/* View details */}
+              <button
+                onClick={() => { onPlaceClick(dayPickerPlace.id); setDayPickerPlace(null); setMobileShowDays(false) }}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', textAlign: 'left', fontSize: 14, color: 'var(--text-primary)' }}
+              >
+                <Eye size={18} color="var(--text-muted)" /> {t('places.viewDetails')}
+              </button>
+              {/* Edit */}
+              {canEditPlaces && (
+                <button
+                  onClick={() => { onEditPlace(dayPickerPlace); setDayPickerPlace(null); setMobileShowDays(false) }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', textAlign: 'left', fontSize: 14, color: 'var(--text-primary)' }}
+                >
+                  <Pencil size={18} color="var(--text-muted)" /> {t('common.edit')}
+                </button>
+              )}
+              {/* Assign to day */}
+              {days?.length > 0 && (
+                <>
                   <button
-                    key={day.id}
-                    onClick={() => { onAssignToDay(dayPickerPlace.id, day.id); setDayPickerPlace(null) }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                      padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                      background: 'transparent', fontFamily: 'inherit', textAlign: 'left',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    onClick={() => setMobileShowDays(v => !v)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', textAlign: 'left', fontSize: 14, color: 'var(--text-primary)' }}
                   >
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-tertiary)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0,
-                    }}>{i + 1}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {day.title || `${t('dayplan.dayN', { n: i + 1 })}`}
-                      </div>
-                      {day.date && <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{new Date(day.date + 'T00:00:00').toLocaleDateString()}</div>}
-                    </div>
-                    {(assignments[String(day.id)] || []).some(a => a.place?.id === dayPickerPlace.id) && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>✓</span>}
+                    <CalendarDays size={18} color="var(--text-muted)" /> {t('places.assignToDay')}
+                    <ChevronDown size={14} style={{ marginLeft: 'auto', color: 'var(--text-faint)', transform: mobileShowDays ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                   </button>
-                )
-              })}
+                  {mobileShowDays && (
+                    <div style={{ paddingLeft: 20 }}>
+                      {days.map((day, i) => (
+                        <button
+                          key={day.id}
+                          onClick={() => { onAssignToDay(dayPickerPlace.id, day.id); setDayPickerPlace(null); setMobileShowDays(false) }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', textAlign: 'left' }}
+                        >
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>{i + 1}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{day.title || t('dayplan.dayN', { n: i + 1 })}</div>
+                            {day.date && <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{new Date(day.date + 'T00:00:00').toLocaleDateString()}</div>}
+                          </div>
+                          {(assignments[String(day.id)] || []).some(a => a.place?.id === dayPickerPlace.id) && <Check size={14} color="var(--text-faint)" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Delete */}
+              {canEditPlaces && (
+                <button
+                  onClick={() => { onDeletePlace(dayPickerPlace.id); setDayPickerPlace(null); setMobileShowDays(false) }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'inherit', textAlign: 'left', fontSize: 14, color: '#ef4444' }}
+                >
+                  <Trash2 size={18} /> {t('common.delete')}
+                </button>
+              )}
             </div>
           </div>
         </div>,

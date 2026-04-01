@@ -765,6 +765,7 @@ const es: Record<string, string> = {
   'places.googleListHint': 'Pega un enlace compartido de una lista de Google Maps para importar todos los lugares.',
   'places.googleListImported': '{count} lugares importados de "{list}"',
   'places.googleListError': 'Error al importar la lista de Google Maps',
+  'places.viewDetails': 'Ver detalles',
   'places.urlResolved': 'Lugar importado desde URL',
   'places.assignToDay': '¿A qué día añadirlo?',
   'places.all': 'Todo',

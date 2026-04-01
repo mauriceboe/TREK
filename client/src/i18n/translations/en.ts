@@ -786,6 +786,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Paste a shared Google Maps list link to import all places.',
   'places.googleListImported': '{count} places imported from "{list}"',
   'places.googleListError': 'Failed to import Google Maps list',
+  'places.viewDetails': 'View Details',
   'places.assignToDay': 'Add to which day?',
   'places.all': 'All',
   'places.unplanned': 'Unplanned',

@@ -790,6 +790,7 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'places.googleListHint': 'Geteilten Google Maps Listen-Link einfügen, um alle Orte zu importieren.',
   'places.googleListImported': '{count} Orte aus "{list}" importiert',
   'places.googleListError': 'Google Maps Liste konnte nicht importiert werden',
+  'places.viewDetails': 'Details anzeigen',
   'places.assignToDay': 'Zu welchem Tag hinzufügen?',
   'places.all': 'Alle',
   'places.unplanned': 'Ungeplant',

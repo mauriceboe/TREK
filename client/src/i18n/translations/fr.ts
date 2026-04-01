@@ -788,6 +788,7 @@ const fr: Record<string, string> = {
   'places.googleListHint': 'Collez un lien de liste Google Maps partagée pour importer tous les lieux.',
   'places.googleListImported': '{count} lieux importés depuis "{list}"',
   'places.googleListError': 'Impossible d\'importer la liste Google Maps',
+  'places.viewDetails': 'Voir les détails',
   'places.urlResolved': 'Lieu importé depuis l\'URL',
   'places.assignToDay': 'Ajouter à quel jour ?',
   'places.all': 'Tous',
