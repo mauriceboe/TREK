@@ -35,7 +35,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=mauriceboe/trek,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=alpha005/trek,push-by-digest=true,name-canonical=true,push=true
           no-cache: true
 
       - name: Export digest
@@ -79,13 +79,13 @@ jobs:
       - name: Create and push multi-arch manifest
         working-directory: /tmp/digests
         run: |
-          mapfile -t digests < <(printf 'mauriceboe/trek@sha256:%s\n' *)
+          mapfile -t digests < <(printf 'alpha005/trek@sha256:%s\n' *)
           docker buildx imagetools create \
-            -t mauriceboe/trek:latest \
-            -t mauriceboe/trek:${{ steps.version.outputs.VERSION }} \
-            -t mauriceboe/nomad:latest \
-            -t mauriceboe/nomad:${{ steps.version.outputs.VERSION }} \
+            -t alpha005/trek:latest \
+            -t alpha005/trek:${{ steps.version.outputs.VERSION }} \
+            -t alpha005/nomad:latest \
+            -t alpha005/nomad:${{ steps.version.outputs.VERSION }} \
             "${digests[@]}"
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect mauriceboe/trek:latest
+        run: docker buildx imagetools inspect alpha005/trek:latest
