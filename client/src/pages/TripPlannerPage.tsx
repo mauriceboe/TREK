@@ -28,6 +28,8 @@ import { useResizablePanels } from '../hooks/useResizablePanels'
 import { useTripWebSocket } from '../hooks/useTripWebSocket'
 import { useRouteCalculation } from '../hooks/useRouteCalculation'
 import { usePlaceSelection } from '../hooks/usePlaceSelection'
+import { useRoadtripStore } from '../store/roadtripStore'
+import { useAddonStore } from '../store/addonStore'
 import type { Accommodation, TripMember, Day, Place, Reservation } from '../types'
 
 export default function TripPlannerPage(): React.ReactElement | null {
@@ -98,6 +100,9 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<'left' | 'right' | null>(null)
   const [deletePlaceId, setDeletePlaceId] = useState<number | null>(null)
 
+  const roadtripStore = useRoadtripStore()
+  const roadtripEnabled = useAddonStore(s => s.isEnabled('roadtrip'))
+
   // Load trip + files (needed for place inspector file section)
   useEffect(() => {
     if (tripId) {
@@ -109,8 +114,15 @@ export default function TripPlannerPage(): React.ReactElement | null {
         const all = [d.owner, ...(d.members || [])].filter(Boolean)
         setTripMembers(all)
       }).catch(() => {})
+      // Load road trip route legs
+      if (roadtripEnabled) {
+        roadtripStore.loadRouteLegs(tripId)
+      }
     }
-  }, [tripId])
+    return () => {
+      if (tripId) roadtripStore.clearTrip(tripId)
+    }
+  }, [tripId, roadtripEnabled])
 
   useEffect(() => {
     if (tripId) tripStore.loadReservations(tripId)
@@ -239,6 +251,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
     catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error') }
   }, [tripId, tripStore, toast, updateRouteForDay])
 
+  const reorderTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const handleReorder = useCallback((dayId, orderedIds) => {
     try {
       tripStore.reorderAssignments(tripId, dayId, orderedIds).catch(() => {})
@@ -249,9 +263,23 @@ export default function TripPlannerPage(): React.ReactElement | null {
       if (waypoints.length >= 2) setRoute(waypoints.map(p => [p.lat, p.lng]))
       else setRoute(null)
       setRouteInfo(null)
+
+      // Recalculate road trip legs after reorder (debounced)
+      if (roadtripEnabled && tripId && waypoints.length >= 2) {
+        if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current)
+        reorderTimerRef.current = setTimeout(() => {
+          const dayIndex = days.findIndex(d => d.id === dayId)
+          if (dayIndex < 0) return
+          const pairs = waypoints.slice(0, -1).map((w, i) => ({
+            from: String(ordered.find(a => a.place?.id === w.id)?.place?.id || ''),
+            to: String(ordered.find(a => a.place?.id === waypoints[i + 1]?.id)?.place?.id || ''),
+          })).filter(p => p.from && p.to)
+          roadtripStore.recalculateDay(tripId, dayIndex, pairs)
+        }, 2000)
+      }
     }
     catch { toast.error(t('trip.toast.reorderError')) }
-  }, [tripId, tripStore, toast])
+  }, [tripId, tripStore, toast, roadtripEnabled, days, roadtripStore])
 
   const handleUpdateDayTitle = useCallback(async (dayId, title) => {
     try { await tripStore.updateDayTitle(tripId, dayId, title) }
@@ -394,6 +422,9 @@ export default function TripPlannerPage(): React.ReactElement | null {
               leftWidth={leftCollapsed ? 0 : leftWidth}
               rightWidth={rightCollapsed ? 0 : rightWidth}
               hasInspector={!!selectedPlace}
+              tripId={tripId}
+              selectedDayId={selectedDayId}
+              days={days}
             />
 
 

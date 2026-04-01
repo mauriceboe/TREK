@@ -60,7 +60,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
-      connectSrc: ["'self'", "ws:", "wss:", "https:", "http:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https:", "http:", "https://router.project-osrm.org", "https://overpass-api.de", "https://raw.githubusercontent.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       objectSrc: ["'self'"],
       frameSrc: ["'self'"],
@@ -167,6 +167,8 @@ app.use('/api/trips/:tripId/budget', budgetRoutes);
 app.use('/api/trips/:tripId/collab', collabRoutes);
 app.use('/api/trips/:tripId/reservations', reservationsRoutes);
 app.use('/api/trips/:tripId/days/:dayId/notes', dayNotesRoutes);
+import roadtripRoutes from './routes/roadtrip';
+app.use('/api/trips/:tripId/route-legs', roadtripRoutes);
 app.get('/api/health', (req: Request, res: Response) => res.json({ status: 'ok' }));
 app.use('/api', assignmentsRoutes);
 app.use('/api/tags', tagsRoutes);

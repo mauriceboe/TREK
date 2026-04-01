@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { AuthRequest, Trip, Place } from '../types';
+import { AuthRequest, Trip, Place, Addon } from '../types';
 
 const router = express.Router();
 router.use(authenticate);
@@ -316,6 +316,92 @@ router.delete('/bucket-list/:id', (req: Request, res: Response) => {
   if (!item) return res.status(404).json({ error: 'Item not found' });
   db.prepare('DELETE FROM bucket_list WHERE id = ?').run(req.params.id);
   res.json({ success: true });
+});
+
+// ── Road Trips Layer ────────────────────────────────────────────────────────
+
+router.get('/road-trips', (req: Request, res: Response) => {
+  // Require both Atlas and Road Trip addons to be enabled
+  const rtAddon = db.prepare('SELECT enabled FROM addons WHERE id = ?').get('roadtrip') as Pick<Addon, 'enabled'> | undefined;
+  if (!rtAddon?.enabled) return res.status(403).json({ error: 'Road Trip addon is not enabled' });
+
+  const authReq = req as AuthRequest;
+  const userId = authReq.user.id;
+
+  // Get all trips the user owns or has member access to
+  const trips = db.prepare(`
+    SELECT DISTINCT t.id, t.title, t.start_date, t.end_date
+    FROM trips t
+    LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = ?
+    WHERE t.user_id = ? OR m.user_id = ?
+    ORDER BY t.start_date DESC
+  `).all(userId, userId, userId) as { id: number; title: string; start_date: string | null; end_date: string | null }[];
+
+  const tripIds = trips.map(t => t.id);
+  if (tripIds.length === 0) {
+    return res.json({ trips: [], totals: { total_trips: 0, total_distance_meters: 0, total_fuel_cost: 0, total_driving_seconds: 0 } });
+  }
+
+  const placeholders = tripIds.map(() => '?').join(',');
+  const legs = db.prepare(`
+    SELECT rl.trip_id, rl.day_index, rl.route_geometry, rl.distance_meters, rl.duration_seconds, rl.fuel_cost,
+      pf.name as from_name, pt.name as to_name
+    FROM trip_route_legs rl
+    LEFT JOIN places pf ON pf.id = rl.from_place_id AND pf.trip_id = rl.trip_id
+    LEFT JOIN places pt ON pt.id = rl.to_place_id AND pt.trip_id = rl.trip_id
+    WHERE rl.trip_id IN (${placeholders}) AND rl.is_road_trip = 1 AND rl.route_geometry IS NOT NULL
+    ORDER BY rl.trip_id, rl.day_index
+  `).all(...tripIds) as { trip_id: number; day_index: number; route_geometry: string; distance_meters: number | null; duration_seconds: number | null; fuel_cost: number | null; from_name: string | null; to_name: string | null }[];
+
+  // Group legs by trip
+  const legsByTrip = new Map<number, typeof legs>();
+  for (const leg of legs) {
+    if (!legsByTrip.has(leg.trip_id)) legsByTrip.set(leg.trip_id, []);
+    legsByTrip.get(leg.trip_id)!.push(leg);
+  }
+
+  let grandTotalDistance = 0;
+  let grandTotalDuration = 0;
+  let grandTotalFuel = 0;
+
+  const tripResults = trips
+    .filter(t => legsByTrip.has(t.id))
+    .map(t => {
+      const tripLegs = legsByTrip.get(t.id)!;
+      const totalDistance = tripLegs.reduce((s, l) => s + (l.distance_meters || 0), 0);
+      const totalDuration = tripLegs.reduce((s, l) => s + (l.duration_seconds || 0), 0);
+      const totalFuel = tripLegs.reduce((s, l) => s + (l.fuel_cost || 0), 0);
+      grandTotalDistance += totalDistance;
+      grandTotalDuration += totalDuration;
+      grandTotalFuel += totalFuel;
+      return {
+        trip_id: t.id,
+        trip_title: t.title,
+        start_date: t.start_date,
+        end_date: t.end_date,
+        total_distance_meters: totalDistance,
+        total_duration_seconds: totalDuration,
+        total_fuel_cost: totalFuel,
+        legs: tripLegs.map(l => ({
+          route_geometry: l.route_geometry,
+          distance_meters: l.distance_meters,
+          duration_seconds: l.duration_seconds,
+          from_name: l.from_name,
+          to_name: l.to_name,
+          day_index: l.day_index,
+        })),
+      };
+    });
+
+  res.json({
+    trips: tripResults,
+    totals: {
+      total_trips: tripResults.length,
+      total_distance_meters: grandTotalDistance,
+      total_fuel_cost: grandTotalFuel,
+      total_driving_seconds: grandTotalDuration,
+    },
+  });
 });
 
 export default router;

@@ -277,6 +277,15 @@ export const collabApi = {
   linkPreview: (tripId: number | string, url: string) => apiClient.get(`/trips/${tripId}/collab/link-preview?url=${encodeURIComponent(url)}`).then(r => r.data),
 }
 
+export const roadtripApi = {
+  listLegs: (tripId: number | string) => apiClient.get(`/trips/${tripId}/route-legs`).then(r => r.data),
+  updateLeg: (tripId: number | string, legId: number, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/route-legs/${legId}`, data).then(r => r.data),
+  calculateLeg: (tripId: number | string, data: { day_index: number; from_place_id: string | number; to_place_id: string | number }) => apiClient.post(`/trips/${tripId}/route-legs/calculate`, data).then(r => r.data),
+  deleteLeg: (tripId: number | string, legId: number) => apiClient.delete(`/trips/${tripId}/route-legs/${legId}`).then(r => r.data),
+  recalculate: (tripId: number | string) => apiClient.post(`/trips/${tripId}/route-legs/recalculate`).then(r => r.data),
+  findStops: (tripId: number | string, legId: number, data: { stop_type: string; search_points: { lat: number; lng: number; distance_along_route_meters: number }[]; corridor?: boolean }) => apiClient.post(`/trips/${tripId}/route-legs/${legId}/find-stops`, data).then(r => r.data),
+}
+
 export const backupApi = {
   list: () => apiClient.get('/backup/list').then(r => r.data),
   create: () => apiClient.post('/backup/create').then(r => r.data),
