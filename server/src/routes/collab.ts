@@ -8,6 +8,7 @@ import { authenticate } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { validateStringLengths } from '../middleware/validate';
 import { AuthRequest, CollabNote, CollabPoll, CollabMessage, TripFile } from '../types';
+import { notifyTripMembers } from '../services/notifications';
 
 interface ReactionRow {
   emoji: string;
@@ -420,12 +421,13 @@ router.post('/messages', authenticate, validateStringLengths({ text: 5000 }), (r
   res.status(201).json({ message: formatted });
   broadcast(tripId, 'collab:message:created', { message: formatted }, req.headers['x-socket-id'] as string);
 
-  // Notify trip members about new chat message
-  import('../services/notifications').then(({ notifyTripMembers }) => {
-    const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
-    const preview = text.trim().length > 80 ? text.trim().substring(0, 80) + '...' : text.trim();
-    notifyTripMembers(Number(tripId), authReq.user.id, 'collab_message', { trip: tripInfo?.title || 'Untitled', actor: authReq.user.username, preview }).catch(() => {});
-  });
+  const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
+  const preview = text.trim().length > 80 ? text.trim().substring(0, 80) + '...' : text.trim();
+  notifyTripMembers(Number(tripId), authReq.user.id, 'collab_message', {
+    trip: tripInfo?.title || 'Untitled',
+    actor: authReq.user.username,
+    preview,
+  }).catch(() => {});
 });
 
 router.post('/messages/:id/react', authenticate, (req: Request, res: Response) => {

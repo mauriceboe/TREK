@@ -365,6 +365,8 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
   const [showEmoji, setShowEmoji] = useState(false)
   const [reactMenu, setReactMenu] = useState(null) // { msgId, x, y }
   const [deletingIds, setDeletingIds] = useState(new Set())
+  const [notificationSupported, setNotificationSupported] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
 
   const containerRef = useRef(null)
   const messagesRef = useRef(messages)
@@ -373,6 +375,44 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
   const textareaRef = useRef(null)
   const emojiBtnRef = useRef(null)
   const isAtBottom = useRef(true)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    setNotificationSupported(true)
+    setNotificationPermission(Notification.permission)
+  }, [])
+
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'denied'
+    if (Notification.permission !== 'default') {
+      setNotificationPermission(Notification.permission)
+      return Notification.permission
+    }
+    try {
+      const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+      return permission
+    } catch {
+      setNotificationPermission('denied')
+      return 'denied'
+    }
+  }, [])
+
+  const showDesktopNotification = useCallback(async (title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    let permission = Notification.permission
+    if (permission === 'default') permission = await requestNotificationPermission()
+    if (permission !== 'granted') return
+
+    try {
+      const notification = new Notification(title, { body, silent: true })
+      notification.onclick = () => {
+        window.focus()
+      }
+    } catch (err) {
+      console.error('Desktop notification failed:', err)
+    }
+  }, [requestNotificationPermission])
 
   const scrollToBottom = useCallback((behavior = 'auto') => {
     const el = scrollRef.current
@@ -425,6 +465,14 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
       if (event.type === 'collab:message:created' && String(event.tripId) === String(tripId)) {
         setMessages(prev => prev.some(m => m.id === event.message.id) ? prev : [...prev, event.message])
         if (isAtBottom.current) setTimeout(() => scrollToBottom('smooth'), 30)
+
+        if (event.message?.user_id && String(event.message.user_id) !== String(currentUser.id)) {
+          const title = event.message.username ? `${event.message.username} sent a message` : 'New message'
+          const body = (event.message.text || '').slice(0, 120)
+          if (document.visibilityState !== 'visible' || !isAtBottom.current) {
+            void showDesktopNotification(title, body)
+          }
+        }
       }
       if (event.type === 'collab:message:deleted' && String(event.tripId) === String(tripId)) {
         setMessages(prev => prev.map(m => m.id === event.messageId ? { ...m, _deleted: true } : m))
@@ -436,7 +484,7 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
     }
     addListener(handler)
     return () => removeListener(handler)
-  }, [tripId, scrollToBottom])
+  }, [tripId, scrollToBottom, currentUser.id, showDesktopNotification])
 
   /* ── auto-resize textarea ── */
   const handleTextChange = useCallback((e) => {
@@ -753,6 +801,22 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
               </React.Fragment>
             )
           })}
+        </div>
+      )}
+
+      {notificationSupported && notificationPermission !== 'granted' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '0 12px 10px', padding: '10px 12px', borderRadius: 14, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.16)' }}>
+          <div style={{ flex: '1 1 auto', minWidth: 0, color: 'var(--text-primary)', fontSize: 13 }}>
+            {notificationPermission === 'denied'
+              ? 'Browser notifications are blocked for this site. Enable them in your browser settings.'
+              : 'Enable browser notifications to get alerts when new chat messages arrive.'}
+          </div>
+          <button onClick={requestNotificationPermission} style={{
+            flex: '0 0 auto', padding: '9px 14px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 600,
+          }}>
+            {notificationPermission === 'denied' ? 'Retry permission' : 'Enable notifications'}
+          </button>
         </div>
       )}
 

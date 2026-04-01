@@ -20,7 +20,7 @@ router.get('/preferences', authenticate, (req: Request, res: Response) => {
 // Update user's notification preferences
 router.put('/preferences', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { notify_trip_invite, notify_booking_change, notify_trip_reminder, notify_webhook } = req.body;
+  const { notify_trip_invite, notify_booking_change, notify_trip_reminder, notify_vacay_invite, notify_photos_shared, notify_collab_message, notify_packing_tagged, notify_webhook } = req.body;
 
   // Ensure row exists
   const existing = db.prepare('SELECT id FROM notification_preferences WHERE user_id = ?').get(authReq.user.id);
@@ -32,11 +32,19 @@ router.put('/preferences', authenticate, (req: Request, res: Response) => {
     notify_trip_invite = COALESCE(?, notify_trip_invite),
     notify_booking_change = COALESCE(?, notify_booking_change),
     notify_trip_reminder = COALESCE(?, notify_trip_reminder),
+    notify_vacay_invite = COALESCE(?, notify_vacay_invite),
+    notify_photos_shared = COALESCE(?, notify_photos_shared),
+    notify_collab_message = COALESCE(?, notify_collab_message),
+    notify_packing_tagged = COALESCE(?, notify_packing_tagged),
     notify_webhook = COALESCE(?, notify_webhook)
     WHERE user_id = ?`).run(
     notify_trip_invite !== undefined ? (notify_trip_invite ? 1 : 0) : null,
     notify_booking_change !== undefined ? (notify_booking_change ? 1 : 0) : null,
     notify_trip_reminder !== undefined ? (notify_trip_reminder ? 1 : 0) : null,
+    notify_vacay_invite !== undefined ? (notify_vacay_invite ? 1 : 0) : null,
+    notify_photos_shared !== undefined ? (notify_photos_shared ? 1 : 0) : null,
+    notify_collab_message !== undefined ? (notify_collab_message ? 1 : 0) : null,
+    notify_packing_tagged !== undefined ? (notify_packing_tagged ? 1 : 0) : null,
     notify_webhook !== undefined ? (notify_webhook ? 1 : 0) : null,
     authReq.user.id
   );
