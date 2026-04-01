@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { db, canAccessTrip } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { broadcast } from '../websocket';
+import { checkPermission } from '../services/permissions';
 import { AuthRequest, Reservation } from '../types';
 
 const router = express.Router({ mergeParams: true });
@@ -39,6 +40,9 @@ router.post('/', authenticate, (req: Request, res: Response) => {
 
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  if (!checkPermission('reservation_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
 
   if (!title) return res.status(400).json({ error: 'Title is required' });
 
@@ -105,7 +109,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   // Notify trip members about new booking
   import('../services/notifications').then(({ notifyTripMembers }) => {
     const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
-    notifyTripMembers(Number(tripId), authReq.user.id, 'booking_change', { trip: tripInfo?.title || 'Untitled', actor: authReq.user.username, booking: title, type: type || 'booking' }).catch(() => {});
+    notifyTripMembers(Number(tripId), authReq.user.id, 'booking_change', { trip: tripInfo?.title || 'Untitled', actor: authReq.user.email, booking: title, type: type || 'booking' }).catch(() => {});
   });
 });
 
@@ -117,6 +121,9 @@ router.put('/positions', authenticate, (req: Request, res: Response) => {
 
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  if (!checkPermission('reservation_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
 
   if (!Array.isArray(positions)) return res.status(400).json({ error: 'positions must be an array' });
 
@@ -139,6 +146,9 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  if (!checkPermission('reservation_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
 
   const reservation = db.prepare('SELECT * FROM reservations WHERE id = ? AND trip_id = ?').get(id, tripId) as Reservation | undefined;
   if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
@@ -222,6 +232,11 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
   res.json({ reservation: updated });
   broadcast(tripId, 'reservation:updated', { reservation: updated }, req.headers['x-socket-id'] as string);
+
+  import('../services/notifications').then(({ notifyTripMembers }) => {
+    const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
+    notifyTripMembers(Number(tripId), authReq.user.id, 'booking_change', { trip: tripInfo?.title || 'Untitled', actor: authReq.user.email, booking: title || reservation.title, type: type || reservation.type || 'booking' }).catch(() => {});
+  });
 });
 
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
@@ -231,10 +246,12 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
 
-  const reservation = db.prepare('SELECT id, accommodation_id FROM reservations WHERE id = ? AND trip_id = ?').get(id, tripId) as { id: number; accommodation_id: number | null } | undefined;
+  if (!checkPermission('reservation_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
+  const reservation = db.prepare('SELECT id, title, type, accommodation_id FROM reservations WHERE id = ? AND trip_id = ?').get(id, tripId) as { id: number; title: string; type: string; accommodation_id: number | null } | undefined;
   if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
 
-  // Delete linked accommodation if exists
   if (reservation.accommodation_id) {
     db.prepare('DELETE FROM day_accommodations WHERE id = ?').run(reservation.accommodation_id);
     broadcast(tripId, 'accommodation:deleted', { accommodationId: reservation.accommodation_id }, req.headers['x-socket-id'] as string);
@@ -243,6 +260,11 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
   db.prepare('DELETE FROM reservations WHERE id = ?').run(id);
   res.json({ success: true });
   broadcast(tripId, 'reservation:deleted', { reservationId: Number(id) }, req.headers['x-socket-id'] as string);
+
+  import('../services/notifications').then(({ notifyTripMembers }) => {
+    const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(tripId) as { title: string } | undefined;
+    notifyTripMembers(Number(tripId), authReq.user.id, 'booking_change', { trip: tripInfo?.title || 'Untitled', actor: authReq.user.email, booking: reservation.title, type: reservation.type || 'booking' }).catch(() => {});
+  });
 });
 
 export default router;

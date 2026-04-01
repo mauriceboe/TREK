@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { decrypt_api_key } from '../services/apiKeyCrypto';
 
 interface NominatimResult {
   osm_type: string;
@@ -122,18 +123,19 @@ async function fetchWikimediaPhoto(lat: number, lng: number, name?: string): Pro
         action: 'query', format: 'json',
         titles: name,
         prop: 'pageimages',
-        piprop: 'original',
+        piprop: 'thumbnail',
+        pithumbsize: '400',
         pilimit: '1',
         redirects: '1',
       });
       const res = await fetch(`https://en.wikipedia.org/w/api.php?${searchParams}`, { headers: { 'User-Agent': UA } });
       if (res.ok) {
-        const data = await res.json() as { query?: { pages?: Record<string, { original?: { source?: string } }> } };
+        const data = await res.json() as { query?: { pages?: Record<string, { thumbnail?: { source?: string } }> } };
         const pages = data.query?.pages;
         if (pages) {
           for (const page of Object.values(pages)) {
-            if (page.original?.source) {
-              return { photoUrl: page.original.source, attribution: 'Wikipedia' };
+            if (page.thumbnail?.source) {
+              return { photoUrl: page.thumbnail.source, attribution: 'Wikipedia' };
             }
           }
         }
@@ -152,7 +154,7 @@ async function fetchWikimediaPhoto(lat: number, lng: number, name?: string): Pro
     ggslimit: '5',
     prop: 'imageinfo',
     iiprop: 'url|extmetadata|mime',
-    iiurlwidth: '600',
+    iiurlwidth: '400',
   });
   try {
     const res = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, { headers: { 'User-Agent': UA } });
@@ -197,12 +199,13 @@ const router = express.Router();
 
 function getMapsKey(userId: number): string | null {
   const user = db.prepare('SELECT maps_api_key FROM users WHERE id = ?').get(userId) as { maps_api_key: string | null } | undefined;
-  if (user?.maps_api_key) return user.maps_api_key;
+  const user_key = decrypt_api_key(user?.maps_api_key);
+  if (user_key) return user_key;
   const admin = db.prepare("SELECT maps_api_key FROM users WHERE role = 'admin' AND maps_api_key IS NOT NULL AND maps_api_key != '' LIMIT 1").get() as { maps_api_key: string } | undefined;
-  return admin?.maps_api_key || null;
+  return decrypt_api_key(admin?.maps_api_key) || null;
 }
 
-const photoCache = new Map<string, { photoUrl: string; attribution: string | null; fetchedAt: number }>();
+const photoCache = new Map<string, { photoUrl: string; attribution: string | null; fetchedAt: number; error?: boolean }>();
 const PHOTO_TTL = 12 * 60 * 60 * 1000; // 12 hours
 const CACHE_MAX_ENTRIES = 1000;
 const CACHE_PRUNE_TARGET = 500;
@@ -377,8 +380,14 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
   const { placeId } = req.params;
 
   const cached = photoCache.get(placeId);
-  if (cached && Date.now() - cached.fetchedAt < PHOTO_TTL) {
-    return res.json({ photoUrl: cached.photoUrl, attribution: cached.attribution });
+  const ERROR_TTL = 5 * 60 * 1000; // 5 min for errors
+  if (cached) {
+    const ttl = cached.error ? ERROR_TTL : PHOTO_TTL;
+    if (Date.now() - cached.fetchedAt < ttl) {
+      if (cached.error) return res.status(404).json({ error: `(Cache) No photo available` });
+      return res.json({ photoUrl: cached.photoUrl, attribution: cached.attribution });
+    }
+    photoCache.delete(placeId);
   }
 
   // Wikimedia Commons fallback for OSM places (using lat/lng query params)
@@ -396,10 +405,12 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
         if (wiki) {
           photoCache.set(placeId, { ...wiki, fetchedAt: Date.now() });
           return res.json(wiki);
+        } else {
+          photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
         }
       } catch { /* fall through */ }
     }
-    return res.status(404).json({ error: 'No photo available' });
+    return res.status(404).json({ error: '(Wikimedia) No photo available' });
   }
 
   // Google Photos
@@ -414,11 +425,13 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
 
     if (!detailsRes.ok) {
       console.error('Google Places photo details error:', details.error?.message || detailsRes.status);
-      return res.status(404).json({ error: 'Photo could not be retrieved' });
+      photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
+      return res.status(404).json({ error: '(Google Places) Photo could not be retrieved' });
     }
 
     if (!details.photos?.length) {
-      return res.status(404).json({ error: 'No photo available' });
+      photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
+      return res.status(404).json({ error: '(Google Places) No photo available' });
     }
 
     const photo = details.photos[0];
@@ -426,13 +439,15 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
     const attribution = photo.authorAttributions?.[0]?.displayName || null;
 
     const mediaRes = await fetch(
-      `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&key=${apiKey}&skipHttpRedirect=true`
+      `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400&skipHttpRedirect=true`,
+      { headers: { 'X-Goog-Api-Key': apiKey } }
     );
     const mediaData = await mediaRes.json() as { photoUri?: string };
     const photoUrl = mediaData.photoUri;
 
     if (!photoUrl) {
-      return res.status(404).json({ error: 'Photo URL not available' });
+      photoCache.set(placeId, { photoUrl: '', attribution, fetchedAt: Date.now(), error: true });
+      return res.status(404).json({ error: '(Google Places) Photo URL not available' });
     }
 
     photoCache.set(placeId, { photoUrl, attribution, fetchedAt: Date.now() });
@@ -448,6 +463,7 @@ router.get('/place-photo/:placeId', authenticate, async (req: Request, res: Resp
     res.json({ photoUrl, attribution });
   } catch (err: unknown) {
     console.error('Place photo error:', err);
+    photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
     res.status(500).json({ error: 'Error fetching photo' });
   }
 });

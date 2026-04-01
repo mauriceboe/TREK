@@ -4,34 +4,40 @@ import { db } from '../db/database';
 import { JWT_SECRET } from '../config';
 import { AuthRequest, OptionalAuthRequest, User } from '../types';
 
-const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+function extractToken(req: Request): string | null {
+  // Prefer httpOnly cookie; fall back to Authorization: Bearer (MCP, API clients)
+  const cookieToken = (req as any).cookies?.trek_session;
+  if (cookieToken) return cookieToken;
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  return (authHeader && authHeader.split(' ')[1]) || null;
+}
+
+const authenticate = (req: Request, res: Response, next: NextFunction): void => {
+  const token = extractToken(req);
 
   if (!token) {
-    res.status(401).json({ error: 'Access token required' });
+    res.status(401).json({ error: 'Access token required', code: 'AUTH_REQUIRED' });
     return;
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
     const user = db.prepare(
       'SELECT id, username, email, role FROM users WHERE id = ?'
     ).get(decoded.id) as User | undefined;
     if (!user) {
-      res.status(401).json({ error: 'User not found' });
+      res.status(401).json({ error: 'User not found', code: 'AUTH_REQUIRED' });
       return;
     }
     (req as AuthRequest).user = user;
     next();
   } catch (err: unknown) {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Invalid or expired token', code: 'AUTH_REQUIRED' });
   }
 };
 
 const optionalAuth = (req: Request, res: Response, next: NextFunction): void => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = extractToken(req);
 
   if (!token) {
     (req as OptionalAuthRequest).user = null;
@@ -39,7 +45,7 @@ const optionalAuth = (req: Request, res: Response, next: NextFunction): void => 
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number };
     const user = db.prepare(
       'SELECT id, username, email, role FROM users WHERE id = ?'
     ).get(decoded.id) as User | undefined;

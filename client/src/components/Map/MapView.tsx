@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback, createElement, memo } from 'react'
 import DOM from 'react-dom'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, CircleMarker, Circle, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { mapsApi } from '../../api/client'
-import { getCategoryIcon } from '../shared/categoryIcons'
+import { getCategoryIcon, CATEGORY_ICON_MAP } from '../shared/categoryIcons'
+
+function categoryIconSvg(iconName: string | null | undefined, size: number): string {
+  const IconComponent = (iconName && CATEGORY_ICON_MAP[iconName]) || CATEGORY_ICON_MAP['MapPin']
+  try {
+    return renderToStaticMarkup(createElement(IconComponent, { size, color: 'white', strokeWidth: 2.5 }))
+  } catch { return '' }
+}
 import type { Place } from '../../types'
 
 // Fix default marker icons for vite
@@ -26,7 +34,12 @@ function escAttr(s) {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+const iconCache = new Map<string, L.DivIcon>()
+
 function createPlaceIcon(place, orderNumbers, isSelected) {
+  const cacheKey = `${place.id}:${isSelected}:${place.image_url || ''}:${place.category_color || ''}:${place.category_icon || ''}:${orderNumbers?.join(',') || ''}`
+  const cached = iconCache.get(cacheKey)
+  if (cached) return cached
   const size = isSelected ? 44 : 36
   const borderColor = isSelected ? '#111827' : 'white'
   const borderWidth = isSelected ? 3 : 2.5
@@ -34,9 +47,8 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
     ? '0 0 0 3px rgba(17,24,39,0.25), 0 4px 14px rgba(0,0,0,0.3)'
     : '0 2px 8px rgba(0,0,0,0.22)'
   const bgColor = place.category_color || '#6b7280'
-  const icon = place.category_icon || '📍'
 
-  // Number badges (bottom-right), supports multiple numbers for duplicate places
+  // Number badges (bottom-right)
   let badgeHtml = ''
   if (orderNumbers && orderNumbers.length > 0) {
     const label = orderNumbers.join(' · ')
@@ -54,28 +66,30 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
     ">${label}</span>`
   }
 
-  if (place.image_url) {
-    return L.divIcon({
+  // Base64 data URL thumbnails — no external image fetch during zoom
+  // Only use base64 data URLs for markers — external URLs cause zoom lag
+  if (place.image_url && place.image_url.startsWith('data:')) {
+    const imgIcon = L.divIcon({
       className: '',
       html: `<div style="
         width:${size}px;height:${size}px;border-radius:50%;
         border:${borderWidth}px solid ${borderColor};
         box-shadow:${shadow};
-        overflow:visible;background:${bgColor};
-        cursor:pointer;flex-shrink:0;position:relative;
+        overflow:hidden;background:${bgColor};
+        cursor:pointer;position:relative;
       ">
-        <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;">
-          <img src="${escAttr(place.image_url)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />
-        </div>
+        <img src="${place.image_url}" width="${size}" height="${size}" style="display:block;border-radius:50%;object-fit:cover;" />
         ${badgeHtml}
       </div>`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
       tooltipAnchor: [size / 2 + 6, 0],
     })
+    iconCache.set(cacheKey, imgIcon)
+    return imgIcon
   }
 
-  return L.divIcon({
+  const fallbackIcon = L.divIcon({
     className: '',
     html: `<div style="
       width:${size}px;height:${size}px;border-radius:50%;
@@ -84,14 +98,17 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
       background:${bgColor};
       display:flex;align-items:center;justify-content:center;
       cursor:pointer;position:relative;
+      will-change:transform;contain:layout style;
     ">
-      <span style="font-size:${isSelected ? 18 : 15}px;line-height:1;">${icon}</span>
+      ${categoryIconSvg(place.category_icon, isSelected ? 18 : 15)}
       ${badgeHtml}
     </div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     tooltipAnchor: [size / 2 + 6, 0],
   })
+  iconCache.set(cacheKey, fallbackIcon)
+  return fallbackIcon
 }
 
 interface SelectionControllerProps {
@@ -166,6 +183,16 @@ interface MapClickHandlerProps {
   onClick: ((e: L.LeafletMouseEvent) => void) | null
 }
 
+function ZoomTracker({ onZoomStart, onZoomEnd }: { onZoomStart: () => void; onZoomEnd: () => void }) {
+  const map = useMap()
+  useEffect(() => {
+    map.on('zoomstart', onZoomStart)
+    map.on('zoomend', onZoomEnd)
+    return () => { map.off('zoomstart', onZoomStart); map.off('zoomend', onZoomEnd) }
+  }, [map, onZoomStart, onZoomEnd])
+  return null
+}
+
 function MapClickHandler({ onClick }: MapClickHandlerProps) {
   const map = useMap()
   useEffect(() => {
@@ -237,8 +264,7 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
 }
 
 // Module-level photo cache shared with PlaceAvatar
-const mapPhotoCache = new Map()
-const mapPhotoInFlight = new Set()
+import { getCached, isLoading, fetchPhoto, onThumbReady, getAllThumbs } from '../../services/photoService'
 
 // Live location tracker — blue dot with pulse animation (like Apple/Google Maps)
 function LocationTracker() {
@@ -330,7 +356,7 @@ function LocationTracker() {
   )
 }
 
-export function MapView({
+export const MapView = memo(function MapView({
   places = [],
   dayPlaces = [],
   route = null,
@@ -358,54 +384,110 @@ export function MapView({
     const right = rightWidth + 40
     return { paddingTopLeft: [left, top], paddingBottomRight: [right, bottom] }
   }, [leftWidth, rightWidth, hasInspector])
-  const [photoUrls, setPhotoUrls] = useState({})
 
-  // Fetch photos for places with concurrency limit to avoid blocking map rendering
+  // photoUrls: only base64 thumbs for smooth map zoom
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>(getAllThumbs)
+
+  // Fetch photos via shared service — subscribe to thumb (base64) availability
+  const placeIds = useMemo(() => places.map(p => p.id).join(','), [places])
   useEffect(() => {
-    const queue = places.filter(place => {
-      if (place.image_url) return false
+    if (!places || places.length === 0) return
+    const cleanups: (() => void)[] = []
+
+    const setThumb = (cacheKey: string, thumb: string) => {
+      iconCache.clear()
+      setPhotoUrls(prev => prev[cacheKey] === thumb ? prev : { ...prev, [cacheKey]: thumb })
+    }
+
+    for (const place of places) {
+      if (place.image_url && place.image_url.startsWith('data:')) continue
       const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
-      if (!cacheKey) return false
-      if (mapPhotoCache.has(cacheKey)) {
-        const cached = mapPhotoCache.get(cacheKey)
-        if (cached) setPhotoUrls(prev => prev[cacheKey] === cached ? prev : ({ ...prev, [cacheKey]: cached }))
-        return false
+      if (!cacheKey) continue
+
+      const cached = getCached(cacheKey)
+      if (cached?.thumbDataUrl) {
+        setThumb(cacheKey, cached.thumbDataUrl)
+        continue
       }
-      if (mapPhotoInFlight.has(cacheKey)) return false
-      const photoId = place.google_place_id || place.osm_id
-      if (!photoId && !(place.lat && place.lng)) return false
-      return true
-    })
 
-    let active = 0
-    const MAX_CONCURRENT = 3
-    let idx = 0
+      // Subscribe for when thumb becomes available
+      cleanups.push(onThumbReady(cacheKey, thumb => setThumb(cacheKey, thumb)))
 
-    const fetchNext = () => {
-      while (active < MAX_CONCURRENT && idx < queue.length) {
-        const place = queue[idx++]
-        const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
+      // Always fetch through API — returns fresh URL + converts to base64
+      if (!cached && !isLoading(cacheKey)) {
         const photoId = place.google_place_id || place.osm_id
-        mapPhotoInFlight.add(cacheKey)
-        active++
-        mapsApi.placePhoto(photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
-          .then(data => {
-            if (data.photoUrl) {
-              mapPhotoCache.set(cacheKey, data.photoUrl)
-              setPhotoUrls(prev => ({ ...prev, [cacheKey]: data.photoUrl }))
-            } else {
-              mapPhotoCache.set(cacheKey, null)
-            }
-          })
-          .catch(() => { mapPhotoCache.set(cacheKey, null) })
-          .finally(() => { mapPhotoInFlight.delete(cacheKey); active--; fetchNext() })
+        if (photoId || (place.lat && place.lng)) {
+          fetchPhoto(cacheKey, photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
+        }
       }
     }
-    fetchNext()
-  }, [places])
+
+    return () => cleanups.forEach(fn => fn())
+  }, [placeIds])
+
+  const clusterIconCreateFunction = useCallback((cluster) => {
+    const count = cluster.getChildCount()
+    const size = count < 10 ? 36 : count < 50 ? 42 : 48
+    return L.divIcon({
+      html: `<div class="marker-cluster-custom" style="width:${size}px;height:${size}px;"><span>${count}</span></div>`,
+      className: 'marker-cluster-wrapper',
+      iconSize: L.point(size, size),
+    })
+  }, [])
+
+  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
+  const markers = useMemo(() => places.map((place) => {
+    const isSelected = place.id === selectedPlaceId
+    const pck = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
+    const resolvedPhoto = (pck && photoUrls[pck]) || (place.image_url?.startsWith('data:') ? place.image_url : null) || null
+    const orderNumbers = dayOrderMap[place.id] ?? null
+    const icon = createPlaceIcon({ ...place, image_url: resolvedPhoto }, orderNumbers, isSelected)
+
+    return (
+      <Marker
+        key={place.id}
+        position={[place.lat, place.lng]}
+        icon={icon}
+        eventHandlers={{
+          click: () => onMarkerClick && onMarkerClick(place.id),
+        }}
+        zIndexOffset={isSelected ? 1000 : 0}
+      >
+        <Tooltip
+          direction="right"
+          offset={[0, 0]}
+          opacity={1}
+          className="map-tooltip"
+          permanent={isTouchDevice && isSelected}
+        >
+          <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
+            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+              {place.name}
+            </div>
+            {place.category_name && (() => {
+              const CatIcon = getCategoryIcon(place.category_icon)
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                  <CatIcon size={10} style={{ color: place.category_color || 'var(--text-muted)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{place.category_name}</span>
+                </div>
+              )
+            })()}
+            {place.address && (
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2, maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {place.address}
+              </div>
+            )}
+          </div>
+        </Tooltip>
+      </Marker>
+    )
+  }), [places, selectedPlaceId, dayOrderMap, photoUrls, onMarkerClick, isTouchDevice])
 
   return (
     <MapContainer
+      id="trek-map"
       center={center}
       zoom={zoom}
       zoomControl={false}
@@ -416,6 +498,10 @@ export function MapView({
         url={tileUrl}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         maxZoom={19}
+        keepBuffer={8}
+        updateWhenZooming={false}
+        updateWhenIdle={true}
+        referrerPolicy="strict-origin-when-cross-origin"
       />
 
       <MapController center={center} zoom={zoom} />
@@ -427,71 +513,17 @@ export function MapView({
 
       <MarkerClusterGroup
         chunkedLoading
+        chunkInterval={30}
+        chunkDelay={0}
         maxClusterRadius={30}
         disableClusteringAtZoom={11}
         spiderfyOnMaxZoom
         showCoverageOnHover={false}
         zoomToBoundsOnClick
-        singleMarkerMode
-        iconCreateFunction={(cluster) => {
-          const count = cluster.getChildCount()
-          const size = count < 10 ? 36 : count < 50 ? 42 : 48
-          return L.divIcon({
-            html: `<div class="marker-cluster-custom"
-              style="width:${size}px;height:${size}px;">
-              <span>${count}</span>
-            </div>`,
-            className: 'marker-cluster-wrapper',
-            iconSize: L.point(size, size),
-          })
-        }}
+        animate={false}
+        iconCreateFunction={clusterIconCreateFunction}
       >
-        {places.map((place) => {
-          const isSelected = place.id === selectedPlaceId
-          const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
-          const resolvedPhotoUrl = place.image_url || (cacheKey && photoUrls[cacheKey]) || null
-          const orderNumbers = dayOrderMap[place.id] ?? null
-          const icon = createPlaceIcon({ ...place, image_url: resolvedPhotoUrl }, orderNumbers, isSelected)
-
-          return (
-            <Marker
-              key={place.id}
-              position={[place.lat, place.lng]}
-              icon={icon}
-              eventHandlers={{
-                click: () => onMarkerClick && onMarkerClick(place.id),
-              }}
-              zIndexOffset={isSelected ? 1000 : 0}
-            >
-              <Tooltip
-                direction="right"
-                offset={[0, 0]}
-                opacity={1}
-                className="map-tooltip"
-              >
-                <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
-                    {place.name}
-                  </div>
-                  {place.category_name && (() => {
-                    const CatIcon = getCategoryIcon(place.category_icon)
-                    return (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
-                        <CatIcon size={10} style={{ color: place.category_color || 'var(--text-muted)', flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{place.category_name}</span>
-                      </div>
-                    )
-                  })()}
-                  {place.address && (
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2, maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {place.address}
-                    </div>
-                  )}
-                </div>
-              </Tooltip>
-            </Marker>
-          )
-        })}
+        {markers}
       </MarkerClusterGroup>
 
       {route && route.length > 1 && (
@@ -508,6 +540,24 @@ export function MapView({
           ))}
         </>
       )}
+
+      {/* GPX imported route geometries */}
+      {places.map((place) => {
+        if (!place.route_geometry) return null
+        try {
+          const coords = JSON.parse(place.route_geometry) as [number, number][]
+          if (!coords || coords.length < 2) return null
+          return (
+            <Polyline
+              key={`gpx-${place.id}`}
+              positions={coords}
+              color={place.category_color || '#3b82f6'}
+              weight={3.5}
+              opacity={0.75}
+            />
+          )
+        } catch { return null }
+      })}
     </MapContainer>
   )
-}
+})

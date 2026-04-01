@@ -3,18 +3,15 @@ import { getSocketId } from './websocket'
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor - add auth token and socket ID
+// Request interceptor - add socket ID
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     const sid = getSocketId()
     if (sid) {
       config.headers['X-Socket-Id'] = sid
@@ -28,8 +25,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token')
+    if (error.response?.status === 401 && (error.response?.data as { code?: string } | undefined)?.code === 'AUTH_REQUIRED') {
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
         window.location.href = '/login'
       }
@@ -107,6 +103,8 @@ export const placesApi = {
     const fd = new FormData(); fd.append('file', file)
     return apiClient.post(`/trips/${tripId}/places/import/gpx`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
   },
+  importGoogleList: (tripId: number | string, url: string) =>
+    apiClient.post(`/trips/${tripId}/places/import/google-list`, { url }).then(r => r.data),
 }
 
 export const assignmentsApi = {
@@ -163,7 +161,6 @@ export const adminApi = {
   addons: () => apiClient.get('/admin/addons').then(r => r.data),
   updateAddon: (id: number | string, data: Record<string, unknown>) => apiClient.put(`/admin/addons/${id}`, data).then(r => r.data),
   checkVersion: () => apiClient.get('/admin/version-check').then(r => r.data),
-  installUpdate: () => apiClient.post('/admin/update', {}, { timeout: 300000 }).then(r => r.data),
   getBagTracking: () => apiClient.get('/admin/bag-tracking').then(r => r.data),
   updateBagTracking: (enabled: boolean) => apiClient.put('/admin/bag-tracking', { enabled }).then(r => r.data),
   packingTemplates: () => apiClient.get('/admin/packing-templates').then(r => r.data),
@@ -184,6 +181,9 @@ export const adminApi = {
     apiClient.get('/admin/audit-log', { params }).then(r => r.data),
   mcpTokens: () => apiClient.get('/admin/mcp-tokens').then(r => r.data),
   deleteMcpToken: (id: number) => apiClient.delete(`/admin/mcp-tokens/${id}`).then(r => r.data),
+  getPermissions: () => apiClient.get('/admin/permissions').then(r => r.data),
+  updatePermissions: (permissions: Record<string, string>) => apiClient.put('/admin/permissions', { permissions }).then(r => r.data),
+  rotateJwtSecret: () => apiClient.post('/admin/rotate-jwt-secret').then(r => r.data),
 }
 
 export const addonsApi = {
@@ -281,9 +281,8 @@ export const backupApi = {
   list: () => apiClient.get('/backup/list').then(r => r.data),
   create: () => apiClient.post('/backup/create').then(r => r.data),
   download: async (filename: string): Promise<void> => {
-    const token = localStorage.getItem('auth_token')
     const res = await fetch(`/api/backup/download/${filename}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     })
     if (!res.ok) throw new Error('Download failed')
     const blob = await res.blob()
@@ -316,6 +315,7 @@ export const notificationsApi = {
   getPreferences: () => apiClient.get('/notifications/preferences').then(r => r.data),
   updatePreferences: (prefs: Record<string, boolean>) => apiClient.put('/notifications/preferences', prefs).then(r => r.data),
   testSmtp: (email?: string) => apiClient.post('/notifications/test-smtp', { email }).then(r => r.data),
+  testWebhook: () => apiClient.post('/notifications/test-webhook').then(r => r.data),
 }
 
 export default apiClient

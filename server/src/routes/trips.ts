@@ -3,15 +3,17 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { db, canAccessTrip, isOwner } from '../db/database';
+import { db, canAccessTrip } from '../db/database';
 import { authenticate, demoUploadBlock } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { AuthRequest, Trip, User } from '../types';
+import { writeAudit, getClientIp, logInfo } from '../services/auditLog';
+import { checkPermission } from '../services/permissions';
 
 const router = express.Router();
 
 const MS_PER_DAY = 86400000;
-const MAX_TRIP_DAYS = 90;
+const MAX_TRIP_DAYS = 365;
 const MAX_COVER_SIZE = 20 * 1024 * 1024; // 20 MB
 
 const coversDir = path.join(__dirname, '../../uploads/covers');
@@ -135,18 +137,26 @@ router.get('/', authenticate, (req: Request, res: Response) => {
 
 router.post('/', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { title, description, start_date, end_date, currency } = req.body;
+  if (!checkPermission('trip_create', authReq.user.role, null, authReq.user.id, false))
+    return res.status(403).json({ error: 'No permission to create trips' });
+  const { title, description, start_date, end_date, currency, reminder_days } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
 
+  const rd = reminder_days !== undefined ? (Number(reminder_days) >= 0 && Number(reminder_days) <= 30 ? Number(reminder_days) : 3) : 3;
+
   const result = db.prepare(`
-    INSERT INTO trips (user_id, title, description, start_date, end_date, currency)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(authReq.user.id, title, description || null, start_date || null, end_date || null, currency || 'EUR');
+    INSERT INTO trips (user_id, title, description, start_date, end_date, currency, reminder_days)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(authReq.user.id, title, description || null, start_date || null, end_date || null, currency || 'EUR', rd);
 
   const tripId = result.lastInsertRowid;
   generateDays(tripId, start_date, end_date);
+  writeAudit({ userId: authReq.user.id, action: 'trip.create', ip: getClientIp(req), details: { tripId: Number(tripId), title, reminder_days: rd === 0 ? 'none' : `${rd} days` } });
+  if (rd > 0) {
+    logInfo(`${authReq.user.email} set ${rd}-day reminder for trip "${title}"`);
+  }
   const trip = db.prepare(`${TRIP_SELECT} WHERE t.id = :tripId`).get({ userId: authReq.user.id, tripId });
   res.status(201).json({ trip });
 });
@@ -168,13 +178,29 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   const access = canAccessTrip(req.params.id, authReq.user.id);
   if (!access) return res.status(404).json({ error: 'Trip not found' });
 
-  const ownerOnly = req.body.is_archived !== undefined || req.body.cover_image !== undefined;
-  if (ownerOnly && !isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'Only the owner can change this setting' });
+  const tripOwnerId = access.user_id;
+  const isMember = access.user_id !== authReq.user.id;
+
+  // Archive check
+  if (req.body.is_archived !== undefined) {
+    if (!checkPermission('trip_archive', authReq.user.role, tripOwnerId, authReq.user.id, isMember))
+      return res.status(403).json({ error: 'No permission to archive/unarchive this trip' });
+  }
+  // Cover image check
+  if (req.body.cover_image !== undefined) {
+    if (!checkPermission('trip_cover_upload', authReq.user.role, tripOwnerId, authReq.user.id, isMember))
+      return res.status(403).json({ error: 'No permission to change cover image' });
+  }
+  // General edit check (title, description, dates, currency, reminder_days)
+  const editFields = ['title', 'description', 'start_date', 'end_date', 'currency', 'reminder_days'];
+  if (editFields.some(f => req.body[f] !== undefined)) {
+    if (!checkPermission('trip_edit', authReq.user.role, tripOwnerId, authReq.user.id, isMember))
+      return res.status(403).json({ error: 'No permission to edit this trip' });
+  }
 
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const { title, description, start_date, end_date, currency, is_archived, cover_image } = req.body;
+  const { title, description, start_date, end_date, currency, is_archived, cover_image, reminder_days } = req.body;
 
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
@@ -186,15 +212,40 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   const newCurrency = currency || trip.currency;
   const newArchived = is_archived !== undefined ? (is_archived ? 1 : 0) : trip.is_archived;
   const newCover = cover_image !== undefined ? cover_image : trip.cover_image;
+  const newReminder = reminder_days !== undefined ? (Number(reminder_days) >= 0 && Number(reminder_days) <= 30 ? Number(reminder_days) : (trip as any).reminder_days) : (trip as any).reminder_days;
 
   db.prepare(`
     UPDATE trips SET title=?, description=?, start_date=?, end_date=?,
-      currency=?, is_archived=?, cover_image=?, updated_at=CURRENT_TIMESTAMP
+      currency=?, is_archived=?, cover_image=?, reminder_days=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
-  `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, req.params.id);
+  `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, newReminder, req.params.id);
 
   if (newStart !== trip.start_date || newEnd !== trip.end_date)
     generateDays(req.params.id, newStart, newEnd);
+
+  const changes: Record<string, unknown> = {};
+  if (title && title !== trip.title) changes.title = title;
+  if (newStart !== trip.start_date) changes.start_date = newStart;
+  if (newEnd !== trip.end_date) changes.end_date = newEnd;
+  if (newReminder !== (trip as any).reminder_days) changes.reminder_days = newReminder === 0 ? 'none' : `${newReminder} days`;
+  if (is_archived !== undefined && newArchived !== trip.is_archived) changes.archived = !!newArchived;
+
+  const isAdminEdit = authReq.user.role === 'admin' && trip.user_id !== authReq.user.id;
+  if (Object.keys(changes).length > 0) {
+    const ownerEmail = isAdminEdit ? (db.prepare('SELECT email FROM users WHERE id = ?').get(trip.user_id) as { email: string } | undefined)?.email : undefined;
+    writeAudit({ userId: authReq.user.id, action: 'trip.update', ip: getClientIp(req), details: { tripId: Number(req.params.id), trip: newTitle, ...(ownerEmail ? { owner: ownerEmail } : {}), ...changes } });
+    if (isAdminEdit && ownerEmail) {
+      logInfo(`Admin ${authReq.user.email} edited trip "${newTitle}" owned by ${ownerEmail}`);
+    }
+  }
+
+  if (newReminder !== (trip as any).reminder_days) {
+    if (newReminder > 0) {
+      logInfo(`${authReq.user.email} set ${newReminder}-day reminder for trip "${newTitle}"`);
+    } else {
+      logInfo(`${authReq.user.email} removed reminder for trip "${newTitle}"`);
+    }
+  }
 
   const updatedTrip = db.prepare(`${TRIP_SELECT} WHERE t.id = :tripId`).get({ userId: authReq.user.id, tripId: req.params.id });
   res.json({ trip: updatedTrip });
@@ -203,8 +254,12 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
 router.post('/:id/cover', authenticate, demoUploadBlock, uploadCover.single('cover'), (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'Only the owner can change the cover image' });
+  const access = canAccessTrip(req.params.id, authReq.user.id);
+  const tripOwnerId = access?.user_id;
+  if (!tripOwnerId) return res.status(404).json({ error: 'Trip not found' });
+  const isMember = tripOwnerId !== authReq.user.id;
+  if (!checkPermission('trip_cover_upload', authReq.user.role, tripOwnerId, authReq.user.id, isMember))
+    return res.status(403).json({ error: 'No permission to change the cover image' });
 
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
@@ -226,9 +281,20 @@ router.post('/:id/cover', authenticate, demoUploadBlock, uploadCover.single('cov
 
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'Only the owner can delete the trip' });
+  const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number } | undefined;
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const tripOwnerId = trip.user_id;
+  const isMemberDel = tripOwnerId !== authReq.user.id;
+  if (!checkPermission('trip_delete', authReq.user.role, tripOwnerId, authReq.user.id, isMemberDel))
+    return res.status(403).json({ error: 'No permission to delete this trip' });
   const deletedTripId = Number(req.params.id);
+  const delTrip = db.prepare('SELECT title, user_id FROM trips WHERE id = ?').get(req.params.id) as { title: string; user_id: number } | undefined;
+  const isAdminDel = authReq.user.role === 'admin' && delTrip && delTrip.user_id !== authReq.user.id;
+  const ownerEmail = isAdminDel ? (db.prepare('SELECT email FROM users WHERE id = ?').get(delTrip!.user_id) as { email: string } | undefined)?.email : undefined;
+  writeAudit({ userId: authReq.user.id, action: 'trip.delete', ip: getClientIp(req), details: { tripId: deletedTripId, trip: delTrip?.title, ...(ownerEmail ? { owner: ownerEmail } : {}) } });
+  if (isAdminDel && ownerEmail) {
+    logInfo(`Admin ${authReq.user.email} deleted trip "${delTrip!.title}" owned by ${ownerEmail}`);
+  }
   db.prepare('DELETE FROM trips WHERE id = ?').run(req.params.id);
   res.json({ success: true });
   broadcast(deletedTripId, 'trip:deleted', { id: deletedTripId }, req.headers['x-socket-id'] as string);
@@ -236,10 +302,11 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
 
 router.get('/:id/members', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!canAccessTrip(req.params.id, authReq.user.id))
+  const access = canAccessTrip(req.params.id, authReq.user.id);
+  if (!access)
     return res.status(404).json({ error: 'Trip not found' });
 
-  const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number };
+  const tripOwnerId = access.user_id;
   const members = db.prepare(`
     SELECT u.id, u.username, u.email, u.avatar,
       CASE WHEN u.id = ? THEN 'owner' ELSE 'member' END as role,
@@ -250,9 +317,9 @@ router.get('/:id/members', authenticate, (req: Request, res: Response) => {
     LEFT JOIN users ib ON ib.id = m.invited_by
     WHERE m.trip_id = ?
     ORDER BY m.added_at ASC
-  `).all(trip.user_id, req.params.id) as { id: number; username: string; email: string; avatar: string | null; role: string; added_at: string; invited_by_username: string | null }[];
+  `).all(tripOwnerId, req.params.id) as { id: number; username: string; email: string; avatar: string | null; role: string; added_at: string; invited_by_username: string | null }[];
 
-  const owner = db.prepare('SELECT id, username, email, avatar FROM users WHERE id = ?').get(trip.user_id) as Pick<User, 'id' | 'username' | 'email' | 'avatar'>;
+  const owner = db.prepare('SELECT id, username, email, avatar FROM users WHERE id = ?').get(tripOwnerId) as Pick<User, 'id' | 'username' | 'email' | 'avatar'>;
 
   res.json({
     owner: { ...owner, role: 'owner', avatar_url: owner.avatar ? `/uploads/avatars/${owner.avatar}` : null },
@@ -263,8 +330,14 @@ router.get('/:id/members', authenticate, (req: Request, res: Response) => {
 
 router.post('/:id/members', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!canAccessTrip(req.params.id, authReq.user.id))
+  const access = canAccessTrip(req.params.id, authReq.user.id);
+  if (!access)
     return res.status(404).json({ error: 'Trip not found' });
+
+  const tripOwnerId = access.user_id;
+  const isMember = tripOwnerId !== authReq.user.id;
+  if (!checkPermission('member_manage', authReq.user.role, tripOwnerId, authReq.user.id, isMember))
+    return res.status(403).json({ error: 'No permission to manage members' });
 
   const { identifier } = req.body;
   if (!identifier) return res.status(400).json({ error: 'Email or username required' });
@@ -275,8 +348,7 @@ router.post('/:id/members', authenticate, (req: Request, res: Response) => {
 
   if (!target) return res.status(404).json({ error: 'User not found' });
 
-  const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number };
-  if (target.id === trip.user_id)
+  if (target.id === tripOwnerId)
     return res.status(400).json({ error: 'Trip owner is already a member' });
 
   const existing = db.prepare('SELECT id FROM trip_members WHERE trip_id = ? AND user_id = ?').get(req.params.id, target.id);
@@ -287,7 +359,7 @@ router.post('/:id/members', authenticate, (req: Request, res: Response) => {
   // Notify invited user
   const tripInfo = db.prepare('SELECT title FROM trips WHERE id = ?').get(req.params.id) as { title: string } | undefined;
   import('../services/notifications').then(({ notify }) => {
-    notify({ userId: target.id, event: 'trip_invite', params: { trip: tripInfo?.title || 'Untitled', actor: authReq.user.username } }).catch(() => {});
+    notify({ userId: target.id, event: 'trip_invite', params: { trip: tripInfo?.title || 'Untitled', actor: authReq.user.email, invitee: target.email } }).catch(() => {});
   });
 
   res.status(201).json({ member: { ...target, role: 'member', avatar_url: target.avatar ? `/uploads/avatars/${target.avatar}` : null } });
@@ -300,8 +372,13 @@ router.delete('/:id/members/:userId', authenticate, (req: Request, res: Response
 
   const targetId = parseInt(req.params.userId);
   const isSelf = targetId === authReq.user.id;
-  if (!isSelf && !isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'No permission' });
+  if (!isSelf) {
+    const access = canAccessTrip(req.params.id, authReq.user.id);
+    if (!access) return res.status(404).json({ error: 'Trip not found' });
+    const memberCheck = access.user_id !== authReq.user.id;
+    if (!checkPermission('member_manage', authReq.user.role, access.user_id, authReq.user.id, memberCheck))
+      return res.status(403).json({ error: 'No permission to remove members' });
+  }
 
   db.prepare('DELETE FROM trip_members WHERE trip_id = ? AND user_id = ?').run(req.params.id, targetId);
   res.json({ success: true });
@@ -319,7 +396,12 @@ router.get('/:id/export.ics', authenticate, (req: Request, res: Response) => {
   const days = db.prepare('SELECT * FROM days WHERE trip_id = ? ORDER BY day_number ASC').all(req.params.id) as any[];
   const reservations = db.prepare('SELECT * FROM reservations WHERE trip_id = ?').all(req.params.id) as any[];
 
-  const esc = (s: string) => s.replace(/[\\;,\n]/g, m => m === '\n' ? '\\n' : '\\' + m);
+  const esc = (s: string) => s
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/\r/g, '');
   const fmtDate = (d: string) => d.replace(/-/g, '');
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const uid = (id: number, type: string) => `trek-${type}-${id}@trek`;
@@ -367,14 +449,14 @@ router.get('/:id/export.ics', authenticate, (req: Request, res: Response) => {
     ics += `SUMMARY:${esc(r.title)}\r\n`;
 
     let desc = r.type ? `Type: ${r.type}` : '';
-    if (r.confirmation_number) desc += `\\nConfirmation: ${r.confirmation_number}`;
-    if (meta.airline) desc += `\\nAirline: ${meta.airline}`;
-    if (meta.flight_number) desc += `\\nFlight: ${meta.flight_number}`;
-    if (meta.departure_airport) desc += `\\nFrom: ${meta.departure_airport}`;
-    if (meta.arrival_airport) desc += `\\nTo: ${meta.arrival_airport}`;
-    if (meta.train_number) desc += `\\nTrain: ${meta.train_number}`;
-    if (r.notes) desc += `\\n${r.notes}`;
-    if (desc) ics += `DESCRIPTION:${desc}\r\n`;
+    if (r.confirmation_number) desc += `\nConfirmation: ${r.confirmation_number}`;
+    if (meta.airline) desc += `\nAirline: ${meta.airline}`;
+    if (meta.flight_number) desc += `\nFlight: ${meta.flight_number}`;
+    if (meta.departure_airport) desc += `\nFrom: ${meta.departure_airport}`;
+    if (meta.arrival_airport) desc += `\nTo: ${meta.arrival_airport}`;
+    if (meta.train_number) desc += `\nTrain: ${meta.train_number}`;
+    if (r.notes) desc += `\n${r.notes}`;
+    if (desc) ics += `DESCRIPTION:${esc(desc)}\r\n`;
     if (r.location) ics += `LOCATION:${esc(r.location)}\r\n`;
     ics += `END:VEVENT\r\n`;
   }
@@ -382,7 +464,8 @@ router.get('/:id/export.ics', authenticate, (req: Request, res: Response) => {
   ics += 'END:VCALENDAR\r\n';
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${esc(trip.title || 'trek-trip')}.ics"`);
+  const safeFilename = (trip.title || 'trek-trip').replace(/["\r\n]/g, '').replace(/[^\w\s.-]/g, '_');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.ics"`);
   res.send(ics);
 });
 

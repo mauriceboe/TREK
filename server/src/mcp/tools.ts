@@ -177,7 +177,7 @@ export function registerTools(server: McpServer, userId: number): void {
   server.registerTool(
     'create_place',
     {
-      description: 'Add a new place/POI to a trip.',
+      description: 'Add a new place/POI to a trip. Set google_place_id or osm_id (from search_place) so the app can show opening hours and ratings.',
       inputSchema: {
         tripId: z.number().int().positive(),
         name: z.string().min(1).max(200),
@@ -185,19 +185,21 @@ export function registerTools(server: McpServer, userId: number): void {
         lat: z.number().optional(),
         lng: z.number().optional(),
         address: z.string().max(500).optional(),
-        category_id: z.number().int().positive().optional(),
+        category_id: z.number().int().positive().optional().describe('Category ID — use list_categories to see available options'),
+        google_place_id: z.string().optional().describe('Google Place ID from search_place — enables opening hours display'),
+        osm_id: z.string().optional().describe('OpenStreetMap ID from search_place (e.g. "way:12345") — enables opening hours if no Google ID'),
         notes: z.string().max(2000).optional(),
         website: z.string().max(500).optional(),
         phone: z.string().max(50).optional(),
       },
     },
-    async ({ tripId, name, description, lat, lng, address, category_id, notes, website, phone }) => {
+    async ({ tripId, name, description, lat, lng, address, category_id, google_place_id, osm_id, notes, website, phone }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       const result = db.prepare(`
-        INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, notes, website, phone, transport_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(tripId, name, description || null, lat ?? null, lng ?? null, address || null, category_id || null, notes || null, website || null, phone || null, 'walking');
+        INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, google_place_id, osm_id, notes, website, phone, transport_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(tripId, name, description || null, lat ?? null, lng ?? null, address || null, category_id || null, google_place_id || null, osm_id || null, notes || null, website || null, phone || null, 'walking');
       const place = db.prepare('SELECT * FROM places WHERE id = ?').get(result.lastInsertRowid);
       broadcast(tripId, 'place:created', { place });
       return ok({ place });
@@ -265,6 +267,53 @@ export function registerTools(server: McpServer, userId: number): void {
       db.prepare('DELETE FROM places WHERE id = ?').run(placeId);
       broadcast(tripId, 'place:deleted', { placeId });
       return ok({ success: true });
+    }
+  );
+
+  // --- CATEGORIES ---
+
+  server.registerTool(
+    'list_categories',
+    {
+      description: 'List all available place categories with their id, name, icon and color. Use category_id when creating or updating places.',
+      inputSchema: {},
+    },
+    async () => {
+      const categories = db.prepare('SELECT id, name, color, icon FROM categories ORDER BY name ASC').all();
+      return ok({ categories });
+    }
+  );
+
+  // --- SEARCH ---
+
+  server.registerTool(
+    'search_place',
+    {
+      description: 'Search for a real-world place by name or address. Returns results with osm_id (and google_place_id if configured). Use these IDs when calling create_place so the app can display opening hours and ratings.',
+      inputSchema: {
+        query: z.string().min(1).max(500).describe('Place name or address to search for'),
+      },
+    },
+    async ({ query }) => {
+      // Use Nominatim (no API key needed, always available)
+      const params = new URLSearchParams({
+        q: query, format: 'json', addressdetails: '1', limit: '5', 'accept-language': 'en',
+      });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: { 'User-Agent': 'TREK Travel Planner' },
+      });
+      if (!response.ok) {
+        return { content: [{ type: 'text' as const, text: 'Search failed — Nominatim API error.' }], isError: true };
+      }
+      const data = await response.json() as { osm_type: string; osm_id: number; name: string; display_name: string; lat: string; lon: string }[];
+      const places = data.map(item => ({
+        osm_id: `${item.osm_type}:${item.osm_id}`,
+        name: item.name || item.display_name?.split(',')[0] || '',
+        address: item.display_name || '',
+        lat: parseFloat(item.lat) || null,
+        lng: parseFloat(item.lon) || null,
+      }));
+      return ok({ places });
     }
   );
 

@@ -1,8 +1,8 @@
 import crypto from 'crypto';
-import { JWT_SECRET } from '../config';
+import { ENCRYPTION_KEY } from '../config';
 
 function getKey(): Buffer {
-  return crypto.createHash('sha256').update(`${JWT_SECRET}:mfa:v1`).digest();
+  return crypto.createHash('sha256').update(`${ENCRYPTION_KEY}:mfa:v1`).digest();
 }
 
 /** Encrypt TOTP secret for storage in SQLite. */

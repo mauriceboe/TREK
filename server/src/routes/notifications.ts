@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { testSmtp } from '../services/notifications';
+import { testSmtp, testWebhook } from '../services/notifications';
 
 const router = express.Router();
 
@@ -52,6 +52,15 @@ router.post('/test-smtp', authenticate, async (req: Request, res: Response) => {
 
   const { email } = req.body;
   const result = await testSmtp(email || authReq.user.email);
+  res.json(result);
+});
+
+// Admin: test webhook configuration
+router.post('/test-webhook', authenticate, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (authReq.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const result = await testWebhook();
   res.json(result);
 });
 

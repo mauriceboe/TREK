@@ -37,15 +37,22 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
   updatePlace: async (tripId, placeId, placeData) => {
     try {
       const data = await placesApi.update(tripId, placeId, placeData)
-      set(state => ({
-        places: state.places.map(p => p.id === placeId ? data.place : p),
-        assignments: Object.fromEntries(
-          Object.entries(state.assignments).map(([dayId, items]) => [
-            dayId,
-            items.map((a: Assignment) => a.place?.id === placeId ? { ...a, place: { ...data.place, place_time: a.place.place_time, end_time: a.place.end_time } } : a)
-          ])
-        ),
-      }))
+      set(state => {
+        const updatedAssignments = { ...state.assignments }
+        let changed = false
+        for (const [dayId, items] of Object.entries(state.assignments)) {
+          if (items.some((a: Assignment) => a.place?.id === placeId)) {
+            updatedAssignments[dayId] = items.map((a: Assignment) =>
+              a.place?.id === placeId ? { ...a, place: { ...data.place, place_time: a.place.place_time, end_time: a.place.end_time } } : a
+            )
+            changed = true
+          }
+        }
+        return {
+          places: state.places.map(p => p.id === placeId ? data.place : p),
+          ...(changed ? { assignments: updatedAssignments } : {}),
+        }
+      })
       return data.place
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error updating place'))
@@ -55,15 +62,20 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
   deletePlace: async (tripId, placeId) => {
     try {
       await placesApi.delete(tripId, placeId)
-      set(state => ({
-        places: state.places.filter(p => p.id !== placeId),
-        assignments: Object.fromEntries(
-          Object.entries(state.assignments).map(([dayId, items]) => [
-            dayId,
-            items.filter((a: Assignment) => a.place?.id !== placeId)
-          ])
-        ),
-      }))
+      set(state => {
+        const updatedAssignments = { ...state.assignments }
+        let changed = false
+        for (const [dayId, items] of Object.entries(state.assignments)) {
+          if (items.some((a: Assignment) => a.place?.id === placeId)) {
+            updatedAssignments[dayId] = items.filter((a: Assignment) => a.place?.id !== placeId)
+            changed = true
+          }
+        }
+        return {
+          places: state.places.filter(p => p.id !== placeId),
+          ...(changed ? { assignments: updatedAssignments } : {}),
+        }
+      })
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error deleting place'))
     }

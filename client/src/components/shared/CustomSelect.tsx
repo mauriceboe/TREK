@@ -19,6 +19,7 @@ interface CustomSelectProps {
   searchable?: boolean
   style?: React.CSSProperties
   size?: 'sm' | 'md'
+  disabled?: boolean
 }
 
 export default function CustomSelect({
@@ -29,6 +30,7 @@ export default function CustomSelect({
   searchable = false,
   style = {},
   size = 'md',
+  disabled = false,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -83,17 +85,19 @@ export default function CustomSelect({
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => { setOpen(o => !o); setSearch('') }}
+        disabled={disabled}
+        onClick={() => { if (!disabled) { setOpen(o => !o); setSearch('') } }}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           padding: sm ? '8px 12px' : '8px 14px', borderRadius: 10,
           border: '1px solid var(--border-primary)',
           background: 'var(--bg-input)', color: 'var(--text-primary)',
           fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
-          cursor: 'pointer', outline: 'none', textAlign: 'left',
+          cursor: disabled ? 'default' : 'pointer', outline: 'none', textAlign: 'left',
           transition: 'border-color 0.15s', overflow: 'hidden', minWidth: 0,
+          opacity: disabled ? 0.5 : 1,
         }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--text-faint)'}
+        onMouseEnter={e => { if (!disabled) e.currentTarget.style.borderColor = 'var(--text-faint)' }}
         onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-primary)' }}
       >
         {selected?.icon && <span style={{ display: 'flex', flexShrink: 0 }}>{selected.icon}</span>}

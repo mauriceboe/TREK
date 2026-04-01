@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth';
 import { requireTripAccess } from '../middleware/tripAccess';
 import { broadcast } from '../websocket';
 import { loadTagsByPlaceIds, loadParticipantsByAssignmentIds, formatAssignmentWithPlace } from '../services/queryHelpers';
+import { checkPermission } from '../services/permissions';
 import { AuthRequest, AssignmentRow, Day, DayNote } from '../types';
 
 const router = express.Router({ mergeParams: true });
@@ -126,6 +127,10 @@ router.get('/', authenticate, requireTripAccess, (req: Request, res: Response) =
 });
 
 router.post('/', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId } = req.params;
   const { date, notes } = req.body;
 
@@ -144,6 +149,10 @@ router.post('/', authenticate, requireTripAccess, (req: Request, res: Response) 
 });
 
 router.put('/:id', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   const day = db.prepare('SELECT * FROM days WHERE id = ? AND trip_id = ?').get(id, tripId) as Day | undefined;
@@ -161,6 +170,10 @@ router.put('/:id', authenticate, requireTripAccess, (req: Request, res: Response
 });
 
 router.delete('/:id', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   const day = db.prepare('SELECT * FROM days WHERE id = ? AND trip_id = ?').get(id, tripId);
@@ -199,6 +212,10 @@ accommodationsRouter.get('/', authenticate, requireTripAccess, (req: Request, re
 });
 
 accommodationsRouter.post('/', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId } = req.params;
   const { place_id, start_day_id, end_day_id, check_in, check_out, confirmation, notes } = req.body;
 
@@ -243,6 +260,10 @@ accommodationsRouter.post('/', authenticate, requireTripAccess, (req: Request, r
 });
 
 accommodationsRouter.put('/:id', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   interface DayAccommodation { id: number; trip_id: number; place_id: number; start_day_id: number; end_day_id: number; check_in: string | null; check_out: string | null; confirmation: string | null; notes: string | null; }
@@ -294,6 +315,10 @@ accommodationsRouter.put('/:id', authenticate, requireTripAccess, (req: Request,
 });
 
 accommodationsRouter.delete('/:id', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   const existing = db.prepare('SELECT * FROM day_accommodations WHERE id = ? AND trip_id = ?').get(id, tripId);

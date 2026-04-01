@@ -7,7 +7,7 @@ import Navbar from '../components/Layout/Navbar'
 import CustomSelect from '../components/shared/CustomSelect'
 import { useToast } from '../components/shared/Toast'
 import { Save, Map, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, AlertTriangle, Copy, Download, Printer, Terminal, Plus, Check } from 'lucide-react'
-import { authApi, adminApi, notificationsApi } from '../api/client'
+import { authApi, adminApi } from '../api/client'
 import apiClient from '../api/client'
 import { useAddonStore } from '../store/addonStore'
 import type { LucideIcon } from 'lucide-react'
@@ -56,56 +56,54 @@ function Section({ title, icon: Icon, children }: SectionProps): React.ReactElem
   )
 }
 
-function NotificationPreferences({ t, memoriesEnabled }: { t: any; memoriesEnabled: boolean }) {
-  const [prefs, setPrefs] = useState<Record<string, number> | null>(null)
-  const [addons, setAddons] = useState<Record<string, boolean>>({})
-  useEffect(() => { notificationsApi.getPreferences().then(d => setPrefs(d.preferences)).catch(() => {}) }, [])
+function ToggleSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button onClick={onToggle}
+      style={{
+        position: 'relative', width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+        background: on ? 'var(--accent, #111827)' : 'var(--border-primary, #d1d5db)',
+        transition: 'background 0.2s',
+      }}>
+      <span style={{
+        position: 'absolute', top: 2, left: on ? 22 : 2,
+        width: 20, height: 20, borderRadius: '50%', background: 'white',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      }} />
+    </button>
+  )
+}
+
+function NotificationPreferences({ t }: { t: any; memoriesEnabled: boolean }) {
+  const [notifChannel, setNotifChannel] = useState<string>('none')
   useEffect(() => {
-    apiClient.get('/addons').then(r => {
-      const map: Record<string, boolean> = {}
-      for (const a of (r.data.addons || [])) map[a.id] = !!a.enabled
-      setAddons(map)
+    authApi.getAppConfig?.().then((cfg: any) => {
+      if (cfg?.notification_channel) setNotifChannel(cfg.notification_channel)
     }).catch(() => {})
   }, [])
 
-  const toggle = async (key: string) => {
-    if (!prefs) return
-    const newVal = prefs[key] ? 0 : 1
-    setPrefs(prev => prev ? { ...prev, [key]: newVal } : prev)
-    try { await notificationsApi.updatePreferences({ [key]: !!newVal }) } catch {}
+  if (notifChannel === 'none') {
+    return (
+      <p style={{ fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+        {t('settings.notificationsDisabled')}
+      </p>
+    )
   }
 
-  if (!prefs) return <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>{t('common.loading')}</p>
-
-  const options = [
-    { key: 'notify_trip_invite', label: t('settings.notifyTripInvite') },
-    { key: 'notify_booking_change', label: t('settings.notifyBookingChange') },
-    ...(addons.vacay ? [{ key: 'notify_vacay_invite', label: t('settings.notifyVacayInvite') }] : []),
-    ...(memoriesEnabled ? [{ key: 'notify_photos_shared', label: t('settings.notifyPhotosShared') }] : []),
-    ...(addons.collab ? [{ key: 'notify_collab_message', label: t('settings.notifyCollabMessage') }] : []),
-    ...(addons.documents ? [{ key: 'notify_packing_tagged', label: t('settings.notifyPackingTagged') }] : []),
-    { key: 'notify_webhook', label: t('settings.notifyWebhook') },
-  ]
+  const channelLabel = notifChannel === 'email'
+    ? (t('admin.notifications.email') || 'Email (SMTP)')
+    : (t('admin.notifications.webhook') || 'Webhook')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {options.map(opt => (
-        <div key={opt.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{opt.label}</span>
-          <button onClick={() => toggle(opt.key)}
-            style={{
-              position: 'relative', width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-              background: prefs[opt.key] ? 'var(--accent, #111827)' : 'var(--border-primary, #d1d5db)',
-              transition: 'background 0.2s',
-            }}>
-            <span style={{
-              position: 'absolute', top: 2, left: prefs[opt.key] ? 22 : 2,
-              width: 20, height: 20, borderRadius: '50%', background: 'white',
-              transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-            }} />
-          </button>
-        </div>
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+        <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+          {t('settings.notificationsActive')}: {channelLabel}
+        </span>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: 0, lineHeight: 1.5 }}>
+        {t('settings.notificationsManagedByAdmin')}
+      </p>
     </div>
   )
 }
@@ -144,14 +142,17 @@ export default function SettingsPage(): React.ReactElement {
     }
   }, [memoriesEnabled])
 
+  const [immichTestPassed, setImmichTestPassed] = useState(false)
+
   const handleSaveImmich = async () => {
     setSaving(s => ({ ...s, immich: true }))
     try {
-      await apiClient.put('/integrations/immich/settings', { immich_url: immichUrl, immich_api_key: immichApiKey || undefined })
+      const saveRes = await apiClient.put('/integrations/immich/settings', { immich_url: immichUrl, immich_api_key: immichApiKey || undefined })
+      if (saveRes.data.warning) toast.warn(saveRes.data.warning)
       toast.success(t('memories.saved'))
-      // Test connection
       const res = await apiClient.get('/integrations/immich/status')
       setImmichConnected(res.data.connected)
+      setImmichTestPassed(false)
     } catch {
       toast.error(t('memories.connectionError'))
     } finally {
@@ -162,13 +163,13 @@ export default function SettingsPage(): React.ReactElement {
   const handleTestImmich = async () => {
     setImmichTesting(true)
     try {
-      const res = await apiClient.get('/integrations/immich/status')
+      const res = await apiClient.post('/integrations/immich/test', { immich_url: immichUrl, immich_api_key: immichApiKey })
       if (res.data.connected) {
         toast.success(`${t('memories.connectionSuccess')} — ${res.data.user?.name || ''}`)
-        setImmichConnected(true)
+        setImmichTestPassed(true)
       } else {
         toast.error(`${t('memories.connectionError')}: ${res.data.error}`)
-        setImmichConnected(false)
+        setImmichTestPassed(false)
       }
     } catch {
       toast.error(t('memories.connectionError'))
@@ -427,7 +428,7 @@ export default function SettingsPage(): React.ReactElement {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('settings.mapTemplate')}</label>
               <CustomSelect
-                value=""
+                value={mapTileUrl}
                 onChange={(value: string) => { if (value) setMapTileUrl(value) }}
                 placeholder={t('settings.mapTemplatePlaceholder.select')}
                 options={MAP_PRESETS.map(p => ({
@@ -678,19 +679,20 @@ export default function SettingsPage(): React.ReactElement {
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('memories.immichUrl')}</label>
-                  <input type="url" value={immichUrl} onChange={e => setImmichUrl(e.target.value)}
+                  <input type="url" value={immichUrl} onChange={e => { setImmichUrl(e.target.value); setImmichTestPassed(false) }}
                     placeholder="https://immich.example.com"
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('memories.immichApiKey')}</label>
-                  <input type="password" value={immichApiKey} onChange={e => setImmichApiKey(e.target.value)}
+                  <input type="password" value={immichApiKey} onChange={e => { setImmichApiKey(e.target.value); setImmichTestPassed(false) }}
                     placeholder={immichConnected ? '••••••••' : 'API Key'}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={handleSaveImmich} disabled={saving.immich}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:bg-slate-400">
+                  <button onClick={handleSaveImmich} disabled={saving.immich || !immichTestPassed}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:bg-slate-400"
+                    title={!immichTestPassed ? t('memories.testFirst') : ''}>
                     <Save className="w-4 h-4" /> {t('common.save')}
                   </button>
                   <button onClick={handleTestImmich} disabled={immichTesting}
@@ -924,6 +926,7 @@ export default function SettingsPage(): React.ReactElement {
                       await authApi.changePassword({ current_password: currentPassword, new_password: newPassword })
                       toast.success(t('settings.passwordChanged'))
                       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+                      await loadUser({ silent: true })
                     } catch (err: unknown) {
                       toast.error(getApiErrorMessage(err, t('common.error')))
                     }

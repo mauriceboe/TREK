@@ -3,6 +3,8 @@ import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import { mapsApi } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { useToast } from '../shared/Toast'
 import { Search, Paperclip, X, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -67,6 +69,9 @@ export default function PlaceFormModal({
   const toast = useToast()
   const { t, language } = useTranslation()
   const { hasMapsKey } = useAuthStore()
+  const can = useCanDo()
+  const tripObj = useTripStore((s) => s.trip)
+  const canUploadFiles = can('file_upload', tripObj)
 
   useEffect(() => {
     if (place) {
@@ -154,6 +159,7 @@ export default function PlaceFormModal({
 
   // Paste support for files/images
   const handlePaste = (e) => {
+    if (!canUploadFiles) return
     const items = e.clipboardData?.items
     if (!items) return
     for (const item of Array.from(items)) {
@@ -373,7 +379,7 @@ export default function PlaceFormModal({
         </div>
 
         {/* File Attachments */}
-        {true && (
+        {canUploadFiles && (
           <div className="border border-gray-200 rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-medium text-gray-700">{t('files.title')}</label>

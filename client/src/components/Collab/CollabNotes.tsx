@@ -5,6 +5,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Plus, Trash2, Pin, PinOff, Pencil, X, Check, StickyNote, Settings, ExternalLink, Maximize2 } from 'lucide-react'
 import { collabApi } from '../../api/client'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { addListener, removeListener } from '../../api/websocket'
 import { useTranslation } from '../../i18n'
 import type { User } from '../../types'
@@ -216,7 +218,7 @@ function UserAvatar({ user, size = 14 }: UserAvatarProps) {
 interface NoteFormModalProps {
   onClose: () => void
   onSubmit: (data: { title: string; content: string; category: string; website: string; files?: File[] }) => Promise<void>
-  onDeleteFile: (noteId: number, fileId: number) => Promise<void>
+  onDeleteFile?: (noteId: number, fileId: number) => Promise<void>
   existingCategories: string[]
   categoryColors: Record<string, string>
   getCategoryColor: (category: string) => string
@@ -226,6 +228,9 @@ interface NoteFormModalProps {
 }
 
 function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, categoryColors, getCategoryColor, note, tripId, t }: NoteFormModalProps) {
+  const can = useCanDo()
+  const tripObj = useTripStore((s) => s.trip)
+  const canUploadFiles = can('file_upload', tripObj)
   const isEdit = !!note
   const allCategories = [...new Set([...existingCategories, ...Object.keys(categoryColors || {})])].filter(Boolean)
 
@@ -298,6 +303,7 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
         }}
         onClick={e => e.stopPropagation()}
         onPaste={e => {
+          if (!canUploadFiles) return
           const items = e.clipboardData?.items
           if (!items) return
           for (const item of Array.from(items)) {
@@ -450,7 +456,7 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
           </div>
 
           {/* File attachments */}
-          <div>
+          {canUploadFiles && <div>
             <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, fontFamily: FONT }}>
               {t('collab.notes.attachFiles')}
             </div>
@@ -483,7 +489,7 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
                 <Plus size={11} /> {t('files.attach') || 'Add'}
               </label>
             </div>
-          </div>
+          </div>}
 
           {/* Submit */}
           <button
@@ -689,6 +695,7 @@ function CategorySettingsModal({ onClose, categories, categoryColors, onSave, on
 interface NoteCardProps {
   note: CollabNote
   currentUser: User
+  canEdit: boolean
   onUpdate: (noteId: number, data: Partial<CollabNote>) => Promise<void>
   onDelete: (noteId: number) => Promise<void>
   onEdit: (note: CollabNote) => void
@@ -699,7 +706,7 @@ interface NoteCardProps {
   t: (key: string) => string
 }
 
-function NoteCard({ note, currentUser, onUpdate, onDelete, onEdit, onView, onPreviewFile, getCategoryColor, tripId, t }: NoteCardProps) {
+function NoteCard({ note, currentUser, canEdit, onUpdate, onDelete, onEdit, onView, onPreviewFile, getCategoryColor, tripId, t }: NoteCardProps) {
   const [hovered, setHovered] = useState(false)
 
   const author = note.author || note.user || { username: note.username, avatar: note.avatar_url || (note.avatar ? `/uploads/avatars/${note.avatar}` : null) }
@@ -760,24 +767,24 @@ function NoteCard({ note, currentUser, onUpdate, onDelete, onEdit, onView, onPre
                 <Maximize2 size={10} />
               </button>
             )}
-            <button onClick={handleTogglePin} title={note.pinned ? t('collab.notes.unpin') : t('collab.notes.pin')}
+            {canEdit && <button onClick={handleTogglePin} title={note.pinned ? t('collab.notes.unpin') : t('collab.notes.pin')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = color}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               {note.pinned ? <PinOff size={10} /> : <Pin size={10} />}
-            </button>
-            <button onClick={() => onEdit?.(note)} title={t('collab.notes.edit')}
+            </button>}
+            {canEdit && <button onClick={() => onEdit?.(note)} title={t('collab.notes.edit')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               <Pencil size={10} />
-            </button>
-            <button onClick={handleDelete} title={t('collab.notes.delete')}
+            </button>}
+            {canEdit && <button onClick={handleDelete} title={t('collab.notes.delete')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               <Trash2 size={10} />
-            </button>
+            </button>}
             <div style={{ width: 1, height: 12, background: 'var(--border-faint)', flexShrink: 0, marginLeft: 1, marginRight: 1 }} />
             {/* Author avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}
@@ -879,6 +886,9 @@ interface CollabNotesProps {
 
 export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
   const { t } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canEdit = can('collab_edit', trip)
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
@@ -1124,17 +1134,17 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
           {t('collab.notes.title')}
         </h3>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button onClick={() => setShowSettings(true)} title={t('collab.notes.categorySettings') || 'Categories'}
+          {canEdit && <button onClick={() => setShowSettings(true)} title={t('collab.notes.categorySettings') || 'Categories'}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-faint)', transition: 'color 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
             <Settings size={14} />
-          </button>
-          <button onClick={() => setShowNewModal(true)}
+          </button>}
+          {canEdit && <button onClick={() => setShowNewModal(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 99, padding: '6px 12px', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 600, fontFamily: FONT, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <Plus size={12} />
             {t('collab.notes.new')}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1252,6 +1262,7 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
                 key={note.id}
                 note={note}
                 currentUser={currentUser}
+                canEdit={canEdit}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
                 onEdit={setEditingNote}
@@ -1303,12 +1314,12 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
                 )}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <button onClick={() => { setViewingNote(null); setEditingNote(viewingNote) }}
+                {canEdit && <button onClick={() => { setViewingNote(null); setEditingNote(viewingNote) }}
                   style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
                   onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
                   <Pencil size={16} />
-                </button>
+                </button>}
                 <button onClick={() => setViewingNote(null)}
                   style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
@@ -1327,6 +1338,8 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
 
       {showNewModal && (
         <NoteFormModal
+          note={null}
+          tripId={tripId}
           onClose={() => setShowNewModal(false)}
           onSubmit={handleCreateNote}
           existingCategories={categories}

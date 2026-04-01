@@ -59,7 +59,7 @@ interface ReservationModalProps {
   assignments: AssignmentsMap
   selectedDayId: number | null
   files?: TripFile[]
-  onFileUpload: (fd: FormData) => Promise<void>
+  onFileUpload?: (fd: FormData) => Promise<void>
   onFileDelete: (fileId: number) => Promise<void>
   accommodations?: Accommodation[]
 }
@@ -504,14 +504,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             ))}
             <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }} onChange={handleFileChange} />
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
+              {onFileUpload && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
                 border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
                 fontSize: 11, color: 'var(--text-faint)', cursor: uploadingFile ? 'default' : 'pointer', fontFamily: 'inherit',
               }}>
                 <Paperclip size={11} />
                 {uploadingFile ? t('reservations.uploading') : t('reservations.attachFile')}
-              </button>
+              </button>}
               {/* Link existing file picker */}
               {reservation?.id && files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).length > 0 && (
                 <div style={{ position: 'relative' }}>

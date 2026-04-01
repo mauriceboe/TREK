@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Camera, Plus, Share2, EyeOff, Eye, X, Check, Search, ArrowUpDown, MapPin, Filter } from 'lucide-react'
+import { Camera, Plus, Share2, EyeOff, Eye, X, Check, Search, ArrowUpDown, MapPin, Filter, Link2, RefreshCw, Unlink, FolderOpen } from 'lucide-react'
 import apiClient from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
+import { getAuthUrl } from '../../api/authUrl'
+import { useToast } from '../shared/Toast'
+
+function ImmichImg({ baseUrl, style, loading }: { baseUrl: string; style?: React.CSSProperties; loading?: 'lazy' | 'eager' }) {
+  const [src, setSrc] = useState('')
+  useEffect(() => {
+    getAuthUrl(baseUrl, 'immich').then(setSrc)
+  }, [baseUrl])
+  return src ? <img src={src} alt="" loading={loading} style={style} /> : null
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +41,7 @@ interface MemoriesPanelProps {
 
 export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPanelProps) {
   const { t } = useTranslation()
+  const toast = useToast()
   const currentUser = useAuthStore(s => s.user)
 
   const [connected, setConnected] = useState(false)
@@ -52,11 +63,65 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
   const [sortAsc, setSortAsc] = useState(true)
   const [locationFilter, setLocationFilter] = useState('')
 
+  // Album linking
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false)
+  const [albums, setAlbums] = useState<{ id: string; albumName: string; assetCount: number }[]>([])
+  const [albumsLoading, setAlbumsLoading] = useState(false)
+  const [albumLinks, setAlbumLinks] = useState<{ id: number; immich_album_id: string; album_name: string; user_id: number; username: string; sync_enabled: number; last_synced_at: string | null }[]>([])
+  const [syncing, setSyncing] = useState<number | null>(null)
+
+  const loadAlbumLinks = async () => {
+    try {
+      const res = await apiClient.get(`/integrations/immich/trips/${tripId}/album-links`)
+      setAlbumLinks(res.data.links || [])
+    } catch { setAlbumLinks([]) }
+  }
+
+  const openAlbumPicker = async () => {
+    setShowAlbumPicker(true)
+    setAlbumsLoading(true)
+    try {
+      const res = await apiClient.get('/integrations/immich/albums')
+      setAlbums(res.data.albums || [])
+    } catch { setAlbums([]); toast.error(t('memories.error.loadAlbums')) }
+    finally { setAlbumsLoading(false) }
+  }
+
+  const linkAlbum = async (albumId: string, albumName: string) => {
+    try {
+      await apiClient.post(`/integrations/immich/trips/${tripId}/album-links`, { album_id: albumId, album_name: albumName })
+      setShowAlbumPicker(false)
+      await loadAlbumLinks()
+      // Auto-sync after linking
+      const linksRes = await apiClient.get(`/integrations/immich/trips/${tripId}/album-links`)
+      const newLink = (linksRes.data.links || []).find((l: any) => l.immich_album_id === albumId)
+      if (newLink) await syncAlbum(newLink.id)
+    } catch { toast.error(t('memories.error.linkAlbum')) }
+  }
+
+  const unlinkAlbum = async (linkId: number) => {
+    try {
+      await apiClient.delete(`/integrations/immich/trips/${tripId}/album-links/${linkId}`)
+      loadAlbumLinks()
+    } catch { toast.error(t('memories.error.unlinkAlbum')) }
+  }
+
+  const syncAlbum = async (linkId: number) => {
+    setSyncing(linkId)
+    try {
+      await apiClient.post(`/integrations/immich/trips/${tripId}/album-links/${linkId}/sync`)
+      await loadAlbumLinks()
+      await loadPhotos()
+    } catch { toast.error(t('memories.error.syncAlbum')) }
+    finally { setSyncing(null) }
+  }
+
   // Lightbox
   const [lightboxId, setLightboxId] = useState<string | null>(null)
   const [lightboxUserId, setLightboxUserId] = useState<number | null>(null)
   const [lightboxInfo, setLightboxInfo] = useState<any>(null)
   const [lightboxInfoLoading, setLightboxInfoLoading] = useState(false)
+  const [lightboxOriginalSrc, setLightboxOriginalSrc] = useState('')
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +154,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       setConnected(false)
     }
     await loadPhotos()
+    await loadAlbumLinks()
     setLoading(false)
   }
 
@@ -114,6 +180,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       setPickerPhotos(res.data.assets || [])
     } catch {
       setPickerPhotos([])
+      toast.error(t('memories.error.loadPhotos'))
     } finally {
       setPickerLoading(false)
     }
@@ -142,7 +209,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       })
       setShowPicker(false)
       loadInitial()
-    } catch {}
+    } catch { toast.error(t('memories.error.addPhotos')) }
   }
 
   // ── Remove photo ──────────────────────────────────────────────────────────
@@ -151,7 +218,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
     try {
       await apiClient.delete(`/integrations/immich/trips/${tripId}/photos/${assetId}`)
       setTripPhotos(prev => prev.filter(p => p.immich_asset_id !== assetId))
-    } catch {}
+    } catch { toast.error(t('memories.error.removePhoto')) }
   }
 
   // ── Toggle sharing ────────────────────────────────────────────────────────
@@ -162,18 +229,13 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
       setTripPhotos(prev => prev.map(p =>
         p.immich_asset_id === assetId ? { ...p, shared: shared ? 1 : 0 } : p
       ))
-    } catch {}
+    } catch { toast.error(t('memories.error.toggleSharing')) }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const token = useAuthStore(s => s.token)
-
-  const thumbnailUrl = (assetId: string, userId: number) =>
-    `/api/integrations/immich/assets/${assetId}/thumbnail?userId=${userId}&token=${token}`
-
-  const originalUrl = (assetId: string, userId: number) =>
-    `/api/integrations/immich/assets/${assetId}/original?userId=${userId}&token=${token}`
+  const thumbnailBaseUrl = (assetId: string, userId: number) =>
+    `/api/integrations/immich/assets/${assetId}/thumbnail?userId=${userId}`
 
   const ownPhotos = tripPhotos.filter(p => p.user_id === currentUser?.id)
   const othersPhotos = tripPhotos.filter(p => p.user_id !== currentUser?.id && p.shared)
@@ -218,6 +280,72 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 300 }}>
           {t('memories.notConnectedHint')}
         </p>
+      </div>
+    )
+  }
+
+  // ── Photo Picker Modal ────────────────────────────────────────────────────
+
+  // ── Album Picker Modal ──────────────────────────────────────────────────
+
+  if (showAlbumPicker) {
+    const linkedIds = new Set(albumLinks.map(l => l.immich_album_id))
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...font }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {t('memories.selectAlbum')}
+            </h3>
+            <button onClick={() => setShowAlbumPicker(false)}
+              style={{ padding: '7px 14px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          {albumsLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <div style={{ width: 24, height: 24, border: '2px solid var(--border-primary)', borderTopColor: 'var(--text-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+            </div>
+          ) : albums.length === 0 ? (
+            <p style={{ textAlign: 'center', padding: 40, fontSize: 13, color: 'var(--text-faint)' }}>
+              {t('memories.noAlbums')}
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {albums.map(album => {
+                const isLinked = linkedIds.has(album.id)
+                return (
+                  <button key={album.id} onClick={() => !isLinked && linkAlbum(album.id, album.albumName)}
+                    disabled={isLinked}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px',
+                      borderRadius: 10, border: 'none', cursor: isLinked ? 'default' : 'pointer',
+                      background: isLinked ? 'var(--bg-tertiary)' : 'transparent', fontFamily: 'inherit', textAlign: 'left',
+                      opacity: isLinked ? 0.5 : 1,
+                    }}
+                    onMouseEnter={e => { if (!isLinked) e.currentTarget.style.background = 'var(--bg-hover)' }}
+                    onMouseLeave={e => { if (!isLinked) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <FolderOpen size={20} color="var(--text-muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{album.albumName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>
+                        {album.assetCount} {t('memories.photos')}
+                      </div>
+                    </div>
+                    {isLinked ? (
+                      <Check size={16} color="var(--text-faint)" />
+                    ) : (
+                      <Link2 size={16} color="var(--text-muted)" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -328,7 +456,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
                           outline: isSelected ? '3px solid var(--text-primary)' : 'none',
                           outlineOffset: -3,
                         }}>
-                        <img src={thumbnailUrl(asset.id, currentUser!.id)} alt="" loading="lazy"
+                        <ImmichImg baseUrl={thumbnailBaseUrl(asset.id, currentUser!.id)} loading="lazy"
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         {isSelected && (
                           <div style={{
@@ -404,16 +532,52 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
             </p>
           </div>
           {connected && (
-            <button onClick={openPicker}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10,
-                border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-              <Plus size={14} /> {t('memories.addPhotos')}
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={openAlbumPicker}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10,
+                  border: '1px solid var(--border-primary)', background: 'none', color: 'var(--text-muted)',
+                  fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                <Link2 size={13} /> {t('memories.linkAlbum')}
+              </button>
+              <button onClick={openPicker}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10,
+                  border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                <Plus size={14} /> {t('memories.addPhotos')}
+              </button>
+            </div>
           )}
         </div>
+
+        {/* Linked Albums */}
+        {albumLinks.length > 0 && (
+          <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border-secondary)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {albumLinks.map(link => (
+              <div key={link.id} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8,
+                background: 'var(--bg-tertiary)', fontSize: 11, color: 'var(--text-muted)',
+              }}>
+                <FolderOpen size={11} />
+                <span style={{ fontWeight: 500 }}>{link.album_name}</span>
+                {link.username !== currentUser?.username && <span style={{ color: 'var(--text-faint)' }}>({link.username})</span>}
+                <button onClick={() => syncAlbum(link.id)} disabled={syncing === link.id} title={t('memories.syncAlbum')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: 'var(--text-faint)' }}>
+                  <RefreshCw size={11} style={{ animation: syncing === link.id ? 'spin 1s linear infinite' : 'none' }} />
+                </button>
+                {link.user_id === currentUser?.id && (
+                  <button onClick={() => unlinkAlbum(link.id)} title={t('memories.unlinkAlbum')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: 'var(--text-faint)' }}>
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Filter & Sort bar */}
@@ -470,12 +634,14 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
                   style={{ position: 'relative', aspectRatio: '1', borderRadius: 10, overflow: 'visible', cursor: 'pointer' }}
                   onClick={() => {
                     setLightboxId(photo.immich_asset_id); setLightboxUserId(photo.user_id); setLightboxInfo(null)
+                    setLightboxOriginalSrc('')
+                    getAuthUrl(`/api/integrations/immich/assets/${photo.immich_asset_id}/original?userId=${photo.user_id}`, 'immich').then(setLightboxOriginalSrc)
                     setLightboxInfoLoading(true)
                     apiClient.get(`/integrations/immich/assets/${photo.immich_asset_id}/info?userId=${photo.user_id}`)
                       .then(r => setLightboxInfo(r.data)).catch(() => {}).finally(() => setLightboxInfoLoading(false))
                   }}>
 
-                  <img src={thumbnailUrl(photo.immich_asset_id, photo.user_id)} alt="" loading="lazy"
+                  <ImmichImg baseUrl={thumbnailBaseUrl(photo.immich_asset_id, photo.user_id)} loading="lazy"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} />
 
                   {/* Other user's avatar */}
@@ -592,7 +758,7 @@ export default function MemoriesPanel({ tripId, startDate, endDate }: MemoriesPa
           </button>
           <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', justifyContent: 'center', padding: 20, width: '100%', height: '100%' }}>
             <img
-              src={originalUrl(lightboxId, lightboxUserId)}
+              src={lightboxOriginalSrc}
               alt=""
               style={{ maxWidth: lightboxInfo ? 'calc(100% - 280px)' : '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 10, cursor: 'default' }}
             />

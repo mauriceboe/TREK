@@ -84,7 +84,7 @@ interface PlaceWithTags extends Place {
 }
 
 function getPlaceWithTags(placeId: number | string): PlaceWithTags | null {
-  const place = _db!.prepare(`
+  const place = db.prepare(`
     SELECT p.*, c.name as category_name, c.color as category_color, c.icon as category_icon
     FROM places p
     LEFT JOIN categories c ON p.category_id = c.id
@@ -93,7 +93,7 @@ function getPlaceWithTags(placeId: number | string): PlaceWithTags | null {
 
   if (!place) return null;
 
-  const tags = _db!.prepare(`
+  const tags = db.prepare(`
     SELECT t.* FROM tags t
     JOIN place_tags pt ON t.id = pt.tag_id
     WHERE pt.place_id = ?
@@ -117,7 +117,7 @@ interface TripAccess {
 }
 
 function canAccessTrip(tripId: number | string, userId: number): TripAccess | undefined {
-  return _db!.prepare(`
+  return db.prepare(`
     SELECT t.id, t.user_id FROM trips t
     LEFT JOIN trip_members m ON m.trip_id = t.id AND m.user_id = ?
     WHERE t.id = ? AND (t.user_id = ? OR m.user_id IS NOT NULL)
@@ -125,7 +125,7 @@ function canAccessTrip(tripId: number | string, userId: number): TripAccess | un
 }
 
 function isOwner(tripId: number | string, userId: number): boolean {
-  return !!_db!.prepare('SELECT id FROM trips WHERE id = ? AND user_id = ?').get(tripId, userId);
+  return !!db.prepare('SELECT id FROM trips WHERE id = ? AND user_id = ?').get(tripId, userId);
 }
 
 export { db, closeDb, reinitialize, getPlaceWithTags, canAccessTrip, isOwner };

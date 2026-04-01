@@ -16,20 +16,33 @@ env:
   NODE_ENV: production
   PORT: 3000
   # ALLOWED_ORIGINS: ""
-# NOTE: If using ingress, ensure env.ALLOWED_ORIGINS matches the domains in ingress.hosts for proper CORS configuration.
+  # NOTE: If using ingress, ensure env.ALLOWED_ORIGINS matches the domains in ingress.hosts for proper CORS configuration.
+  # ALLOW_INTERNAL_NETWORK: "false"
+  # Set to "true" if Immich or other integrated services are hosted on a private/RFC-1918 network address.
+  # Loopback (127.x) and link-local/metadata addresses (169.254.x) are always blocked.
+  # COOKIE_SECURE: "true"
+  # Set to "false" to allow session cookies over plain HTTP (e.g. no ingress TLS). Not recommended for production.
+  # OIDC_DISCOVERY_URL: ""
+  # Override the OIDC discovery endpoint for providers with non-standard paths (e.g. Authentik).
 
 
-# JWT secret configuration
+# Secret environment variables stored in a Kubernetes Secret.
+# JWT_SECRET is managed entirely by the server (auto-generated into the data PVC,
+# rotatable via the admin panel) — it is not configured here.
 secretEnv:
-  # If set, use this value for JWT_SECRET (base64-encoded in secret.yaml)
-  JWT_SECRET: ""
+  # At-rest encryption key for stored secrets (API keys, MFA, SMTP, OIDC, etc.).
+  # Recommended: set to a random 32-byte hex value (openssl rand -hex 32).
+  # If left empty the server resolves the key automatically:
+  #   1. data/.jwt_secret (existing installs — encrypted data stays readable after upgrade)
+  #   2. data/.encryption_key auto-generated on first start (fresh installs)
+  ENCRYPTION_KEY: ""
 
-# If true, a random JWT_SECRET will be generated during install (overrides secretEnv.JWT_SECRET)
-generateJwtSecret: false
+# If true, a random ENCRYPTION_KEY is generated at install and preserved across upgrades
+generateEncryptionKey: false
 
-# If set, use an existing Kubernetes secret for JWT_SECRET
+# If set, use an existing Kubernetes secret that contains ENCRYPTION_KEY
 existingSecret: ""
-existingSecretKey: JWT_SECRET
+existingSecretKey: ENCRYPTION_KEY
 
 persistence:
   enabled: true
@@ -38,7 +51,13 @@ persistence:
   uploads:
     size: 1Gi
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 ingress:
   enabled: false

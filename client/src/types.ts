@@ -10,6 +10,8 @@ export interface User {
   created_at: string
   /** Present after load; true when TOTP MFA is enabled for password login */
   mfa_enabled?: boolean
+  /** True when a password change is required before the user can continue */
+  must_change_password?: boolean
 }
 
 export interface Trip {
@@ -20,6 +22,7 @@ export interface Trip {
   end_date: string
   cover_url: string | null
   is_archived: boolean
+  reminder_days: number
   owner_id: number
   created_at: string
   updated_at: string
@@ -49,6 +52,7 @@ export interface Place {
   image_url: string | null
   google_place_id: string | null
   osm_id: string | null
+  route_geometry: string | null
   place_time: string | null
   end_time: string | null
   created_at: string
@@ -106,6 +110,7 @@ export interface BudgetItem {
   paid_by: number | null
   persons: number
   members: BudgetMember[]
+  expense_date: string | null
 }
 
 export interface BudgetMember {

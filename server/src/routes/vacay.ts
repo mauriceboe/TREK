@@ -351,7 +351,7 @@ router.post('/invite', (req: Request, res: Response) => {
 
   // Notify invited user
   import('../services/notifications').then(({ notify }) => {
-    notify({ userId: user_id, event: 'vacay_invite', params: { actor: authReq.user.username } }).catch(() => {});
+    notify({ userId: user_id, event: 'vacay_invite', params: { actor: authReq.user.email } }).catch(() => {});
   });
 
   res.json({ success: true });

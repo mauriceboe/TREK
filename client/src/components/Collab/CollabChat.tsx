@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom'
 import { ArrowUp, Trash2, Reply, ChevronUp, MessageCircle, Smile, X } from 'lucide-react'
 import { collabApi } from '../../api/client'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { addListener, removeListener } from '../../api/websocket'
 import { useTranslation } from '../../i18n'
 import type { User } from '../../types'
@@ -353,6 +355,9 @@ interface CollabChatProps {
 export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
   const { t } = useTranslation()
   const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canEdit = can('collab_edit', trip)
 
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
@@ -636,11 +641,11 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
                       style={{ position: 'relative' }}
                       onMouseEnter={() => setHoveredId(msg.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      onContextMenu={e => { e.preventDefault(); setReactMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }) }}
+                      onContextMenu={e => { e.preventDefault(); if (canEdit) setReactMenu({ msgId: msg.id, x: e.clientX, y: e.clientY }) }}
                       onTouchEnd={e => {
                         const now = Date.now()
                         const lastTap = e.currentTarget.dataset.lastTap || 0
-                        if (now - lastTap < 300) {
+                        if (now - lastTap < 300 && canEdit) {
                           e.preventDefault()
                           const touch = e.changedTouches?.[0]
                           if (touch) setReactMenu({ msgId: msg.id, x: touch.clientX, y: touch.clientY })
@@ -692,7 +697,7 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
                         transition: 'opacity .1s',
                         ...(own ? { left: -6 } : { right: -6 }),
                       }}>
-                        <button onClick={() => setReplyTo(msg)} title="Reply" style={{
+                        <button onClick={() => setReplyTo(msg)} title={t('collab.chat.reply')} style={{
                           width: 24, height: 24, borderRadius: '50%', border: 'none',
                           background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                           cursor: 'pointer', color: 'var(--accent-text)', padding: 0,
@@ -703,8 +708,8 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
                         >
                           <Reply size={11} />
                         </button>
-                        {own && (
-                          <button onClick={() => handleDelete(msg.id)} title="Delete" style={{
+                        {own && canEdit && (
+                          <button onClick={() => handleDelete(msg.id)} title={t('common.delete')} style={{
                             width: 24, height: 24, borderRadius: '50%', border: 'none',
                             background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: 'pointer', color: 'var(--accent-text)', padding: 0,
@@ -735,7 +740,7 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
                           {msg.reactions.map(r => {
                             const myReaction = r.users.some(u => String(u.user_id) === String(currentUser.id))
                             return (
-                              <ReactionBadge key={r.emoji} reaction={r} currentUserId={currentUser.id} onReact={() => handleReact(msg.id, r.emoji)} />
+                              <ReactionBadge key={r.emoji} reaction={r} currentUserId={currentUser.id} onReact={() => { if (canEdit) handleReact(msg.id, r.emoji) }} />
                             )
                           })}
                         </div>
@@ -780,23 +785,27 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
           {/* Emoji button */}
-          <button ref={emojiBtnRef} onClick={() => setShowEmoji(!showEmoji)} style={{
-            width: 34, height: 34, borderRadius: '50%', border: 'none',
-            background: showEmoji ? 'var(--bg-hover)' : 'transparent',
-            color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'background 0.15s',
-          }}>
-            <Smile size={20} />
-          </button>
+          {canEdit && (
+            <button ref={emojiBtnRef} onClick={() => setShowEmoji(!showEmoji)} style={{
+              width: 34, height: 34, borderRadius: '50%', border: 'none',
+              background: showEmoji ? 'var(--bg-hover)' : 'transparent',
+              color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'background 0.15s',
+            }}>
+              <Smile size={20} />
+            </button>
+          )}
 
           <textarea
             ref={textareaRef}
             rows={1}
+            disabled={!canEdit}
             style={{
               flex: 1, resize: 'none', border: '1px solid var(--border-primary)', borderRadius: 20,
               padding: '8px 14px', fontSize: 14, lineHeight: 1.4, fontFamily: 'inherit',
               background: 'var(--bg-input)', color: 'var(--text-primary)', outline: 'none',
               maxHeight: 100, overflowY: 'hidden',
+              opacity: canEdit ? 1 : 0.5,
             }}
             placeholder={t('collab.chat.placeholder')}
             value={text}
@@ -805,15 +814,17 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
           />
 
           {/* Send */}
-          <button onClick={handleSend} disabled={!text.trim() || sending} style={{
-            width: 34, height: 34, borderRadius: '50%', border: 'none',
-            background: text.trim() ? '#007AFF' : 'var(--border-primary)',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: text.trim() ? 'pointer' : 'default', flexShrink: 0,
-            transition: 'background 0.15s',
-          }}>
-            <ArrowUp size={18} strokeWidth={2.5} />
-          </button>
+          {canEdit && (
+            <button onClick={handleSend} disabled={!text.trim() || sending} style={{
+              width: 34, height: 34, borderRadius: '50%', border: 'none',
+              background: text.trim() ? '#007AFF' : 'var(--border-primary)',
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: text.trim() ? 'pointer' : 'default', flexShrink: 0,
+              transition: 'background 0.15s',
+            }}>
+              <ArrowUp size={18} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
       </div>
 

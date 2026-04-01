@@ -10,3 +10,12 @@ data:
   {{- if .Values.env.ALLOWED_ORIGINS }}
   ALLOWED_ORIGINS: {{ .Values.env.ALLOWED_ORIGINS | quote }}
   {{- end }}
+  {{- if .Values.env.ALLOW_INTERNAL_NETWORK }}
+  ALLOW_INTERNAL_NETWORK: {{ .Values.env.ALLOW_INTERNAL_NETWORK | quote }}
+  {{- end }}
+  {{- if .Values.env.COOKIE_SECURE }}
+  COOKIE_SECURE: {{ .Values.env.COOKIE_SECURE | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_DISCOVERY_URL }}
+  OIDC_DISCOVERY_URL: {{ .Values.env.OIDC_DISCOVERY_URL | quote }}
+  {{- end }}

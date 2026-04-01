@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import ReactDOM from 'react-dom'
 import { useTripStore } from '../../store/tripStore'
+import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
@@ -56,9 +57,10 @@ interface ReservationCardProps {
   files?: TripFile[]
   onNavigateToFiles: () => void
   assignmentLookup: Record<number, AssignmentLookupEntry>
+  canEdit: boolean
 }
 
-function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateToFiles, assignmentLookup }: ReservationCardProps) {
+function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateToFiles, assignmentLookup, canEdit }: ReservationCardProps) {
   const { toggleReservationStatus } = useTripStore()
   const toast = useToast()
   const { t, locale } = useTranslation()
@@ -95,24 +97,34 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: confirmed ? 'rgba(22,163,74,0.06)' : 'rgba(217,119,6,0.06)' }}>
         <div style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: confirmed ? '#16a34a' : '#d97706' }} />
-        <button onClick={handleToggle} style={{ fontSize: 10, fontWeight: 700, color: confirmed ? '#16a34a' : '#d97706', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-          {confirmed ? t('reservations.confirmed') : t('reservations.pending')}
-        </button>
+        {canEdit ? (
+          <button onClick={handleToggle} style={{ fontSize: 10, fontWeight: 700, color: confirmed ? '#16a34a' : '#d97706', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+            {confirmed ? t('reservations.confirmed') : t('reservations.pending')}
+          </button>
+        ) : (
+          <span style={{ fontSize: 10, fontWeight: 700, color: confirmed ? '#16a34a' : '#d97706', padding: 0 }}>
+            {confirmed ? t('reservations.confirmed') : t('reservations.pending')}
+          </span>
+        )}
         <div style={{ width: 1, height: 10, background: 'var(--border-faint)' }} />
         <TypeIcon size={11} style={{ color: typeInfo.color, flexShrink: 0 }} />
         <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{t(typeInfo.labelKey)}</span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
-        <button onClick={() => onEdit(r)} title={t('common.edit')} style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
-          <Pencil size={11} />
-        </button>
-        <button onClick={() => setShowDeleteConfirm(true)} title={t('common.delete')} style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
-          <Trash2 size={11} />
-        </button>
+        {canEdit && (
+          <button onClick={() => onEdit(r)} title={t('common.edit')} style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
+            <Pencil size={11} />
+          </button>
+        )}
+        {canEdit && (
+          <button onClick={() => setShowDeleteConfirm(true)} title={t('common.delete')} style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', flexShrink: 0 }}
+            onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
+            <Trash2 size={11} />
+          </button>
+        )}
       </div>
 
       {/* Details */}
@@ -131,7 +143,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
                 <div style={{ flex: 1, padding: '5px 10px', textAlign: 'center', borderRight: '1px solid var(--border-faint)' }}>
                   <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{t('reservations.time')}</div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginTop: 1 }}>
-                    {fmtTime(r.reservation_time)}{r.reservation_end_time ? ` – ${r.reservation_end_time}` : ''}
+                    {fmtTime(r.reservation_time)}{r.reservation_end_time ? ` – ${r.reservation_end_time.includes('T') ? fmtTime(r.reservation_end_time) : fmtTime(r.reservation_time.split('T')[0] + 'T' + r.reservation_end_time)}` : ''}
                   </div>
                 </div>
               )}
@@ -330,6 +342,9 @@ interface ReservationsPanelProps {
 
 export default function ReservationsPanel({ tripId, reservations, days, assignments, files = [], onAdd, onEdit, onDelete, onNavigateToFiles }: ReservationsPanelProps) {
   const { t, locale } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canEdit = can('reservation_edit', trip)
   const [showHint, setShowHint] = useState(() => !localStorage.getItem('hideReservationHint'))
 
   const assignmentLookup = useMemo(() => buildAssignmentLookup(days, assignments), [days, assignments])
@@ -348,13 +363,15 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
             {total === 0 ? t('reservations.empty') : t('reservations.summary', { confirmed: allConfirmed.length, pending: allPending.length })}
           </p>
         </div>
-        <button onClick={onAdd} style={{
-          display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 99,
-          border: 'none', background: 'var(--accent)', color: 'var(--accent-text)',
-          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          <Plus size={13} /> <span className="hidden sm:inline">{t('reservations.addManual')}</span>
-        </button>
+        {canEdit && (
+          <button onClick={onAdd} style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 99,
+            border: 'none', background: 'var(--accent)', color: 'var(--accent-text)',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <Plus size={13} /> <span className="hidden sm:inline">{t('reservations.addManual')}</span>
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -370,14 +387,14 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
             {allPending.length > 0 && (
               <Section title={t('reservations.pending')} count={allPending.length} accent="gray">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {allPending.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} />)}
+                  {allPending.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} />)}
                 </div>
               </Section>
             )}
             {allConfirmed.length > 0 && (
               <Section title={t('reservations.confirmed')} count={allConfirmed.length} accent="green">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {allConfirmed.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} />)}
+                  {allConfirmed.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} />)}
                 </div>
               </Section>
             )}

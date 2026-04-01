@@ -79,9 +79,11 @@ async function runBackup(): Promise<void> {
       if (fs.existsSync(uploadsDir)) archive.directory(uploadsDir, 'uploads');
       archive.finalize();
     });
-    console.log(`[Auto-Backup] Created: ${filename}`);
+    const { logInfo: li } = require('./services/auditLog');
+    li(`Auto-Backup created: ${filename}`);
   } catch (err: unknown) {
-    console.error('[Auto-Backup] Error:', err instanceof Error ? err.message : err);
+    const { logError: le } = require('./services/auditLog');
+    le(`Auto-Backup: ${err instanceof Error ? err.message : err}`);
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
     return;
   }
@@ -102,11 +104,13 @@ function cleanupOldBackups(keepDays: number): void {
       const stat = fs.statSync(filePath);
       if (stat.birthtimeMs < cutoff) {
         fs.unlinkSync(filePath);
-        console.log(`[Auto-Backup] Old backup deleted: ${file}`);
+        const { logInfo: li } = require('./services/auditLog');
+        li(`Auto-Backup old backup deleted: ${file}`);
       }
     }
   } catch (err: unknown) {
-    console.error('[Auto-Backup] Cleanup error:', err instanceof Error ? err.message : err);
+    const { logError: le } = require('./services/auditLog');
+    le(`Auto-Backup cleanup: ${err instanceof Error ? err.message : err}`);
   }
 }
 
@@ -118,14 +122,16 @@ function start(): void {
 
   const settings = loadSettings();
   if (!settings.enabled) {
-    console.log('[Auto-Backup] Disabled');
+    const { logInfo: li } = require('./services/auditLog');
+    li('Auto-Backup disabled');
     return;
   }
 
   const expression = buildCronExpression(settings);
   const tz = process.env.TZ || 'UTC';
   currentTask = cron.schedule(expression, runBackup, { timezone: tz });
-  console.log(`[Auto-Backup] Scheduled: ${settings.interval} (${expression}), tz: ${tz}, retention: ${settings.keep_days === 0 ? 'forever' : settings.keep_days + ' days'}`);
+  const { logInfo: li2 } = require('./services/auditLog');
+  li2(`Auto-Backup scheduled: ${settings.interval} (${expression}), tz: ${tz}, retention: ${settings.keep_days === 0 ? 'forever' : settings.keep_days + ' days'}`);
 }
 
 // Demo mode: hourly reset of demo user data
@@ -140,15 +146,75 @@ function startDemoReset(): void {
       const { resetDemoUser } = require('./demo/demo-reset');
       resetDemoUser();
     } catch (err: unknown) {
-      console.error('[Demo Reset] Error:', err instanceof Error ? err.message : err);
+      const { logError: le } = require('./services/auditLog');
+      le(`Demo reset: ${err instanceof Error ? err.message : err}`);
     }
   });
-  console.log('[Demo] Hourly reset scheduled (at :00 every hour)');
+  const { logInfo: li3 } = require('./services/auditLog');
+  li3('Demo hourly reset scheduled');
+}
+
+// Trip reminders: daily check at 9 AM local time for trips starting tomorrow
+let reminderTask: ScheduledTask | null = null;
+
+function startTripReminders(): void {
+  if (reminderTask) { reminderTask.stop(); reminderTask = null; }
+
+  try {
+    const { db } = require('./db/database');
+    const getSetting = (key: string) => (db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined)?.value;
+    const channel = getSetting('notification_channel') || 'none';
+    const reminderEnabled = getSetting('notify_trip_reminder') !== 'false';
+    const hasSmtp = !!(getSetting('smtp_host') || '').trim();
+    const hasWebhook = !!(getSetting('notification_webhook_url') || '').trim();
+    const channelReady = (channel === 'email' && hasSmtp) || (channel === 'webhook' && hasWebhook);
+
+    if (!channelReady || !reminderEnabled) {
+      const { logInfo: li } = require('./services/auditLog');
+      const reason = !channelReady ? `no ${channel === 'none' ? 'notification channel' : channel} configuration` : 'trip reminders disabled in settings';
+      li(`Trip reminders: disabled (${reason})`);
+      return;
+    }
+
+    const tripCount = (db.prepare('SELECT COUNT(*) as c FROM trips WHERE reminder_days > 0 AND start_date IS NOT NULL').get() as { c: number }).c;
+    const { logInfo: liSetup } = require('./services/auditLog');
+    liSetup(`Trip reminders: enabled via ${channel}${tripCount > 0 ? `, ${tripCount} trip(s) with active reminders` : ''}`);
+  } catch {
+    return;
+  }
+
+  const tz = process.env.TZ || 'UTC';
+  reminderTask = cron.schedule('0 9 * * *', async () => {
+    try {
+      const { db } = require('./db/database');
+      const { notifyTripMembers } = require('./services/notifications');
+
+      const trips = db.prepare(`
+        SELECT t.id, t.title, t.user_id, t.reminder_days FROM trips t
+        WHERE t.reminder_days > 0
+          AND t.start_date IS NOT NULL
+          AND t.start_date = date('now', '+' || t.reminder_days || ' days')
+      `).all() as { id: number; title: string; user_id: number; reminder_days: number }[];
+
+      for (const trip of trips) {
+        await notifyTripMembers(trip.id, 0, 'trip_reminder', { trip: trip.title }).catch(() => {});
+      }
+
+      const { logInfo: li } = require('./services/auditLog');
+      if (trips.length > 0) {
+        li(`Trip reminders sent for ${trips.length} trip(s): ${trips.map(t => `"${t.title}" (${t.reminder_days}d)`).join(', ')}`);
+      }
+    } catch (err: unknown) {
+      const { logError: le } = require('./services/auditLog');
+      le(`Trip reminder check failed: ${err instanceof Error ? err.message : err}`);
+    }
+  }, { timezone: tz });
 }
 
 function stop(): void {
   if (currentTask) { currentTask.stop(); currentTask = null; }
   if (demoTask) { demoTask.stop(); demoTask = null; }
+  if (reminderTask) { reminderTask.stop(); reminderTask = null; }
 }
 
-export { start, stop, startDemoReset, loadSettings, saveSettings, VALID_INTERVALS };
+export { start, stop, startDemoReset, startTripReminders, loadSettings, saveSettings, VALID_INTERVALS };

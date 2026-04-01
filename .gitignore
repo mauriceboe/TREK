@@ -11,6 +11,9 @@ client/public/icons/*.png
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # User data
 server/data/
@@ -28,6 +31,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # Logs
 logs

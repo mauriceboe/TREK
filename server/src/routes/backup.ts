@@ -4,6 +4,7 @@ import unzipper from 'unzipper';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import Database from 'better-sqlite3';
 import { authenticate, adminOnly } from '../middleware/auth';
 import * as scheduler from '../scheduler';
 import { db, closeDb, reinitialize } from '../db/database';
@@ -157,6 +158,34 @@ async function restoreFromZip(zipPath: string, res: Response, audit?: RestoreAud
     if (!fs.existsSync(extractedDb)) {
       fs.rmSync(extractDir, { recursive: true, force: true });
       return res.status(400).json({ error: 'Invalid backup: travel.db not found' });
+    }
+
+    let uploadedDb: InstanceType<typeof Database> | null = null;
+    try {
+      uploadedDb = new Database(extractedDb, { readonly: true });
+
+      const integrityResult = uploadedDb.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+      if (integrityResult.integrity_check !== 'ok') {
+        fs.rmSync(extractDir, { recursive: true, force: true });
+        return res.status(400).json({ error: `Uploaded database failed integrity check: ${integrityResult.integrity_check}` });
+      }
+
+      const requiredTables = ['users', 'trips', 'trip_members', 'places', 'days'];
+      const existingTables = uploadedDb
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[];
+      const tableNames = new Set(existingTables.map(t => t.name));
+      for (const table of requiredTables) {
+        if (!tableNames.has(table)) {
+          fs.rmSync(extractDir, { recursive: true, force: true });
+          return res.status(400).json({ error: `Uploaded database is missing required table: ${table}. This does not appear to be a TREK backup.` });
+        }
+      }
+    } catch (err) {
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      return res.status(400).json({ error: 'Uploaded file is not a valid SQLite database' });
+    } finally {
+      uploadedDb?.close();
     }
 
     closeDb();

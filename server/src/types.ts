@@ -16,6 +16,7 @@ export interface User {
   mfa_enabled?: number | boolean;
   mfa_secret?: string | null;
   mfa_backup_codes?: string | null;
+  must_change_password?: number | boolean;
   created_at?: string;
   updated_at?: string;
 }

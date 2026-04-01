@@ -15,7 +15,11 @@ interface AuditEntry {
   ip: string | null
 }
 
-export default function AuditLogPanel(): React.ReactElement {
+interface AuditLogPanelProps {
+  serverTimezone?: string
+}
+
+export default function AuditLogPanel({ serverTimezone }: AuditLogPanelProps): React.ReactElement {
   const { t, locale } = useTranslation()
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [total, setTotal] = useState(0)
@@ -66,9 +70,10 @@ export default function AuditLogPanel(): React.ReactElement {
 
   const fmtTime = (iso: string) => {
     try {
-      return new Date(iso).toLocaleString(locale, {
+      return new Date(iso.endsWith('Z') ? iso : iso + 'Z').toLocaleString(locale, {
         dateStyle: 'short',
         timeStyle: 'medium',
+        timeZone: serverTimezone || undefined,
       })
     } catch {
       return iso

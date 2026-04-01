@@ -17,7 +17,6 @@ interface AvatarResponse {
 
 interface AuthState {
   user: User | null
-  token: string | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -26,10 +25,11 @@ interface AuthState {
   serverTimezone: string
   /** Server policy: all users must enable MFA */
   appRequireMfa: boolean
+  tripRemindersEnabled: boolean
 
   login: (email: string, password: string) => Promise<LoginResult>
   completeMfaLogin: (mfaToken: string, code: string) => Promise<AuthResponse>
-  register: (username: string, email: string, password: string) => Promise<AuthResponse>
+  register: (username: string, email: string, password: string, invite_token?: string) => Promise<AuthResponse>
   logout: () => void
   /** Pass `{ silent: true }` to refresh the user without toggling global isLoading (avoids unmounting protected routes). */
   loadUser: (opts?: { silent?: boolean }) => Promise<void>
@@ -42,19 +42,20 @@ interface AuthState {
   setHasMapsKey: (val: boolean) => void
   setServerTimezone: (tz: string) => void
   setAppRequireMfa: (val: boolean) => void
+  setTripRemindersEnabled: (val: boolean) => void
   demoLogin: () => Promise<AuthResponse>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: localStorage.getItem('auth_token') || null,
-  isAuthenticated: !!localStorage.getItem('auth_token'),
-  isLoading: false,
+  isAuthenticated: false,
+  isLoading: true,
   error: null,
   demoMode: localStorage.getItem('demo_mode') === 'true',
   hasMapsKey: false,
   serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   appRequireMfa: false,
+  tripRemindersEnabled: false,
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
@@ -64,15 +65,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ isLoading: false, error: null })
         return { mfa_required: true as const, mfa_token: data.mfa_token }
       }
-      localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,
-        token: data.token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(data.token)
+      connect()
       return data as AuthResponse
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Login failed')
@@ -85,15 +84,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const data = await authApi.verifyMfaLogin({ mfa_token: mfaToken, code: code.replace(/\s/g, '') })
-      localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,
-        token: data.token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(data.token)
+      connect()
       return data as AuthResponse
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Verification failed')
@@ -106,15 +103,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const data = await authApi.register({ username, email, password, invite_token })
-      localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,
-        token: data.token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(data.token)
+      connect()
       return data
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Registration failed')
@@ -125,10 +120,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     disconnect()
-    localStorage.removeItem('auth_token')
+    // Tell server to clear the httpOnly cookie
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
+    // Clear service worker caches containing sensitive data
+    if ('caches' in window) {
+      caches.delete('api-data').catch(() => {})
+      caches.delete('user-uploads').catch(() => {})
+    }
     set({
       user: null,
-      token: null,
       isAuthenticated: false,
       error: null,
     })
@@ -136,11 +136,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loadUser: async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent
-    const token = get().token
-    if (!token) {
-      if (!silent) set({ isLoading: false })
-      return
-    }
     if (!silent) set({ isLoading: true })
     try {
       const data = await authApi.me()
@@ -149,15 +144,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       })
-      connect(token)
+      connect()
     } catch (err: unknown) {
-      localStorage.removeItem('auth_token')
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      })
+      // Only clear auth state on 401 (invalid/expired token), not on network errors
+      const isAuthError = err && typeof err === 'object' && 'response' in err &&
+        (err as { response?: { status?: number } }).response?.status === 401
+      if (isAuthError) {
+        set({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        })
+      } else {
+        set({ isLoading: false })
+      }
     }
   },
 
@@ -212,21 +212,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setHasMapsKey: (val: boolean) => set({ hasMapsKey: val }),
   setServerTimezone: (tz: string) => set({ serverTimezone: tz }),
   setAppRequireMfa: (val: boolean) => set({ appRequireMfa: val }),
+  setTripRemindersEnabled: (val: boolean) => set({ tripRemindersEnabled: val }),
 
   demoLogin: async () => {
     set({ isLoading: true, error: null })
     try {
       const data = await authApi.demoLogin()
-      localStorage.setItem('auth_token', data.token)
       set({
         user: data.user,
-        token: data.token,
         isAuthenticated: true,
         isLoading: false,
         demoMode: true,
         error: null,
       })
-      connect(data.token)
+      connect()
       return data
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Demo login failed')

@@ -9,9 +9,10 @@ let reconnectDelay = 1000
 const MAX_RECONNECT_DELAY = 30000
 const listeners = new Set<WebSocketListener>()
 const activeTrips = new Set<string>()
-let currentToken: string | null = null
+let shouldReconnect = false
 let refetchCallback: RefetchCallback | null = null
 let mySocketId: string | null = null
+let connecting = false
 
 export function getSocketId(): string | null {
   return mySocketId
@@ -21,9 +22,28 @@ export function setRefetchCallback(fn: RefetchCallback | null): void {
   refetchCallback = fn
 }
 
-function getWsUrl(token: string): string {
+function getWsUrl(wsToken: string): string {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${protocol}://${location.host}/ws?token=${token}`
+  return `${protocol}://${location.host}/ws?token=${wsToken}`
+}
+
+async function fetchWsToken(): Promise<string | null> {
+  try {
+    const resp = await fetch('/api/auth/ws-token', {
+      method: 'POST',
+      credentials: 'include',
+    })
+    if (resp.status === 401) {
+      // Session expired — stop reconnecting
+      shouldReconnect = false
+      return null
+    }
+    if (!resp.ok) return null
+    const { token } = await resp.json()
+    return token as string
+  } catch {
+    return null
+  }
 }
 
 function handleMessage(event: MessageEvent): void {
@@ -45,19 +65,29 @@ function scheduleReconnect(): void {
   if (reconnectTimer) return
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null
-    if (currentToken) {
-      connectInternal(currentToken, true)
+    if (shouldReconnect) {
+      connectInternal(true)
     }
   }, reconnectDelay)
   reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY)
 }
 
-function connectInternal(token: string, _isReconnect = false): void {
+async function connectInternal(_isReconnect = false): Promise<void> {
+  if (connecting) return
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
     return
   }
 
-  const url = getWsUrl(token)
+  connecting = true
+  const wsToken = await fetchWsToken()
+  connecting = false
+
+  if (!wsToken) {
+    if (shouldReconnect) scheduleReconnect()
+    return
+  }
+
+  const url = getWsUrl(wsToken)
   socket = new WebSocket(url)
 
   socket.onopen = () => {
@@ -82,7 +112,7 @@ function connectInternal(token: string, _isReconnect = false): void {
 
   socket.onclose = () => {
     socket = null
-    if (currentToken) {
+    if (shouldReconnect) {
       scheduleReconnect()
     }
   }
@@ -92,18 +122,18 @@ function connectInternal(token: string, _isReconnect = false): void {
   }
 }
 
-export function connect(token: string): void {
-  currentToken = token
+export function connect(): void {
+  shouldReconnect = true
   reconnectDelay = 1000
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
-  connectInternal(token, false)
+  connectInternal(false)
 }
 
 export function disconnect(): void {
-  currentToken = null
+  shouldReconnect = false
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null

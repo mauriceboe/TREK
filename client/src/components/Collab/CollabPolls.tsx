@@ -3,6 +3,8 @@ import { Plus, Trash2, X, Check, BarChart3, Lock, Clock } from 'lucide-react'
 import { collabApi } from '../../api/client'
 import { addListener, removeListener } from '../../api/websocket'
 import { useTranslation } from '../../i18n'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import ReactDOM from 'react-dom'
 import type { User } from '../../types'
 
@@ -190,13 +192,14 @@ function VoterChip({ voter, offset }: VoterChipProps) {
 interface PollCardProps {
   poll: Poll
   currentUser: User
+  canEdit: boolean
   onVote: (pollId: number, optionId: number) => Promise<void>
   onClose: (pollId: number) => Promise<void>
   onDelete: (pollId: number) => Promise<void>
   t: (key: string) => string
 }
 
-function PollCard({ poll, currentUser, onVote, onClose, onDelete, t }: PollCardProps) {
+function PollCard({ poll, currentUser, canEdit, onVote, onClose, onDelete, t }: PollCardProps) {
   const total = totalVotes(poll)
   const isClosed = poll.is_closed || isExpired(poll.deadline)
   const remaining = timeRemaining(poll.deadline)
@@ -238,22 +241,24 @@ function PollCard({ poll, currentUser, onVote, onClose, onDelete, t }: PollCardP
           </div>
         </div>
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-          {!isClosed && (
-            <button onClick={() => onClose(poll.id)} title={t('collab.polls.close')}
+        {canEdit && (
+          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            {!isClosed && (
+              <button onClick={() => onClose(poll.id)} title={t('collab.polls.close')}
+                style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
+                <Lock size={12} />
+              </button>
+            )}
+            <button onClick={() => onDelete(poll.id)} title={t('collab.polls.delete')}
               style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+              onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
-              <Lock size={12} />
+              <Trash2 size={12} />
             </button>
-          )}
-          <button onClick={() => onDelete(poll.id)} title={t('collab.polls.delete')}
-            style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
-            onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
-            <Trash2 size={12} />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Options */}
@@ -337,6 +342,9 @@ interface CollabPollsProps {
 
 export default function CollabPolls({ tripId, currentUser }: CollabPollsProps) {
   const { t } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canEdit = can('collab_edit', trip)
   const [polls, setPolls] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -426,13 +434,15 @@ export default function CollabPolls({ tripId, currentUser }: CollabPollsProps) {
           <BarChart3 size={14} color="var(--text-faint)" />
           {t('collab.polls.title')}
         </h3>
-        <button onClick={() => setShowForm(true)} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 99, padding: '6px 12px',
-          background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 600,
-          fontFamily: FONT, border: 'none', cursor: 'pointer',
-        }}>
-          <Plus size={12} /> {t('collab.polls.new')}
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowForm(true)} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 99, padding: '6px 12px',
+            background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 600,
+            fontFamily: FONT, border: 'none', cursor: 'pointer',
+          }}>
+            <Plus size={12} /> {t('collab.polls.new')}
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -446,7 +456,7 @@ export default function CollabPolls({ tripId, currentUser }: CollabPollsProps) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {activePolls.length > 0 && activePolls.map(poll => (
-              <PollCard key={poll.id} poll={poll} currentUser={currentUser} onVote={handleVote} onClose={handleClose} onDelete={handleDelete} t={t} />
+              <PollCard key={poll.id} poll={poll} currentUser={currentUser} canEdit={canEdit} onVote={handleVote} onClose={handleClose} onDelete={handleDelete} t={t} />
             ))}
             {closedPolls.length > 0 && (
               <>
@@ -456,7 +466,7 @@ export default function CollabPolls({ tripId, currentUser }: CollabPollsProps) {
                   </div>
                 )}
                 {closedPolls.map(poll => (
-                  <PollCard key={poll.id} poll={poll} currentUser={currentUser} onVote={handleVote} onClose={handleClose} onDelete={handleDelete} t={t} />
+                  <PollCard key={poll.id} poll={poll} currentUser={currentUser} canEdit={canEdit} onVote={handleVote} onClose={handleClose} onDelete={handleDelete} t={t} />
                 ))}
               </>
             )}

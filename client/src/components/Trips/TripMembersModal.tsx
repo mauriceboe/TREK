@@ -3,6 +3,8 @@ import Modal from '../shared/Modal'
 import { tripsApi, authApi, shareApi } from '../../api/client'
 import { useToast } from '../shared/Toast'
 import { useAuthStore } from '../../store/authStore'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { Crown, UserMinus, UserPlus, Users, LogOut, Link2, Trash2, Copy, Check } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { getApiErrorMessage } from '../../types'
@@ -32,7 +34,7 @@ function Avatar({ username, avatarUrl, size = 32 }: AvatarProps) {
   )
 }
 
-function ShareLinkSection({ tripId, t }: { tripId: number; t: any }) {
+function ShareLinkSection({ tripId, t }: { tripId: number; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -172,6 +174,10 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
   const toast = useToast()
   const { user } = useAuthStore()
   const { t } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canManageMembers = can('member_manage', trip)
+  const canManageShare = can('share_manage', trip)
 
   useEffect(() => {
     if (isOpen && tripId) {
@@ -247,7 +253,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('members.shareTrip')} size="3xl">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }} className="share-modal-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: canManageShare ? '1fr 1fr' : '1fr', gap: 24, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }} className="share-modal-grid">
         <style>{`@media (max-width: 640px) { .share-modal-grid { grid-template-columns: 1fr !important; } }`}</style>
 
         {/* Left column: Members */}
@@ -260,7 +266,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
         </div>
 
         {/* Add member dropdown */}
-        <div>
+        {canManageMembers && <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
             {t('members.inviteUser')}
           </label>
@@ -293,10 +299,10 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
               <UserPlus size={13} /> {adding ? '…' : t('members.invite')}
             </button>
           </div>
-          {availableUsers.length === 0 && allUsers.length > 0 && (
+          {availableUsers.length === 0 && allUsers.length > 0 && canManageMembers && (
             <p style={{ fontSize: 11.5, color: 'var(--text-faint)', margin: '6px 0 0' }}>{t('members.allHaveAccess')}</p>
           )}
-        </div>
+        </div>}
 
         {/* Members list */}
         <div>
@@ -317,7 +323,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {allMembers.map(member => {
                 const isSelf = member.id === user?.id
-                const canRemove = isCurrentOwner ? member.role !== 'owner' : isSelf
+                const canRemove = isSelf || (canManageMembers && member.role !== 'owner')
                 return (
                   <div key={member.id} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
@@ -358,9 +364,9 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
         </div>
 
         {/* Right column: Share Link */}
-        <div style={{ borderLeft: '1px solid var(--border-faint)', paddingLeft: 24 }}>
+        {canManageShare && <div style={{ borderLeft: '1px solid var(--border-faint)', paddingLeft: 24 }}>
         <ShareLinkSection tripId={tripId} t={t} />
-        </div>
+        </div>}
 
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
       </div>

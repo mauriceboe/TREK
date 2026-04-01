@@ -1,10 +1,35 @@
 import express, { Request, Response } from 'express';
+import fetch from 'node-fetch';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest, Trip, Place } from '../types';
 
 const router = express.Router();
 router.use(authenticate);
+
+// Geocode cache: rounded coords -> country code
+const geocodeCache = new Map<string, string | null>();
+
+function roundKey(lat: number, lng: number): string {
+  return `${lat.toFixed(3)},${lng.toFixed(3)}`;
+}
+
+async function reverseGeocodeCountry(lat: number, lng: number): Promise<string | null> {
+  const key = roundKey(lat, lng);
+  if (geocodeCache.has(key)) return geocodeCache.get(key)!;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=3&accept-language=en`, {
+      headers: { 'User-Agent': 'TREK Travel Planner' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { address?: { country_code?: string } };
+    const code = data.address?.country_code?.toUpperCase() || null;
+    geocodeCache.set(key, code);
+    return code;
+  } catch {
+    return null;
+  }
+}
 
 const COUNTRY_BOXES: Record<string, [number, number, number, number]> = {
   AF:[60.5,29.4,75,38.5],AL:[19,39.6,21.1,42.7],DZ:[-8.7,19,12,37.1],AD:[1.4,42.4,1.8,42.7],AO:[11.7,-18.1,24.1,-4.4],
@@ -83,7 +108,7 @@ const CONTINENT_MAP: Record<string, string> = {
   SE:'Europe',CH:'Europe',TH:'Asia',TR:'Europe',UA:'Europe',AE:'Asia',GB:'Europe',US:'North America',VN:'Asia',NG:'Africa',
 };
 
-router.get('/stats', (req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user.id;
 
@@ -109,6 +134,9 @@ router.get('/stats', (req: Request, res: Response) => {
   const countrySet = new Map<string, CountryEntry>();
   for (const place of places) {
     let code = getCountryFromAddress(place.address);
+    if (!code && place.lat && place.lng) {
+      code = await reverseGeocodeCountry(place.lat, place.lng);
+    }
     if (!code && place.lat && place.lng) {
       code = getCountryFromCoords(place.lat, place.lng);
     }

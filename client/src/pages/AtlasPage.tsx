@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getIntlLanguage, getLocaleForLanguage, useTranslation } from '../i18n'
 import { useSettingsStore } from '../store/settingsStore'
@@ -127,6 +127,7 @@ export default function AtlasPage(): React.ReactElement {
   const glareRef = useRef<HTMLDivElement>(null)
   const borderGlareRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const country_layer_by_a2_ref = useRef<Record<string, any>>({})
 
   const handlePanelMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
     if (!panelRef.current || !glareRef.current || !borderGlareRef.current) return
@@ -139,7 +140,7 @@ export default function AtlasPage(): React.ReactElement {
     // Border glow that follows cursor
     borderGlareRef.current.style.opacity = '1'
     borderGlareRef.current.style.maskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
-    borderGlareRef.current.style.WebkitMaskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
+    borderGlareRef.current.style.webkitMaskImage = `radial-gradient(circle 150px at ${x}px ${y}px, black 0%, transparent 100%)`
   }
   const handlePanelMouseLeave = () => {
     if (glareRef.current) glareRef.current.style.opacity = '0'
@@ -169,6 +170,26 @@ export default function AtlasPage(): React.ReactElement {
   const [bucketPoiYear, setBucketPoiYear] = useState(0)
   const [bucketTab, setBucketTab] = useState<'stats' | 'bucket'>('stats')
   const bucketMarkersRef = useRef<any>(null)
+
+  const [atlas_country_search, set_atlas_country_search] = useState('')
+  const [atlas_country_results, set_atlas_country_results] = useState<{ code: string; label: string }[]>([])
+  const [atlas_country_open, set_atlas_country_open] = useState(false)
+
+  const atlas_country_options = useMemo(() => {
+    if (!geoData) return []
+    const opts: { code: string; label: string }[] = []
+    const seen = new Set<string>()
+    for (const f of (geoData as any).features || []) {
+      const a2 = f?.properties?.ISO_A2
+      if (!a2 || a2 === '-99' || typeof a2 !== 'string' || a2.length !== 2) continue
+      if (seen.has(a2)) continue
+      seen.add(a2)
+      const label = String(resolveName(a2) || f?.properties?.NAME || f?.properties?.ADMIN || a2)
+      opts.push({ code: a2, label })
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label))
+    return opts
+  }, [geoData, resolveName])
 
   // Load atlas data + bucket list
   useEffect(() => {
@@ -231,8 +252,7 @@ export default function AtlasPage(): React.ReactElement {
       updateWhenIdle: false,
       tileSize: 256,
       zoomOffset: 0,
-      crossOrigin: true,
-      loading: true,
+      crossOrigin: true
     }).addTo(map)
 
     // Preload adjacent zoom level tiles
@@ -292,6 +312,7 @@ export default function AtlasPage(): React.ReactElement {
         const a3 = feature.properties?.ADM0_A3 || feature.properties?.ISO_A3 || feature.properties?.['ISO3166-1-Alpha-3'] || feature.id
         const c = countryMap[a3]
         if (c) {
+          country_layer_by_a2_ref.current[c.code] = layer
           const name = resolveName(c.code)
           const formatDate = (d) => { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString(getLocaleForLanguage(language), { month: 'short', year: 'numeric' }) }
           const tooltipHtml = `
@@ -337,6 +358,7 @@ export default function AtlasPage(): React.ReactElement {
           const isoA2 = feature.properties?.ISO_A2
           const countryCode = a3ToA2Entry ? a3ToA2Entry[0] : (isoA2 && isoA2 !== '-99' ? isoA2 : null)
           if (countryCode && countryCode !== '-99') {
+            country_layer_by_a2_ref.current[countryCode] = layer
             const name = feature.properties?.NAME || feature.properties?.ADMIN || resolveName(countryCode)
             layer.bindTooltip(`<div style="font-size:12px;font-weight:600">${name}</div>`, {
               sticky: false, className: 'atlas-tooltip', direction: 'top', offset: [0, -10], opacity: 1
@@ -364,6 +386,23 @@ export default function AtlasPage(): React.ReactElement {
   const handleUnmarkCountry = (code: string): void => {
     const country = data?.countries.find(c => c.code === code)
     setConfirmAction({ type: 'unmark', code, name: resolveName(code) })
+  }
+
+  const select_country_from_search = (country_code: string): void => {
+    const country_label = resolveName(country_code)
+    set_atlas_country_search(country_label)
+    set_atlas_country_open(false)
+    set_atlas_country_results([])
+
+    const layer = country_layer_by_a2_ref.current[country_code]
+    try {
+      if (layer?.getBounds && mapInstance.current) {
+        mapInstance.current.fitBounds(layer.getBounds(), { padding: [24, 24], animate: true, maxZoom: 6 })
+      }
+    } catch (e ) { 
+      console.error('Error fitting bounds', e)
+     }
+    setConfirmAction({ type: 'choose', code: country_code, name: country_label })
   }
 
   const executeConfirmAction = async (): Promise<void> => {
@@ -494,6 +533,129 @@ export default function AtlasPage(): React.ReactElement {
       <div style={{ position: 'fixed', top: 'var(--nav-h)', left: 0, right: 0, bottom: 0 }}>
         {/* Map */}
         <div ref={mapRef} style={{ position: 'absolute', inset: 0, zIndex: 1, background: dark ? '#1a1a2e' : '#f0f0f0' }} />
+        <div
+          className="absolute z-20 flex justify-center"
+          style={{ top: 14, left: 0, right: 0, pointerEvents: 'none' }}
+        >
+          <div style={{ width: 'min(520px, calc(100vw - 28px))', pointerEvents: 'auto' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 12px',
+              borderRadius: 16,
+              border: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'),
+              background: dark ? 'rgba(10,10,15,0.55)' : 'rgba(255,255,255,0.55)',
+              backdropFilter: 'blur(18px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+              boxShadow: dark ? '0 8px 26px rgba(0,0,0,0.25)' : '0 8px 26px rgba(0,0,0,0.10)',
+            }}>
+              <Search size={16} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+              <input
+                value={atlas_country_search}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  set_atlas_country_search(raw)
+                  const q = raw.trim().toLowerCase()
+                  if (!q) {
+                    set_atlas_country_results([])
+                    set_atlas_country_open(false)
+                    return
+                  }
+                  const results = atlas_country_options
+                    .filter(o => o.label.toLowerCase().includes(q) || o.code.toLowerCase() === q)
+                    .slice(0, 8)
+                  set_atlas_country_results(results)
+                  set_atlas_country_open(true)
+                }}
+                onFocus={() => {
+                  if (atlas_country_results.length > 0) set_atlas_country_open(true)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    set_atlas_country_open(false)
+                    return
+                  }
+                  if (e.key === 'Enter') {
+                    const first = atlas_country_results[0]
+                    if (first) select_country_from_search(first.code)
+                  }
+                }}
+                placeholder={t('atlas.searchCountry')}
+                autoComplete="off"
+                spellCheck={false}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                  color: 'var(--text-primary)',
+                }}
+              />
+              {atlas_country_search.trim() && (
+                <button
+                  onClick={() => {
+                    set_atlas_country_search('')
+                    set_atlas_country_results([])
+                    set_atlas_country_open(false)
+                  }}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: 2, display: 'flex' }}
+                  aria-label="Clear"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {atlas_country_open && atlas_country_results.length > 0 && (
+              <div
+                style={{
+                  marginTop: 8,
+                  borderRadius: 14,
+                  overflow: 'hidden',
+                  border: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'),
+                  background: dark ? 'rgba(10,10,15,0.75)' : 'rgba(255,255,255,0.75)',
+                  backdropFilter: 'blur(18px) saturate(180%)',
+                  WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+                  boxShadow: dark ? '0 12px 30px rgba(0,0,0,0.35)' : '0 12px 30px rgba(0,0,0,0.12)',
+                }}
+                onMouseLeave={() => set_atlas_country_open(false)}
+              >
+                {atlas_country_results.map((r) => (
+                  <button
+                    key={r.code}
+                    onClick={() => select_country_from_search(r.code)}
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontFamily: 'inherit',
+                      textAlign: 'left',
+                      borderBottom: '1px solid ' + (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'),
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <img src={`https://flagcdn.com/w40/${r.code.toLowerCase()}.png`} alt={r.code} style={{ width: 28, height: 20, borderRadius: 4, objectFit: 'cover' }} />
+                      <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.label}
+                      </span>
+                    </span>
+                    <ChevronRight size={16} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Mobile: Bottom bar */}
         <div className="md:hidden absolute bottom-3 left-0 right-0 z-10 flex justify-center" style={{ touchAction: 'manipulation' }}>
@@ -551,7 +713,7 @@ export default function AtlasPage(): React.ReactElement {
             bucketForm={bucketForm} setBucketForm={setBucketForm}
             onAddBucket={handleAddBucketItem} onDeleteBucket={handleDeleteBucketItem}
             onSearchBucket={handleBucketPoiSearch} onSelectBucketPoi={handleSelectBucketPoi}
-            bucketSearchResults={bucketSearchResults} bucketPoiMonth={bucketPoiMonth} setBucketPoiMonth={setBucketPoiMonth}
+            bucketSearchResults={bucketSearchResults} setBucketSearchResults={setBucketSearchResults} bucketPoiMonth={bucketPoiMonth} setBucketPoiMonth={setBucketPoiMonth}
             bucketPoiYear={bucketPoiYear} setBucketPoiYear={setBucketPoiYear} bucketSearching={bucketSearching}
             bucketSearch={bucketSearch} setBucketSearch={setBucketSearch}
             t={t} dark={dark}
@@ -629,24 +791,24 @@ export default function AtlasPage(): React.ReactElement {
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 16 }}>
                   <div style={{ flex: 1 }}>
                     <CustomSelect
-                      value={bucketMonth}
+                      value={String(bucketMonth)}
                       onChange={v => setBucketMonth(Number(v))}
                       placeholder={t('atlas.month')}
                       options={[
-                        { value: 0, label: '—' },
-                        ...Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2000, i).toLocaleString(language, { month: 'long' }) })),
+                        { value: '0', label: '—' },
+                        ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: new Date(2000, i).toLocaleString(language, { month: 'long' }) })),
                       ]}
                       size="sm"
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <CustomSelect
-                      value={bucketYear}
+                      value={String(bucketYear)}
                       onChange={v => setBucketYear(Number(v))}
                       placeholder={t('atlas.year')}
                       options={[
-                        { value: 0, label: '—' },
-                        ...Array.from({ length: 20 }, (_, i) => ({ value: new Date().getFullYear() + i, label: String(new Date().getFullYear() + i) })),
+                        { value: '0', label: '—' },
+                        ...Array.from({ length: 20 }, (_, i) => ({ value: String(new Date().getFullYear() + i), label: String(new Date().getFullYear() + i) })),
                       ]}
                       size="sm"
                     />
@@ -717,6 +879,7 @@ interface SidebarContentProps {
   onSearchBucket: () => Promise<void>
   onSelectBucketPoi: (result: any) => void
   bucketSearchResults: any[]
+  setBucketSearchResults: (v: string[]) => void
   bucketPoiMonth: number
   setBucketPoiMonth: (v: number) => void
   bucketPoiYear: number
@@ -728,7 +891,7 @@ interface SidebarContentProps {
   dark: boolean
 }
 
-function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onCountryClick, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
+function SidebarContent({ data, stats, countries, selectedCountry, countryDetail, resolveName, onTripClick, onUnmarkCountry, bucketList, bucketTab, setBucketTab, showBucketAdd, setShowBucketAdd, bucketForm, setBucketForm, onAddBucket, onDeleteBucket, onSearchBucket, onSelectBucketPoi, bucketSearchResults, setBucketSearchResults, bucketPoiMonth, setBucketPoiMonth, bucketPoiYear, setBucketPoiYear, bucketSearching, bucketSearch, setBucketSearch, t, dark }: SidebarContentProps): React.ReactElement {
   const { language } = useTranslation()
   const bg = (o) => dark ? `rgba(255,255,255,${o})` : `rgba(0,0,0,${o})`
   const tp = dark ? '#f1f5f9' : '#0f172a'
@@ -854,12 +1017,12 @@ function SidebarContent({ data, stats, countries, selectedCountry, countryDetail
         {/* Month / Year with CustomSelect */}
         <div style={{ display: 'flex', gap: 6 }}>
           <div style={{ flex: 1 }}>
-            <CustomSelect value={bucketPoiMonth} onChange={v => setBucketPoiMonth(Number(v))} placeholder={t('atlas.month')} size="sm"
-              options={[{ value: 0, label: '—' }, ...Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: new Date(2000, i).toLocaleString(language, { month: 'short' }) }))]} />
+            <CustomSelect value={String(bucketPoiMonth)} onChange={v => setBucketPoiMonth(Number(v))} placeholder={t('atlas.month')} size="sm"
+              options={[{ value: '0', label: '—' }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: new Date(2000, i).toLocaleString(language, { month: 'short' }) }))]} />
           </div>
           <div style={{ flex: 1 }}>
-            <CustomSelect value={bucketPoiYear} onChange={v => setBucketPoiYear(Number(v))} placeholder={t('atlas.year')} size="sm"
-              options={[{ value: 0, label: '—' }, ...Array.from({ length: 20 }, (_, i) => ({ value: new Date().getFullYear() + i, label: String(new Date().getFullYear() + i) }))]} />
+            <CustomSelect value={String(bucketPoiYear)} onChange={v => setBucketPoiYear(Number(v))} placeholder={t('atlas.year')} size="sm"
+              options={[{ value: '0', label: '—' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(new Date().getFullYear() + i), label: String(new Date().getFullYear() + i) }))]} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>

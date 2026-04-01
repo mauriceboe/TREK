@@ -69,6 +69,7 @@ export default function CustomTimePicker({ value, onChange, placeholder = '00:00
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value
     onChange(raw)
+    if (is12h) return // let handleBlur parse 12h formats
     const clean = raw.replace(/[^0-9:]/g, '')
     if (/^\d{2}:\d{2}$/.test(clean)) onChange(clean)
     else if (/^\d{4}$/.test(clean)) onChange(clean.slice(0, 2) + ':' + clean.slice(2))
@@ -80,7 +81,23 @@ export default function CustomTimePicker({ value, onChange, placeholder = '00:00
 
   const handleBlur = () => {
     if (!value) return
-    const clean = value.replace(/[^0-9:]/g, '')
+    const raw = value.trim()
+
+    // Parse 12h input like "5:30 PM", "5:30pm", "530pm"
+    if (is12h) {
+      const match12 = raw.match(/^(\d{1,2}):?(\d{2})?\s*(am|pm)$/i)
+      if (match12) {
+        let h = parseInt(match12[1])
+        const m = match12[2] ? parseInt(match12[2]) : 0
+        const isPm = match12[3].toLowerCase() === 'pm'
+        if (h === 12) h = isPm ? 12 : 0
+        else if (isPm) h += 12
+        onChange(String(Math.min(23, h)).padStart(2, '0') + ':' + String(Math.min(59, m)).padStart(2, '0'))
+        return
+      }
+    }
+
+    const clean = raw.replace(/[^0-9:]/g, '')
     if (/^\d{1,2}:\d{2}$/.test(clean)) {
       const [hh, mm] = clean.split(':')
       const h = Math.min(23, Math.max(0, parseInt(hh)))

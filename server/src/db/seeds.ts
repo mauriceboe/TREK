@@ -1,4 +1,46 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
+
+function isOidcOnlyConfigured(): boolean {
+  if (process.env.OIDC_ONLY !== 'true') return false;
+  return !!(process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID);
+}
+
+function seedAdminAccount(db: Database.Database): void {
+  try {
+    const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
+    if (userCount > 0) return;
+
+    if (isOidcOnlyConfigured()) {
+      console.log('');
+      console.log('╔══════════════════════════════════════════════╗');
+      console.log('║  TREK — OIDC-Only Mode                       ║');
+      console.log('║  First SSO login will become admin.           ║');
+      console.log('╚══════════════════════════════════════════════╝');
+      console.log('');
+      return;
+    }
+
+    const bcrypt = require('bcryptjs');
+    const password = crypto.randomBytes(12).toString('base64url');
+    const hash = bcrypt.hashSync(password, 12);
+    const email = 'admin@trek.local';
+    const username = 'admin';
+
+    db.prepare('INSERT INTO users (username, email, password_hash, role, must_change_password) VALUES (?, ?, ?, ?, 1)').run(username, email, hash, 'admin');
+
+    console.log('');
+    console.log('╔══════════════════════════════════════════════╗');
+    console.log('║  TREK — First Run: Admin Account Created     ║');
+    console.log('╠══════════════════════════════════════════════╣');
+    console.log(`║  Email:    ${email.padEnd(33)}║`);
+    console.log(`║  Password: ${password.padEnd(33)}║`);
+    console.log('╚══════════════════════════════════════════════╝');
+    console.log('');
+  } catch (err: unknown) {
+    console.error('[ERROR] Error seeding admin account:', err instanceof Error ? err.message : err);
+  }
+}
 
 function seedCategories(db: Database.Database): void {
   try {
@@ -45,6 +87,7 @@ function seedAddons(db: Database.Database): void {
 }
 
 function runSeeds(db: Database.Database): void {
+  seedAdminAccount(db);
   seedCategories(db);
   seedAddons(db);
 }

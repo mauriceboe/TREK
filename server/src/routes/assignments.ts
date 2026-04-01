@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth';
 import { requireTripAccess } from '../middleware/tripAccess';
 import { broadcast } from '../websocket';
 import { loadTagsByPlaceIds, loadParticipantsByAssignmentIds, formatAssignmentWithPlace } from '../services/queryHelpers';
+import { checkPermission } from '../services/permissions';
 import { AuthRequest, AssignmentRow, DayAssignment, Tag, Participant } from '../types';
 
 const router = express.Router({ mergeParams: true });
@@ -110,6 +111,10 @@ router.get('/trips/:tripId/days/:dayId/assignments', authenticate, requireTripAc
 });
 
 router.post('/trips/:tripId/days/:dayId/assignments', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, dayId } = req.params;
   const { place_id, notes } = req.body;
 
@@ -132,6 +137,10 @@ router.post('/trips/:tripId/days/:dayId/assignments', authenticate, requireTripA
 });
 
 router.delete('/trips/:tripId/days/:dayId/assignments/:id', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, dayId, id } = req.params;
 
   const assignment = db.prepare(
@@ -146,6 +155,10 @@ router.delete('/trips/:tripId/days/:dayId/assignments/:id', authenticate, requir
 });
 
 router.put('/trips/:tripId/days/:dayId/assignments/reorder', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, dayId } = req.params;
   const { orderedIds } = req.body;
 
@@ -168,6 +181,10 @@ router.put('/trips/:tripId/days/:dayId/assignments/reorder', authenticate, requi
 });
 
 router.put('/trips/:tripId/assignments/:id/move', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
   const { new_day_id, order_index } = req.body;
 
@@ -204,6 +221,10 @@ router.get('/trips/:tripId/assignments/:id/participants', authenticate, requireT
 });
 
 router.put('/trips/:tripId/assignments/:id/time', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   const assignment = db.prepare(`
@@ -223,6 +244,10 @@ router.put('/trips/:tripId/assignments/:id/time', authenticate, requireTripAcces
 });
 
 router.put('/trips/:tripId/assignments/:id/participants', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
   const { tripId, id } = req.params;
 
   const { user_ids } = req.body;

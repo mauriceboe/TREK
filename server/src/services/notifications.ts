@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import fetch from 'node-fetch';
 import { db } from '../db/database';
+import { decrypt_api_key } from './apiKeyCrypto';
+import { logInfo, logDebug, logError } from './auditLog';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,7 +33,7 @@ function getSmtpConfig(): SmtpConfig | null {
   const host = process.env.SMTP_HOST || getAppSetting('smtp_host');
   const port = process.env.SMTP_PORT || getAppSetting('smtp_port');
   const user = process.env.SMTP_USER || getAppSetting('smtp_user');
-  const pass = process.env.SMTP_PASS || getAppSetting('smtp_pass');
+  const pass = process.env.SMTP_PASS || decrypt_api_key(getAppSetting('smtp_pass')) || '';
   const from = process.env.SMTP_FROM || getAppSetting('smtp_from');
   if (!host || !port || !from) return null;
   return { host, port: parseInt(port, 10), user: user || '', pass: pass || '', from, secure: parseInt(port, 10) === 465 };
@@ -42,7 +44,13 @@ function getWebhookUrl(): string | null {
 }
 
 function getAppUrl(): string {
-  return process.env.APP_URL || getAppSetting('app_url') || '';
+  const origins = process.env.ALLOWED_ORIGINS;
+  if (origins) {
+    const first = origins.split(',')[0]?.trim();
+    if (first) return first.replace(/\/+$/, '');
+  }
+  const port = process.env.PORT || '3000';
+  return `http://localhost:${port}`;
 }
 
 function getUserEmail(userId: number): string | null {
@@ -53,9 +61,11 @@ function getUserLanguage(userId: number): string {
   return (db.prepare("SELECT value FROM settings WHERE user_id = ? AND key = 'language'").get(userId) as { value: string } | undefined)?.value || 'en';
 }
 
-function getUserPrefs(userId: number): Record<string, number> {
-  const row = db.prepare('SELECT * FROM notification_preferences WHERE user_id = ?').get(userId) as any;
-  return row || { notify_trip_invite: 1, notify_booking_change: 1, notify_trip_reminder: 1, notify_vacay_invite: 1, notify_photos_shared: 1, notify_collab_message: 1, notify_packing_tagged: 1, notify_webhook: 0 };
+function getAdminEventEnabled(event: EventType): boolean {
+  const prefKey = EVENT_PREF_MAP[event];
+  if (!prefKey) return true;
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(prefKey) as { value: string } | undefined;
+  return !row || row.value !== 'false';
 }
 
 // Event → preference column mapping
@@ -90,7 +100,7 @@ type EventTextFn = (params: Record<string, string>) => EventText
 
 const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
   en: {
-    trip_invite: p => ({ title: `You've been invited to "${p.trip}"`, body: `${p.actor} invited you to the trip "${p.trip}". Open TREK to view and start planning!` }),
+    trip_invite: p => ({ title: `Trip invite: "${p.trip}"`, body: `${p.actor} invited ${p.invitee || 'a member'} to the trip "${p.trip}".` }),
     booking_change: p => ({ title: `New booking: ${p.booking}`, body: `${p.actor} added a new ${p.type} "${p.booking}" to "${p.trip}".` }),
     trip_reminder: p => ({ title: `Trip reminder: ${p.trip}`, body: `Your trip "${p.trip}" is coming up soon!` }),
     vacay_invite: p => ({ title: 'Vacay Fusion Invite', body: `${p.actor} invited you to fuse vacation plans. Open TREK to accept or decline.` }),
@@ -99,7 +109,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Packing: ${p.category}`, body: `${p.actor} assigned you to the "${p.category}" packing category in "${p.trip}".` }),
   },
   de: {
-    trip_invite: p => ({ title: `Einladung zu "${p.trip}"`, body: `${p.actor} hat dich zur Reise "${p.trip}" eingeladen. Öffne TREK um die Planung zu starten!` }),
+    trip_invite: p => ({ title: `Einladung zu "${p.trip}"`, body: `${p.actor} hat ${p.invitee || 'ein Mitglied'} zur Reise "${p.trip}" eingeladen.` }),
     booking_change: p => ({ title: `Neue Buchung: ${p.booking}`, body: `${p.actor} hat eine neue Buchung "${p.booking}" (${p.type}) zu "${p.trip}" hinzugefügt.` }),
     trip_reminder: p => ({ title: `Reiseerinnerung: ${p.trip}`, body: `Deine Reise "${p.trip}" steht bald an!` }),
     vacay_invite: p => ({ title: 'Vacay Fusion-Einladung', body: `${p.actor} hat dich eingeladen, Urlaubspläne zu fusionieren. Öffne TREK um anzunehmen oder abzulehnen.` }),
@@ -108,7 +118,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Packliste: ${p.category}`, body: `${p.actor} hat dich der Kategorie "${p.category}" in der Packliste von "${p.trip}" zugewiesen.` }),
   },
   fr: {
-    trip_invite: p => ({ title: `Invitation à "${p.trip}"`, body: `${p.actor} vous a invité au voyage "${p.trip}". Ouvrez TREK pour commencer la planification !` }),
+    trip_invite: p => ({ title: `Invitation à "${p.trip}"`, body: `${p.actor} a invité ${p.invitee || 'un membre'} au voyage "${p.trip}".` }),
     booking_change: p => ({ title: `Nouvelle réservation : ${p.booking}`, body: `${p.actor} a ajouté une réservation "${p.booking}" (${p.type}) à "${p.trip}".` }),
     trip_reminder: p => ({ title: `Rappel de voyage : ${p.trip}`, body: `Votre voyage "${p.trip}" approche !` }),
     vacay_invite: p => ({ title: 'Invitation Vacay Fusion', body: `${p.actor} vous invite à fusionner les plans de vacances. Ouvrez TREK pour accepter ou refuser.` }),
@@ -117,7 +127,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Bagages : ${p.category}`, body: `${p.actor} vous a assigné à la catégorie "${p.category}" dans "${p.trip}".` }),
   },
   es: {
-    trip_invite: p => ({ title: `Invitación a "${p.trip}"`, body: `${p.actor} te invitó al viaje "${p.trip}". ¡Abre TREK para comenzar a planificar!` }),
+    trip_invite: p => ({ title: `Invitación a "${p.trip}"`, body: `${p.actor} invitó a ${p.invitee || 'un miembro'} al viaje "${p.trip}".` }),
     booking_change: p => ({ title: `Nueva reserva: ${p.booking}`, body: `${p.actor} añadió una reserva "${p.booking}" (${p.type}) a "${p.trip}".` }),
     trip_reminder: p => ({ title: `Recordatorio: ${p.trip}`, body: `¡Tu viaje "${p.trip}" se acerca!` }),
     vacay_invite: p => ({ title: 'Invitación Vacay Fusion', body: `${p.actor} te invitó a fusionar planes de vacaciones. Abre TREK para aceptar o rechazar.` }),
@@ -126,7 +136,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Equipaje: ${p.category}`, body: `${p.actor} te asignó a la categoría "${p.category}" en "${p.trip}".` }),
   },
   nl: {
-    trip_invite: p => ({ title: `Uitgenodigd voor "${p.trip}"`, body: `${p.actor} heeft je uitgenodigd voor de reis "${p.trip}". Open TREK om te beginnen met plannen!` }),
+    trip_invite: p => ({ title: `Uitnodiging voor "${p.trip}"`, body: `${p.actor} heeft ${p.invitee || 'een lid'} uitgenodigd voor de reis "${p.trip}".` }),
     booking_change: p => ({ title: `Nieuwe boeking: ${p.booking}`, body: `${p.actor} heeft een boeking "${p.booking}" (${p.type}) toegevoegd aan "${p.trip}".` }),
     trip_reminder: p => ({ title: `Reisherinnering: ${p.trip}`, body: `Je reis "${p.trip}" komt eraan!` }),
     vacay_invite: p => ({ title: 'Vacay Fusion uitnodiging', body: `${p.actor} nodigt je uit om vakantieplannen te fuseren. Open TREK om te accepteren of af te wijzen.` }),
@@ -135,7 +145,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Paklijst: ${p.category}`, body: `${p.actor} heeft je toegewezen aan de categorie "${p.category}" in "${p.trip}".` }),
   },
   ru: {
-    trip_invite: p => ({ title: `Приглашение в "${p.trip}"`, body: `${p.actor} пригласил вас в поездку "${p.trip}". Откройте TREK чтобы начать планирование!` }),
+    trip_invite: p => ({ title: `Приглашение в "${p.trip}"`, body: `${p.actor} пригласил ${p.invitee || 'участника'} в поездку "${p.trip}".` }),
     booking_change: p => ({ title: `Новое бронирование: ${p.booking}`, body: `${p.actor} добавил бронирование "${p.booking}" (${p.type}) в "${p.trip}".` }),
     trip_reminder: p => ({ title: `Напоминание: ${p.trip}`, body: `Ваша поездка "${p.trip}" скоро начнётся!` }),
     vacay_invite: p => ({ title: 'Приглашение Vacay Fusion', body: `${p.actor} приглашает вас объединить планы отпуска. Откройте TREK для подтверждения.` }),
@@ -144,7 +154,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Список вещей: ${p.category}`, body: `${p.actor} назначил вас в категорию "${p.category}" в "${p.trip}".` }),
   },
   zh: {
-    trip_invite: p => ({ title: `邀请加入"${p.trip}"`, body: `${p.actor} 邀请你加入旅行"${p.trip}"。打开 TREK 开始规划！` }),
+    trip_invite: p => ({ title: `邀请加入"${p.trip}"`, body: `${p.actor} 邀请了 ${p.invitee || '成员'} 加入旅行"${p.trip}"。` }),
     booking_change: p => ({ title: `新预订：${p.booking}`, body: `${p.actor} 在"${p.trip}"中添加了预订"${p.booking}"（${p.type}）。` }),
     trip_reminder: p => ({ title: `旅行提醒：${p.trip}`, body: `你的旅行"${p.trip}"即将开始！` }),
     vacay_invite: p => ({ title: 'Vacay 融合邀请', body: `${p.actor} 邀请你合并假期计划。打开 TREK 接受或拒绝。` }),
@@ -153,7 +163,7 @@ const EVENT_TEXTS: Record<string, Record<EventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `行李清单：${p.category}`, body: `${p.actor} 将你分配到"${p.trip}"中的"${p.category}"类别。` }),
   },
   ar: {
-    trip_invite: p => ({ title: `دعوة إلى "${p.trip}"`, body: `${p.actor} دعاك إلى الرحلة "${p.trip}". افتح TREK لبدء التخطيط!` }),
+    trip_invite: p => ({ title: `دعوة إلى "${p.trip}"`, body: `${p.actor} دعا ${p.invitee || 'عضو'} إلى الرحلة "${p.trip}".` }),
     booking_change: p => ({ title: `حجز جديد: ${p.booking}`, body: `${p.actor} أضاف حجز "${p.booking}" (${p.type}) إلى "${p.trip}".` }),
     trip_reminder: p => ({ title: `تذكير: ${p.trip}`, body: `رحلتك "${p.trip}" تقترب!` }),
     vacay_invite: p => ({ title: 'دعوة دمج الإجازة', body: `${p.actor} يدعوك لدمج خطط الإجازة. افتح TREK للقبول أو الرفض.` }),
@@ -236,11 +246,39 @@ async function sendEmail(to: string, subject: string, body: string, userId?: num
       text: body,
       html: buildEmailHtml(subject, body, lang),
     });
+    logInfo(`Email sent to=${to} subject="${subject}"`);
+    logDebug(`Email smtp=${config.host}:${config.port} from=${config.from} to=${to}`);
     return true;
   } catch (err) {
-    console.error('[Notifications] Email send failed:', err instanceof Error ? err.message : err);
+    logError(`Email send failed to=${to}: ${err instanceof Error ? err.message : err}`);
     return false;
   }
+}
+
+function buildWebhookBody(url: string, payload: { event: string; title: string; body: string; tripName?: string }): string {
+  const isDiscord = /discord(?:app)?\.com\/api\/webhooks\//.test(url);
+  const isSlack = /hooks\.slack\.com\//.test(url);
+
+  if (isDiscord) {
+    return JSON.stringify({
+      embeds: [{
+        title: `📍 ${payload.title}`,
+        description: payload.body,
+        color: 0x3b82f6,
+        footer: { text: payload.tripName ? `Trip: ${payload.tripName}` : 'TREK' },
+        timestamp: new Date().toISOString(),
+      }],
+    });
+  }
+
+  if (isSlack) {
+    const trip = payload.tripName ? `  •  _${payload.tripName}_` : '';
+    return JSON.stringify({
+      text: `*${payload.title}*\n${payload.body}${trip}`,
+    });
+  }
+
+  return JSON.stringify({ ...payload, timestamp: new Date().toISOString(), source: 'TREK' });
 }
 
 async function sendWebhook(payload: { event: string; title: string; body: string; tripName?: string }): Promise<boolean> {
@@ -248,37 +286,68 @@ async function sendWebhook(payload: { event: string; title: string; body: string
   if (!url) return false;
 
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, timestamp: new Date().toISOString(), source: 'TREK' }),
+      body: buildWebhookBody(url, payload),
       signal: AbortSignal.timeout(10000),
     });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      logError(`Webhook HTTP ${res.status}: ${errBody}`);
+      return false;
+    }
+
+    logInfo(`Webhook sent event=${payload.event} trip=${payload.tripName || '-'}`);
+    logDebug(`Webhook url=${url} payload=${buildWebhookBody(url, payload).substring(0, 500)}`);
     return true;
   } catch (err) {
-    console.error('[Notifications] Webhook failed:', err instanceof Error ? err.message : err);
+    logError(`Webhook failed event=${payload.event}: ${err instanceof Error ? err.message : err}`);
     return false;
   }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
+function getNotificationChannel(): string {
+  return getAppSetting('notification_channel') || 'none';
+}
+
 export async function notify(payload: NotificationPayload): Promise<void> {
-  const prefs = getUserPrefs(payload.userId);
-  const prefKey = EVENT_PREF_MAP[payload.event];
-  if (prefKey && !prefs[prefKey]) return;
+  const channel = getNotificationChannel();
+  if (channel === 'none') return;
+
+  if (!getAdminEventEnabled(payload.event)) return;
 
   const lang = getUserLanguage(payload.userId);
   const { title, body } = getEventText(lang, payload.event, payload.params);
 
-  const email = getUserEmail(payload.userId);
-  if (email) await sendEmail(email, title, body, payload.userId);
-  if (prefs.notify_webhook) await sendWebhook({ event: payload.event, title, body, tripName: payload.params.trip });
+  logDebug(`Notification event=${payload.event} channel=${channel} userId=${payload.userId} params=${JSON.stringify(payload.params)}`);
+
+  if (channel === 'email') {
+    const email = getUserEmail(payload.userId);
+    if (email) await sendEmail(email, title, body, payload.userId);
+  } else if (channel === 'webhook') {
+    await sendWebhook({ event: payload.event, title, body, tripName: payload.params.trip });
+  }
 }
 
 export async function notifyTripMembers(tripId: number, actorUserId: number, event: EventType, params: Record<string, string>): Promise<void> {
+  const channel = getNotificationChannel();
+  if (channel === 'none') return;
+  if (!getAdminEventEnabled(event)) return;
+
   const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(tripId) as { user_id: number } | undefined;
   if (!trip) return;
+
+  if (channel === 'webhook') {
+    const lang = getUserLanguage(actorUserId);
+    const { title, body } = getEventText(lang, event, params);
+    logDebug(`notifyTripMembers event=${event} channel=webhook tripId=${tripId} actor=${actorUserId}`);
+    await sendWebhook({ event, title, body, tripName: params.trip });
+    return;
+  }
 
   const members = db.prepare('SELECT user_id FROM trip_members WHERE trip_id = ?').all(tripId) as { user_id: number }[];
   const allIds = [trip.user_id, ...members.map(m => m.user_id)].filter(id => id !== actorUserId);
@@ -293,6 +362,15 @@ export async function testSmtp(to: string): Promise<{ success: boolean; error?: 
   try {
     const sent = await sendEmail(to, 'Test Notification', 'This is a test email from TREK. If you received this, your SMTP configuration is working correctly.');
     return sent ? { success: true } : { success: false, error: 'SMTP not configured' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+export async function testWebhook(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const sent = await sendWebhook({ event: 'test', title: 'Test Notification', body: 'This is a test webhook from TREK. If you received this, your webhook configuration is working correctly.' });
+    return sent ? { success: true } : { success: false, error: 'Webhook URL not configured' };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }

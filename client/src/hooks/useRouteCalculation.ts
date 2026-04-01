@@ -19,7 +19,8 @@ export function useRouteCalculation(tripStore: TripStoreState, selectedDayId: nu
   const updateRouteForDay = useCallback(async (dayId: number | null) => {
     if (routeAbortRef.current) routeAbortRef.current.abort()
     if (!dayId) { setRoute(null); setRouteSegments([]); return }
-    const da = (tripStore.assignments[String(dayId)] || []).slice().sort((a, b) => a.order_index - b.order_index)
+    const currentAssignments = tripStore.assignments || {}
+    const da = (currentAssignments[String(dayId)] || []).slice().sort((a, b) => a.order_index - b.order_index)
     const waypoints = da.map((a) => a.place).filter((p) => p?.lat && p?.lng)
     if (waypoints.length < 2) { setRoute(null); setRouteSegments([]); return }
     setRoute(waypoints.map((p) => [p.lat!, p.lng!]))
@@ -33,12 +34,14 @@ export function useRouteCalculation(tripStore: TripStoreState, selectedDayId: nu
       if (err instanceof Error && err.name !== 'AbortError') setRouteSegments([])
       else if (!(err instanceof Error)) setRouteSegments([])
     }
-  }, [tripStore, routeCalcEnabled])
+  }, [routeCalcEnabled])
 
+  // Only recalculate when assignments for the SELECTED day change
+  const selectedDayAssignments = selectedDayId ? tripStore.assignments?.[String(selectedDayId)] : null
   useEffect(() => {
     if (!selectedDayId) { setRoute(null); setRouteSegments([]); return }
     updateRouteForDay(selectedDayId)
-  }, [selectedDayId, tripStore.assignments])
+  }, [selectedDayId, selectedDayAssignments])
 
   return { route, routeSegments, routeInfo, setRoute, setRouteInfo, updateRouteForDay }
 }

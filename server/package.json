@@ -1,6 +1,6 @@
 {
   "name": "trek-server",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "main": "src/index.ts",
   "scripts": {
     "start": "node --import tsx src/index.ts",
@@ -11,6 +11,7 @@
     "archiver": "^6.0.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.8.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.3",
@@ -33,6 +34,7 @@
     "@types/archiver": "^7.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
     "@types/jsonwebtoken": "^9.0.10",
