@@ -1,8 +1,13 @@
 import express, { Request, Response } from 'express';
+import https from 'https';
 import fetch from 'node-fetch';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
+
+// Force IPv4 to prevent ETIMEDOUT on Docker bridge networks where IPv6 is unroutable.
+// node-fetch v2 ignores NODE_OPTIONS --dns-result-order, so we must pass an explicit agent.
+const ipv4Agent = new https.Agent({ family: 4 });
 
 interface WeatherResult {
   temp: number;
@@ -161,7 +166,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
       if (diffDays >= -1 && diffDays <= 16) {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`;
-        const response = await fetch(url);
+        const response = await fetch(url, { agent: ipv4Agent });
         const data = await response.json() as OpenMeteoForecast;
 
         if (!response.ok || data.error) {
@@ -199,7 +204,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
         const endStr = endDate.toISOString().slice(0, 10);
 
         const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`;
-        const response = await fetch(url);
+        const response = await fetch(url, { agent: ipv4Agent });
         const data = await response.json() as OpenMeteoForecast;
 
         if (!response.ok || data.error) {
@@ -251,7 +256,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
     if (cached) return res.json(cached);
 
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode&timezone=auto`;
-    const response = await fetch(url);
+    const response = await fetch(url, { agent: ipv4Agent });
     const data = await response.json() as OpenMeteoForecast;
 
     if (!response.ok || data.error) {
@@ -304,7 +309,7 @@ router.get('/detailed', authenticate, async (req: Request, res: Response) => {
         + `&hourly=temperature_2m,precipitation,weathercode,windspeed_10m,relativehumidity_2m`
         + `&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,windspeed_10m_max,sunrise,sunset`
         + `&timezone=auto`;
-      const response = await fetch(url);
+      const response = await fetch(url, { agent: ipv4Agent });
       const data = await response.json() as OpenMeteoForecast;
 
       if (!response.ok || data.error) {
@@ -366,7 +371,7 @@ router.get('/detailed', authenticate, async (req: Request, res: Response) => {
       + `&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset,precipitation_probability_max,precipitation_sum,windspeed_10m_max`
       + `&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { agent: ipv4Agent });
     const data = await response.json() as OpenMeteoForecast;
 
     if (!response.ok || data.error) {
