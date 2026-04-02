@@ -102,6 +102,13 @@ export default function AdminPage(): React.ReactElement {
   const [allowedFileTypes, setAllowedFileTypes] = useState<string>('jpg,jpeg,png,gif,webp,heic,pdf,doc,docx,xls,xlsx,txt,csv')
   const [savingFileTypes, setSavingFileTypes] = useState<boolean>(false)
 
+  // Nearby places settings
+  const ALL_NEARBY_CATEGORIES = ['food', 'attractions', 'shopping', 'nightlife', 'outdoors', 'transport', 'services', 'accommodation']
+  const [nearbyCategories, setNearbyCategories] = useState<Set<string>>(new Set(ALL_NEARBY_CATEGORIES))
+  const [nearbyRadius, setNearbyRadius] = useState<number>(1500)
+  const [nearbyMaxResults, setNearbyMaxResults] = useState<number>(20)
+  const [savingNearby, setSavingNearby] = useState<boolean>(false)
+
   // SMTP settings
   const [smtpValues, setSmtpValues] = useState<Record<string, string>>({})
   const [smtpLoaded, setSmtpLoaded] = useState(false)
@@ -165,6 +172,9 @@ export default function AdminPage(): React.ReactElement {
       setAllowRegistration(config.allow_registration)
       if (config.require_mfa !== undefined) setRequireMfa(!!config.require_mfa)
       if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
+      if (config.nearby_categories) setNearbyCategories(new Set(config.nearby_categories.split(',').map((s: string) => s.trim()).filter(Boolean)))
+      if (config.nearby_radius) setNearbyRadius(config.nearby_radius)
+      if (config.nearby_max_results) setNearbyMaxResults(config.nearby_max_results)
     } catch (err: unknown) {
       // ignore
     }
@@ -761,6 +771,87 @@ export default function AdminPage(): React.ReactElement {
                     className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:bg-slate-400 mt-3"
                   >
                     {savingFileTypes ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                    {t('common.save')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Nearby Places */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <h2 className="font-semibold text-slate-900">{t('admin.nearbyTitle')}</h2>
+                  <p className="text-xs text-slate-400 mt-1">{t('admin.nearbyHint')}</p>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-2 block">{t('admin.nearbyCategories')}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_NEARBY_CATEGORIES.map(cat => {
+                        const enabled = nearbyCategories.has(cat)
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() => {
+                              const next = new Set(nearbyCategories)
+                              if (enabled && next.size > 1) next.delete(cat)
+                              else next.add(cat)
+                              setNearbyCategories(next)
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${enabled ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                          >
+                            {t(`nearby.types.${cat}`)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 block">{t('admin.nearbyRadius')}</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={100}
+                        max={10000}
+                        step={100}
+                        value={nearbyRadius}
+                        onChange={e => setNearbyRadius(Number(e.target.value))}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-slate-600 font-medium w-20 text-right">{nearbyRadius >= 1000 ? `${(nearbyRadius / 1000).toFixed(1)} km` : `${nearbyRadius} m`}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 block">{t('admin.nearbyMaxResults')}</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={nearbyMaxResults}
+                        onChange={e => setNearbyMaxResults(Number(e.target.value))}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-slate-600 font-medium w-20 text-right">{nearbyMaxResults}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setSavingNearby(true)
+                      try {
+                        await authApi.updateAppSettings({
+                          nearby_categories: [...nearbyCategories].join(','),
+                          nearby_radius: String(nearbyRadius),
+                          nearby_max_results: String(nearbyMaxResults),
+                        })
+                        toast.success(t('admin.nearbySaved'))
+                      } catch { toast.error(t('common.error')) }
+                      finally { setSavingNearby(false) }
+                    }}
+                    disabled={savingNearby}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-700 disabled:bg-slate-400"
+                  >
+                    {savingNearby ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
                     {t('common.save')}
                   </button>
                 </div>

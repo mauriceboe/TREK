@@ -455,6 +455,12 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesHint': 'Konfiguriere welche Dateitypen hochgeladen werden dürfen.',
   'admin.fileTypesFormat': 'Kommagetrennte Endungen (z.B. jpg,png,pdf,doc). Verwende * um alle Typen zu erlauben.',
   'admin.fileTypesSaved': 'Dateityp-Einstellungen gespeichert',
+  'admin.nearbyTitle': 'Orte in der Nähe',
+  'admin.nearbyHint': 'Konfiguriere welche Kategorien bei "In der Nähe suchen" angezeigt werden und den Standard-Suchradius.',
+  'admin.nearbyCategories': 'Aktivierte Kategorien',
+  'admin.nearbyRadius': 'Standard-Suchradius',
+  'admin.nearbyMaxResults': 'Max. Ergebnisse',
+  'admin.nearbySaved': 'Einstellungen für Orte in der Nähe gespeichert',
 
   // Packing Templates & Bag Tracking
   'admin.bagTracking.title': 'Gepäck-Tracking',

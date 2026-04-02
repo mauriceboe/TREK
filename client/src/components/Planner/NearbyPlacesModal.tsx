@@ -25,9 +25,11 @@ interface NearbyPlacesModalProps {
   lng: number
   locationName: string
   onAddPlace: (data: Record<string, unknown>) => void
+  enabledCategories?: string
+  defaultRadius?: number
 }
 
-const TYPE_CATEGORIES = [
+const ALL_TYPE_CATEGORIES = [
   { id: 'food', icon: '🍽️', color: '#f97316' },
   { id: 'attractions', icon: '🏛️', color: '#8b5cf6' },
   { id: 'shopping', icon: '🛍️', color: '#ec4899' },
@@ -40,6 +42,7 @@ const TYPE_CATEGORIES = [
 
 export default function NearbyPlacesModal({
   isOpen, onClose, lat, lng, locationName, onAddPlace,
+  enabledCategories, defaultRadius = 1500,
 }: NearbyPlacesModalProps) {
   const { t, language } = useTranslation()
   const [selectedType, setSelectedType] = useState<string | null>(null)
@@ -48,14 +51,25 @@ export default function NearbyPlacesModal({
   const [error, setError] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
 
+  const enabledSet = enabledCategories
+    ? new Set(enabledCategories.split(',').map(s => s.trim()).filter(Boolean))
+    : null
+  const visibleCategories = enabledSet
+    ? ALL_TYPE_CATEGORIES.filter(c => enabledSet.has(c.id))
+    : ALL_TYPE_CATEGORIES
+
+  const [suggestedCategoryId, setSuggestedCategoryId] = useState<number | null>(null)
+
   const searchNearby = useCallback(async (type: string) => {
     setSelectedType(type)
     setLoading(true)
     setError(null)
     setPlaces([])
+    setSuggestedCategoryId(null)
     try {
-      const data = await mapsApi.nearby(lat, lng, type, 1500, language)
+      const data = await mapsApi.nearby(lat, lng, type, defaultRadius, language)
       setPlaces(data.places || [])
+      setSuggestedCategoryId(data.suggested_category_id || null)
       if (!data.places?.length) {
         setError(t('nearby.noResults'))
       }
@@ -77,6 +91,7 @@ export default function NearbyPlacesModal({
       osm_id: place.osm_id || undefined,
       website: place.website || undefined,
       phone: place.phone || undefined,
+      category_id: suggestedCategoryId || undefined,
     })
     setAddedIds(prev => new Set(prev).add(key))
   }, [onAddPlace])
@@ -105,7 +120,7 @@ export default function NearbyPlacesModal({
           >
             <ChevronLeft size={18} />
           </button>
-          <span>{TYPE_CATEGORIES.find(c => c.id === selectedType)?.icon} {t(`nearby.types.${selectedType}`)}</span>
+          <span>{ALL_TYPE_CATEGORIES.find(c => c.id === selectedType)?.icon} {t(`nearby.types.${selectedType}`)}</span>
         </div>
       ) : t('nearby.title')
     } size="lg">
@@ -116,7 +131,7 @@ export default function NearbyPlacesModal({
             <span>{t('nearby.searchingNear')} <strong>{locationName}</strong></span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-            {TYPE_CATEGORIES.map(cat => (
+            {visibleCategories.map(cat => (
               <button
                 key={cat.id}
                 onClick={() => searchNearby(cat.id)}

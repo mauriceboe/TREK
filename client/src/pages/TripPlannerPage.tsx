@@ -58,6 +58,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const [enabledAddons, setEnabledAddons] = useState<Record<string, boolean>>({ packing: true, budget: true, documents: true })
   const [tripAccommodations, setTripAccommodations] = useState<Accommodation[]>([])
   const [allowedFileTypes, setAllowedFileTypes] = useState<string | null>(null)
+  const [nearbyCategories, setNearbyCategories] = useState<string | undefined>(undefined)
+  const [nearbyRadius, setNearbyRadius] = useState<number>(1500)
   const [tripMembers, setTripMembers] = useState<TripMember[]>([])
 
   const loadAccommodations = useCallback(() => {
@@ -75,6 +77,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
     }).catch(() => {})
     authApi.getAppConfig().then(config => {
       if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
+      if (config.nearby_categories) setNearbyCategories(config.nearby_categories)
+      if (config.nearby_radius) setNearbyRadius(config.nearby_radius)
     }).catch(() => {})
   }, [])
 
@@ -846,6 +850,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
           lat={nearbyTarget.lat}
           lng={nearbyTarget.lng}
           locationName={nearbyTarget.name}
+          enabledCategories={nearbyCategories}
+          defaultRadius={nearbyRadius}
           onAddPlace={async (data) => {
             try {
               await tripActions.addPlace(tripId, data)

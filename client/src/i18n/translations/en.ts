@@ -455,6 +455,12 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesHint': 'Configure which file types users can upload.',
   'admin.fileTypesFormat': 'Comma-separated extensions (e.g. jpg,png,pdf,doc). Use * to allow all types.',
   'admin.fileTypesSaved': 'File type settings saved',
+  'admin.nearbyTitle': 'Nearby Places',
+  'admin.nearbyHint': 'Configure which categories appear in the "Find Nearby" feature and the default search radius.',
+  'admin.nearbyCategories': 'Enabled Categories',
+  'admin.nearbyRadius': 'Default Search Radius',
+  'admin.nearbyMaxResults': 'Max Results',
+  'admin.nearbySaved': 'Nearby places settings saved',
 
   // Packing Templates & Bag Tracking
   'admin.bagTracking.title': 'Bag Tracking',
