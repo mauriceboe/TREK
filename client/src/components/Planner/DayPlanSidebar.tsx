@@ -4,7 +4,7 @@ declare global { interface Window { __dragData: DragDataPayload | null } }
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import ReactDOM from 'react-dom'
-import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Check, Trash2, Info, MapPin, Star, Heart, Camera, Lightbulb, Flag, Bookmark, Train, Bus, Plane, Car, Ship, Coffee, ShoppingBag, AlertTriangle, FileDown, Lock, Hotel, Utensils, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLink, Clock, Pencil, GripVertical, Ticket, Plus, FileText, Check, Trash2, Info, MapPin, Star, Heart, Camera, Lightbulb, Flag, Bookmark, Train, Bus, Plane, Car, Ship, Coffee, ShoppingBag, AlertTriangle, FileDown, Lock, Hotel, Utensils, Users, Undo2 } from 'lucide-react'
 
 const RES_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 import { assignmentsApi, reservationsApi } from '../../api/client'
@@ -80,6 +80,10 @@ interface DayPlanSidebarProps {
   onAddReservation: () => void
   onNavigateToFiles?: () => void
   onExpandedDaysChange?: (expandedDayIds: Set<number>) => void
+  pushUndo?: (label: string, undoFn: () => Promise<void> | void) => void
+  canUndo?: boolean
+  lastActionLabel?: string | null
+  onUndo?: () => void
 }
 
 const DayPlanSidebar = React.memo(function DayPlanSidebar({
@@ -93,6 +97,10 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   onAddReservation,
   onNavigateToFiles,
   onExpandedDaysChange,
+  pushUndo,
+  canUndo = false,
+  lastActionLabel = null,
+  onUndo,
 }: DayPlanSidebarProps) {
   const toast = useToast()
   const { t, language, locale } = useTranslation()
@@ -119,6 +127,9 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   const [draggingId, setDraggingId] = useState(null)
   const [lockedIds, setLockedIds] = useState(new Set())
   const [lockHoverId, setLockHoverId] = useState(null)
+  const [undoHover, setUndoHover] = useState(false)
+  const [pdfHover, setPdfHover] = useState(false)
+  const [icsHover, setIcsHover] = useState(false)
   const [dropTargetKey, _setDropTargetKey] = useState(null)
   const dropTargetRef = useRef(null)
   const setDropTargetKey = (key) => { dropTargetRef.current = key; _setDropTargetKey(key) }
@@ -395,6 +406,9 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
 
   // Unified reorder: assigns positions to ALL item types based on new visual order
   const applyMergedOrder = async (dayId: number, newOrder: { type: string; data: any }[]) => {
+    // Capture previous place order for undo
+    const prevAssignmentIds = getDayAssignments(dayId).map(a => a.id)
+
     // Places get sequential integer positions (0, 1, 2, ...)
     // Non-place items between place N-1 and place N get fractional positions
     const assignmentIds: number[] = []
@@ -436,6 +450,13 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
           if (res) res.day_plan_position = tu.day_plan_position
         }
         await reservationsApi.updatePositions(tripId, transportUpdates)
+      }
+      if (prevAssignmentIds.length) {
+        const capturedDayId = dayId
+        const capturedPrevIds = prevAssignmentIds
+        pushUndo?.(t('undo.reorder'), async () => {
+          await tripActions.reorderAssignments(tripId, capturedDayId, capturedPrevIds)
+        })
       }
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error') }
   }
@@ -599,18 +620,22 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   }
 
   const toggleLock = (assignmentId) => {
+    const prevLocked = new Set(lockedIds)
     setLockedIds(prev => {
       const next = new Set(prev)
       if (next.has(assignmentId)) next.delete(assignmentId)
       else next.add(assignmentId)
       return next
     })
+    pushUndo?.(t('undo.lock'), () => { setLockedIds(prevLocked) })
   }
 
   const handleOptimize = async () => {
     if (!selectedDayId) return
     const da = getDayAssignments(selectedDayId)
     if (da.length < 3) return
+
+    const prevIds = da.map(a => a.id)
 
     // Separate locked (stay at their index) and unlocked assignments
     const locked = new Map() // index -> assignment
@@ -638,6 +663,10 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
 
     await onReorder(selectedDayId, result.map(a => a.id))
     toast.success(t('dayplan.toast.routeOptimized'))
+    const capturedDayId = selectedDayId
+    pushUndo?.(t('undo.optimize'), async () => {
+      await tripActions.reorderAssignments(tripId, capturedDayId, prevIds)
+    })
   }
 
   const handleGoogleMaps = () => {
@@ -656,7 +685,16 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     if (placeId) {
       onAssignToDay?.(parseInt(placeId), dayId)
     } else if (assignmentId && fromDayId !== dayId) {
-      tripActions.moveAssignment(tripId, Number(assignmentId), fromDayId, dayId).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
+      const srcAssignment = (useTripStore.getState().assignments[String(fromDayId)] || []).find(a => a.id === Number(assignmentId))
+      const capturedFromDayId = fromDayId
+      const capturedOrderIndex = srcAssignment?.order_index ?? 0
+      tripActions.moveAssignment(tripId, Number(assignmentId), fromDayId, dayId)
+        .then(() => {
+          pushUndo?.(t('undo.moveDay'), async () => {
+            await tripActions.moveAssignment(tripId, Number(assignmentId), dayId, capturedFromDayId, capturedOrderIndex)
+          })
+        })
+        .catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
     } else if (noteId && fromDayId !== dayId) {
       tripActions.moveDayNote(tripId, fromDayId, dayId, Number(noteId)).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
     }
@@ -710,57 +748,119 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
               </div>
             )}
           </div>
-          <button
-            onClick={async () => {
-              const flatNotes = Object.entries(dayNotes).flatMap(([dayId, notes]) =>
-                notes.map(n => ({ ...n, day_id: Number(dayId) }))
-              )
-              try {
-                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale })
-              } catch (e) {
-                console.error('PDF error:', e)
-                toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
-              }
-            }}
-            title={t('dayplan.pdfTooltip')}
-            style={{
-              flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 10px', borderRadius: 8, border: 'none',
-              background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 500,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <FileDown size={13} strokeWidth={2} />
-            {t('dayplan.pdf')}
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const res = await fetch(`/api/trips/${tripId}/export.ics`, {
-                  credentials: 'include',
-                })
-                if (!res.ok) throw new Error()
-                const blob = await res.blob()
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `${trip?.title || 'trip'}.ics`
-                a.click()
-                URL.revokeObjectURL(url)
-              } catch { toast.error('ICS export failed') }
-            }}
-            title={t('dayplan.icsTooltip')}
-            style={{
-              flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 10px', borderRadius: 8,
-              border: '1px solid var(--border-primary)', background: 'none',
-              color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <FileDown size={13} strokeWidth={2} />
-            ICS
-          </button>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={async () => {
+                const flatNotes = Object.entries(dayNotes).flatMap(([dayId, notes]) =>
+                  notes.map(n => ({ ...n, day_id: Number(dayId) }))
+                )
+                try {
+                  await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, reservations, t, locale })
+                } catch (e) {
+                  console.error('PDF error:', e)
+                  toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
+                }
+              }}
+              onMouseEnter={() => setPdfHover(true)}
+              onMouseLeave={() => setPdfHover(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', borderRadius: 8, border: 'none',
+                background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <FileDown size={13} strokeWidth={2} />
+              {t('dayplan.pdf')}
+            </button>
+            {pdfHover && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 200,
+                background: 'var(--bg-card, white)', color: 'var(--text-primary, #111827)',
+                fontSize: 11, fontWeight: 500, padding: '5px 10px',
+                borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                border: '1px solid var(--border-faint, #e5e7eb)',
+              }}>
+                {t('dayplan.pdfTooltip')}
+              </div>
+            )}
+          </div>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/trips/${tripId}/export.ics`, {
+                    credentials: 'include',
+                  })
+                  if (!res.ok) throw new Error()
+                  const blob = await res.blob()
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${trip?.title || 'trip'}.ics`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                } catch { toast.error('ICS export failed') }
+              }}
+              onMouseEnter={() => setIcsHover(true)}
+              onMouseLeave={() => setIcsHover(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', borderRadius: 8,
+                border: '1px solid var(--border-primary)', background: 'none',
+                color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <FileDown size={13} strokeWidth={2} />
+              ICS
+            </button>
+            {icsHover && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 200,
+                background: 'var(--bg-card, white)', color: 'var(--text-primary, #111827)',
+                fontSize: 11, fontWeight: 500, padding: '5px 10px',
+                borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                border: '1px solid var(--border-faint, #e5e7eb)',
+              }}>
+                {t('dayplan.icsTooltip')}
+              </div>
+            )}
+          </div>
+          {onUndo && (
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                onMouseEnter={() => setUndoHover(true)}
+                onMouseLeave={() => setUndoHover(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 30, height: 30, borderRadius: 8,
+                  border: '1px solid var(--border-primary)', background: 'none',
+                  color: canUndo ? 'var(--text-primary)' : 'var(--border-primary)',
+                  cursor: canUndo ? 'pointer' : 'default', fontFamily: 'inherit',
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                <Undo2 size={14} strokeWidth={2} />
+              </button>
+              {undoHover && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                  whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 200,
+                  background: 'var(--bg-card, white)', color: 'var(--text-primary, #111827)',
+                  fontSize: 11, fontWeight: 500, padding: '5px 10px',
+                  borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  border: '1px solid var(--border-faint, #e5e7eb)',
+                }}>
+                  {canUndo && lastActionLabel ? t('undo.tooltip', { action: lastActionLabel }) : t('undo.button')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

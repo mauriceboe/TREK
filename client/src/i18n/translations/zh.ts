@@ -1484,6 +1484,19 @@ const zh: Record<string, string> = {
   'perm.actionHint.packing_edit': '谁可以管理行李物品和包袋',
   'perm.actionHint.collab_edit': '谁可以创建笔记、投票和发送消息',
   'perm.actionHint.share_manage': '谁可以创建或删除公开分享链接',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default zh

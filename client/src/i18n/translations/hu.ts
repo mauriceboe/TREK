@@ -1485,6 +1485,19 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'Ki kezelheti a csomagolási tételeket és táskákat',
   'perm.actionHint.collab_edit': 'Ki hozhat létre jegyzeteket, szavazásokat és küldhet üzeneteket',
   'perm.actionHint.share_manage': 'Ki hozhat létre vagy törölhet nyilvános megosztási linkeket',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default hu

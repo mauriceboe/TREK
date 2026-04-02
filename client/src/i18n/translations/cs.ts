@@ -507,8 +507,6 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'admin.addons.toast.updated': 'Doplněk byl aktualizován',
   'admin.addons.toast.error': 'Aktualizace doplňku se nezdařila',
   'admin.addons.noAddons': 'Žádné doplňky nejsou k dispozici',
-  'admin.addons.catalog.memories.name': 'Fotky (Immich)',
-  'admin.addons.catalog.memories.description': 'Sdílejte cestovní fotky přes vaši instanci Immich',
   'admin.addons.catalog.mcp.name': 'MCP',
   'admin.addons.catalog.mcp.description': 'Model Context Protocol pro integraci AI asistentů',
   'admin.addons.subtitleBefore': 'Zapněte nebo vypněte funkce a přizpůsobte si ',
@@ -1488,6 +1486,19 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'Kdo může spravovat položky balení a tašky',
   'perm.actionHint.collab_edit': 'Kdo může vytvářet poznámky, hlasování a posílat zprávy',
   'perm.actionHint.share_manage': 'Kdo může vytvářet nebo mazat veřejné odkazy ke sdílení',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default cs

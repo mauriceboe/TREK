@@ -1484,6 +1484,19 @@ const fr: Record<string, string> = {
   'perm.actionHint.packing_edit': 'Qui peut gérer les articles de bagages et les sacs',
   'perm.actionHint.collab_edit': 'Qui peut créer des notes, des sondages et envoyer des messages',
   'perm.actionHint.share_manage': 'Qui peut créer ou supprimer des liens de partage publics',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default fr

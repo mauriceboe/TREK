@@ -1490,6 +1490,21 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'Who can manage packing items and bags',
   'perm.actionHint.collab_edit': 'Who can create notes, polls and send messages',
   'perm.actionHint.share_manage': 'Who can create or delete public share links',
+
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+  'undo.addPlace': 'Place added',
+  'undo.done': 'Undone: {action}',
 }
 
 export default en

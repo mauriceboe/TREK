@@ -1484,6 +1484,19 @@ const nl: Record<string, string> = {
   'perm.actionHint.packing_edit': 'Wie kan pakitems en tassen beheren',
   'perm.actionHint.collab_edit': 'Wie kan notities, polls aanmaken en berichten versturen',
   'perm.actionHint.share_manage': 'Wie kan openbare deellinks aanmaken of verwijderen',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default nl

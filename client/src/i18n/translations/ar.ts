@@ -1488,6 +1488,19 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'من يمكنه إدارة عناصر التعبئة والحقائب',
   'perm.actionHint.collab_edit': 'من يمكنه إنشاء ملاحظات واستطلاعات وإرسال رسائل',
   'perm.actionHint.share_manage': 'من يمكنه إنشاء أو حذف روابط المشاركة العامة',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default ar

@@ -1485,6 +1485,21 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'Chi può gestire articoli da bagaglio e borse',
   'perm.actionHint.collab_edit': 'Chi può creare note, sondaggi e inviare messaggi',
   'perm.actionHint.share_manage': 'Chi può creare o eliminare link di condivisione pubblici',
+
+  // Undo
+  'undo.button': 'Annulla',
+  'undo.tooltip': 'Annulla: {action}',
+  'undo.assignPlace': 'Luogo assegnato al giorno',
+  'undo.removeAssignment': 'Luogo rimosso dal giorno',
+  'undo.reorder': 'Luoghi riordinati',
+  'undo.optimize': 'Percorso ottimizzato',
+  'undo.deletePlace': 'Luogo eliminato',
+  'undo.moveDay': 'Luogo spostato in altro giorno',
+  'undo.lock': 'Blocco luogo modificato',
+  'undo.importGpx': 'Importazione GPX',
+  'undo.importGoogleList': 'Importazione Google Maps',
+  'undo.addPlace': 'Luogo aggiunto',
+  'undo.done': 'Annullato: {action}',
 }
 
 export default it

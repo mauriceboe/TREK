@@ -1483,6 +1483,19 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'perm.actionHint.packing_edit': 'Quem pode gerenciar itens de bagagem e malas',
   'perm.actionHint.collab_edit': 'Quem pode criar notas, enquetes e enviar mensagens',
   'perm.actionHint.share_manage': 'Quem pode criar ou excluir links de compartilhamento públicos',
+  // Undo
+  'undo.button': 'Undo',
+  'undo.tooltip': 'Undo: {action}',
+  'undo.assignPlace': 'Place assigned to day',
+  'undo.removeAssignment': 'Place removed from day',
+  'undo.reorder': 'Places reordered',
+  'undo.optimize': 'Route optimized',
+  'undo.deletePlace': 'Place deleted',
+  'undo.moveDay': 'Place moved to another day',
+  'undo.lock': 'Place lock toggled',
+  'undo.importGpx': 'GPX import',
+  'undo.importGoogleList': 'Google Maps import',
+
 }
 
 export default br
