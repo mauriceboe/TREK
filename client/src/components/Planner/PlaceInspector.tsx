@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getAuthUrl } from '../../api/authUrl'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { X, Clock, MapPin, ExternalLink, Phone, Euro, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Users, Mountain, TrendingUp } from 'lucide-react'
+import { X, Clock, MapPin, ExternalLink, Phone, Euro, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Users, Mountain, TrendingUp, Radar } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { mapsApi } from '../../api/client'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -123,6 +123,7 @@ interface PlaceInspectorProps {
   tripMembers?: TripMember[]
   onSetParticipants: (assignmentId: number, dayId: number, participantIds: number[]) => void
   onUpdatePlace: (placeId: number, data: Partial<Place>) => void
+  onFindNearby?: () => void
   leftWidth?: number
   rightWidth?: number
 }
@@ -131,6 +132,7 @@ export default function PlaceInspector({
   place, categories, days, selectedDayId, selectedAssignmentId, assignments, reservations = [],
   onClose, onEdit, onDelete, onAssignToDay, onRemoveAssignment,
   files, onFileUpload, tripMembers = [], onSetParticipants, onUpdatePlace,
+  onFindNearby,
   leftWidth = 0, rightWidth = 0,
 }: PlaceInspectorProps) {
   const { t, locale, language } = useTranslation()
@@ -617,6 +619,10 @@ export default function PlaceInspector({
           {(place.website || googleDetails?.website) && (
             <ActionButton onClick={() => window.open(place.website || googleDetails?.website, '_blank')} variant="ghost" icon={<ExternalLink size={13} />}
               label={<span className="hidden sm:inline">{t('inspector.website')}</span>} />
+          )}
+          {onFindNearby && place.lat && place.lng && (
+            <ActionButton onClick={onFindNearby} variant="ghost" icon={<Radar size={13} />}
+              label={<span className="hidden sm:inline">{t('inspector.findNearby')}</span>} />
           )}
           <div style={{ flex: 1 }} />
           <ActionButton onClick={onEdit} variant="ghost" icon={<Edit2 size={13} />} label={<span className="hidden sm:inline">{t('common.edit')}</span>} />

@@ -844,6 +844,23 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'inspector.editRes': 'Edit Reservation',
   'inspector.participants': 'Participants',
   'inspector.trackStats': 'Track Stats',
+  'inspector.findNearby': 'Find Nearby',
+  // Nearby Places
+  'nearby.title': 'Explore Nearby',
+  'nearby.searchingNear': 'Searching near',
+  'nearby.searching': 'Searching nearby places...',
+  'nearby.noResults': 'No places found nearby. Try a different category.',
+  'nearby.searchError': 'Failed to search nearby places.',
+  'nearby.add': 'Add',
+  'nearby.added': 'Added',
+  'nearby.types.food': 'Food & Drink',
+  'nearby.types.attractions': 'Attractions',
+  'nearby.types.shopping': 'Shopping',
+  'nearby.types.nightlife': 'Nightlife',
+  'nearby.types.outdoors': 'Outdoors',
+  'nearby.types.transport': 'Transport',
+  'nearby.types.services': 'Services',
+  'nearby.types.accommodation': 'Accommodation',
 
   // Reservations
   'reservations.title': 'Bookings',
