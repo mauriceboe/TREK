@@ -15,9 +15,12 @@ service:
 env:
   NODE_ENV: production
   PORT: 3000
-  ALLOWED_ORIGINS: ""
+  # ALLOWED_ORIGINS: ""
   # NOTE: If using ingress, ensure env.ALLOWED_ORIGINS matches the domains in ingress.hosts for proper CORS configuration.
-  ALLOW_INTERNAL_NETWORK: ""
+  # APP_URL: "https://trek.example.com"
+  # Public base URL of this instance. Required when OIDC is enabled — must match the redirect URI registered with your IdP.
+  # Also used as the base URL for links in email notifications and other external links.
+  # ALLOW_INTERNAL_NETWORK: "false"
   # Set to "true" if Immich or other integrated services are hosted on a private/RFC-1918 network address.
   # Loopback (127.x) and link-local/metadata addresses (169.254.x) are always blocked.
   # COOKIE_SECURE: "true"
