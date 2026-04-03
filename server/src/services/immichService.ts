@@ -1,4 +1,4 @@
-import { db, canAccessTrip } from '../db/database';
+import { db } from '../db/database';
 import { maybe_encrypt_api_key, decrypt_api_key } from './apiKeyCrypto';
 import { checkSsrf } from '../utils/ssrfGuard';
 import { writeAudit } from './auditLog';
@@ -171,45 +171,6 @@ export async function searchPhotos(
   }
 }
 
-// ── Trip Photos ────────────────────────────────────────────────────────────
-
-export function listTripPhotos(tripId: string, userId: number) {
-  return db.prepare(`
-    SELECT tp.asset_id AS immich_asset_id, tp.user_id, tp.shared, tp.added_at,
-           u.username, u.avatar, u.immich_url
-    FROM trip_photos tp
-    JOIN users u ON tp.user_id = u.id
-    WHERE tp.trip_id = ?
-    AND tp.provider = 'immich'
-    AND (tp.user_id = ? OR tp.shared = 1)
-    ORDER BY tp.added_at ASC
-  `).all(tripId, userId);
-}
-
-export function addTripPhotos(
-  tripId: string,
-  userId: number,
-  assetIds: string[],
-  shared: boolean
-): number {
-  const insert = db.prepare('INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, shared) VALUES (?, ?, ?, ?, ?)');
-  let added = 0;
-  for (const assetId of assetIds) {
-    const result = insert.run(tripId, userId, assetId, 'immich', shared ? 1 : 0);
-    if (result.changes > 0) added++;
-  }
-  return added;
-}
-
-export function removeTripPhoto(tripId: string, userId: number, assetId: string) {
-  db.prepare('DELETE FROM trip_photos WHERE trip_id = ? AND user_id = ? AND asset_id = ? AND provider = ?')
-    .run(tripId, userId, assetId, 'immich');
-}
-
-export function togglePhotoSharing(tripId: string, userId: number, assetId: string, shared: boolean) {
-  db.prepare('UPDATE trip_photos SET shared = ? WHERE trip_id = ? AND user_id = ? AND asset_id = ? AND provider = ?')
-    .run(shared ? 1 : 0, tripId, userId, assetId, 'immich');
-}
 
 // ── Asset Info / Proxy ─────────────────────────────────────────────────────
 
@@ -323,15 +284,6 @@ export async function listAlbums(
   }
 }
 
-export function listAlbumLinks(tripId: string) {
-  return db.prepare(`
-    SELECT tal.*, u.username
-    FROM trip_album_links tal
-    JOIN users u ON tal.user_id = u.id
-    WHERE tal.trip_id = ? AND tal.provider = 'immich'
-    ORDER BY tal.created_at ASC
-  `).all(tripId);
-}
 
 export function createAlbumLink(
   tripId: string,
@@ -347,11 +299,6 @@ export function createAlbumLink(
   } catch {
     return { success: false, error: 'Album already linked' };
   }
-}
-
-export function deleteAlbumLink(linkId: string, tripId: string, userId: number) {
-  db.prepare('DELETE FROM trip_album_links WHERE id = ? AND trip_id = ? AND user_id = ?')
-    .run(linkId, tripId, userId);
 }
 
 export async function syncAlbumAssets(

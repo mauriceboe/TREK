@@ -12,19 +12,13 @@ import {
   getConnectionStatus,
   browseTimeline,
   searchPhotos,
-  listTripPhotos,
-  addTripPhotos,
-  removeTripPhoto,
-  togglePhotoSharing,
-  getAssetInfo,
   proxyThumbnail,
   proxyOriginal,
   isValidAssetId,
   listAlbums,
-  listAlbumLinks,
   createAlbumLink,
-  deleteAlbumLink,
   syncAlbumAssets,
+  getAssetInfo,
 } from '../services/immichService';
 
 const router = express.Router();
@@ -89,11 +83,13 @@ router.post('/search', authenticate, async (req: Request, res: Response) => {
 
 // ── Asset Details ──────────────────────────────────────────────────────────
 
-router.get('/trips/:tripId/photos', authenticate, (req: Request, res: Response) => {
+router.get('/assets/:assetId/info', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { tripId } = req.params;
-  if (!canAccessTrip(tripId, authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
-  res.json({ photos: listTripPhotos(tripId, authReq.user.id) });
+  const { assetId } = req.params;
+  if (!isValidAssetId(assetId)) return res.status(400).json({ error: 'Invalid asset ID' });
+  const result = await getAssetInfo(authReq.user.id, assetId);
+  if (result.error) return res.status(result.status!).json({ error: result.error });
+  res.json(result.data);
 });
 
 // ── Proxy Immich Assets ────────────────────────────────────────────────────
