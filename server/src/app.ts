@@ -235,8 +235,7 @@ export function createApp(): express.Application {
     } else {
       console.error('Unhandled error:', err);
     }
-    const status = err.status || err.statusCode || 500;
-    res.status(status).json({ error: status === 500 ? 'Internal server error' : err.message });
+    res.status(500).json({ error: 'Internal server error' });
   });
 
   return app;

@@ -59,7 +59,7 @@ const avatarUpload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!file.mimetype.startsWith('image/') || !ALLOWED_AVATAR_EXTS.includes(ext)) {
-      return cb(null, false);
+      return cb(new Error('Only image files (jpg, png, gif, webp) are allowed'));
     }
     cb(null, true);
   },
