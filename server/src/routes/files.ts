@@ -57,7 +57,7 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.includes(ext) || file.mimetype.includes('svg')) {
-      return cb(new Error('File type not allowed'));
+      return cb(null, false);
     }
     const allowed = getAllowedExtensions().split(',').map(e => e.trim().toLowerCase());
     const fileExt = ext.replace('.', '');

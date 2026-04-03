@@ -56,3 +56,5 @@ coverage
 .cache
 *.tsbuildinfo
 *.tgz
+
+.scannerwork

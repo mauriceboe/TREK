@@ -1,7 +1,7 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import archiver from 'archiver';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 
 const dataDir = path.join(__dirname, '../data');
 const backupsDir = path.join(dataDir, 'backups');
@@ -9,8 +9,8 @@ const uploadsDir = path.join(__dirname, '../uploads');
 const settingsFile = path.join(dataDir, 'backup-settings.json');
 
 const VALID_INTERVALS = ['hourly', 'daily', 'weekly', 'monthly'];
-const VALID_DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6]; // 0=Sunday
-const VALID_HOURS = Array.from({ length: 24 }, (_, i) => i);
+const VALID_DAYS_OF_WEEK = new Set([0, 1, 2, 3, 4, 5, 6]); // 0=Sunday
+const VALID_HOURS = new Set(Array.from({length: 24}, (_, i) => i));
 
 interface BackupSettings {
   enabled: boolean;
@@ -22,8 +22,8 @@ interface BackupSettings {
 }
 
 function buildCronExpression(settings: BackupSettings): string {
-  const hour = VALID_HOURS.includes(settings.hour) ? settings.hour : 2;
-  const dow = VALID_DAYS_OF_WEEK.includes(settings.day_of_week) ? settings.day_of_week : 0;
+  const hour = VALID_HOURS.has(settings.hour) ? settings.hour : 2;
+  const dow = VALID_DAYS_OF_WEEK.has(settings.day_of_week) ? settings.day_of_week : 0;
   const dom = settings.day_of_month >= 1 && settings.day_of_month <= 28 ? settings.day_of_month : 1;
 
   switch (settings.interval) {

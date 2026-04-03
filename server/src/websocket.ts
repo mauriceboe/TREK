@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { db, canAccessTrip } from './db/database';
 import { consumeEphemeralToken } from './services/ephemeralTokens';
 import { User } from './types';
-import http from 'http';
+import http from 'node:http';
 
 interface NomadWebSocket extends WebSocket {
   isAlive: boolean;
@@ -48,7 +48,7 @@ function setupWebSocket(server: http.Server): void {
 
   const HEARTBEAT_INTERVAL = 30000; // 30 seconds
   const heartbeat = setInterval(() => {
-    wss!.clients.forEach((ws) => {
+    wss.clients.forEach((ws) => {
       const nws = ws as NomadWebSocket;
       if (nws.isAlive === false) return nws.terminate();
       nws.isAlive = false;
@@ -61,7 +61,7 @@ function setupWebSocket(server: http.Server): void {
   wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
     const nws = ws as NomadWebSocket;
     // Extract token from query param
-    const url = new URL(req.url!, 'http://localhost');
+    const url = new URL(req.url, 'http://localhost');
     const token = url.searchParams.get('token');
 
     if (!token) {
@@ -103,7 +103,7 @@ function setupWebSocket(server: http.Server): void {
 
     nws.on('message', (data) => {
       // Rate limiting
-      const rate = socketMsgCounts.get(nws)!;
+      const rate = socketMsgCounts.get(nws);
       const now = Date.now();
       if (now - rate.windowStart > WS_MSG_WINDOW) {
         rate.count = 1;
@@ -129,14 +129,14 @@ function setupWebSocket(server: http.Server): void {
       if (msg.type === 'join' && msg.tripId) {
         const tripId = Number(msg.tripId);
         // Verify the user has access to this trip
-        if (!canAccessTrip(tripId, user!.id)) {
+        if (!canAccessTrip(tripId, user.id)) {
           nws.send(JSON.stringify({ type: 'error', message: 'Access denied' }));
           return;
         }
         // Add to room
         if (!rooms.has(tripId)) rooms.set(tripId, new Set());
-        rooms.get(tripId)!.add(nws);
-        socketRooms.get(nws)!.add(tripId);
+        rooms.get(tripId).add(nws);
+        socketRooms.get(nws).add(tripId);
         nws.send(JSON.stringify({ type: 'joined', tripId }));
       }
 
@@ -198,7 +198,7 @@ function broadcastToUser(userId: number, payload: Record<string, unknown>, exclu
     if (nws.readyState !== 1) continue;
     if (excludeNum && socketId.get(nws) === excludeNum) continue;
     const user = socketUser.get(nws);
-    if (user && user.id === userId) {
+    if (user?.id === userId) {
       nws.send(JSON.stringify(payload));
     }
   }

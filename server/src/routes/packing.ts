@@ -74,6 +74,21 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   broadcast(tripId, 'packing:created', { item }, req.headers['x-socket-id'] as string);
 });
 
+router.put('/reorder', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { tripId } = req.params;
+  const { orderedIds } = req.body;
+
+  const trip = verifyTripAccess(tripId, authReq.user.id);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  if (!checkPermission('packing_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
+  reorderItems(tripId, orderedIds);
+  res.json({ success: true });
+});
+
 router.put('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId, id } = req.params;
@@ -218,21 +233,6 @@ router.put('/category-assignees/:categoryName', authenticate, (req: Request, res
       }
     });
   }
-});
-
-router.put('/reorder', authenticate, (req: Request, res: Response) => {
-  const authReq = req as AuthRequest;
-  const { tripId } = req.params;
-  const { orderedIds } = req.body;
-
-  const trip = verifyTripAccess(tripId, authReq.user.id);
-  if (!trip) return res.status(404).json({ error: 'Trip not found' });
-
-  if (!checkPermission('packing_edit', authReq.user.role, trip.user_id, authReq.user.id, trip.user_id !== authReq.user.id))
-    return res.status(403).json({ error: 'No permission' });
-
-  reorderItems(tripId, orderedIds);
-  res.json({ success: true });
 });
 
 export default router;

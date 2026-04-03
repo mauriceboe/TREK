@@ -4,7 +4,13 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "node --import tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:ws": "vitest run tests/websocket",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
@@ -43,9 +49,13 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^7.0.11",
     "@types/qrcode": "^1.5.5",
+    "@types/supertest": "^6.0.3",
     "@types/unzipper": "^0.10.11",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "nodemon": "^3.1.0"
+    "@vitest/coverage-v8": "^3.2.4",
+    "nodemon": "^3.1.0",
+    "supertest": "^7.2.2",
+    "vitest": "^3.2.4"
   }
 }

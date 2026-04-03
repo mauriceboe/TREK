@@ -59,7 +59,7 @@ const avatarUpload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!file.mimetype.startsWith('image/') || !ALLOWED_AVATAR_EXTS.includes(ext)) {
-      return cb(new Error('Only .jpg, .jpeg, .png, .gif, .webp images are allowed'));
+      return cb(null, false);
     }
     cb(null, true);
   },
@@ -321,3 +321,6 @@ router.post('/resource-token', authenticate, (req: Request, res: Response) => {
 });
 
 export default router;
+
+// Exported for test resets only — do not use in production code
+export { loginAttempts, mfaAttempts };

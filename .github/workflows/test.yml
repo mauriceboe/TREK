@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'server/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'server/**'
+      - '.github/workflows/test.yml'
+
+jobs:
+  server-tests:
+    name: Server Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: cd server && npm ci
+
+      - name: Run tests
+        run: cd server && npm test
+
+      - name: Upload coverage
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: server/coverage/
+          retention-days: 7

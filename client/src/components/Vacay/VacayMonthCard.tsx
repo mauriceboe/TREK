@@ -81,6 +81,7 @@ export default function VacayMonthCard({
               return (
                 <div
                   key={di}
+                  title={holiday ? (holiday.label ? `${holiday.label}: ${holiday.localName}` : holiday.localName) : undefined}
                   className="relative flex items-center justify-center cursor-pointer transition-colors"
                   style={{
                     height: 28,
