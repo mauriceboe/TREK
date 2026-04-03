@@ -43,7 +43,9 @@ const noteUpload = multer({
     const ext = path.extname(file.originalname).toLowerCase();
     const BLOCKED = ['.svg', '.html', '.htm', '.xml', '.xhtml', '.js', '.jsx', '.ts', '.exe', '.bat', '.sh', '.cmd', '.msi', '.dll', '.com', '.vbs', '.ps1', '.php'];
     if (BLOCKED.includes(ext) || file.mimetype.includes('svg') || file.mimetype.includes('html') || file.mimetype.includes('javascript')) {
-      return cb(new Error('File type not allowed'));
+      const err: Error & { statusCode?: number } = new Error('File type not allowed');
+      err.statusCode = 400;
+      return cb(err);
     }
     cb(null, true);
   },

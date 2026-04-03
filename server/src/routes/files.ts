@@ -57,14 +57,18 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.includes(ext) || file.mimetype.includes('svg')) {
-      return cb(new Error('File type not allowed'));
+      const err: Error & { statusCode?: number } = new Error('File type not allowed');
+      err.statusCode = 400;
+      return cb(err);
     }
     const allowed = getAllowedExtensions().split(',').map(e => e.trim().toLowerCase());
     const fileExt = ext.replace('.', '');
     if (allowed.includes(fileExt) || (allowed.includes('*') && !BLOCKED_EXTENSIONS.includes(ext))) {
       cb(null, true);
     } else {
-      cb(new Error('File type not allowed'));
+      const err: Error & { statusCode?: number } = new Error('File type not allowed');
+      err.statusCode = 400;
+      cb(err);
     }
   },
 });
