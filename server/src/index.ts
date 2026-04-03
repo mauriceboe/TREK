@@ -145,9 +145,13 @@ app.get('/uploads/avatars/:filename', async (req: Request, res: Response) => {
     if (result.type === 'redirect') {
       return res.redirect(302, result.url);
     }
+    result.stream.on('error', () => res.status(404).send('Not found'));
     result.stream.pipe(res);
   } catch (err: unknown) {
     console.error('Avatar download error:', err);
+    // Fallback: serve from local filesystem (covers old files and misconfigured backends)
+    const localPath = path.join(__dirname, '../uploads/avatars', safeName);
+    if (fs.existsSync(localPath)) return res.sendFile(localPath);
     res.status(404).send('Not found');
   }
 });
@@ -162,9 +166,13 @@ app.get('/uploads/covers/:filename', async (req: Request, res: Response) => {
     if (result.type === 'redirect') {
       return res.redirect(302, result.url);
     }
+    result.stream.on('error', () => res.status(404).send('Not found'));
     result.stream.pipe(res);
   } catch (err: unknown) {
     console.error('Cover download error:', err);
+    // Fallback: serve from local filesystem (covers old files and misconfigured backends)
+    const localPath = path.join(__dirname, '../uploads/covers', safeName);
+    if (fs.existsSync(localPath)) return res.sendFile(localPath);
     res.status(404).send('Not found');
   }
 });

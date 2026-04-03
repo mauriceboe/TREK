@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import { db, canAccessTrip } from '../db/database';
 import { CollabNote, CollabPoll, CollabMessage, TripFile } from '../types';
 import { checkSsrf, createPinnedAgent } from '../utils/ssrfGuard';
@@ -165,12 +163,10 @@ export function deleteNote(tripId: string | number, noteId: string | number): bo
   const existing = db.prepare('SELECT id FROM collab_notes WHERE id = ? AND trip_id = ?').get(noteId, tripId);
   if (!existing) return false;
 
-  // Clean up attached files from disk
-  const noteFiles = db.prepare('SELECT id, filename FROM trip_files WHERE note_id = ?').all(noteId) as NoteFileRow[];
-  for (const f of noteFiles) {
-    const filePath = path.join(__dirname, '../../uploads', f.filename);
-    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
-  }
+  // IMPORTANT: The route layer (collab.ts) queries trip_files BEFORE calling this
+  // function so it can delete the files from the storage backend afterward.
+  // The DB rows must be deleted here (after the route has read them) so the FK
+  // constraint on collab_notes is satisfied. Do not reorder these two operations.
   db.prepare('DELETE FROM trip_files WHERE note_id = ?').run(noteId);
 
   db.prepare('DELETE FROM collab_notes WHERE id = ?').run(noteId);
@@ -202,9 +198,7 @@ export function deleteNoteFile(noteId: string | number, fileId: string | number)
   const file = db.prepare('SELECT * FROM trip_files WHERE id = ? AND note_id = ?').get(fileId, noteId) as TripFile | undefined;
   if (!file) return false;
 
-  const filePath = path.join(__dirname, '../../uploads', file.filename);
-  try { fs.unlinkSync(filePath); } catch { /* ignore */ }
-
+  // File removal is handled by the route layer via the storage backend
   db.prepare('DELETE FROM trip_files WHERE id = ?').run(fileId);
   return true;
 }

@@ -302,7 +302,7 @@ router.post('/rotate-jwt-secret', (req: Request, res: Response) => {
   writeAudit({
     userId: authReq.user?.id ?? null,
     action: 'admin.rotate_jwt_secret',
-    details: { target_type: 'system', username: authReq.user?.username ?? 'unknown' },
+    details: { rotatedBy: authReq.user?.username ?? 'unknown' },
     ip: getClientIp(req),
   });
   res.json({ success: true });

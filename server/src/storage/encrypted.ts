@@ -1,6 +1,5 @@
 import { Readable, Transform } from 'stream';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { StorageBackend, DownloadResult, ListEntry } from './types';
 import { createEncryptionStream, createDecryptionStream } from './crypto';
@@ -24,7 +23,9 @@ export class EncryptedBackend implements StorageBackend {
       await this.backend.store(key, combined);
     } else {
       // Write encrypted data to a temp file to avoid buffering large streams in memory
-      const tmpPath = path.join(os.tmpdir(), `trek-enc-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
+      const tmpDir = path.join(__dirname, '../../data/tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpPath = path.join(tmpDir, `trek-enc-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
 
       // Register metadataPromise BEFORE piping to avoid missing 'end' on short streams
       const metadataPromise = new Promise<Buffer>((resolve) => {
@@ -114,6 +115,7 @@ export class EncryptedBackend implements StorageBackend {
       }
     });
 
+    result.stream.on('error', (err) => decryptStream.destroy(err));
     result.stream.pipe(decryptStream);
     
     return { type: 'stream', stream: decryptStream };

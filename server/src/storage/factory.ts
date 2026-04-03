@@ -5,7 +5,7 @@ import { S3Backend } from './s3';
 import { EncryptedBackend } from './encrypted';
 import { decryptCredentials } from './crypto';
 
-const backendCache = new Map<number | string, StorageBackend>();
+const backendCache = new Map<string, StorageBackend>();
 
 export function getBackend(purpose: StoragePurpose): StorageBackend {
   const assignment = db.prepare(
@@ -22,8 +22,9 @@ export function getBackend(purpose: StoragePurpose): StorageBackend {
     return backendCache.get(cacheKey)!;
   }
 
-  if (backendCache.has(targetId)) {
-    return backendCache.get(targetId)!;
+  const numericCacheKey = `target:${targetId}`;
+  if (backendCache.has(numericCacheKey)) {
+    return backendCache.get(numericCacheKey)!;
   }
 
   const target = db.prepare(
@@ -57,13 +58,13 @@ export function getBackend(purpose: StoragePurpose): StorageBackend {
     backend = new EncryptedBackend(backend);
   }
 
-  backendCache.set(targetId, backend);
+  backendCache.set(numericCacheKey, backend);
   return backend;
 }
 
 export function invalidateBackendCache(targetId?: number): void {
   if (targetId !== undefined) {
-    backendCache.delete(targetId);
+    backendCache.delete(`target:${targetId}`);
   } else {
     backendCache.clear();
   }
