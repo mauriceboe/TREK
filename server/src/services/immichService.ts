@@ -230,11 +230,27 @@ export function togglePhotoSharing(tripId: string, userId: number, assetId: stri
 
 // ── Asset Info / Proxy ─────────────────────────────────────────────────────
 
+/**
+ * Verify that requestingUserId can access a shared photo belonging to ownerUserId.
+ * The asset must be shared (shared=1) and the requesting user must be a member of
+ * the same trip that contains the photo.
+ */
+export function canAccessUserPhoto(requestingUserId: number, ownerUserId: number, assetId: string): boolean {
+  const row = db.prepare(`
+    SELECT tp.trip_id FROM trip_photos tp
+    WHERE tp.immich_asset_id = ? AND tp.user_id = ? AND tp.shared = 1
+  `).get(assetId, ownerUserId) as { trip_id: number } | undefined;
+  if (!row) return false;
+  return !!canAccessTrip(String(row.trip_id), requestingUserId);
+}
+
 export async function getAssetInfo(
   userId: number,
-  assetId: string
+  assetId: string,
+  ownerUserId?: number
 ): Promise<{ data?: any; error?: string; status?: number }> {
-  const creds = getImmichCredentials(userId);
+  const effectiveUserId = ownerUserId ?? userId;
+  const creds = getImmichCredentials(effectiveUserId);
   if (!creds) return { error: 'Not found', status: 404 };
 
   try {
@@ -272,9 +288,11 @@ export async function getAssetInfo(
 
 export async function proxyThumbnail(
   userId: number,
-  assetId: string
+  assetId: string,
+  ownerUserId?: number
 ): Promise<{ buffer?: Buffer; contentType?: string; error?: string; status?: number }> {
-  const creds = getImmichCredentials(userId);
+  const effectiveUserId = ownerUserId ?? userId;
+  const creds = getImmichCredentials(effectiveUserId);
   if (!creds) return { error: 'Not found', status: 404 };
 
   try {
@@ -293,9 +311,11 @@ export async function proxyThumbnail(
 
 export async function proxyOriginal(
   userId: number,
-  assetId: string
+  assetId: string,
+  ownerUserId?: number
 ): Promise<{ buffer?: Buffer; contentType?: string; error?: string; status?: number }> {
-  const creds = getImmichCredentials(userId);
+  const effectiveUserId = ownerUserId ?? userId;
+  const creds = getImmichCredentials(effectiveUserId);
   if (!creds) return { error: 'Not found', status: 404 };
 
   try {

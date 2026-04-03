@@ -20,6 +20,7 @@ import {
   proxyThumbnail,
   proxyOriginal,
   isValidAssetId,
+  canAccessUserPhoto,
   listAlbums,
   listAlbumLinks,
   createAlbumLink,
@@ -143,7 +144,12 @@ router.get('/assets/:assetId/info', authenticate, async (req: Request, res: Resp
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
   if (!isValidAssetId(assetId)) return res.status(400).json({ error: 'Invalid asset ID' });
-  const result = await getAssetInfo(authReq.user.id, assetId);
+  const queryUserId = req.query.userId ? Number(req.query.userId) : undefined;
+  const ownerUserId = queryUserId && queryUserId !== authReq.user.id ? queryUserId : undefined;
+  if (ownerUserId && !canAccessUserPhoto(authReq.user.id, ownerUserId, assetId)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const result = await getAssetInfo(authReq.user.id, assetId, ownerUserId);
   if (result.error) return res.status(result.status!).json({ error: result.error });
   res.json(result.data);
 });
@@ -154,7 +160,12 @@ router.get('/assets/:assetId/thumbnail', authFromQuery, async (req: Request, res
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
   if (!isValidAssetId(assetId)) return res.status(400).send('Invalid asset ID');
-  const result = await proxyThumbnail(authReq.user.id, assetId);
+  const queryUserId = req.query.userId ? Number(req.query.userId) : undefined;
+  const ownerUserId = queryUserId && queryUserId !== authReq.user.id ? queryUserId : undefined;
+  if (ownerUserId && !canAccessUserPhoto(authReq.user.id, ownerUserId, assetId)) {
+    return res.status(403).send('Forbidden');
+  }
+  const result = await proxyThumbnail(authReq.user.id, assetId, ownerUserId);
   if (result.error) return res.status(result.status!).send(result.error);
   res.set('Content-Type', result.contentType!);
   res.set('Cache-Control', 'public, max-age=86400');
@@ -165,7 +176,12 @@ router.get('/assets/:assetId/original', authFromQuery, async (req: Request, res:
   const authReq = req as AuthRequest;
   const { assetId } = req.params;
   if (!isValidAssetId(assetId)) return res.status(400).send('Invalid asset ID');
-  const result = await proxyOriginal(authReq.user.id, assetId);
+  const queryUserId = req.query.userId ? Number(req.query.userId) : undefined;
+  const ownerUserId = queryUserId && queryUserId !== authReq.user.id ? queryUserId : undefined;
+  if (ownerUserId && !canAccessUserPhoto(authReq.user.id, ownerUserId, assetId)) {
+    return res.status(403).send('Forbidden');
+  }
+  const result = await proxyOriginal(authReq.user.id, assetId, ownerUserId);
   if (result.error) return res.status(result.status!).send(result.error);
   res.set('Content-Type', result.contentType!);
   res.set('Cache-Control', 'public, max-age=86400');
