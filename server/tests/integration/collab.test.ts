@@ -47,7 +47,7 @@ import { createTables } from '../../src/db/schema';
 import { runMigrations } from '../../src/db/migrations';
 import { resetTestDb } from '../helpers/test-db';
 import { createUser, createTrip, addTripMember } from '../helpers/factories';
-import { authCookie } from '../helpers/auth';
+import { authCookie, generateToken } from '../helpers/auth';
 import { loginAttempts, mfaAttempts } from '../../src/routes/auth';
 
 const app: Application = createApp();
@@ -248,6 +248,103 @@ describe('Collab notes', () => {
       .set('Cookie', authCookie(user.id));
     expect(del.status).toBe(200);
     expect(del.body.success).toBe(true);
+  });
+
+  it('COLLAB-028 — uploaded note file URL uses authenticated download path, not /uploads/', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const create = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes`)
+      .set('Cookie', authCookie(user.id))
+      .send({ title: 'URL check' });
+    const noteId = create.body.note.id;
+
+    const upload = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes/${noteId}/files`)
+      .set('Cookie', authCookie(user.id))
+      .attach('file', FIXTURE_PDF);
+    expect(upload.status).toBe(201);
+
+    const fileUrl = upload.body.file.url;
+    expect(fileUrl).toMatch(/^\/api\/trips\/\d+\/files\/\d+\/download$/);
+    expect(fileUrl).not.toContain('/uploads/');
+  });
+
+  it('COLLAB-029 — note attachments in listing use authenticated download URLs', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const create = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes`)
+      .set('Cookie', authCookie(user.id))
+      .send({ title: 'List URL check' });
+    const noteId = create.body.note.id;
+
+    await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes/${noteId}/files`)
+      .set('Cookie', authCookie(user.id))
+      .attach('file', FIXTURE_PDF);
+
+    const list = await request(app)
+      .get(`/api/trips/${trip.id}/collab/notes`)
+      .set('Cookie', authCookie(user.id));
+    expect(list.status).toBe(200);
+
+    const note = list.body.notes.find((n: any) => n.id === noteId);
+    expect(note.attachments.length).toBe(1);
+    expect(note.attachments[0].url).toMatch(/^\/api\/trips\/\d+\/files\/\d+\/download$/);
+    expect(note.attachments[0].url).not.toContain('/uploads/');
+  });
+
+  it('COLLAB-030 — note file is downloadable via files endpoint with ephemeral token', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const create = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes`)
+      .set('Cookie', authCookie(user.id))
+      .send({ title: 'Downloadable note' });
+    const noteId = create.body.note.id;
+
+    const upload = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes/${noteId}/files`)
+      .set('Cookie', authCookie(user.id))
+      .attach('file', FIXTURE_PDF);
+    const fileUrl = upload.body.file.url;
+
+    // Obtain an ephemeral resource token (same flow as getAuthUrl on the client)
+    const tokenRes = await request(app)
+      .post('/api/auth/resource-token')
+      .set('Cookie', authCookie(user.id))
+      .send({ purpose: 'download' });
+    expect(tokenRes.status).toBe(200);
+    const { token } = tokenRes.body;
+
+    // Download with ?token= should succeed
+    const dl = await request(app).get(`${fileUrl}?token=${token}`);
+    expect(dl.status).toBe(200);
+  });
+
+  it('COLLAB-031 — note file download without auth returns 401', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const create = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes`)
+      .set('Cookie', authCookie(user.id))
+      .send({ title: 'Auth required note' });
+    const noteId = create.body.note.id;
+
+    const upload = await request(app)
+      .post(`/api/trips/${trip.id}/collab/notes/${noteId}/files`)
+      .set('Cookie', authCookie(user.id))
+      .attach('file', FIXTURE_PDF);
+    const fileUrl = upload.body.file.url;
+
+    // Download without any auth should fail
+    const dl = await request(app).get(fileUrl);
+    expect(dl.status).toBe(401);
   });
 });
 
