@@ -127,6 +127,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   const [draggingId, setDraggingId] = useState(null)
   const [lockedIds, setLockedIds] = useState(new Set())
   const [lockHoverId, setLockHoverId] = useState(null)
+  const [optimizationPreview, setOptimizationPreview] = useState(null)
   const [undoHover, setUndoHover] = useState(false)
   const [pdfHover, setPdfHover] = useState(false)
   const [icsHover, setIcsHover] = useState(false)
@@ -628,9 +629,73 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
 
     const profile = getRouteProfileForAssignments(dayAssignments)
     const result = await calculateRoute(waypoints, profile)
-    const lineCoords = waypoints.map(p => [p.lat, p.lng])
     setRouteInfo({ distance: result.distanceText, duration: result.durationText })
-    onRouteCalculated?.({ ...result, coordinates: lineCoords })
+    onRouteCalculated?.(result)
+  }
+
+  const buildOptimizationPreview = async (dayId) => {
+    const dayAssignments = getDayAssignments(dayId)
+    if (dayAssignments.length < 3) return null
+
+    const locked = new Map()
+    const unlocked = []
+    dayAssignments.forEach((assignment, index) => {
+      if (lockedIds.has(assignment.id)) locked.set(index, assignment)
+      else unlocked.push(assignment)
+    })
+
+    const unlockedWithCoords = unlocked.filter(a => a.place?.lat && a.place?.lng)
+    const unlockedNoCoords = unlocked.filter(a => !a.place?.lat || !a.place?.lng)
+    if (unlockedWithCoords.length < 2) return null
+
+    const profile = getRouteProfileForAssignments(unlockedWithCoords)
+    const optimization = await optimizeRoute(
+      unlockedWithCoords.map(a => ({ assignment: a, lat: a.place.lat, lng: a.place.lng })),
+      profile
+    )
+    if (!optimization.changed) return null
+
+    const optimizedAssignments = optimization.waypoints.map(item => item.assignment)
+    const optimizedQueue = [...optimizedAssignments, ...unlockedNoCoords]
+    const result = new Array(dayAssignments.length)
+    locked.forEach((assignment, index) => { result[index] = assignment })
+    let queueIndex = 0
+    for (let index = 0; index < result.length; index++) {
+      if (!result[index]) result[index] = optimizedQueue[queueIndex++]
+    }
+
+    const prevIds = dayAssignments.map(a => a.id)
+    const nextIds = result.map(a => a.id)
+    if (nextIds.every((id, index) => id === prevIds[index])) return null
+
+    const currentGeoAssignments = dayAssignments.filter(a => a.place?.lat && a.place?.lng)
+    const nextGeoAssignments = result.filter(a => a.place?.lat && a.place?.lng)
+    if (currentGeoAssignments.length < 2 || nextGeoAssignments.length < 2) return null
+
+    const [currentRoute, nextRoute] = await Promise.all([
+      calculateRoute(
+        currentGeoAssignments.map(a => ({ lat: a.place.lat, lng: a.place.lng })),
+        profile
+      ),
+      calculateRoute(
+        nextGeoAssignments.map(a => ({ lat: a.place.lat, lng: a.place.lng })),
+        profile
+      ),
+    ])
+
+    const secondsSaved = Math.round(currentRoute.duration - nextRoute.duration)
+    if (secondsSaved <= 1) return null
+
+    return {
+      dayId,
+      profile,
+      prevIds,
+      nextIds,
+      result,
+      currentRoute,
+      nextRoute,
+      secondsSaved,
+    }
   }
 
   const handleCalculateRoute = async () => {
@@ -645,6 +710,23 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     finally { setIsCalculating(false) }
   }
 
+  useEffect(() => {
+    if (!selectedDayId) {
+      setOptimizationPreview(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const preview = await buildOptimizationPreview(selectedDayId)
+        if (!cancelled) setOptimizationPreview(preview)
+      } catch {
+        if (!cancelled) setOptimizationPreview(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedDayId, assignments[String(selectedDayId || '')], lockedIds])
+
   const toggleLock = (assignmentId) => {
     const prevLocked = new Set(lockedIds)
     setLockedIds(prev => {
@@ -658,54 +740,24 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
 
   const handleOptimize = async () => {
     if (!selectedDayId) return
-    const da = getDayAssignments(selectedDayId)
-    if (da.length < 3) return
-
-    const prevIds = da.map(a => a.id)
-
-    // Separate locked (stay at their index) and unlocked assignments
-    const locked = new Map() // index -> assignment
-    const unlocked = []
-    da.forEach((a, i) => {
-      if (lockedIds.has(a.id)) locked.set(i, a)
-      else unlocked.push(a)
-    })
-
-    // Optimize only unlocked assignments (work on assignments, not places)
-    const unlockedWithCoords = unlocked.filter(a => a.place?.lat && a.place?.lng)
-    const unlockedNoCoords = unlocked.filter(a => !a.place?.lat || !a.place?.lng)
-    if (unlockedWithCoords.length < 2) {
+    const preview = optimizationPreview?.dayId === selectedDayId
+      ? optimizationPreview
+      : await buildOptimizationPreview(selectedDayId)
+    if (!preview) {
       toast.error(t('dayplan.toast.needTwoPlaces'))
       return
     }
 
-    const profile = getRouteProfileForAssignments(unlockedWithCoords)
-    const optimization = await optimizeRoute(
-      unlockedWithCoords.map(a => ({ assignment: a, lat: a.place.lat, lng: a.place.lng })),
-      profile
-    )
-    const optimizedAssignments = optimization.waypoints.map(item => item.assignment)
-    const optimizedQueue = [...optimizedAssignments, ...unlockedNoCoords]
-
-    // Merge: locked stay at their index, fill gaps with optimized
-    const result = new Array(da.length)
-    locked.forEach((a, i) => { result[i] = a })
-    let qi = 0
-    for (let i = 0; i < result.length; i++) {
-      if (!result[i]) result[i] = optimizedQueue[qi++]
-    }
-
-    const nextIds = result.map(a => a.id)
-    if (nextIds.every((id, index) => id === prevIds[index])) return
-
-    await onReorder(selectedDayId, result.map(a => a.id))
+    await onReorder(selectedDayId, preview.nextIds)
     try {
-      await updateDisplayedRoute(result)
+      await updateDisplayedRoute(preview.result)
     } catch {}
+    setOptimizationPreview(null)
     toast.success(t('dayplan.toast.routeOptimized'))
     const capturedDayId = selectedDayId
+    const capturedPrevIds = preview.prevIds
     pushUndo?.(t('undo.optimize'), async () => {
-      await tripActions.reorderAssignments(tripId, capturedDayId, prevIds)
+      await tripActions.reorderAssignments(tripId, capturedDayId, capturedPrevIds)
     })
   }
 
@@ -1534,6 +1586,34 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                           <span>{routeInfo.distance}</span>
                           <span style={{ color: 'var(--text-faint)' }}>·</span>
                           <span>{routeInfo.duration}</span>
+                        </div>
+                      )}
+
+                      {optimizationPreview?.dayId === day.id && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          fontSize: 11,
+                          color: 'var(--text-secondary)',
+                          background: 'var(--bg-hover)',
+                          borderRadius: 8,
+                          padding: '6px 10px',
+                        }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>
+                            {optimizationPreview.currentRoute.durationText} â†’ {optimizationPreview.nextRoute.durationText}
+                          </span>
+                          <span style={{
+                            flexShrink: 0,
+                            padding: '2px 7px',
+                            borderRadius: 99,
+                            background: 'rgba(34,197,94,0.12)',
+                            color: '#15803d',
+                            fontWeight: 600,
+                          }}>
+                            -{Math.max(1, Math.round(optimizationPreview.secondsSaved / 60))} min
+                          </span>
                         </div>
                       )}
 

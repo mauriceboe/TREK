@@ -191,6 +191,8 @@ export interface RouteSegment {
   mid: [number, number]
   from: [number, number]
   to: [number, number]
+  durationText: string
+  profile: 'driving' | 'walking' | 'cycling'
   walkingText: string
   drivingText: string
 }
@@ -199,6 +201,7 @@ export interface RouteResult {
   coordinates: [number, number][]
   distance: number
   duration: number
+  profile?: 'driving' | 'walking' | 'cycling'
   distanceText: string
   durationText: string
   walkingText: string

@@ -50,6 +50,7 @@ export async function calculateRoute(
     coordinates,
     distance,
     duration,
+    profile,
     distanceText: formatDistance(distance),
     durationText: formatDuration(duration),
     walkingText: formatDuration(walkingDuration),
@@ -96,12 +97,13 @@ export async function optimizeRoute<T extends Waypoint>(
 /** Fetches per-leg distance/duration from OSRM and returns segment metadata (midpoints, walking/driving times). */
 export async function calculateSegments(
   waypoints: Waypoint[],
+  profile: RouteProfile = 'driving',
   { signal }: { signal?: AbortSignal } = {}
 ): Promise<RouteSegment[]> {
   if (!waypoints || waypoints.length < 2) return []
 
   const coords = waypoints.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_BASE}/driving/${coords}?overview=false&geometries=geojson&steps=false&annotations=distance,duration`
+  const url = `${OSRM_BASE}/${profile}/${coords}?overview=false&geometries=geojson&steps=false&annotations=distance,duration`
 
   const response = await fetch(url, { signal })
   if (!response.ok) throw new Error('Route could not be calculated')
@@ -115,8 +117,16 @@ export async function calculateSegments(
     const to: [number, number] = [waypoints[i + 1].lat, waypoints[i + 1].lng]
     const mid: [number, number] = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]
     const walkingDuration = leg.distance / (5000 / 3600)
+    const cyclingDuration = leg.distance / (15000 / 3600)
+    const duration = profile === 'driving'
+      ? leg.duration
+      : profile === 'cycling'
+        ? cyclingDuration
+        : walkingDuration
     return {
       mid, from, to,
+      durationText: formatDuration(duration),
+      profile,
       walkingText: formatDuration(walkingDuration),
       drivingText: formatDuration(leg.duration),
     }
