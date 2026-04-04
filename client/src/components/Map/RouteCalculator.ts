@@ -1,7 +1,6 @@
 import type { RouteResult, RouteSegment, Waypoint } from '../../types'
+import { mapsApi } from '../../api/client'
 
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1'
-const OSRM_TABLE_BASE = 'https://router.project-osrm.org/table/v1'
 type RouteProfile = 'driving' | 'walking' | 'cycling'
 
 interface RouteOptimizationResult<T extends Waypoint> {
@@ -21,15 +20,7 @@ export async function calculateRoute(
     throw new Error('At least 2 waypoints required')
   }
 
-  const coords = waypoints.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_BASE}/${profile}/${coords}?overview=full&geometries=geojson&steps=false`
-
-  const response = await fetch(url, { signal })
-  if (!response.ok) {
-    throw new Error('Route could not be calculated')
-  }
-
-  const data = await response.json()
+  const data = await mapsApi.route({ waypoints, profile, overview: true, annotations: false })
 
   if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
     throw new Error('No route found')
@@ -102,13 +93,7 @@ export async function calculateSegments(
 ): Promise<RouteSegment[]> {
   if (!waypoints || waypoints.length < 2) return []
 
-  const coords = waypoints.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_BASE}/${profile}/${coords}?overview=false&geometries=geojson&steps=false&annotations=distance,duration`
-
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error('Route could not be calculated')
-
-  const data = await response.json()
+  const data = await mapsApi.route({ waypoints, profile, overview: false, annotations: true })
   if (data.code !== 'Ok' || !data.routes?.[0]) throw new Error('No route found')
 
   const legs = data.routes[0].legs
@@ -162,12 +147,9 @@ async function buildCostMatrix(
   signal?: AbortSignal
 ): Promise<number[][]> {
   const coords = places.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_TABLE_BASE}/${profile}/${coords}?annotations=duration`
 
   try {
-    const response = await fetch(url, { signal })
-    if (!response.ok) throw new Error('Table request failed')
-    const data = await response.json()
+    const data = await mapsApi.table({ waypoints: places, profile })
     const durations = Array.isArray(data?.durations) ? data.durations : null
     if (!durations || durations.length !== places.length) throw new Error('Invalid duration matrix')
     return durations.map((row: unknown, rowIndex: number) => {

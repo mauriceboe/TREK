@@ -199,6 +199,10 @@ export const mapsApi = {
   placePhoto: (placeId: string, lat?: number, lng?: number, name?: string) => apiClient.get(`/maps/place-photo/${encodeURIComponent(placeId)}`, { params: { lat, lng, name } }).then(r => r.data),
   reverse: (lat: number, lng: number, lang?: string) => apiClient.get('/maps/reverse', { params: { lat, lng, lang } }).then(r => r.data),
   resolveUrl: (url: string) => apiClient.post('/maps/resolve-url', { url }).then(r => r.data),
+  route: (data: { waypoints: Array<{ lat: number; lng: number }>; profile?: 'driving' | 'walking' | 'cycling'; overview?: boolean; annotations?: boolean }) =>
+    apiClient.post('/maps/route', data).then(r => r.data),
+  table: (data: { waypoints: Array<{ lat: number; lng: number }>; profile?: 'driving' | 'walking' | 'cycling' }) =>
+    apiClient.post('/maps/table', data).then(r => r.data),
 }
 
 export const budgetApi = {
