@@ -1,15 +1,14 @@
 import { create } from 'zustand'
-import { authApi } from '../api/client'
+import { authApi, clearSessionCaches } from '../api/client'
 import { connect, disconnect } from '../api/websocket'
 import type { User } from '../types'
 import { getApiErrorMessage } from '../types'
+import { authClient, waitForBetterAuthCookie } from '../auth/client'
 
 interface AuthResponse {
   user: User
-  token: string
+  token: string | null
 }
-
-export type LoginResult = AuthResponse | { mfa_required: true; mfa_token: string }
 
 interface AvatarResponse {
   avatar_url: string
@@ -23,12 +22,14 @@ interface AuthState {
   error: string | null
   demoMode: boolean
   hasMapsKey: boolean
+  appRequireMfa?: boolean
+  tripRemindersEnabled: boolean
+  setTripRemindersEnabled: (val: boolean) => void
 
-  login: (email: string, password: string) => Promise<LoginResult>
-  completeMfaLogin: (mfaToken: string, code: string) => Promise<AuthResponse>
+  login: (email: string, password: string) => Promise<AuthResponse>
   register: (username: string, email: string, password: string) => Promise<AuthResponse>
   logout: () => void
-  loadUser: () => Promise<void>
+  loadUser: (options?: { silent?: boolean }) => Promise<void>
   updateMapsKey: (key: string | null) => Promise<void>
   updateApiKeys: (keys: Record<string, string | null>) => Promise<void>
   updateProfile: (profileData: Partial<User>) => Promise<void>
@@ -42,30 +43,49 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: localStorage.getItem('auth_token') || null,
-  isAuthenticated: !!localStorage.getItem('auth_token'),
-  isLoading: false,
+  isAuthenticated: false,
+  isLoading: true,
   error: null,
   demoMode: localStorage.getItem('demo_mode') === 'true',
   hasMapsKey: false,
+  tripRemindersEnabled: false,
+  setTripRemindersEnabled: (val: boolean) => set({ tripRemindersEnabled: val }),
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const data = await authApi.login({ email, password }) as AuthResponse & { mfa_required?: boolean; mfa_token?: string }
-      if (data.mfa_required && data.mfa_token) {
-        set({ isLoading: false, error: null })
-        return { mfa_required: true as const, mfa_token: data.mfa_token }
+      localStorage.removeItem('auth_token')
+      const signIn = await authClient.signIn.email({
+        email,
+        password,
+      })
+      if (signIn.error) {
+        const bridge = await authApi.bridgeLegacyLogin({ email, password }).catch(() => null)
+        if (!bridge?.migrated) {
+          throw new Error(signIn.error.message || 'Login failed')
+        }
+        const retry = await authClient.signIn.email({
+          email,
+          password,
+        })
+        if (retry.error) {
+          throw new Error(retry.error.message || 'Login failed')
+        }
       }
-      localStorage.setItem('auth_token', data.token)
+      if (!(await waitForBetterAuthCookie())) {
+        throw new Error('Login session was not established. Please try again.')
+      }
+      const data = await authApi.me()
+      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
       set({
         user: data.user,
-        token: data.token,
+        token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(data.token)
-      return data as AuthResponse
+      connect(token)
+      return { user: data.user, token }
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Login failed')
       set({ isLoading: false, error })
@@ -73,41 +93,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  completeMfaLogin: async (mfaToken: string, code: string) => {
+  register: async (username: string, email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const data = await authApi.verifyMfaLogin({ mfa_token: mfaToken, code: code.replace(/\s/g, '') })
-      localStorage.setItem('auth_token', data.token)
+      localStorage.removeItem('auth_token')
+      const signUp = await authClient.signUp.email({
+        email,
+        password,
+        name: username.trim(),
+        username: username.trim(),
+        displayUsername: username.trim(),
+      })
+      if (signUp.error) {
+        throw new Error(signUp.error.message || 'Registration failed')
+      }
+      if (!(await waitForBetterAuthCookie())) {
+        throw new Error('Registration session was not established. Please try again.')
+      }
+      let data: { user: User }
+      try {
+        data = await authApi.me()
+      } catch {
+        const signIn = await authClient.signIn.email({
+          email,
+          password,
+        })
+        if (signIn.error) {
+          throw new Error(signIn.error.message || 'Registration failed')
+        }
+        if (!(await waitForBetterAuthCookie())) {
+          throw new Error('Registration session was not established. Please try again.')
+        }
+        data = await authApi.me()
+      }
+      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
       set({
         user: data.user,
-        token: data.token,
+        token,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(data.token)
-      return data as AuthResponse
-    } catch (err: unknown) {
-      const error = getApiErrorMessage(err, 'Verification failed')
-      set({ isLoading: false, error })
-      throw new Error(error)
-    }
-  },
-
-  register: async (username: string, email: string, password: string, invite_token?: string) => {
-    set({ isLoading: true, error: null })
-    try {
-      const data = await authApi.register({ username, email, password, invite_token })
-      localStorage.setItem('auth_token', data.token)
-      set({
-        user: data.user,
-        token: data.token,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      })
-      connect(data.token)
-      return data
+      connect(token)
+      return { user: data.user, token }
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Registration failed')
       set({ isLoading: false, error })
@@ -116,33 +144,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    void authClient.signOut().catch(() => {})
+    void authApi.logout().catch(() => {})
     disconnect()
     localStorage.removeItem('auth_token')
+    void clearSessionCaches().catch(() => {})
     set({
       user: null,
       token: null,
       isAuthenticated: false,
+      isLoading: false,
       error: null,
     })
   },
 
-  loadUser: async () => {
-    const token = get().token
-    if (!token) {
-      set({ isLoading: false })
-      return
-    }
+  loadUser: async (_options?: { silent?: boolean }) => {
     set({ isLoading: true })
     try {
+      if (!localStorage.getItem('auth_token')) {
+        await waitForBetterAuthCookie(500)
+      }
       const data = await authApi.me()
+      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
       set({
         user: data.user,
+        token,
         isAuthenticated: true,
         isLoading: false,
       })
       connect(token)
     } catch (err: unknown) {
       localStorage.removeItem('auth_token')
+      void clearSessionCaches().catch(() => {})
       set({
         user: null,
         token: null,

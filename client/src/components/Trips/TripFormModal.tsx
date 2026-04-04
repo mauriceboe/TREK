@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import Modal from '../shared/Modal'
-import { Calendar, Camera, X, Clipboard, UserPlus } from 'lucide-react'
+import { Calendar, Camera, X, Clipboard, UserPlus, Bell } from 'lucide-react'
 import { tripsApi, authApi } from '../../api/client'
 import CustomSelect from '../shared/CustomSelect'
 import { useAuthStore } from '../../store/authStore'
+import { useCanDo } from '../../store/permissionsStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
@@ -12,7 +13,7 @@ import type { Trip } from '../../types'
 interface TripFormModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Record<string, string | number | null>) => Promise<void> | void
+  onSave: (data: Record<string, string | number | null>) => Promise<{ trip?: Trip } | void> | { trip?: Trip } | void
   trip: Trip | null
   onCoverUpdate: (tripId: number, coverUrl: string) => void
 }
@@ -23,13 +24,20 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
   const toast = useToast()
   const { t } = useTranslation()
   const currentUser = useAuthStore(s => s.user)
+  const tripRemindersEnabled = useAuthStore(s => s.tripRemindersEnabled)
+  const setTripRemindersEnabled = useAuthStore(s => s.setTripRemindersEnabled)
+  const can = useCanDo()
+  const canUploadCover = !isEditing || can('trip_cover_upload', trip)
+  const canEditTrip = !isEditing || can('trip_edit', trip)
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     start_date: '',
     end_date: '',
+    reminder_days: 0 as number,
   })
+  const [customReminder, setCustomReminder] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [coverPreview, setCoverPreview] = useState(null)
@@ -41,24 +49,39 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
 
   useEffect(() => {
     if (trip) {
+      const rd = trip.reminder_days ?? 3
       setFormData({
         title: trip.title || '',
         description: trip.description || '',
         start_date: trip.start_date || '',
         end_date: trip.end_date || '',
+        reminder_days: rd,
       })
+      setCustomReminder(![0, 1, 3, 9].includes(rd))
       setCoverPreview(trip.cover_image || null)
     } else {
-      setFormData({ title: '', description: '', start_date: '', end_date: '' })
+      setFormData({ title: '', description: '', start_date: '', end_date: '', reminder_days: tripRemindersEnabled ? 3 : 0 })
+      setCustomReminder(false)
       setCoverPreview(null)
     }
     setPendingCoverFile(null)
     setSelectedMembers([])
     setError('')
+    if (isOpen) {
+      authApi.getAppConfig().then((c: { trip_reminders_enabled?: boolean }) => {
+        if (c?.trip_reminders_enabled !== undefined) setTripRemindersEnabled(c.trip_reminders_enabled)
+      }).catch(() => {})
+    }
     if (!trip) {
       authApi.listUsers().then(d => setAllUsers(d.users || [])).catch(() => {})
     }
   }, [trip, isOpen])
+
+  useEffect(() => {
+    if (!trip && isOpen) {
+      setFormData(prev => ({ ...prev, reminder_days: tripRemindersEnabled ? 3 : 0 }))
+    }
+  }, [tripRemindersEnabled])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -74,23 +97,25 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
         description: formData.description.trim() || null,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
+        reminder_days: formData.reminder_days,
       })
+      const newTripId = result && typeof result === 'object' && 'trip' in result ? Number(result.trip?.id) : null
       // Add selected members for newly created trips
-      if (selectedMembers.length > 0 && result?.trip?.id) {
+      if (selectedMembers.length > 0 && newTripId) {
         for (const userId of selectedMembers) {
           const user = allUsers.find(u => u.id === userId)
           if (user) {
-            try { await tripsApi.addMember(result.trip.id, user.username) } catch {}
+            try { await tripsApi.addMember(newTripId, user.username) } catch {}
           }
         }
       }
       // Upload pending cover for newly created trips
-      if (pendingCoverFile && result?.trip?.id) {
+      if (pendingCoverFile && newTripId) {
         try {
           const fd = new FormData()
           fd.append('cover', pendingCoverFile)
-          const data = await tripsApi.uploadCover(result.trip.id, fd)
-          onCoverUpdate?.(result.trip.id, data.cover_image)
+          const data = await tripsApi.uploadCover(newTripId, fd)
+          onCoverUpdate?.(newTripId, data.cover_image)
         } catch {
           // Cover upload failed but trip was created
         }
@@ -125,9 +150,9 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
     try {
       const fd = new FormData()
       fd.append('cover', file)
-      const data = await tripsApi.uploadCover(trip.id, fd)
+      const data = await tripsApi.uploadCover(Number(trip.id), fd)
       setCoverPreview(data.cover_image)
-      onCoverUpdate?.(trip.id, data.cover_image)
+      onCoverUpdate?.(Number(trip.id), data.cover_image)
       toast.success(t('dashboard.coverSaved'))
     } catch {
       toast.error(t('dashboard.coverUploadError'))
@@ -144,9 +169,9 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
     }
     if (!trip?.id) return
     try {
-      await tripsApi.update(trip.id, { cover_image: null })
+      await tripsApi.update(Number(trip.id), { cover_image: null })
       setCoverPreview(null)
-      onCoverUpdate?.(trip.id, null)
+      onCoverUpdate?.(Number(trip.id), null)
     } catch {
       toast.error(t('dashboard.coverRemoveError'))
     }
@@ -154,9 +179,10 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
 
   // Paste support for cover image
   const handlePaste = (e) => {
+    if (!canUploadCover) return
     const items = e.clipboardData?.items
     if (!items) return
-    for (const item of Array.from(items)) {
+    for (const item of Array.from(items) as DataTransferItem[]) {
       if (item.type.startsWith('image/')) {
         e.preventDefault()
         const file = item.getAsFile()
@@ -172,10 +198,10 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
       if (!prev.end_date || prev.end_date < value) {
         next.end_date = value
       } else if (prev.start_date) {
-        const oldStart = new Date(prev.start_date + 'T00:00:00')
-        const oldEnd = new Date(prev.end_date + 'T00:00:00')
-        const duration = Math.round((oldEnd - oldStart) / 86400000)
-        const newEnd = new Date(value + 'T00:00:00')
+        const oldStart = new Date(prev.start_date + 'T00:00:00Z')
+        const oldEnd = new Date(prev.end_date + 'T00:00:00Z')
+        const duration = Math.round((oldEnd.getTime() - oldStart.getTime()) / 86400000)
+        const newEnd = new Date(value + 'T00:00:00Z')
         newEnd.setDate(newEnd.getDate() + duration)
         next.end_date = newEnd.toISOString().split('T')[0]
       }
@@ -211,8 +237,8 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
         )}
 
-        {/* Cover image — available for both create and edit */}
-        <div>
+        {/* Cover image — gated by trip_cover_upload permission */}
+        {canUploadCover && <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('dashboard.coverImage')}</label>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverChange} />
           {coverPreview ? (
@@ -240,20 +266,20 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
               <Camera size={15} /> {uploadingCover ? t('common.uploading') : t('dashboard.addCoverImage')}
             </button>
           )}
-        </div>
+        </div>}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             {t('dashboard.tripTitle')} <span className="text-red-500">*</span>
           </label>
-          <input type="text" value={formData.title} onChange={e => update('title', e.target.value)}
-            required placeholder={t('dashboard.tripTitlePlaceholder')} className={inputCls} />
+          <input type="text" value={formData.title} onChange={e => canEditTrip && update('title', e.target.value)}
+            required readOnly={!canEditTrip} placeholder={t('dashboard.tripTitlePlaceholder')} className={inputCls} />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('dashboard.tripDescription')}</label>
-          <textarea value={formData.description} onChange={e => update('description', e.target.value)}
-            placeholder={t('dashboard.tripDescriptionPlaceholder')} rows={3}
+          <textarea value={formData.description} onChange={e => canEditTrip && update('description', e.target.value)}
+            readOnly={!canEditTrip} placeholder={t('dashboard.tripDescriptionPlaceholder')} rows={3}
             className={`${inputCls} resize-none`} />
         </div>
 
@@ -271,6 +297,59 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
             <CustomDatePicker value={formData.end_date} onChange={v => update('end_date', v)} placeholder={t('dashboard.endDate')} />
           </div>
         </div>
+
+        {/* Reminder — only visible to owner (or when creating) */}
+        {(!isEditing || trip?.user_id === currentUser?.id || currentUser?.role === 'admin') && (
+        <div className={!tripRemindersEnabled ? 'opacity-50' : ''}>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <Bell className="inline w-4 h-4 mr-1" />{t('trips.reminder')}
+          </label>
+          {!tripRemindersEnabled ? (
+            <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3">
+              {t('trips.reminderDisabledHint')}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 0, label: t('trips.reminderNone') },
+                  { value: 1, label: `1 ${t('trips.reminderDay')}` },
+                  { value: 3, label: `3 ${t('trips.reminderDays')}` },
+                  { value: 9, label: `9 ${t('trips.reminderDays')}` },
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => { update('reminder_days', opt.value); setCustomReminder(false) }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                      !customReminder && formData.reminder_days === opt.value
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+                <button type="button"
+                  onClick={() => { setCustomReminder(true); if ([0, 1, 3, 9].includes(formData.reminder_days)) update('reminder_days', 7) }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    customReminder
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}>
+                  {t('trips.reminderCustom')}
+                </button>
+              </div>
+              {customReminder && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input type="number" min={1} max={30}
+                    value={formData.reminder_days}
+                    onChange={e => update('reminder_days', Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+                    className="w-20 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300" />
+                  <span className="text-xs text-slate-500">{t('trips.reminderDaysBefore')}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        )}
 
         {/* Members — only for new trips */}
         {!isEditing && allUsers.filter(u => u.id !== currentUser?.id).length > 0 && (
@@ -304,7 +383,7 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
                   if (value) { setSelectedMembers(prev => prev.includes(Number(value)) ? prev : [...prev, Number(value)]); setMemberSelectValue('') }
                 }}
                 placeholder={t('dashboard.addMember')}
-                options={allUsers.filter(u => u.id !== currentUser?.id && !selectedMembers.includes(u.id)).map(u => ({ value: u.id, label: u.username }))}
+                options={allUsers.filter(u => u.id !== currentUser?.id && !selectedMembers.includes(u.id)).map(u => ({ value: String(u.id), label: u.username }))}
                 searchable
                 size="sm"
               />
@@ -312,11 +391,6 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
           </div>
         )}
 
-        {!formData.start_date && !formData.end_date && (
-          <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3">
-            {t('dashboard.noDateHint')}
-          </p>
-        )}
       </form>
     </Modal>
   )

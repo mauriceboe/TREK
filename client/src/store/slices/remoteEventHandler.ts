@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
-import type { Assignment, Place, Day, DayNote, PackingItem, BudgetItem, BudgetMember, Reservation, Trip, TripFile, WebSocketEvent } from '../../types'
+import type { Assignment, Place, Day, DayNote, PackingItem, BudgetItem, BudgetMember, Reservation, Trip, TripLeg, TripFile, WebSocketEvent } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 
@@ -11,7 +11,7 @@ type SetState = StoreApi<TripStoreState>['setState']
 export function handleRemoteEvent(set: SetState, event: WebSocketEvent): void {
   const { type, ...payload } = event
 
-  set(state => {
+  set((state): Partial<TripStoreState> => {
     switch (type) {
       // Places
       case 'place:created':
@@ -44,12 +44,12 @@ export function handleRemoteEvent(set: SetState, event: WebSocketEvent): void {
         const existing = (state.assignments[dayKey] || [])
         const placeId = (payload.assignment as Assignment).place?.id || (payload.assignment as Assignment).place_id
         if (existing.some(a => a.id === (payload.assignment as Assignment).id || (placeId && a.place?.id === placeId))) {
-          const hasTempVersion = existing.some(a => a.id < 0 && a.place?.id === placeId)
+          const hasTempVersion = existing.some(a => Number(a.id) < 0 && a.place?.id === placeId)
           if (hasTempVersion) {
             return {
               assignments: {
                 ...state.assignments,
-                [dayKey]: existing.map(a => (a.id < 0 && a.place?.id === placeId) ? payload.assignment as Assignment : a),
+                [dayKey]: existing.map(a => (Number(a.id) < 0 && a.place?.id === placeId) ? payload.assignment as Assignment : a),
               }
             }
           }
@@ -97,7 +97,7 @@ export function handleRemoteEvent(set: SetState, event: WebSocketEvent): void {
       case 'assignment:reordered': {
         const dayKey = String(payload.dayId)
         const currentItems = state.assignments[dayKey] || []
-        const orderedIds: number[] = payload.orderedIds || []
+        const orderedIds = (payload.orderedIds || []) as number[]
         const reordered = orderedIds.map((id, idx) => {
           const item = currentItems.find(a => a.id === id)
           return item ? { ...item, order_index: idx } : null
@@ -197,7 +197,7 @@ export function handleRemoteEvent(set: SetState, event: WebSocketEvent): void {
         return {
           budgetItems: state.budgetItems.map(i =>
             i.id === payload.itemId
-              ? { ...i, members: (i.members || []).map(m => m.user_id === payload.userId ? { ...m, paid: payload.paid } : m) }
+              ? { ...i, members: (i.members || []).map(m => m.user_id === payload.userId ? { ...m, paid: payload.paid as boolean } : m) }
               : i
           ),
         }
@@ -217,7 +217,23 @@ export function handleRemoteEvent(set: SetState, event: WebSocketEvent): void {
 
       // Trip
       case 'trip:updated':
-        return { trip: payload.trip as Trip }
+        return {
+          trip: payload.trip as Trip,
+          ...(payload.legs ? { legs: payload.legs as TripLeg[] } : {}),
+        }
+
+      // Trip Legs
+      case 'tripLeg:created': {
+        const leg = payload.leg as TripLeg
+        if (state.legs.some(l => l.id === leg.id)) return {}
+        return { legs: [...state.legs, leg].sort((a, b) => a.start_day_number - b.start_day_number || Number(a.id) - Number(b.id)) }
+      }
+      case 'tripLeg:updated': {
+        const leg = payload.leg as TripLeg
+        return { legs: state.legs.map(l => l.id === leg.id ? leg : l).sort((a, b) => a.start_day_number - b.start_day_number || Number(a.id) - Number(b.id)) }
+      }
+      case 'tripLeg:deleted':
+        return { legs: state.legs.filter(l => l.id !== payload.legId) }
 
       // Files
       case 'file:created':

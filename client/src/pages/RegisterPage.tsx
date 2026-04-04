@@ -26,7 +26,7 @@ export default function RegisterPage(): React.ReactElement {
       return
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t('register.passwordTooShort'))
       return
     }

@@ -1,6 +1,9 @@
 services:
   app:
-    image: mauriceboe/trek:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: trek:local
     container_name: trek
     ports:
       - "3000:3000"

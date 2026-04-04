@@ -62,13 +62,11 @@ function RootRedirect() {
 }
 
 export default function App() {
-  const { loadUser, token, isAuthenticated, demoMode, setDemoMode, setHasMapsKey } = useAuthStore()
+  const { loadUser, isAuthenticated, demoMode, setDemoMode, setHasMapsKey } = useAuthStore()
   const { loadSettings } = useSettingsStore()
 
   useEffect(() => {
-    if (token) {
-      loadUser()
-    }
+    loadUser()
     authApi.getAppConfig().then((config: { demo_mode?: boolean; has_maps_key?: boolean }) => {
       if (config?.demo_mode) setDemoMode(true)
       if (config?.has_maps_key !== undefined) setHasMapsKey(config.has_maps_key)

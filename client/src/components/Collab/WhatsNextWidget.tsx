@@ -23,13 +23,14 @@ function formatDayLabel(date, t, locale) {
   if (d.toDateString() === now.toDateString()) return t('collab.whatsNext.today') || 'Today'
   if (d.toDateString() === tomorrow.toDateString()) return t('collab.whatsNext.tomorrow') || 'Tomorrow'
 
-  return d.toLocaleDateString(locale || undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  return new Date(date + 'T00:00:00Z').toLocaleDateString(locale || undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
 interface TripMember {
   id: number
   username: string
   avatar_url?: string | null
+  avatar?: string | null
 }
 
 interface WhatsNextWidgetProps {

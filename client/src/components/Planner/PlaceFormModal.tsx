@@ -3,6 +3,8 @@ import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import { mapsApi } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { useToast } from '../shared/Toast'
 import { Search, Paperclip, X, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -21,6 +23,10 @@ interface PlaceFormData {
   notes: string
   transport_mode: string
   website: string
+  google_place_id?: string
+  osm_id?: string
+  phone?: string
+  [key: string]: any
 }
 
 const DEFAULT_FORM: PlaceFormData = {
@@ -45,7 +51,7 @@ interface PlaceFormModalProps {
   prefillCoords?: { lat: number; lng: number; name?: string; address?: string } | null
   tripId: number
   categories: Category[]
-  onCategoryCreated: (category: Category) => void
+  onCategoryCreated: (category: Partial<Category>) => any
   assignmentId: number | null
   dayAssignments?: Assignment[]
 }
@@ -66,6 +72,9 @@ export default function PlaceFormModal({
   const toast = useToast()
   const { t, language } = useTranslation()
   const { hasMapsKey } = useAuthStore()
+  const can = useCanDo()
+  const tripObj = useTripStore((s) => s.trip)
+  const canUploadFiles = can('file_upload', tripObj)
 
   useEffect(() => {
     if (place) {
@@ -73,9 +82,9 @@ export default function PlaceFormModal({
         name: place.name || '',
         description: place.description || '',
         address: place.address || '',
-        lat: place.lat || '',
-        lng: place.lng || '',
-        category_id: place.category_id || '',
+        lat: place.lat != null ? String(place.lat) : '',
+        lng: place.lng != null ? String(place.lng) : '',
+        category_id: place.category_id != null ? String(place.category_id) : '',
         place_time: place.place_time || '',
         end_time: place.end_time || '',
         notes: place.notes || '',
@@ -96,7 +105,7 @@ export default function PlaceFormModal({
     setPendingFiles([])
   }, [place, prefillCoords, isOpen])
 
-  const handleChange = (field, value) => {
+  const handleChange = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
@@ -104,6 +113,24 @@ export default function PlaceFormModal({
     if (!mapsSearch.trim()) return
     setIsSearchingMaps(true)
     try {
+      // Detect Google Maps URLs and resolve them directly
+      const trimmed = mapsSearch.trim()
+      if (trimmed.match(/^https?:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|maps\.app\.goo\.gl|goo\.gl)/i)) {
+        const resolved = await (mapsApi as any).resolveUrl(trimmed)
+        if (resolved.lat && resolved.lng) {
+          setForm(prev => ({
+            ...prev,
+            name: resolved.name || prev.name,
+            address: resolved.address || prev.address,
+            lat: String(resolved.lat),
+            lng: String(resolved.lng),
+          }))
+          setMapsResults([])
+          setMapsSearch('')
+          toast.success(t('places.urlResolved'))
+          return
+        }
+      }
       const result = await mapsApi.search(mapsSearch, language)
       setMapsResults(result.places || [])
     } catch (err: unknown) {
@@ -132,8 +159,8 @@ export default function PlaceFormModal({
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return
     try {
-      const cat = await onCategoryCreated?.({ name: newCategoryName, color: '#6366f1', icon: 'MapPin' })
-      if (cat) setForm(prev => ({ ...prev, category_id: cat.id }))
+      const cat = await onCategoryCreated?.({ name: newCategoryName, color: '#6366f1', icon: 'MapPin' } as any)
+      if (cat?.id) setForm(prev => ({ ...prev, category_id: String(cat.id) }))
       setNewCategoryName('')
       setShowNewCategory(false)
     } catch (err: unknown) {
@@ -153,9 +180,10 @@ export default function PlaceFormModal({
 
   // Paste support for files/images
   const handlePaste = (e) => {
+    if (!canUploadFiles) return
     const items = e.clipboardData?.items
     if (!items) return
-    for (const item of Array.from(items)) {
+    for (const item of Array.from(items) as DataTransferItem[]) {
       if (item.type.startsWith('image/') || item.type === 'application/pdf') {
         e.preventDefault()
         const file = item.getAsFile()
@@ -177,11 +205,11 @@ export default function PlaceFormModal({
     try {
       await onSave({
         ...form,
-        lat: form.lat ? parseFloat(form.lat) : null,
-        lng: form.lng ? parseFloat(form.lng) : null,
-        category_id: form.category_id || null,
+        lat: form.lat ? String(parseFloat(form.lat)) : '',
+        lng: form.lng ? String(parseFloat(form.lng)) : '',
+        category_id: form.category_id || '',
         _pendingFiles: pendingFiles.length > 0 ? pendingFiles : undefined,
-      })
+      } as any)
       onClose()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t('places.saveError'))
@@ -316,7 +344,7 @@ export default function PlaceFormModal({
                 options={[
                   { value: '', label: t('places.noCategory') },
                   ...(categories || []).map(c => ({
-                    value: c.id,
+                    value: String(c.id),
                     label: c.name,
                   })),
                 ]}
@@ -368,7 +396,7 @@ export default function PlaceFormModal({
         </div>
 
         {/* File Attachments */}
-        {true && (
+        {canUploadFiles && (
           <div className="border border-gray-200 rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-medium text-gray-700">{t('files.title')}</label>
@@ -421,7 +449,7 @@ export default function PlaceFormModal({
 
 interface TimeSectionProps {
   form: PlaceFormData
-  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void
+  handleChange: (field: string, value: any) => void
   assignmentId: number | null
   dayAssignments: Assignment[]
   hasTimeError: boolean

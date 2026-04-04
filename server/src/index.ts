@@ -4,6 +4,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import fs from 'fs';
+import { canAccessTrip, db } from './db/database';
+import { authenticate } from './middleware/auth';
+import { AuthRequest } from './types';
 
 const app = express();
 
@@ -76,6 +79,7 @@ if (shouldForceHttps) {
     res.redirect(301, 'https://' + req.headers.host + req.url);
   });
 }
+
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -83,8 +87,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads/avatars', express.static(path.join(__dirname, '../uploads/avatars')));
 
 // All other uploads require authentication
-app.get('/uploads/:type/:filename', (req: Request, res: Response) => {
-  const { type, filename } = req.params;
+app.get('/uploads/:type/:filename', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const type = Array.isArray(req.params.type) ? req.params.type[0] : req.params.type;
+  const filename = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename;
   const allowedTypes = ['covers', 'files', 'photos'];
   if (!allowedTypes.includes(type)) return res.status(404).send('Not found');
 
@@ -96,6 +102,22 @@ app.get('/uploads/:type/:filename', (req: Request, res: Response) => {
     return res.status(403).send('Forbidden');
   }
 
+  let tripId: number | null = null;
+  if (type === 'covers') {
+    const cover = db.prepare('SELECT id FROM trips WHERE cover_image = ?').get(`/uploads/covers/${safeName}`) as { id: number } | undefined;
+    tripId = cover?.id ?? null;
+  } else if (type === 'files') {
+    const file = db.prepare('SELECT trip_id FROM trip_files WHERE filename IN (?, ?) LIMIT 1').get(safeName, `files/${safeName}`) as { trip_id: number } | undefined;
+    tripId = file?.trip_id ?? null;
+  } else if (type === 'photos') {
+    const photo = db.prepare('SELECT trip_id FROM photos WHERE filename = ? LIMIT 1').get(safeName) as { trip_id: number } | undefined;
+    tripId = photo?.trip_id ?? null;
+  }
+
+  if (!tripId || !canAccessTrip(tripId, authReq.user.id)) {
+    return res.status(404).send('Not found');
+  }
+
   if (!fs.existsSync(resolved)) return res.status(404).send('Not found');
   res.sendFile(resolved);
 });
@@ -103,6 +125,8 @@ app.get('/uploads/:type/:filename', (req: Request, res: Response) => {
 // Routes
 import authRoutes from './routes/auth';
 import tripsRoutes from './routes/trips';
+import legsRoutes from './routes/legs';
+import recommendationsRoutes from './routes/recommendations';
 import daysRoutes, { accommodationsRouter as accommodationsRoutes } from './routes/days';
 import placesRoutes from './routes/places';
 import assignmentsRoutes from './routes/assignments';
@@ -123,6 +147,8 @@ import oidcRoutes from './routes/oidc';
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/oidc', oidcRoutes);
 app.use('/api/trips', tripsRoutes);
+app.use('/api/trips', legsRoutes);
+app.use('/api/trips', recommendationsRoutes);
 app.use('/api/trips/:tripId/days', daysRoutes);
 app.use('/api/trips/:tripId/accommodations', accommodationsRoutes);
 app.use('/api/trips/:tripId/places', placesRoutes);
@@ -139,10 +165,9 @@ app.use('/api/categories', categoriesRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Public addons endpoint (authenticated but not admin-only)
-import { authenticate as addonAuth } from './middleware/auth';
 import { db as addonDb } from './db/database';
 import { Addon } from './types';
-app.get('/api/addons', addonAuth, (req: Request, res: Response) => {
+app.get('/api/addons', authenticate, (req: Request, res: Response) => {
   const addons = addonDb.prepare('SELECT id, name, type, icon, enabled FROM addons WHERE enabled = 1 ORDER BY sort_order').all() as Pick<Addon, 'id' | 'name' | 'type' | 'icon' | 'enabled'>[];
   res.json({ addons: addons.map(a => ({ ...a, enabled: !!a.enabled })) });
 });

@@ -1,13 +1,23 @@
-1. JWT_SECRET handling:
-   - By default, the chart creates a secret with the value from `values.yaml: secretEnv.JWT_SECRET`.
-   - To generate a random JWT_SECRET at install, set `generateJwtSecret: true`.
-   - To use an existing Kubernetes secret, set `existingSecret` to the secret name. The secret must have a key matching `existingSecretKey` (defaults to `JWT_SECRET`).
+1. ENCRYPTION_KEY handling:
+   - ENCRYPTION_KEY encrypts stored secrets (API keys, MFA, SMTP, OIDC) at rest.
+   - By default, the chart creates a Kubernetes Secret from `secretEnv.ENCRYPTION_KEY` in values.yaml.
+   - To generate a random key at install (preserved across upgrades), set `generateEncryptionKey: true`.
+   - To use an existing Kubernetes secret, set `existingSecret` to the secret name. The secret must
+     contain a key matching `existingSecretKey` (defaults to `ENCRYPTION_KEY`).
+   - If left empty, the server resolves the key automatically: existing installs fall back to
+     data/.jwt_secret (encrypted data stays readable with no manual action); fresh installs
+     auto-generate a key persisted to the data PVC.
 
-2. Example usage:
-   - Set a custom secret: `--set secretEnv.JWT_SECRET=your_secret`
-   - Generate a random secret: `--set generateJwtSecret=true`
+2. JWT_SECRET is managed entirely by the server:
+   - Auto-generated on first start and persisted to the data PVC (data/.jwt_secret).
+   - Rotate it via the admin panel (Settings → Danger Zone → Rotate JWT Secret).
+   - No Helm configuration needed or supported.
+
+3. Example usage:
+   - Set an explicit encryption key: `--set secretEnv.ENCRYPTION_KEY=your_enc_key`
+   - Generate a random key at install: `--set generateEncryptionKey=true`
    - Use an existing secret: `--set existingSecret=my-k8s-secret`
-   - Use a custom key in the existing secret: `--set existingSecret=my-k8s-secret --set existingSecretKey=MY_KEY`
+   - Use a custom key name in the existing secret: `--set existingSecret=my-k8s-secret --set existingSecretKey=MY_ENC_KEY`
 
-3. Only one method should be used at a time. If both `generateJwtSecret` and `existingSecret` are set, `existingSecret` takes precedence.
-   If using `existingSecret`, ensure the referenced secret and key exist in the target namespace.
+4. Only one method should be used at a time. If both `generateEncryptionKey` and `existingSecret` are
+   set, `existingSecret` takes precedence. Ensure the referenced secret and key exist in the namespace.

@@ -1,16 +1,36 @@
 import axios, { AxiosInstance } from 'axios'
 import { getSocketId } from './websocket'
+import { getStoredBetterAuthCookie } from '../auth/client'
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
+export async function clearSessionCaches(): Promise<void> {
+  if (typeof window === 'undefined' || !('caches' in window)) return
+  const cacheNames = await window.caches.keys()
+  await Promise.all(
+    cacheNames
+      .filter((name) => name === 'api-data' || name === 'user-uploads')
+      .map((name) => window.caches.delete(name))
+  )
+}
+
+function getBetterAuthCookie(): string | null {
+  return getStoredBetterAuthCookie()
+}
+
 // Request interceptor - add auth token and socket ID
 apiClient.interceptors.request.use(
   (config) => {
+    const betterAuthCookie = getBetterAuthCookie()
+    if (betterAuthCookie) {
+      config.headers['Better-Auth-Cookie'] = betterAuthCookie
+    }
     const token = localStorage.getItem('auth_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -30,6 +50,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token')
+      void clearSessionCaches()
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
         window.location.href = '/login'
       }
@@ -39,13 +60,11 @@ apiClient.interceptors.response.use(
 )
 
 export const authApi = {
-  register: (data: { username: string; email: string; password: string; invite_token?: string }) => apiClient.post('/auth/register', data).then(r => r.data),
-  validateInvite: (token: string) => apiClient.get(`/auth/invite/${token}`).then(r => r.data),
+  register: (data: { username: string; email: string; password: string }) => apiClient.post('/auth/register', data).then(r => r.data),
   login: (data: { email: string; password: string }) => apiClient.post('/auth/login', data).then(r => r.data),
-  verifyMfaLogin: (data: { mfa_token: string; code: string }) => apiClient.post('/auth/mfa/verify-login', data).then(r => r.data),
-  mfaSetup: () => apiClient.post('/auth/mfa/setup', {}).then(r => r.data),
-  mfaEnable: (data: { code: string }) => apiClient.post('/auth/mfa/enable', data).then(r => r.data),
-  mfaDisable: (data: { password: string; code: string }) => apiClient.post('/auth/mfa/disable', data).then(r => r.data),
+  bridgeLegacyLogin: (data: { email: string; password: string }) => apiClient.post('/auth/legacy-login-bridge', data).then(r => r.data),
+  getConvexToken: () => apiClient.post('/auth/convex/token').then(r => r.data),
+  logout: () => apiClient.post('/auth/logout').then(r => r.data),
   me: () => apiClient.get('/auth/me').then(r => r.data),
   updateMapsKey: (key: string | null) => apiClient.put('/auth/me/maps-key', { maps_api_key: key }).then(r => r.data),
   updateApiKeys: (data: Record<string, string | null>) => apiClient.put('/auth/me/api-keys', data).then(r => r.data),
@@ -61,6 +80,15 @@ export const authApi = {
   changePassword: (data: { current_password: string; new_password: string }) => apiClient.put('/auth/me/password', data).then(r => r.data),
   deleteOwnAccount: () => apiClient.delete('/auth/me').then(r => r.data),
   demoLogin: () => apiClient.post('/auth/demo-login').then(r => r.data),
+  verifyMfaLogin: (data: { mfa_token: string; code: string }) => apiClient.post('/auth/mfa/verify-login', data).then(r => r.data),
+  mfaSetup: () => apiClient.post('/auth/mfa/setup').then(r => r.data),
+  mfaEnable: (data: { code: string }) => apiClient.post('/auth/mfa/enable', data).then(r => r.data),
+  mfaDisable: (data: { password: string; code: string }) => apiClient.post('/auth/mfa/disable', data).then(r => r.data),
+  mcpTokens: {
+    list: () => apiClient.get('/auth/mcp-tokens').then(r => r.data),
+    create: (name: string) => apiClient.post('/auth/mcp-tokens', { name }).then(r => r.data),
+    delete: (id: number) => apiClient.delete(`/auth/mcp-tokens/${id}`).then(r => r.data),
+  },
 }
 
 export const tripsApi = {
@@ -75,6 +103,11 @@ export const tripsApi = {
   getMembers: (id: number | string) => apiClient.get(`/trips/${id}/members`).then(r => r.data),
   addMember: (id: number | string, identifier: string) => apiClient.post(`/trips/${id}/members`, { identifier }).then(r => r.data),
   removeMember: (id: number | string, userId: number) => apiClient.delete(`/trips/${id}/members/${userId}`).then(r => r.data),
+  getLegs: (id: number | string) => apiClient.get(`/trips/${id}/legs`).then(r => r.data),
+  createLeg: (id: number | string, data: Record<string, unknown>) => apiClient.post(`/trips/${id}/legs`, data).then(r => r.data),
+  updateLeg: (id: number | string, legId: number, data: Record<string, unknown>) => apiClient.put(`/trips/${id}/legs/${legId}`, data).then(r => r.data),
+  deleteLeg: (id: number | string, legId: number) => apiClient.delete(`/trips/${id}/legs/${legId}`).then(r => r.data),
+  recommendations: (id: number | string, params?: Record<string, unknown>) => apiClient.get(`/trips/${id}/recommendations`, { params }).then(r => r.data),
 }
 
 export const daysApi = {
@@ -91,6 +124,13 @@ export const placesApi = {
   update: (tripId: number | string, id: number | string, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/places/${id}`, data).then(r => r.data),
   delete: (tripId: number | string, id: number | string) => apiClient.delete(`/trips/${tripId}/places/${id}`).then(r => r.data),
   searchImage: (tripId: number | string, id: number | string) => apiClient.get(`/trips/${tripId}/places/${id}/image`).then(r => r.data),
+  importGpx: (tripId: number | string, file: File) => {
+    const form = new FormData()
+    form.append('gpx', file)
+    return apiClient.post(`/trips/${tripId}/places/import-gpx`, form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
+  },
+  importGoogleList: (tripId: number | string, url: string) =>
+    apiClient.post(`/trips/${tripId}/places/import-google-list`, { url }).then(r => r.data),
 }
 
 export const assignmentsApi = {
@@ -111,13 +151,13 @@ export const packingApi = {
   update: (tripId: number | string, id: number, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/packing/${id}`, data).then(r => r.data),
   delete: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/packing/${id}`).then(r => r.data),
   reorder: (tripId: number | string, orderedIds: number[]) => apiClient.put(`/trips/${tripId}/packing/reorder`, { orderedIds }).then(r => r.data),
-  getCategoryAssignees: (tripId: number | string) => apiClient.get(`/trips/${tripId}/packing/category-assignees`).then(r => r.data),
-  setCategoryAssignees: (tripId: number | string, categoryName: string, userIds: number[]) => apiClient.put(`/trips/${tripId}/packing/category-assignees/${encodeURIComponent(categoryName)}`, { user_ids: userIds }).then(r => r.data),
-  applyTemplate: (tripId: number | string, templateId: number) => apiClient.post(`/trips/${tripId}/packing/apply-template/${templateId}`).then(r => r.data),
+  getCategoryAssignees: (tripId: number | string, category?: string) => apiClient.get(category ? `/trips/${tripId}/packing/assignees/${encodeURIComponent(category)}` : `/trips/${tripId}/packing/assignees`).then(r => r.data),
+  setCategoryAssignees: (tripId: number | string, category: string, userIds: number[]) => apiClient.put(`/trips/${tripId}/packing/assignees/${encodeURIComponent(category)}`, { user_ids: userIds }).then(r => r.data),
+  applyTemplate: (tripId: number | string, templateId: number) => apiClient.post(`/trips/${tripId}/packing/apply-template`, { template_id: templateId }).then(r => r.data),
+  bulkImport: (tripId: number | string, items: Record<string, unknown>[]) => apiClient.post(`/trips/${tripId}/packing/bulk-import`, { items }).then(r => r.data),
   listBags: (tripId: number | string) => apiClient.get(`/trips/${tripId}/packing/bags`).then(r => r.data),
-  createBag: (tripId: number | string, data: { name: string; color?: string }) => apiClient.post(`/trips/${tripId}/packing/bags`, data).then(r => r.data),
-  updateBag: (tripId: number | string, bagId: number, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/packing/bags/${bagId}`, data).then(r => r.data),
-  deleteBag: (tripId: number | string, bagId: number) => apiClient.delete(`/trips/${tripId}/packing/bags/${bagId}`).then(r => r.data),
+  createBag: (tripId: number | string, data: Record<string, unknown>) => apiClient.post(`/trips/${tripId}/packing/bags`, data).then(r => r.data),
+  deleteBag: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/packing/bags/${id}`).then(r => r.data),
 }
 
 export const tagsApi = {
@@ -147,22 +187,24 @@ export const adminApi = {
   updateAddon: (id: number | string, data: Record<string, unknown>) => apiClient.put(`/admin/addons/${id}`, data).then(r => r.data),
   checkVersion: () => apiClient.get('/admin/version-check').then(r => r.data),
   installUpdate: () => apiClient.post('/admin/update', {}, { timeout: 300000 }).then(r => r.data),
+  listInvites: () => apiClient.get('/admin/invites').then(r => r.data),
+  createInvite: (data: Record<string, unknown>) => apiClient.post('/admin/invites', data).then(r => r.data),
+  deleteInvite: (id: number) => apiClient.delete(`/admin/invites/${id}`).then(r => r.data),
+  auditLog: (page = 1, limit = 50) => apiClient.get('/admin/audit-log', { params: { page, limit } }).then(r => r.data),
+  sessions: () => apiClient.get('/admin/sessions').then(r => r.data),
   getBagTracking: () => apiClient.get('/admin/bag-tracking').then(r => r.data),
   updateBagTracking: (enabled: boolean) => apiClient.put('/admin/bag-tracking', { enabled }).then(r => r.data),
   packingTemplates: () => apiClient.get('/admin/packing-templates').then(r => r.data),
   getPackingTemplate: (id: number) => apiClient.get(`/admin/packing-templates/${id}`).then(r => r.data),
-  createPackingTemplate: (data: { name: string }) => apiClient.post('/admin/packing-templates', data).then(r => r.data),
-  updatePackingTemplate: (id: number, data: { name: string }) => apiClient.put(`/admin/packing-templates/${id}`, data).then(r => r.data),
+  createPackingTemplate: (data: Record<string, unknown>) => apiClient.post('/admin/packing-templates', data).then(r => r.data),
+  updatePackingTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/admin/packing-templates/${id}`, data).then(r => r.data),
   deletePackingTemplate: (id: number) => apiClient.delete(`/admin/packing-templates/${id}`).then(r => r.data),
-  addTemplateCategory: (templateId: number, data: { name: string }) => apiClient.post(`/admin/packing-templates/${templateId}/categories`, data).then(r => r.data),
-  updateTemplateCategory: (templateId: number, catId: number, data: { name: string }) => apiClient.put(`/admin/packing-templates/${templateId}/categories/${catId}`, data).then(r => r.data),
-  deleteTemplateCategory: (templateId: number, catId: number) => apiClient.delete(`/admin/packing-templates/${templateId}/categories/${catId}`).then(r => r.data),
-  addTemplateItem: (templateId: number, catId: number, data: { name: string }) => apiClient.post(`/admin/packing-templates/${templateId}/categories/${catId}/items`, data).then(r => r.data),
-  updateTemplateItem: (templateId: number, itemId: number, data: { name: string }) => apiClient.put(`/admin/packing-templates/${templateId}/items/${itemId}`, data).then(r => r.data),
-  deleteTemplateItem: (templateId: number, itemId: number) => apiClient.delete(`/admin/packing-templates/${templateId}/items/${itemId}`).then(r => r.data),
-  listInvites: () => apiClient.get('/admin/invites').then(r => r.data),
-  createInvite: (data: { max_uses: number; expires_in_days?: number }) => apiClient.post('/admin/invites', data).then(r => r.data),
-  deleteInvite: (id: number) => apiClient.delete(`/admin/invites/${id}`).then(r => r.data),
+  addTemplateCategory: (id: number, data: Record<string, unknown>) => apiClient.post(`/admin/packing-templates/${id}/categories`, data).then(r => r.data),
+  updateTemplateCategory: (id: number, catId: number, data: Record<string, unknown>) => apiClient.put(`/admin/packing-templates/${id}/categories/${catId}`, data).then(r => r.data),
+  deleteTemplateCategory: (id: number, catId: number) => apiClient.delete(`/admin/packing-templates/${id}/categories/${catId}`).then(r => r.data),
+  addTemplateItem: (id: number, catId: number, data: Record<string, unknown>) => apiClient.post(`/admin/packing-templates/${id}/categories/${catId}/items`, data).then(r => r.data),
+  updateTemplateItem: (id: number, catId: number, itemId: number, data: Record<string, unknown>) => apiClient.put(`/admin/packing-templates/${id}/categories/${catId}/items/${itemId}`, data).then(r => r.data),
+  deleteTemplateItem: (id: number, catId: number, itemId: number) => apiClient.delete(`/admin/packing-templates/${id}/categories/${catId}/items/${itemId}`).then(r => r.data),
 }
 
 export const addonsApi = {
@@ -170,8 +212,11 @@ export const addonsApi = {
 }
 
 export const mapsApi = {
+  autocomplete: (query: string, lang?: string, sessionToken?: string, options?: Record<string, unknown>) =>
+    apiClient.post(`/maps/autocomplete?lang=${lang || 'en'}`, { query, sessionToken, ...options }).then(r => r.data),
   search: (query: string, lang?: string) => apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => r.data),
-  details: (placeId: string, lang?: string) => apiClient.get(`/maps/details/${encodeURIComponent(placeId)}`, { params: { lang } }).then(r => r.data),
+  details: (placeId: string, lang?: string, sessionToken?: string) =>
+    apiClient.get(`/maps/details/${encodeURIComponent(placeId)}`, { params: { lang, sessionToken } }).then(r => r.data),
   placePhoto: (placeId: string, lat?: number, lng?: number, name?: string) => apiClient.get(`/maps/place-photo/${encodeURIComponent(placeId)}`, { params: { lat, lng, name } }).then(r => r.data),
   reverse: (lat: number, lng: number, lang?: string) => apiClient.get('/maps/reverse', { params: { lat, lng, lang } }).then(r => r.data),
 }
@@ -184,6 +229,7 @@ export const budgetApi = {
   setMembers: (tripId: number | string, id: number, userIds: number[]) => apiClient.put(`/trips/${tripId}/budget/${id}/members`, { user_ids: userIds }).then(r => r.data),
   togglePaid: (tripId: number | string, id: number, userId: number, paid: boolean) => apiClient.put(`/trips/${tripId}/budget/${id}/members/${userId}/paid`, { paid }).then(r => r.data),
   perPersonSummary: (tripId: number | string) => apiClient.get(`/trips/${tripId}/budget/summary/per-person`).then(r => r.data),
+  settlement: (tripId: number | string) => apiClient.get(`/trips/${tripId}/budget/settlement`).then(r => r.data),
 }
 
 export const filesApi = {
@@ -197,9 +243,16 @@ export const filesApi = {
   restore: (tripId: number | string, id: number) => apiClient.post(`/trips/${tripId}/files/${id}/restore`).then(r => r.data),
   permanentDelete: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/files/${id}/permanent`).then(r => r.data),
   emptyTrash: (tripId: number | string) => apiClient.delete(`/trips/${tripId}/files/trash/empty`).then(r => r.data),
-  addLink: (tripId: number | string, fileId: number, data: { reservation_id?: number; assignment_id?: number }) => apiClient.post(`/trips/${tripId}/files/${fileId}/link`, data).then(r => r.data),
-  removeLink: (tripId: number | string, fileId: number, linkId: number) => apiClient.delete(`/trips/${tripId}/files/${fileId}/link/${linkId}`).then(r => r.data),
-  getLinks: (tripId: number | string, fileId: number) => apiClient.get(`/trips/${tripId}/files/${fileId}/links`).then(r => r.data),
+  getLinks: (tripId: number | string, id: number) => apiClient.get(`/trips/${tripId}/files/${id}/links`).then(r => r.data),
+  addLink: (tripId: number | string, id: number, data: Record<string, unknown>) => apiClient.post(`/trips/${tripId}/files/${id}/links`, data).then(r => r.data),
+  removeLink: (tripId: number | string, id: number, linkId: number) => apiClient.delete(`/trips/${tripId}/files/${id}/links/${linkId}`).then(r => r.data),
+}
+
+export const photosApi = {
+  list: (tripId: number | string) => apiClient.get(`/trips/${tripId}/photos`).then(r => r.data),
+  upload: (tripId: number | string, formData: FormData) => apiClient.post(`/trips/${tripId}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
+  update: (tripId: number | string, id: number, data: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/photos/${id}`, data).then(r => r.data),
+  delete: (tripId: number | string, id: number) => apiClient.delete(`/trips/${tripId}/photos/${id}`).then(r => r.data),
 }
 
 export const reservationsApi = {
@@ -258,8 +311,13 @@ export const backupApi = {
   create: () => apiClient.post('/backup/create').then(r => r.data),
   download: async (filename: string): Promise<void> => {
     const token = localStorage.getItem('auth_token')
+    const betterAuthCookie = getBetterAuthCookie()
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (betterAuthCookie) headers['Better-Auth-Cookie'] = betterAuthCookie
     const res = await fetch(`/api/backup/download/${filename}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
     })
     if (!res.ok) throw new Error('Download failed')
     const blob = await res.blob()
@@ -279,6 +337,39 @@ export const backupApi = {
   },
   getAutoSettings: () => apiClient.get('/backup/auto-settings').then(r => r.data),
   setAutoSettings: (settings: Record<string, unknown>) => apiClient.put('/backup/auto-settings', settings).then(r => r.data),
+}
+
+export const shareApi = {
+  getLink: (tripId: number | string) => apiClient.get(`/trips/${tripId}/share-link`).then(r => r.data),
+  createLink: (tripId: number | string, perms?: Record<string, boolean>) => apiClient.post(`/trips/${tripId}/share-link`, perms || {}).then(r => r.data),
+  deleteLink: (tripId: number | string) => apiClient.delete(`/trips/${tripId}/share-link`).then(r => r.data),
+  getSharedTrip: (token: string) => apiClient.get(`/shared/${token}`).then(r => r.data),
+}
+
+export const notificationsApi = {
+  getPreferences: () => apiClient.get('/notifications/preferences').then(r => r.data),
+  updatePreferences: (prefs: Record<string, boolean>) => apiClient.put('/notifications/preferences', prefs).then(r => r.data),
+  testSmtp: (email?: string) => apiClient.post('/notifications/test-smtp', { email }).then(r => r.data),
+  testWebhook: () => apiClient.post('/notifications/test-webhook').then(r => r.data),
+}
+
+export const inAppNotificationsApi = {
+  list: (params?: { limit?: number; offset?: number; unread_only?: boolean }) =>
+    apiClient.get('/notifications/in-app', { params }).then(r => r.data),
+  unreadCount: () =>
+    apiClient.get('/notifications/in-app/unread-count').then(r => r.data),
+  markRead: (id: number) =>
+    apiClient.put(`/notifications/in-app/${id}/read`).then(r => r.data),
+  markUnread: (id: number) =>
+    apiClient.put(`/notifications/in-app/${id}/unread`).then(r => r.data),
+  markAllRead: () =>
+    apiClient.put('/notifications/in-app/read-all').then(r => r.data),
+  delete: (id: number) =>
+    apiClient.delete(`/notifications/in-app/${id}`).then(r => r.data),
+  deleteAll: () =>
+    apiClient.delete('/notifications/in-app/all').then(r => r.data),
+  respond: (id: number, response: 'positive' | 'negative') =>
+    apiClient.post(`/notifications/in-app/${id}/respond`, { response }).then(r => r.data),
 }
 
 export default apiClient

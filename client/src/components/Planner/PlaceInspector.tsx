@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Clock, MapPin, ExternalLink, Phone, Euro, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Users } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { getAuthUrl } from '../../api/authUrl'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { X, Clock, MapPin, ExternalLink, Phone, Euro, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Users, Mountain, TrendingUp } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { mapsApi } from '../../api/client'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -100,32 +103,36 @@ interface TripMember {
   id: number
   username: string
   avatar_url?: string | null
+  avatar?: string | null
 }
 
 interface PlaceInspectorProps {
   place: Place | null
   categories: Category[]
   days: Day[]
-  selectedDayId: number | null
-  selectedAssignmentId: number | null
+  selectedDayId: number | string | null
+  selectedAssignmentId: number | string | null
   assignments: AssignmentsMap
   reservations?: Reservation[]
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
-  onAssignToDay: (placeId: number, dayId: number) => void
-  onRemoveAssignment: (assignmentId: number, dayId: number) => void
+  onAssignToDay: (placeId: number | string, dayId: number | string, position?: number) => void
+  onRemoveAssignment: (assignmentId: number | string, dayId: number | string) => void
   files: TripFile[]
-  onFileUpload: (fd: FormData) => Promise<void>
+  onFileUpload?: (fd: FormData) => Promise<any>
   tripMembers?: TripMember[]
-  onSetParticipants: (assignmentId: number, dayId: number, participantIds: number[]) => void
-  onUpdatePlace: (placeId: number, data: Partial<Place>) => void
+  onSetParticipants: (assignmentId: number | string, dayId: number | string, participantIds: number[]) => void
+  onUpdatePlace: (placeId: number | string, data: Partial<Place>) => void
+  leftWidth?: number
+  rightWidth?: number
 }
 
 export default function PlaceInspector({
   place, categories, days, selectedDayId, selectedAssignmentId, assignments, reservations = [],
   onClose, onEdit, onDelete, onAssignToDay, onRemoveAssignment,
   files, onFileUpload, tripMembers = [], onSetParticipants, onUpdatePlace,
+  leftWidth = 0, rightWidth = 0,
 }: PlaceInspectorProps) {
   const { t, locale, language } = useTranslation()
   const timeFormat = useSettingsStore(s => s.settings.time_format) || '24h'
@@ -150,7 +157,7 @@ export default function PlaceInspector({
     const trimmed = nameValue.trim()
     setEditingName(false)
     if (!trimmed || trimmed === place.name) return
-    onUpdatePlace(place.id, { name: trimmed })
+    onUpdatePlace(place.id as number, { name: trimmed })
   }
 
   const handleNameKeyDown = (e) => {
@@ -169,7 +176,7 @@ export default function PlaceInspector({
   const selectedDay = days?.find(d => d.id === selectedDayId)
   const weekdayIndex = getWeekdayIndex(selectedDay?.date)
 
-  const placeFiles = (files || []).filter(f => String(f.place_id) === String(place.id) || (f.linked_place_ids || []).includes(place.id))
+  const placeFiles = (files || []).filter(f => String(f.place_id) === String(place.id) || (f.linked_place_ids || []).includes(place.id as number))
 
   const handleFileUpload = useCallback(async (e) => {
     const selectedFiles = Array.from((e.target as HTMLInputElement).files || [])
@@ -179,7 +186,7 @@ export default function PlaceInspector({
       for (const file of selectedFiles) {
         const fd = new FormData()
         fd.append('file', file)
-        fd.append('place_id', place.id)
+        fd.append('place_id', String(place.id))
         await onFileUpload(fd)
       }
       setFilesExpanded(true)
@@ -196,9 +203,9 @@ export default function PlaceInspector({
       style={{
         position: 'absolute',
         bottom: 20,
-        left: '50%',
+        left: `calc(${leftWidth}px + (100% - ${leftWidth}px - ${rightWidth}px) / 2)`,
         transform: 'translateX(-50%)',
-        width: 'min(800px, calc(100vw - 32px))',
+        width: `min(800px, calc(100% - ${leftWidth}px - ${rightWidth}px - 32px))`,
         zIndex: 50,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
       }}
@@ -319,7 +326,7 @@ export default function PlaceInspector({
                 />
               )
             })()}
-            {place.price > 0 && (
+            {Number(place.price) > 0 && (
               <Chip icon={<Euro size={12} />} text={`${place.price} ${place.currency || '€'}`} color="#059669" bg="#ecfdf5" />
             )}
           </div>
@@ -336,10 +343,8 @@ export default function PlaceInspector({
 
           {/* Description / Summary */}
           {(place.description || place.notes || googleDetails?.summary) && (
-            <div style={{ background: 'var(--bg-hover)', borderRadius: 10, overflow: 'hidden' }}>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: '1.5', padding: '8px 12px' }}>
-                {place.description || place.notes || googleDetails?.summary}
-              </p>
+            <div className="collab-note-md" style={{ background: 'var(--bg-hover)', borderRadius: 10, overflow: 'hidden', fontSize: 12, color: 'var(--text-muted)', lineHeight: '1.5', padding: '8px 12px' }}>
+              <Markdown remarkPlugins={[remarkGfm]}>{place.description || place.notes || googleDetails?.summary || ''}</Markdown>
             </div>
           )}
 
@@ -369,7 +374,7 @@ export default function PlaceInspector({
                         {res.reservation_time && (
                           <div>
                             <div style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{t('reservations.date')}</div>
-                            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', marginTop: 1 }}>{new Date(res.reservation_time).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', marginTop: 1 }}>{new Date((res.reservation_time.includes('T') ? res.reservation_time.split('T')[0] : res.reservation_time) + 'T00:00:00Z').toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}</div>
                           </div>
                         )}
                         {res.reservation_time?.includes('T') && (
@@ -388,7 +393,7 @@ export default function PlaceInspector({
                           </div>
                         )}
                       </div>
-                      {res.notes && <div style={{ padding: '0 10px 6px', fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.4 }}>{res.notes}</div>}
+                      {res.notes && <div className="collab-note-md" style={{ padding: '0 10px 6px', fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.4 }}><Markdown remarkPlugins={[remarkGfm]}>{res.notes}</Markdown></div>}
                       {(() => {
                         const meta = typeof res.metadata === 'string' ? JSON.parse(res.metadata || '{}') : (res.metadata || {})
                         if (!meta || Object.keys(meta).length === 0) return null
@@ -458,6 +463,98 @@ export default function PlaceInspector({
           )}
 
 
+          {/* GPX Track stats */}
+          {place.route_geometry && (() => {
+            try {
+              const pts: number[][] = JSON.parse(place.route_geometry)
+              if (!pts || pts.length < 2) return null
+              const hasEle = pts[0].length >= 3
+
+              // Haversine distance
+              const toRad = (d: number) => d * Math.PI / 180
+              let totalDist = 0
+              for (let i = 1; i < pts.length; i++) {
+                const [lat1, lng1] = pts[i - 1], [lat2, lng2] = pts[i]
+                const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
+                const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+                totalDist += 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+              }
+              const distKm = totalDist / 1000
+
+              // Elevation stats
+              let minEle = Infinity, maxEle = -Infinity, totalUp = 0, totalDown = 0
+              if (hasEle) {
+                for (let i = 0; i < pts.length; i++) {
+                  const e = pts[i][2]
+                  if (e < minEle) minEle = e
+                  if (e > maxEle) maxEle = e
+                  if (i > 0) {
+                    const diff = e - pts[i - 1][2]
+                    if (diff > 0) totalUp += diff; else totalDown += Math.abs(diff)
+                  }
+                }
+              }
+
+              // Elevation profile SVG
+              const chartW = 280, chartH = 60
+              const elevations = hasEle ? pts.map(p => p[2]) : []
+              let pathD = ''
+              if (elevations.length > 1) {
+                const step = Math.max(1, Math.floor(elevations.length / chartW))
+                const sampled = elevations.filter((_, i) => i % step === 0)
+                const eMin = Math.min(...sampled), eMax = Math.max(...sampled)
+                const range = eMax - eMin || 1
+                pathD = sampled.map((e, i) => {
+                  const x = (i / (sampled.length - 1)) * chartW
+                  const y = chartH - ((e - eMin) / range) * (chartH - 4) - 2
+                  return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+                }).join(' ')
+              }
+
+              return (
+                <div style={{ background: 'var(--bg-hover)', borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <TrendingUp size={13} color="#9ca3af" />
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{t('inspector.trackStats')}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                      <MapPin size={12} color="#3b82f6" />
+                      {distKm < 1 ? `${Math.round(totalDist)} m` : `${distKm.toFixed(1)} km`}
+                    </div>
+                    {hasEle && (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                          <Mountain size={12} color="#22c55e" />
+                          {Math.round(maxEle)} m
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                          <Mountain size={12} color="#ef4444" />
+                          {Math.round(minEle)} m
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          ↑{Math.round(totalUp)} m &nbsp;↓{Math.round(totalDown)} m
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {pathD && (
+                    <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" style={{ display: 'block', borderRadius: 6, background: 'var(--bg-tertiary)' }}>
+                      <defs>
+                        <linearGradient id={`ele-grad-${place.id}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      <path d={`${pathD} L${chartW},${chartH} L0,${chartH} Z`} fill={`url(#ele-grad-${place.id})`} />
+                      <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                    </svg>
+                  )}
+                </div>
+              )
+            } catch { return null }
+          })()}
+
           {/* Files section */}
           {(placeFiles.length > 0 || onFileUpload) && (
             <div style={{ background: 'var(--bg-hover)', borderRadius: 10, overflow: 'hidden' }}>
@@ -486,11 +583,11 @@ export default function PlaceInspector({
               {filesExpanded && placeFiles.length > 0 && (
                 <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {placeFiles.map(f => (
-                    <a key={f.id} href={`/uploads/files/${f.filename}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', cursor: 'pointer' }}>
+                    <button key={f.id} onClick={async () => { const u = await getAuthUrl(f.url, 'download'); window.open(u, '_blank', 'noopener noreferrer') }} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}>
                       {(f.mime_type || '').startsWith('image/') ? <FileImage size={12} color="#6b7280" /> : <File size={12} color="#6b7280" />}
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
                       {f.file_size && <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{formatFileSize(f.file_size)}</span>}
-                    </a>
+                    </button>
                   ))}
                 </div>
               )}
@@ -504,10 +601,10 @@ export default function PlaceInspector({
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-faint)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           {selectedDayId && (
             assignmentInDay ? (
-              <ActionButton onClick={() => onRemoveAssignment(selectedDayId, assignmentInDay.id)} variant="ghost" icon={<Minus size={13} />}
+              <ActionButton onClick={() => onRemoveAssignment(assignmentInDay.id as number, selectedDayId as number)} variant="ghost" icon={<Minus size={13} />}
                 label={<><span className="hidden sm:inline">{t('inspector.removeFromDay')}</span><span className="sm:hidden">Remove</span></>} />
             ) : (
-              <ActionButton onClick={() => onAssignToDay(place.id)} variant="primary" icon={<Plus size={13} />} label={t('inspector.addToDay')} />
+              <ActionButton onClick={() => onAssignToDay(place.id as number, selectedDayId as number)} variant="primary" icon={<Plus size={13} />} label={t('inspector.addToDay')} />
             )
           )}
           {googleDetails?.google_maps_url && (
@@ -598,8 +695,8 @@ interface ParticipantsBoxProps {
   participantIds: number[]
   allJoined: boolean
   onSetParticipants: (assignmentId: number, dayId: number, participantIds: number[]) => void
-  selectedAssignmentId: number | null
-  selectedDayId: number | null
+  selectedAssignmentId: number | string | null
+  selectedDayId: number | string | null
   t: (key: string) => string
 }
 
@@ -620,16 +717,16 @@ function ParticipantsBox({ tripMembers, participantIds, allJoined, onSetParticip
       newIds = participantIds.filter(id => id !== userId)
     }
     if (newIds.length === tripMembers.length) newIds = []
-    onSetParticipants(selectedAssignmentId, selectedDayId, newIds)
+    onSetParticipants(selectedAssignmentId as number, selectedDayId as number, newIds)
   }
 
   const handleAdd = (userId) => {
     if (!onSetParticipants) return
     const newIds = [...participantIds, userId]
     if (newIds.length === tripMembers.length) {
-      onSetParticipants(selectedAssignmentId, selectedDayId, [])
+      onSetParticipants(selectedAssignmentId as number, selectedDayId as number, [])
     } else {
-      onSetParticipants(selectedAssignmentId, selectedDayId, newIds)
+      onSetParticipants(selectedAssignmentId as number, selectedDayId as number, newIds)
     }
     setShowAdd(false)
   }

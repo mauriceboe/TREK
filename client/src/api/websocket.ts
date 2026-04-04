@@ -21,9 +21,13 @@ export function setRefetchCallback(fn: RefetchCallback | null): void {
   refetchCallback = fn
 }
 
-function getWsUrl(token: string): string {
+function getWsUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${protocol}://${location.host}/ws?token=${token}`
+  const baseUrl = `${protocol}://${location.host}/ws`
+  if (!currentToken || currentToken === '__session__') return baseUrl
+  const url = new URL(baseUrl)
+  url.searchParams.set('token', currentToken)
+  return url.toString()
 }
 
 function handleMessage(event: MessageEvent): void {
@@ -52,12 +56,12 @@ function scheduleReconnect(): void {
   reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY)
 }
 
-function connectInternal(token: string, _isReconnect = false): void {
+function connectInternal(_token: string, _isReconnect = false): void {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
     return
   }
 
-  const url = getWsUrl(token)
+  const url = getWsUrl()
   socket = new WebSocket(url)
 
   socket.onopen = () => {
@@ -92,14 +96,14 @@ function connectInternal(token: string, _isReconnect = false): void {
   }
 }
 
-export function connect(token: string): void {
-  currentToken = token
+export function connect(token?: string | null): void {
+  currentToken = token || '__session__'
   reconnectDelay = 1000
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
-  connectInternal(token, false)
+  connectInternal(currentToken, false)
 }
 
 export function disconnect(): void {

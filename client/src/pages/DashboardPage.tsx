@@ -4,7 +4,7 @@ import { tripsApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTranslation } from '../i18n'
-import { getApiErrorMessage } from '../types'
+import { getApiErrorMessage, type Trip } from '../types'
 import Navbar from '../components/Layout/Navbar'
 import DemoBanner from '../components/Layout/DemoBanner'
 import CurrencyWidget from '../components/Dashboard/CurrencyWidget'
@@ -40,7 +40,7 @@ function daysUntil(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const d = new Date(dateStr + 'T00:00:00'); d.setHours(0, 0, 0, 0)
-  return Math.round((d - today) / MS_PER_DAY)
+  return Math.round((d.getTime() - today.getTime()) / MS_PER_DAY)
 }
 
 function getTripStatus(trip: DashboardTrip): string | null {
@@ -116,7 +116,7 @@ function LiquidGlass({ children, dark, style, className = '', onClick }: LiquidG
     glareRef.current.style.opacity = '1'
     borderRef.current.style.opacity = '1'
     borderRef.current.style.maskImage = `radial-gradient(circle 120px at ${x}px ${y}px, black 0%, transparent 100%)`
-    borderRef.current.style.WebkitMaskImage = `radial-gradient(circle 120px at ${x}px ${y}px, black 0%, transparent 100%)`
+    borderRef.current.style.webkitMaskImage = `radial-gradient(circle 120px at ${x}px ${y}px, black 0%, transparent 100%)`
   }
   const onLeave = () => {
     if (glareRef.current) glareRef.current.style.opacity = '0'
@@ -889,7 +889,7 @@ export default function DashboardPage(): React.ReactElement {
         isOpen={showForm}
         onClose={() => { setShowForm(false); setEditingTrip(null) }}
         onSave={editingTrip ? handleUpdate : handleCreate}
-        trip={editingTrip}
+        trip={editingTrip as unknown as Trip | null}
         onCoverUpdate={handleCoverUpdate}
       />
 

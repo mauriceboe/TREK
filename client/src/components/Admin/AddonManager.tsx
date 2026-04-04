@@ -15,6 +15,7 @@ interface Addon {
   description: string
   icon: string
   enabled: boolean
+  type: string
 }
 
 interface AddonIconProps {
@@ -204,7 +205,7 @@ function AddonRow({ addon, onToggle, t }: AddonRowProps) {
           {isComingSoon ? t('admin.addons.disabled') : addon.enabled ? t('admin.addons.enabled') : t('admin.addons.disabled')}
         </span>
         <button
-          onClick={() => !isComingSoon && onToggle(addon)}
+          onClick={() => !isComingSoon && onToggle(addon.id)}
           disabled={isComingSoon}
           className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
           style={{ background: (addon.enabled && !isComingSoon) ? 'var(--text-primary)' : 'var(--border-primary)', cursor: isComingSoon ? 'not-allowed' : 'pointer' }}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Clock, Plus, X } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { useSettingsStore } from '../../store/settingsStore'
 
 const POPULAR_ZONES = [
   { label: 'New York', tz: 'America/New_York' },
@@ -23,9 +24,9 @@ const POPULAR_ZONES = [
   { label: 'Cairo', tz: 'Africa/Cairo' },
 ]
 
-function getTime(tz, locale) {
+function getTime(tz, locale, is12h) {
   try {
-    return new Date().toLocaleTimeString(locale, { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+    return new Date().toLocaleTimeString(locale, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: is12h })
   } catch { return '—' }
 }
 
@@ -34,7 +35,7 @@ function getOffset(tz) {
     const now = new Date()
     const local = new Date(now.toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }))
     const remote = new Date(now.toLocaleString('en-US', { timeZone: tz }))
-    const diff = (remote - local) / 3600000
+    const diff = (remote.getTime() - local.getTime()) / 3600000
     const sign = diff >= 0 ? '+' : ''
     return `${sign}${diff}h`
   } catch { return '' }
@@ -42,6 +43,7 @@ function getOffset(tz) {
 
 export default function TimezoneWidget() {
   const { t, locale } = useTranslation()
+  const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
   const [zones, setZones] = useState(() => {
     const saved = localStorage.getItem('dashboard_timezones')
     return saved ? JSON.parse(saved) : [
@@ -87,7 +89,7 @@ export default function TimezoneWidget() {
 
   const removeZone = (tz) => setZones(zones.filter(z => z.tz !== tz))
 
-  const localTime = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  const localTime = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: is12h })
   const rawZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const localZone = rawZone.split('/').pop().replace(/_/g, ' ')
   // Show abbreviated timezone name (e.g. CET, CEST, EST)
@@ -113,7 +115,7 @@ export default function TimezoneWidget() {
         {zones.map(z => (
           <div key={z.tz} className="flex items-center justify-between group">
             <div>
-              <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{getTime(z.tz, locale)}</p>
+              <p className="text-lg font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{getTime(z.tz, locale, is12h)}</p>
               <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{z.label} <span style={{ color: 'var(--text-muted)' }}>{getOffset(z.tz)}</span></p>
             </div>
             <button onClick={() => removeZone(z.tz)} className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all" style={{ color: 'var(--text-faint)' }}>
@@ -155,7 +157,7 @@ export default function TimezoneWidget() {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <span className="font-medium">{z.label}</span>
-              <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{getTime(z.tz, locale)}</span>
+              <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{getTime(z.tz, locale, is12h)}</span>
             </button>
           ))}
         </div>

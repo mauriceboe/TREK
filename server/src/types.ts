@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: 'admin' | 'user';
   password_hash?: string;
+  better_auth_user_id?: string | null;
   maps_api_key?: string | null;
   unsplash_api_key?: string | null;
   openweather_api_key?: string | null;
@@ -29,8 +30,56 @@ export interface Trip {
   currency: string;
   cover_image?: string | null;
   is_archived: number;
+  destination_name?: string | null;
+  destination_address?: string | null;
+  destination_lat?: number | null;
+  destination_lng?: number | null;
+  destination_viewport_south?: number | null;
+  destination_viewport_west?: number | null;
+  destination_viewport_north?: number | null;
+  destination_viewport_east?: number | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface TripLeg {
+  id: number;
+  trip_id: number;
+  destination_name: string;
+  destination_address?: string | null;
+  destination_lat?: number | null;
+  destination_lng?: number | null;
+  destination_viewport_south?: number | null;
+  destination_viewport_west?: number | null;
+  destination_viewport_north?: number | null;
+  destination_viewport_east?: number | null;
+  start_day_number: number;
+  end_day_number: number;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RecommendationPreset {
+  nearbyTypes: string[];
+  textQuery: string;
+}
+
+export interface NormalizedPlace {
+  google_place_id: string | null;
+  name: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  rating: number | null;
+  rating_count: number | null;
+  primary_type: string | null;
+  primary_type_label: string | null;
+  types: string[];
+  website: string | null;
+  phone: string | null;
+  google_maps_url: string | null;
+  source: 'google';
 }
 
 export interface Day {
@@ -263,11 +312,17 @@ export interface Setting {
 
 export interface AuthRequest extends Request {
   user: { id: number; username: string; email: string; role: string };
+  authToken?: string;
+  authProvider?: 'better-auth' | 'legacy';
+  betterAuthSession?: { user: Record<string, unknown>; session: Record<string, unknown> } | null;
   trip?: { id: number; user_id: number };
 }
 
 export interface OptionalAuthRequest extends Request {
   user: { id: number; username: string; email: string; role: string } | null;
+  authToken?: string | null;
+  authProvider?: 'better-auth' | 'legacy' | null;
+  betterAuthSession?: { user: Record<string, unknown>; session: Record<string, unknown> } | null;
 }
 
 export interface AssignmentRow extends DayAssignment {

@@ -222,7 +222,14 @@ export const useVacayStore = create<VacayState>((set, get) => ({
 
   removeYear: async (year: number) => {
     const data = await api.removeYear(year)
-    set({ years: data.years })
+    const updates: Partial<VacayState> = { years: data.years }
+    if (get().selectedYear === year) {
+      updates.selectedYear = data.years.length > 0
+        ? data.years[data.years.length - 1]
+        : new Date().getFullYear()
+    }
+    set(updates)
+    await get().loadStats()
   },
 
   loadEntries: async (year?: number) => {
@@ -240,6 +247,7 @@ export const useVacayStore = create<VacayState>((set, get) => ({
   toggleCompanyHoliday: async (date: string) => {
     await api.toggleCompanyHoliday(date)
     await get().loadEntries()
+    await get().loadStats()
   },
 
   loadStats: async (year?: number) => {

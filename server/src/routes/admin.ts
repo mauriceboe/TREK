@@ -7,6 +7,8 @@ import fs from 'fs';
 import { db } from '../db/database';
 import { authenticate, adminOnly } from '../middleware/auth';
 import { AuthRequest, User, Addon } from '../types';
+import { normalizeBetterAuthUsername } from '../lib/localUserBridge';
+import { signUpBetterAuthEmail } from '../lib/betterAuth';
 
 const router = express.Router();
 
@@ -25,7 +27,7 @@ router.get('/users', (req: Request, res: Response) => {
   res.json({ users: usersWithStatus });
 });
 
-router.post('/users', (req: Request, res: Response) => {
+router.post('/users', async (req: Request, res: Response) => {
   const { username, email, password, role } = req.body;
 
   if (!username?.trim() || !email?.trim() || !password?.trim()) {
@@ -43,10 +45,22 @@ router.post('/users', (req: Request, res: Response) => {
   if (existingEmail) return res.status(409).json({ error: 'Email already taken' });
 
   const passwordHash = bcrypt.hashSync(password.trim(), 12);
+  const betterAuthResult = await signUpBetterAuthEmail({
+    email: email.trim().toLowerCase(),
+    password: password.trim(),
+    name: username.trim(),
+    username: normalizeBetterAuthUsername(username.trim()),
+    displayUsername: username.trim(),
+  });
 
+  if (!betterAuthResult.ok || !betterAuthResult.data?.user) {
+    return res.status(400).json({ error: 'Could not provision Better Auth user' });
+  }
+
+  const betterAuthUser = betterAuthResult.data.user as { id?: string };
   const result = db.prepare(
-    'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)'
-  ).run(username.trim(), email.trim(), passwordHash, role || 'user');
+    'INSERT INTO users (username, email, password_hash, better_auth_user_id, role) VALUES (?, ?, ?, ?, ?)'
+  ).run(username.trim(), email.trim().toLowerCase(), passwordHash, betterAuthUser.id || null, role || 'user');
 
   const user = db.prepare(
     'SELECT id, username, email, role, created_at, updated_at FROM users WHERE id = ?'
@@ -74,6 +88,10 @@ router.put('/users/:id', (req: Request, res: Response) => {
     if (conflict) return res.status(409).json({ error: 'Email already taken' });
   }
 
+  if (user.better_auth_user_id && (username || email || password)) {
+    return res.status(400).json({ error: 'Admin edits for Convex Better Auth users are not supported from this panel yet.' });
+  }
+
   const passwordHash = password ? bcrypt.hashSync(password, 12) : null;
 
   db.prepare(`
@@ -95,14 +113,18 @@ router.put('/users/:id', (req: Request, res: Response) => {
 
 router.delete('/users/:id', (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (parseInt(req.params.id as string) === authReq.user.id) {
+  const userIdParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  if (parseInt(userIdParam, 10) === authReq.user.id) {
     return res.status(400).json({ error: 'Cannot delete own account' });
   }
 
-  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  const user = db.prepare('SELECT id, better_auth_user_id FROM users WHERE id = ?').get(userIdParam) as Pick<User, 'id' | 'better_auth_user_id'> | undefined;
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  if (user.better_auth_user_id) {
+    return res.status(400).json({ error: 'Admin deletion for Convex Better Auth users is not supported from this panel yet.' });
+  }
+  db.prepare('DELETE FROM users WHERE id = ?').run(userIdParam);
   res.json({ success: true });
 });
 
@@ -157,6 +179,7 @@ const isDocker = (() => {
     return fs.existsSync('/.dockerenv') || (fs.existsSync('/proc/1/cgroup') && fs.readFileSync('/proc/1/cgroup', 'utf8').includes('docker'));
   } catch { return false }
 })();
+const canAdminSelfUpdate = process.env.ENABLE_ADMIN_UPDATE === 'true' && !isDocker;
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number);
@@ -191,17 +214,21 @@ router.get('/version-check', async (_req: Request, res: Response) => {
       'https://api.github.com/repos/mauriceboe/TREK/releases/latest',
       { headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'TREK-Server' } }
     );
-    if (!resp.ok) return res.json({ current: currentVersion, latest: currentVersion, update_available: false });
+    if (!resp.ok) return res.json({ current: currentVersion, latest: currentVersion, update_available: false, is_docker: isDocker, can_update: canAdminSelfUpdate });
     const data = await resp.json() as { tag_name?: string; html_url?: string };
     const latest = (data.tag_name || '').replace(/^v/, '');
     const update_available = latest && latest !== currentVersion && compareVersions(latest, currentVersion) > 0;
-    res.json({ current: currentVersion, latest, update_available, release_url: data.html_url || '', is_docker: isDocker });
+    res.json({ current: currentVersion, latest, update_available, release_url: data.html_url || '', is_docker: isDocker, can_update: canAdminSelfUpdate });
   } catch {
-    res.json({ current: currentVersion, latest: currentVersion, update_available: false, is_docker: isDocker });
+    res.json({ current: currentVersion, latest: currentVersion, update_available: false, is_docker: isDocker, can_update: canAdminSelfUpdate });
   }
 });
 
 router.post('/update', async (_req: Request, res: Response) => {
+  if (!canAdminSelfUpdate) {
+    return res.status(403).json({ error: 'Automatic self-update is disabled on this deployment.' });
+  }
+
   const rootDir = path.resolve(__dirname, '../../..');
   const serverDir = path.resolve(__dirname, '../..');
   const clientDir = path.join(rootDir, 'client');
@@ -235,6 +262,43 @@ router.post('/update', async (_req: Request, res: Response) => {
     steps.push({ step: 'error', success: false, output: 'Internal error' });
     res.status(500).json({ success: false, steps });
   }
+});
+
+// ── Audit Log ───────────────────────────────────────────────────────────────
+
+router.get('/audit-log', (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  const offset = (page - 1) * limit;
+
+  const total = (db.prepare('SELECT COUNT(*) as count FROM audit_log').get() as { count: number }).count;
+  const entries = db.prepare(`
+    SELECT a.id, a.user_id, a.action, a.resource, a.details, a.ip, a.created_at,
+           u.username, u.email
+    FROM audit_log a
+    LEFT JOIN users u ON a.user_id = u.id
+    ORDER BY a.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
+
+  res.json({ entries, total, page, limit });
+});
+
+// ── Active Sessions ─────────────────────────────────────────────────────────
+
+router.get('/sessions', (_req: Request, res: Response) => {
+  const sessions = db.prepare(`
+    SELECT s.id, s.createdAt, s.updatedAt, s.expiresAt, s.ipAddress, s.userAgent, s.userId,
+           bau.name, bau.email,
+           u.username, u.role
+    FROM better_auth_sessions s
+    JOIN better_auth_users bau ON s.userId = bau.id
+    LEFT JOIN users u ON u.better_auth_user_id = bau.id
+    WHERE s.expiresAt > datetime('now')
+    ORDER BY s.updatedAt DESC
+  `).all();
+
+  res.json({ sessions });
 });
 
 // ── Invite Tokens ───────────────────────────────────────────────────────────

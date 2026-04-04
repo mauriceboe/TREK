@@ -21,10 +21,41 @@
   <DonateText>Support TREK development</DonateText>
   <DonateLink>https://ko-fi.com/mauriceboe</DonateLink>
   <Requires/>
+
+  <!-- Ports & Volumes -->
   <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
   <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/trek/data" Mode="rw" Description="Database and app data" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/trek/data</Config>
   <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/trek/uploads" Mode="rw" Description="Uploaded files (photos, documents)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/trek/uploads</Config>
-  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node environment" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
-  <Config Name="JWT_SECRET" Target="JWT_SECRET" Default="" Mode="" Description="JWT secret key (auto-generated if empty)" Type="Variable" Display="advanced" Required="false" Mask="true"/>
-  <Config Name="PORT" Target="PORT" Default="3000" Mode="" Description="Internal port" Type="Variable" Display="advanced" Required="false" Mask="false">3000</Config>
+
+  <!-- Core -->
+  <Config Name="ENCRYPTION_KEY" Target="ENCRYPTION_KEY" Default="" Mode="" Description="At-rest encryption key for stored secrets (API keys, MFA, SMTP, OIDC). Recommended: generate with: openssl rand -hex 32. If unset, falls back to data/.jwt_secret (existing installs) or auto-generates a key (fresh installs)." Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="PORT" Target="PORT" Default="3000" Mode="" Description="Internal server port (must match the container port mapping above)." Type="Variable" Display="advanced" Required="false" Mask="false">3000</Config>
+  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node environment (production / development)." Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+  <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="Timezone for logs, reminders and scheduled tasks (e.g. Europe/Berlin)." Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+  <Config Name="LOG_LEVEL" Target="LOG_LEVEL" Default="info" Mode="" Description="Log verbosity: info = concise user actions, debug = verbose admin-level details." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
+  <Config Name="ALLOWED_ORIGINS" Target="ALLOWED_ORIGINS" Default="" Mode="" Description="Comma-separated origins allowed for CORS and used as base URL in email notification links (e.g. https://trek.example.com)." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="APP_URL" Target="APP_URL" Default="" Mode="" Description="Public base URL of this instance (e.g. https://trek.example.com). Required when OIDC is enabled — must match the redirect URI registered with your IdP. Also used as base URL for email notification links." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="FORCE_HTTPS" Target="FORCE_HTTPS" Default="false" Mode="" Description="Redirect HTTP to HTTPS when TREK is behind a TLS-terminating reverse proxy." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="COOKIE_SECURE" Target="COOKIE_SECURE" Default="true" Mode="" Description="Set to false to allow session cookies over plain HTTP (e.g. accessing via IP without HTTPS). Not recommended to disable in production." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="TRUST_PROXY" Target="TRUST_PROXY" Default="1" Mode="" Description="Number of trusted reverse proxies for X-Forwarded-For IP detection." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+  <Config Name="ALLOW_INTERNAL_NETWORK" Target="ALLOW_INTERNAL_NETWORK" Default="false" Mode="" Description="Allow outbound requests to private/RFC-1918 IP addresses. Set to true if Immich or other integrated services are hosted on your local network." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+
+  <!-- Initial Setup -->
+  <Config Name="ADMIN_EMAIL" Target="ADMIN_EMAIL" Default="admin@trek.local" Mode="" Description="Email for the first admin account created on initial boot. Has no effect once any user exists." Type="Variable" Display="always" Required="false" Mask="false">admin@trek.local</Config>
+  <Config Name="ADMIN_PASSWORD" Target="ADMIN_PASSWORD" Default="" Mode="" Description="Password for the first admin account created on initial boot. If omitted a random password is generated and printed to the server log. Has no effect once any user exists." Type="Variable" Display="always" Required="false" Mask="true"/>
+
+  <!-- OIDC / SSO -->
+  <Config Name="OIDC_ISSUER" Target="OIDC_ISSUER" Default="" Mode="" Description="OpenID Connect provider URL (e.g. https://auth.example.com)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="OIDC_CLIENT_ID" Target="OIDC_CLIENT_ID" Default="" Mode="" Description="OIDC client ID registered with your identity provider." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="OIDC_CLIENT_SECRET" Target="OIDC_CLIENT_SECRET" Default="" Mode="" Description="OIDC client secret registered with your identity provider." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="OIDC_DISPLAY_NAME" Target="OIDC_DISPLAY_NAME" Default="SSO" Mode="" Description="Label shown on the SSO login button." Type="Variable" Display="advanced" Required="false" Mask="false">SSO</Config>
+  <Config Name="OIDC_ONLY" Target="OIDC_ONLY" Default="false" Mode="" Description="Set to true to disable local password auth entirely (SSO only). First SSO login becomes admin." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="OIDC_ADMIN_CLAIM" Target="OIDC_ADMIN_CLAIM" Default="" Mode="" Description="OIDC claim used to identify admin users (e.g. groups)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="OIDC_ADMIN_VALUE" Target="OIDC_ADMIN_VALUE" Default="" Mode="" Description="Value of the OIDC claim that grants admin role (e.g. app-trek-admins)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="OIDC_SCOPE" Target="OIDC_SCOPE" Default="openid email profile" Mode="" Description="Space-separated OIDC scopes to request. Fully overrides the default — always include openid email profile plus any extra scopes you need (e.g. add groups when using OIDC_ADMIN_CLAIM)." Type="Variable" Display="advanced" Required="false" Mask="false">openid email profile</Config>
+  <Config Name="OIDC_DISCOVERY_URL" Target="OIDC_DISCOVERY_URL" Default="" Mode="" Description="Override the auto-constructed OIDC discovery endpoint. Useful for providers with a non-standard path (e.g. Authentik)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+
+  <!-- Other -->
+  <Config Name="DEMO_MODE" Target="DEMO_MODE" Default="false" Mode="" Description="Enable demo mode (resets all data hourly). Not intended for regular use." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="MCP_RATE_LIMIT" Target="MCP_RATE_LIMIT" Default="60" Mode="" Description="Max MCP API requests per user per minute." Type="Variable" Display="advanced" Required="false" Mask="false">60</Config>
 </Container>

@@ -104,7 +104,7 @@ export default function VacayPersons() {
 
         {/* Pending invites */}
         {pendingInvites.map(inv => (
-          <div key={inv.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg group"
+          <div key={inv.user_id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg group"
             style={{ background: 'var(--bg-secondary)', opacity: 0.7 }}>
             <Clock size={12} style={{ color: 'var(--text-faint)' }} />
             <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-muted)' }}>

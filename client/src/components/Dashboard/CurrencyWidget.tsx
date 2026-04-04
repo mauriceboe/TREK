@@ -4,17 +4,23 @@ import { useTranslation } from '../../i18n'
 import CustomSelect from '../shared/CustomSelect'
 
 const CURRENCIES = [
-  'EUR','USD','GBP','JPY','CHF','CAD','AUD','NZD','CNY','HKD',
-  'SGD','THB','TRY','SEK','NOK','DKK','PLN','CZK','HUF','RON',
-  'BGN','HRK','ISK','RUB','UAH','BRL','MXN','ARS','CLP','COP',
-  'INR','IDR','MYR','PHP','KRW','TWD','VND','ZAR','EGP','MAD',
-  'NGN','KES','AED','SAR','QAR','KWD','BHD','OMR','ILS',
+  'AED', 'AFN', 'ALL', 'AMD', 'ANG', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT', 'BGN', 'BHD',
+  'BIF', 'BMD', 'BND', 'BOB', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD', 'CAD', 'CDF', 'CHF', 'CLF', 'CLP',
+  'CNH', 'CNY', 'COP', 'CRC', 'CUP', 'CVE', 'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP', 'ERN', 'ETB', 'EUR',
+  'FJD', 'FKP', 'FOK', 'GBP', 'GEL', 'GGP', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HRK',
+  'HTG', 'HUF', 'IDR', 'ILS', 'IMP', 'INR', 'IQD', 'ISK', 'JEP', 'JMD', 'JOD', 'JPY', 'KES', 'KGS', 'KHR',
+  'KID', 'KMF', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD', 'MAD', 'MDL', 'MGA',
+  'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MYR', 'MZN', 'NAD', 'NGN', 'NIO', 'NOK',
+  'NPR', 'NZD', 'OMR', 'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF',
+  'SAR', 'SBD', 'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SOS', 'SRD', 'SSP', 'STN', 'SYP', 'SZL', 'THB',
+  'TJS', 'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TVD', 'TWD', 'TZS', 'UAH', 'UGX', 'USD', 'UYU', 'UZS', 'VES',
+  'VND', 'VUV', 'WST', 'XAF', 'XCD', 'XDR', 'XOF', 'XPF', 'YER', 'ZAR', 'ZMW', 'ZWL'
 ]
 
 const CURRENCY_OPTIONS = CURRENCIES.map(c => ({ value: c, label: c }))
 
 export default function CurrencyWidget() {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [from, setFrom] = useState(() => localStorage.getItem('currency_from') || 'EUR')
   const [to, setTo] = useState(() => localStorage.getItem('currency_to') || 'USD')
   const [amount, setAmount] = useState('100')
@@ -40,7 +46,7 @@ export default function CurrencyWidget() {
   const rawResult = rate && amount ? (parseFloat(amount) * rate).toFixed(2) : null
   const formatNumber = (num) => {
     if (!num || num === '—') return '—'
-    return parseFloat(num).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return parseFloat(num).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
   const result = rawResult
 
@@ -66,13 +72,13 @@ export default function CurrencyWidget() {
 
       {/* From / Swap / To */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex-1" style={{ '--bg-input': 'transparent', '--border-primary': 'transparent' }}>
+        <div className="flex-1" style={{ '--bg-input': 'transparent', '--border-primary': 'transparent' } as React.CSSProperties}>
           <CustomSelect value={from} onChange={setFrom} options={CURRENCY_OPTIONS} searchable size="sm" />
         </div>
         <button onClick={swap} className="p-1.5 rounded-lg shrink-0 transition-colors" style={{ color: 'var(--text-muted)' }}>
           <ArrowRightLeft size={13} />
         </button>
-        <div className="flex-1" style={{ '--bg-input': 'transparent', '--border-primary': 'transparent' }}>
+        <div className="flex-1" style={{ '--bg-input': 'transparent', '--border-primary': 'transparent' } as React.CSSProperties}>
           <CustomSelect value={to} onChange={setTo} options={CURRENCY_OPTIONS} searchable size="sm" />
         </div>
       </div>

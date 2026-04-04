@@ -1,4 +1,58 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
+
+function isOidcOnlyConfigured(): boolean {
+  if (process.env.OIDC_ONLY !== 'true') return false;
+  return !!(process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID);
+}
+
+function seedAdminAccount(db: Database.Database): void {
+  try {
+    const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
+    if (userCount > 0) return;
+
+    if (isOidcOnlyConfigured()) {
+      console.log('');
+      console.log('╔══════════════════════════════════════════════╗');
+      console.log('║  TREK — OIDC-Only Mode                       ║');
+      console.log('║  First SSO login will become admin.           ║');
+      console.log('╚══════════════════════════════════════════════╝');
+      console.log('');
+      return;
+    }
+
+    const bcrypt = require('bcryptjs');
+
+    const env_admin_email = process.env.ADMIN_EMAIL;
+    const env_admin_pw = process.env.ADMIN_PASSWORD;
+
+    let password;
+    let email;
+    if (env_admin_email && env_admin_pw) {
+      password = env_admin_pw;
+      email = env_admin_email;
+    } else {
+      password = crypto.randomBytes(12).toString('base64url');
+      email = 'admin@trek.local';
+    }
+
+    const hash = bcrypt.hashSync(password, 12);
+    const username = 'admin';
+
+    db.prepare('INSERT INTO users (username, email, password_hash, role, must_change_password) VALUES (?, ?, ?, ?, 1)').run(username, email, hash, 'admin');
+
+    console.log('');
+    console.log('╔══════════════════════════════════════════════╗');
+    console.log('║  TREK — First Run: Admin Account Created     ║');
+    console.log('╠══════════════════════════════════════════════╣');
+    console.log(`║  Email:    ${email.padEnd(33)}║`);
+    console.log(`║  Password: ${password.padEnd(33)}║`);
+    console.log('╚══════════════════════════════════════════════╝');
+    console.log('');
+  } catch (err: unknown) {
+    console.error('[ERROR] Error seeding admin account:', err instanceof Error ? err.message : err);
+  }
+}
 
 function seedCategories(db: Database.Database): void {
   try {
@@ -33,6 +87,7 @@ function seedAddons(db: Database.Database): void {
       { id: 'documents', name: 'Documents', description: 'Store and manage travel documents', type: 'trip', icon: 'FileText', enabled: 1, sort_order: 2 },
       { id: 'vacay', name: 'Vacay', description: 'Personal vacation day planner with calendar view', type: 'global', icon: 'CalendarDays', enabled: 1, sort_order: 10 },
       { id: 'atlas', name: 'Atlas', description: 'World map of your visited countries with travel stats', type: 'global', icon: 'Globe', enabled: 1, sort_order: 11 },
+      { id: 'mcp', name: 'MCP', description: 'Model Context Protocol for AI assistant integration', type: 'integration', icon: 'Terminal', enabled: 0, sort_order: 12 },
       { id: 'collab', name: 'Collab', description: 'Notes, polls, and live chat for trip collaboration', type: 'trip', icon: 'Users', enabled: 1, sort_order: 6 },
     ];
     const insertAddon = db.prepare('INSERT OR IGNORE INTO addons (id, name, description, type, icon, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -44,6 +99,7 @@ function seedAddons(db: Database.Database): void {
 }
 
 function runSeeds(db: Database.Database): void {
+  seedAdminAccount(db);
   seedCategories(db);
   seedAddons(db);
 }

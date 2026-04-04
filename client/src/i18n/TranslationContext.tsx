@@ -4,11 +4,15 @@ import de from './translations/de'
 import en from './translations/en'
 import es from './translations/es'
 import fr from './translations/fr'
+import hu from './translations/hu'
+import it from './translations/it'
 import ru from './translations/ru'
 import zh from './translations/zh'
 import nl from './translations/nl'
 import ar from './translations/ar'
 import br from './translations/br'
+import cs from './translations/cs'
+import pl from './translations/pl'
 
 type TranslationStrings = Record<string, string | { name: string; category: string }[]>
 
@@ -17,15 +21,19 @@ export const SUPPORTED_LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'es', label: 'Español' },
   { value: 'fr', label: 'Français' },
+  { value: 'hu', label: 'Magyar' },
   { value: 'nl', label: 'Nederlands' },
   { value: 'br', label: 'Português (Brasil)' },
+  { value: 'cs', label: 'Česky' },
+  { value: 'pl', label: 'Polski' },
   { value: 'ru', label: 'Русский' },
   { value: 'zh', label: '中文' },
+  { value: 'it', label: 'Italiano' },
   { value: 'ar', label: 'العربية' },
 ] as const
 
-const translations: Record<string, TranslationStrings> = { de, en, es, fr, ru, zh, nl, ar, br }
-const LOCALES: Record<string, string> = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', ru: 'ru-RU', zh: 'zh-CN', nl: 'nl-NL', ar: 'ar-SA', br: 'pt-BR' }
+const translations: Record<string, TranslationStrings> = { de, en, es, fr, hu, it, ru, zh, nl, ar, br, cs, pl }
+const LOCALES: Record<string, string> = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', hu: 'hu-HU', it: 'it-IT', ru: 'ru-RU', zh: 'zh-CN', nl: 'nl-NL', ar: 'ar-SA', br: 'pt-BR', cs: 'cs-CZ', pl: 'pl-PL' }
 const RTL_LANGUAGES = new Set(['ar'])
 
 export function getLocaleForLanguage(language: string): string {
@@ -34,7 +42,7 @@ export function getLocaleForLanguage(language: string): string {
 
 export function getIntlLanguage(language: string): string {
   if (language === 'br') return 'pt-BR'
-  return ['de', 'es', 'fr', 'ru', 'zh', 'nl', 'ar'].includes(language) ? language : 'en'
+  return ['de', 'es', 'fr', 'hu', 'it', 'ru', 'zh', 'nl', 'ar', 'cs', 'pl'].includes(language) ? language : 'en'
 }
 
 export function isRtlLanguage(language: string): boolean {

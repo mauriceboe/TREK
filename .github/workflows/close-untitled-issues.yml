@@ -1,0 +1,67 @@
+name: Close untitled issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close if title is empty or generic
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.issue.title.trim();
+            const badTitles = [
+              "[bug]",
+              "bug report",
+              "bug",
+              "issue",
+            ];
+            
+            const featureRequestTitles = [
+              "feature request",
+              "[feature]",
+              "[feature request]",
+              "[enhancement]"
+            ]
+
+            const titleLower = title.toLowerCase();
+
+            if (badTitles.includes(titleLower)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: "This issue was closed because no title was provided. Please re-open with a descriptive title that summarizes the problem."
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                state: "closed",
+                state_reason: "not_planned"
+              });
+            } else if (featureRequestTitles.some(t => titleLower.startsWith(t))) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: "Feature requests should be made in the [Discussions](https://github.com/mauriceboe/TREK/discussions/new?category=feature-requests) — not as issues. This issue has been closed."
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                state: "closed",
+                state_reason: "not_planned"
+              });
+            }

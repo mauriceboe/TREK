@@ -15,21 +15,70 @@ service:
 env:
   NODE_ENV: production
   PORT: 3000
+  # TZ: "UTC"
+  # Timezone for logs, reminders, and cron jobs (e.g. Europe/Berlin).
+  # LOG_LEVEL: "info"
+  # "info" = concise user actions, "debug" = verbose details.
   # ALLOWED_ORIGINS: ""
-# NOTE: If using ingress, ensure env.ALLOWED_ORIGINS matches the domains in ingress.hosts for proper CORS configuration.
+  # NOTE: If using ingress, ensure env.ALLOWED_ORIGINS matches the domains in ingress.hosts for proper CORS configuration.
+  # APP_URL: "https://trek.example.com"
+  # Public base URL of this instance. Required when OIDC is enabled — must match the redirect URI registered with your IdP.
+  # Also used as the base URL for links in email notifications and other external links.
+  # FORCE_HTTPS: "false"
+  # Set to "true" to redirect HTTP to HTTPS behind a TLS-terminating proxy.
+  # COOKIE_SECURE: "true"
+  # Set to "false" to allow session cookies over plain HTTP (e.g. no ingress TLS). Not recommended for production.
+  # TRUST_PROXY: "1"
+  # Number of trusted reverse proxies for X-Forwarded-For header parsing.
+  # ALLOW_INTERNAL_NETWORK: "false"
+  # Set to "true" if Immich or other integrated services are hosted on a private/RFC-1918 network address.
+  # Loopback (127.x) and link-local/metadata addresses (169.254.x) are always blocked.
+  # OIDC_ISSUER: ""
+  # OpenID Connect provider URL.
+  # OIDC_CLIENT_ID: ""
+  # OIDC client ID.
+  # OIDC_DISPLAY_NAME: "SSO"
+  # Label shown on the SSO login button.
+  # OIDC_ONLY: "false"
+  # Set to "true" to disable local password auth entirely (first SSO login becomes admin).
+  # OIDC_ADMIN_CLAIM: ""
+  # OIDC claim used to identify admin users.
+  # OIDC_ADMIN_VALUE: ""
+  # Value of the OIDC claim that grants admin role.
+  # OIDC_SCOPE: "openid email profile groups"
+  # Space-separated OIDC scopes to request. Must include scopes for any claim used by OIDC_ADMIN_CLAIM.
+  # OIDC_DISCOVERY_URL: ""
+  # Override the OIDC discovery endpoint for providers with non-standard paths (e.g. Authentik).
+  # DEMO_MODE: "false"
+  # Enable demo mode (hourly data resets).
+  # MCP_RATE_LIMIT: "60"
+  # Max MCP API requests per user per minute. Defaults to 60.
 
 
-# JWT secret configuration
+# Secret environment variables stored in a Kubernetes Secret.
+# JWT_SECRET is managed entirely by the server (auto-generated into the data PVC,
+# rotatable via the admin panel) — it is not configured here.
 secretEnv:
-  # If set, use this value for JWT_SECRET (base64-encoded in secret.yaml)
-  JWT_SECRET: ""
+  # At-rest encryption key for stored secrets (API keys, MFA, SMTP, OIDC, etc.).
+  # Recommended: set to a random 32-byte hex value (openssl rand -hex 32).
+  # If left empty the server resolves the key automatically:
+  #   1. data/.jwt_secret (existing installs — encrypted data stays readable after upgrade)
+  #   2. data/.encryption_key auto-generated on first start (fresh installs)
+  ENCRYPTION_KEY: ""
+  # Initial admin account — only used on first boot when no users exist yet.
+  # If both values are non-empty the admin account is created with these credentials.
+  # If either is empty a random password is generated and printed to the server log.
+  ADMIN_EMAIL: ""
+  ADMIN_PASSWORD: ""
+  # OIDC client secret — set together with env.OIDC_ISSUER and env.OIDC_CLIENT_ID.
+  OIDC_CLIENT_SECRET: ""
 
-# If true, a random JWT_SECRET will be generated during install (overrides secretEnv.JWT_SECRET)
-generateJwtSecret: false
+# If true, a random ENCRYPTION_KEY is generated at install and preserved across upgrades
+generateEncryptionKey: false
 
-# If set, use an existing Kubernetes secret for JWT_SECRET
+# If set, use an existing Kubernetes secret that contains ENCRYPTION_KEY
 existingSecret: ""
-existingSecretKey: JWT_SECRET
+existingSecretKey: ENCRYPTION_KEY
 
 persistence:
   enabled: true
@@ -38,10 +87,17 @@ persistence:
   uploads:
     size: 1Gi
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 ingress:
   enabled: false
+  className: ""
   annotations: {}
   hosts:
     - host: chart-example.local

@@ -191,6 +191,7 @@ interface GooglePlaceDetails extends GooglePlaceResult {
   editorialSummary?: { text: string };
   reviews?: { authorAttribution?: { displayName?: string; photoUri?: string }; rating?: number; text?: { text?: string }; relativePublishTimeDescription?: string }[];
   photos?: { name: string; authorAttributions?: { displayName?: string }[] }[];
+  viewport?: { low?: { latitude?: number; longitude?: number }; high?: { latitude?: number; longitude?: number } };
 }
 
 const router = express.Router();
@@ -246,6 +247,73 @@ async function searchNominatim(query: string, lang?: string) {
     source: 'openstreetmap',
   }));
 }
+
+// POST /api/maps/autocomplete
+router.post('/autocomplete', authenticate, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { query, sessionToken, mode } = req.body;
+
+  if (!query) return res.status(400).json({ error: 'Search query is required' });
+
+  const apiKey = getMapsKey(authReq.user.id);
+  if (!apiKey) {
+    return res.json({ suggestions: [], source: 'openstreetmap' });
+  }
+
+  try {
+    const geographyOnly = mode === 'destination';
+    const fieldMask = geographyOnly
+      ? 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types'
+      : 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat';
+
+    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': fieldMask,
+      },
+      body: JSON.stringify({
+        input: query,
+        languageCode: (req.query.lang as string) || 'en',
+        includeQueryPredictions: false,
+        sessionToken: sessionToken || undefined,
+      }),
+    });
+
+    const data = await response.json() as { suggestions?: { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } }; types?: string[] } }[]; error?: { message?: string } };
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.error?.message || 'Google Places autocomplete error' });
+    }
+
+    const geographicTypes = new Set([
+      'country', 'locality', 'administrative_area_level_1',
+      'administrative_area_level_2', 'administrative_area_level_3',
+    ]);
+
+    const suggestions = (data.suggestions || [])
+      .map(item => item.placePrediction)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .filter(item => {
+        if (!geographyOnly) return true;
+        const types = Array.isArray(item.types) ? item.types : [];
+        return types.some(type => geographicTypes.has(type));
+      })
+      .map(item => ({
+        place_id: item.placeId,
+        text: item.text?.text || '',
+        primary_text: item.structuredFormat?.mainText?.text || item.text?.text || '',
+        secondary_text: item.structuredFormat?.secondaryText?.text || '',
+        types: item.types || [],
+      }));
+
+    res.json({ suggestions, source: 'google' });
+  } catch (err: unknown) {
+    console.error('Maps autocomplete error:', err);
+    res.status(500).json({ error: 'Google Places autocomplete error' });
+  }
+});
 
 router.post('/search', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
@@ -327,11 +395,14 @@ router.get('/details/:placeId', authenticate, async (req: Request, res: Response
 
   try {
     const lang = (req.query.lang as string) || 'de';
-    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=${lang}`, {
+    const params = new URLSearchParams({ languageCode: lang });
+    if (req.query.sessionToken) params.set('sessionToken', req.query.sessionToken as string);
+
+    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}?${params.toString()}`, {
       method: 'GET',
       headers: {
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,websiteUri,nationalPhoneNumber,regularOpeningHours,googleMapsUri,reviews,editorialSummary',
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,viewport,rating,userRatingCount,websiteUri,nationalPhoneNumber,regularOpeningHours,googleMapsUri,reviews,editorialSummary',
       },
     });
 
@@ -347,6 +418,12 @@ router.get('/details/:placeId', authenticate, async (req: Request, res: Response
       address: data.formattedAddress || '',
       lat: data.location?.latitude || null,
       lng: data.location?.longitude || null,
+      viewport: data.viewport ? {
+        south: data.viewport.low?.latitude ?? null,
+        west: data.viewport.low?.longitude ?? null,
+        north: data.viewport.high?.latitude ?? null,
+        east: data.viewport.high?.longitude ?? null,
+      } : null,
       rating: data.rating || null,
       rating_count: data.userRatingCount || null,
       website: data.websiteUri || null,

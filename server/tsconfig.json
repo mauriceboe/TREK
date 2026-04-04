@@ -14,7 +14,14 @@
     "sourceMap": true,
     "allowJs": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    // The MCP SDK's package.json uses a wildcard exports pattern with extension-less targets
+    // (e.g. "./*": "./dist/esm/*") which TypeScript cannot resolve — it only strips .js suffixes.
+    // These paths manually redirect to the CJS dist until the SDK fixes its exports map.
+    "paths": {
+      "@modelcontextprotocol/sdk/server/mcp": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp"],
+      "@modelcontextprotocol/sdk/server/streamableHttp": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/streamableHttp"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

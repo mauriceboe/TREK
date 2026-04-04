@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import jwt from 'jsonwebtoken';
 import { db } from '../db/database';
 import { JWT_SECRET } from '../config';
+import { setAuthCookie } from '../middleware/auth';
 import { User } from '../types';
 
 interface OidcDiscoveryDoc {
@@ -195,6 +196,9 @@ router.get('/callback', async (req: Request, res: Response) => {
       const isFirstUser = userCount === 0;
 
       if (!isFirstUser) {
+        if (process.env.INVITE_ONLY === 'true') {
+          return res.redirect(frontendUrl('/login?oidc_error=registration_disabled'));
+        }
         const setting = db.prepare("SELECT value FROM app_settings WHERE key = 'allow_registration'").get() as { value: string } | undefined;
         if (setting?.value === 'false') {
           return res.redirect(frontendUrl('/login?oidc_error=registration_disabled'));
@@ -237,6 +241,7 @@ router.get('/exchange', (req: Request, res: Response) => {
   if (!entry) return res.status(400).json({ error: 'Invalid or expired code' });
   authCodes.delete(code);
   if (Date.now() - entry.created > AUTH_CODE_TTL) return res.status(400).json({ error: 'Code expired' });
+  setAuthCookie(res, entry.token);
   res.json({ token: entry.token });
 });
 

@@ -1,0 +1,108 @@
+name: Bug Report
+description: Create a report to help us improve TREK
+title: "[BUG] "
+labels: []
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checklist
+      options:
+        - label: I have searched [existing issues](https://github.com/mauriceboe/TREK/issues) and this bug has not been reported yet
+          required: true
+        - label: I am running the latest available version of TREK
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: TREK version
+      description: Found in the Settings → About, or in the Docker image tag
+      placeholder: "e.g. 2.8.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: When I do X, Y happens instead of Z…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reliably trigger the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment method
+      options:
+        - Docker Compose
+        - Docker (standalone)
+        - Kubernetes / Helm
+        - Unraid template
+        - Sources
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Host OS
+      placeholder: "e.g. Ubuntu 24.04, Unraid 6.12, Synology DSM 7"
+
+  - type: dropdown
+    id: user_os
+    attributes:
+      label: Accessing TREK from
+      options:
+        - Desktop browser
+        - Mobile browser
+        - Mobile app (PWA)
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser (if applicable)
+      placeholder: "e.g. Chrome 124, Firefox 125, Safari 17"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error output
+      description: Paste any relevant server or browser console output here.
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag and drop screenshots here if applicable.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that might help us understand the issue.

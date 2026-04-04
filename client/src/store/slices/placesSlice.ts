@@ -1,4 +1,5 @@
 import { placesApi } from '../../api/client'
+import { convexCreatePlace, convexUpdatePlace, convexDeletePlace } from '../../convex/mutationClient'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { Place, Assignment } from '../../types'
@@ -10,12 +11,14 @@ type GetState = StoreApi<TripStoreState>['getState']
 export interface PlacesSlice {
   refreshPlaces: (tripId: number | string) => Promise<void>
   addPlace: (tripId: number | string, placeData: Partial<Place>) => Promise<Place>
-  updatePlace: (tripId: number | string, placeId: number, placeData: Partial<Place>) => Promise<Place>
-  deletePlace: (tripId: number | string, placeId: number) => Promise<void>
+  updatePlace: (tripId: number | string, placeId: number | string, placeData: Partial<Place>) => Promise<Place>
+  deletePlace: (tripId: number | string, placeId: number | string) => Promise<void>
 }
 
 export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => ({
   refreshPlaces: async (tripId) => {
+    // With Convex, the bridge hook handles reactive refreshes
+    if (get().tripBackend === 'convex') return
     try {
       const data = await placesApi.list(tripId)
       set({ places: data.places })
@@ -25,6 +28,11 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
   },
 
   addPlace: async (tripId, placeData) => {
+    if (get().tripBackend === 'convex') {
+      const result = await convexCreatePlace(tripId as any, placeData as any)
+      // Convex reactivity will update the store, but return immediately
+      return result as any as Place
+    }
     try {
       const data = await placesApi.create(tripId, placeData)
       set(state => ({ places: [data.place, ...state.places] }))
@@ -35,8 +43,12 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
   },
 
   updatePlace: async (tripId, placeId, placeData) => {
+    if (get().tripBackend === 'convex') {
+      const result = await convexUpdatePlace(tripId as any, placeId as any, placeData as any)
+      return result as any as Place
+    }
     try {
-      const data = await placesApi.update(tripId, placeId, placeData)
+      const data = await placesApi.update(tripId, placeId as number, placeData)
       set(state => ({
         places: state.places.map(p => p.id === placeId ? data.place : p),
         assignments: Object.fromEntries(
@@ -53,8 +65,22 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
   },
 
   deletePlace: async (tripId, placeId) => {
+    if (get().tripBackend === 'convex') {
+      // Optimistic removal
+      set(state => ({
+        places: state.places.filter(p => p.id !== placeId),
+        assignments: Object.fromEntries(
+          Object.entries(state.assignments).map(([dayId, items]) => [
+            dayId,
+            items.filter((a: Assignment) => a.place?.id !== placeId)
+          ])
+        ),
+      }))
+      await convexDeletePlace(tripId as any, placeId as any)
+      return
+    }
     try {
-      await placesApi.delete(tripId, placeId)
+      await placesApi.delete(tripId, placeId as number)
       set(state => ({
         places: state.places.filter(p => p.id !== placeId),
         assignments: Object.fromEntries(

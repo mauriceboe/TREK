@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/J27gr9GH"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3" /></a>
   <a href="https://hub.docker.com/r/mauriceboe/trek"><img src="https://img.shields.io/docker/pulls/mauriceboe/trek" alt="Docker Pulls" /></a>
   <a href="https://github.com/mauriceboe/TREK"><img src="https://img.shields.io/github/stars/mauriceboe/TREK" alt="GitHub Stars" /></a>
@@ -98,7 +99,9 @@
 ## Quick Start
 
 ```bash
-docker run -d -p 3000:3000 -v ./data:/app/data -v ./uploads:/app/uploads mauriceboe/trek
+ENCRYPTION_KEY=$(openssl rand -hex 32) docker run -d -p 3000:3000 \
+  -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
+  -v ./data:/app/data -v ./uploads:/app/uploads mauriceboe/trek
 ```
 
 The app runs on port `3000`. The first user to register becomes the admin.
@@ -120,20 +123,54 @@ services:
   app:
     image: mauriceboe/trek:latest
     container_name: trek
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      # - OIDC_ISSUER=https://auth.example.com
-      # - OIDC_CLIENT_ID=trek
-      # - OIDC_CLIENT_SECRET=supersecret
-      # - OIDC_DISPLAY_NAME="SSO"
-      # - OIDC_ONLY=true          # disable password auth entirely
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-} # Recommended. Generate with: openssl rand -hex 32. If unset, falls back to data/.jwt_secret (existing installs) or auto-generates a key (fresh installs).
+      - TZ=${TZ:-UTC} # Timezone for logs, reminders and scheduled tasks (e.g. Europe/Berlin)
+      - LOG_LEVEL=${LOG_LEVEL:-info} # info = concise user actions; debug = verbose admin-level details
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-} # Comma-separated origins for CORS and email notification links
+      - FORCE_HTTPS=true # Redirect HTTP to HTTPS when behind a TLS-terminating proxy
+      # - COOKIE_SECURE=false # Uncomment if accessing over plain HTTP (no HTTPS). Not recommended for production.
+      - TRUST_PROXY=1 # Number of trusted proxies for X-Forwarded-For
+      # - ALLOW_INTERNAL_NETWORK=true # Uncomment if Immich or other services are on your local network (RFC-1918 IPs)
+      - APP_URL=${APP_URL:-} # Base URL of this instance — required when OIDC is enabled; must match the redirect URI registered with your IdP; Also used as the base URL for email notifications and other external links
+      # - OIDC_ISSUER=https://auth.example.com # OpenID Connect provider URL
+      # - OIDC_CLIENT_ID=trek # OpenID Connect client ID
+      # - OIDC_CLIENT_SECRET=supersecret # OpenID Connect client secret
+      # - OIDC_DISPLAY_NAME=SSO # Label shown on the SSO login button
+      # - OIDC_ONLY=false # Set to true to disable local password auth entirely (SSO only)
+      # - OIDC_ADMIN_CLAIM=groups # OIDC claim used to identify admin users
+      # - OIDC_ADMIN_VALUE=app-trek-admins # Value of the OIDC claim that grants admin role
+      # - OIDC_SCOPE=openid email profile # Fully overrides the default. Add extra scopes as needed (e.g. add groups if using OIDC_ADMIN_CLAIM)
+      # - OIDC_DISCOVERY_URL= # Override the OIDC discovery endpoint for providers with non-standard paths (e.g. Authentik)
+      # - DEMO_MODE=false # Enable demo mode (resets data hourly)
+      # - ADMIN_EMAIL=admin@trek.local # Initial admin e-mail — only used on first boot when no users exist
+      # - ADMIN_PASSWORD=changeme      # Initial admin password — only used on first boot when no users exist
+      # - MCP_RATE_LIMIT=60 # Max MCP API requests per user per minute (default: 60)
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 ```
 
 ```bash
@@ -161,6 +198,18 @@ docker run -d --name trek -p 3000:3000 -v ./data:/app/data -v ./uploads:/app/upl
 > **Tip:** Not sure which paths you used? Run `docker inspect trek --format '{{json .Mounts}}'` before removing the container.
 
 Your data is persisted in the mounted `data` and `uploads` volumes — updates never touch your existing data.
+
+### Rotating the Encryption Key
+
+If you need to rotate `ENCRYPTION_KEY` (e.g. you are upgrading from a version that derived encryption from `JWT_SECRET`), use the migration script to re-encrypt all stored secrets under the new key without starting the app:
+
+```bash
+docker exec -it trek node --import tsx scripts/migrate-encryption.ts
+```
+
+The script will prompt for your old and new keys interactively (input is not echoed). It creates a timestamped database backup before making any changes and exits with a non-zero code if anything fails.
+
+**Upgrading from a previous version?** Your old JWT secret is in `./data/.jwt_secret`. Use its contents as the "old key" and your new `ENCRYPTION_KEY` value as the "new key".
 
 ### Reverse Proxy (recommended)
 
@@ -226,17 +275,34 @@ trek.yourdomain.com {
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| **Core** | | |
 | `PORT` | Server port | `3000` |
-| `NODE_ENV` | Environment | `production` |
-| `JWT_SECRET` | JWT signing secret | Auto-generated |
-| `FORCE_HTTPS` | Redirect HTTP to HTTPS | `false` |
-| `OIDC_ISSUER` | OIDC provider URL | — |
+| `NODE_ENV` | Environment (`production` / `development`) | `production` |
+| `ENCRYPTION_KEY` | At-rest encryption key for stored secrets (API keys, MFA, SMTP, OIDC). Recommended: generate with `openssl rand -hex 32`. If unset, falls back to `data/.jwt_secret` (existing installs) or auto-generates a key (fresh installs). | Auto |
+| `TZ` | Timezone for logs, reminders and cron jobs (e.g. `Europe/Berlin`) | `UTC` |
+| `LOG_LEVEL` | `info` = concise user actions, `debug` = verbose details | `info` |
+| `ALLOWED_ORIGINS` | Comma-separated origins for CORS and email links | same-origin |
+| `FORCE_HTTPS` | Redirect HTTP to HTTPS behind a TLS-terminating proxy | `false` |
+| `COOKIE_SECURE` | Set to `false` to allow session cookies over plain HTTP (e.g. accessing via IP without HTTPS). Defaults to `true` in production. **Not recommended to disable in production.** | `true` |
+| `TRUST_PROXY` | Number of trusted reverse proxies for `X-Forwarded-For` | `1` |
+| `ALLOW_INTERNAL_NETWORK` | Allow outbound requests to private/RFC-1918 IP addresses. Set to `true` if Immich or other integrated services are hosted on your local network. Loopback (`127.x`) and link-local/metadata addresses (`169.254.x`) are always blocked regardless of this setting. | `false` |
+| `APP_URL` | Public base URL of this instance (e.g. `https://trek.example.com`). Required when OIDC is enabled — must match the redirect URI registered with your IdP. Also used as the base URL for external links in email notifications. | — |
+| **OIDC / SSO** | | |
+| `OIDC_ISSUER` | OpenID Connect provider URL | — |
 | `OIDC_CLIENT_ID` | OIDC client ID | — |
 | `OIDC_CLIENT_SECRET` | OIDC client secret | — |
-| `OIDC_DISPLAY_NAME` | SSO button label | `SSO` |
-| `OIDC_ONLY` | Disable password auth | `false` |
-| `TRUST_PROXY` | Trust proxy headers | `1` |
-| `DEMO_MODE` | Enable demo mode | `false` |
+| `OIDC_DISPLAY_NAME` | Label shown on the SSO login button | `SSO` |
+| `OIDC_ONLY` | Disable local password auth entirely (first SSO login becomes admin) | `false` |
+| `OIDC_ADMIN_CLAIM` | OIDC claim used to identify admin users | — |
+| `OIDC_ADMIN_VALUE` | Value of the OIDC claim that grants admin role | — |
+| `OIDC_SCOPE` | Space-separated OIDC scopes to request. **Fully replaces** the default — always include `openid email profile` plus any extra scopes you need (e.g. add `groups` when using `OIDC_ADMIN_CLAIM`) | `openid email profile` |
+| `OIDC_DISCOVERY_URL` | Override the auto-constructed OIDC discovery endpoint. Useful for providers that expose it at a non-standard path (e.g. Authentik: `https://auth.example.com/application/o/trek/.well-known/openid-configuration`) | — |
+| **Initial Setup** | | |
+| `ADMIN_EMAIL` | Email for the first admin account created on initial boot. Must be set together with `ADMIN_PASSWORD`. If either is omitted a random password is generated and printed to the server log. Has no effect once any user exists. | `admin@trek.local` |
+| `ADMIN_PASSWORD` | Password for the first admin account created on initial boot. Must be set together with `ADMIN_EMAIL`. | random |
+| **Other** | | |
+| `DEMO_MODE` | Enable demo mode (hourly data resets) | `false` |
+| `MCP_RATE_LIMIT` | Max MCP API requests per user per minute | `60` |
 
 ## Optional API Keys
 
@@ -261,6 +327,7 @@ docker build -t trek .
 
 - **Database**: SQLite, stored in `./data/travel.db`
 - **Uploads**: Stored in `./uploads/`
+- **Logs**: `./data/logs/trek.log` (auto-rotated)
 - **Backups**: Create and restore via Admin Panel
 - **Auto-Backups**: Configurable schedule and retention in Admin Panel
 

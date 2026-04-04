@@ -1,0 +1,7 @@
+{
+  "setup": [
+    "docker compose up -d"
+  ],
+  "teardown": [],
+  "run": []
+}

@@ -213,5 +213,5 @@ function PhotoThumbnail({ photo, days, places, onClick }: PhotoThumbnailProps) {
 
 function formatDate(dateStr, locale) {
   if (!dateStr) return ''
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+  return new Date(dateStr + 'T00:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }

@@ -4,6 +4,9 @@ import { JWT_SECRET } from './config';
 import { db, canAccessTrip } from './db/database';
 import { User } from './types';
 import http from 'http';
+import type { Request } from 'express';
+import { getRequestToken } from './middleware/auth';
+import { verifyConvexToken } from './lib/convexAuth';
 
 interface NomadWebSocket extends WebSocket {
   isAlive: boolean;
@@ -24,6 +27,27 @@ let nextSocketId = 1;
 
 let wss: WebSocketServer | null = null;
 
+async function authenticateSocketToken(token: string): Promise<User | undefined> {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
+    return db.prepare(
+      'SELECT id, username, email, role, better_auth_user_id FROM users WHERE id = ?'
+    ).get(decoded.id) as User | undefined;
+  } catch {
+    const payload = await verifyConvexToken(token);
+    const subject = typeof payload.sub === 'string' ? payload.sub : null;
+    const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : null;
+    if (!subject && !email) return undefined;
+    return db.prepare(
+      `SELECT id, username, email, role, better_auth_user_id
+       FROM users
+       WHERE better_auth_user_id = ?
+          OR LOWER(email) = LOWER(?)
+       LIMIT 1`
+    ).get(subject, email) as User | undefined;
+  }
+}
+
 /** Attaches a WebSocket server with JWT auth, room-based trip channels, and heartbeat keep-alive. */
 function setupWebSocket(server: http.Server): void {
   wss = new WebSocketServer({ server, path: '/ws' });
@@ -40,11 +64,10 @@ function setupWebSocket(server: http.Server): void {
 
   wss.on('close', () => clearInterval(heartbeat));
 
-  wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  wss.on('connection', async (ws: WebSocket, req: http.IncomingMessage) => {
     const nws = ws as NomadWebSocket;
-    // Extract token from query param
     const url = new URL(req.url!, 'http://localhost');
-    const token = url.searchParams.get('token');
+    const token = getRequestToken(req as unknown as Request) || url.searchParams.get('token');
 
     if (!token) {
       nws.close(4001, 'Authentication required');
@@ -53,10 +76,7 @@ function setupWebSocket(server: http.Server): void {
 
     let user: User | undefined;
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
-      user = db.prepare(
-        'SELECT id, username, email, role FROM users WHERE id = ?'
-      ).get(decoded.id) as User | undefined;
+      user = await authenticateSocketToken(token);
       if (!user) {
         nws.close(4001, 'User not found');
         return;

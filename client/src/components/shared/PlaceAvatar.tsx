@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { mapsApi } from '../../api/client'
+import React, { useState, useEffect, useRef } from 'react'
 import { getCategoryIcon } from './categoryIcons'
+import { getCached, isLoading, fetchPhoto, onThumbReady } from '../../services/photoService'
 import type { Place } from '../../types'
 
 interface Category {
@@ -14,48 +14,52 @@ interface PlaceAvatarProps {
   category?: Category | null
 }
 
-const photoCache = new Map<string, string | null>()
-const photoInFlight = new Set<string>()
-
-export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarProps) {
+export default React.memo(function PlaceAvatar({ place, size = 32, category }: PlaceAvatarProps) {
   const [photoSrc, setPhotoSrc] = useState<string | null>(place.image_url || null)
+  const [visible, setVisible] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Observe visibility — fetch photo only when avatar enters viewport
+  useEffect(() => {
+    if (place.image_url) { setVisible(true); return }
+    const el = ref.current
+    if (!el) return
+    // Check if already cached — show immediately without waiting for intersection
+    const photoId = place.google_place_id || place.osm_id
+    const cacheKey = photoId || `${place.lat},${place.lng}`
+    if (cacheKey && getCached(cacheKey)) { setVisible(true); return }
+
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect() } }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [place.id])
 
   useEffect(() => {
+    if (!visible) return
     if (place.image_url) { setPhotoSrc(place.image_url); return }
     const photoId = place.google_place_id || place.osm_id
     if (!photoId && !(place.lat && place.lng)) { setPhotoSrc(null); return }
 
     const cacheKey = photoId || `${place.lat},${place.lng}`
-    if (photoCache.has(cacheKey)) {
-      const cached = photoCache.get(cacheKey)
-      if (cached) setPhotoSrc(cached)
+
+    const cached = getCached(cacheKey)
+    if (cached) {
+      setPhotoSrc(cached.thumbDataUrl || cached.photoUrl)
+      if (!cached.thumbDataUrl && cached.photoUrl) {
+        return onThumbReady(cacheKey, thumb => setPhotoSrc(thumb))
+      }
       return
     }
 
-    if (photoInFlight.has(cacheKey)) {
-      // Another instance is already fetching, wait for it
-      const check = setInterval(() => {
-        if (photoCache.has(cacheKey)) {
-          clearInterval(check)
-          const cached = photoCache.get(cacheKey)
-          if (cached) setPhotoSrc(cached)
-        }
-      }, 200)
-      return () => clearInterval(check)
+    if (isLoading(cacheKey)) {
+      return onThumbReady(cacheKey, thumb => setPhotoSrc(thumb))
     }
-    photoInFlight.add(cacheKey)
-    mapsApi.placePhoto(photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
-      .then((data: { photoUrl?: string }) => {
-        if (data.photoUrl) {
-          photoCache.set(cacheKey, data.photoUrl)
-          setPhotoSrc(data.photoUrl)
-        } else {
-          photoCache.set(cacheKey, null)
-        }
-        photoInFlight.delete(cacheKey)
-      })
-      .catch(() => { photoCache.set(cacheKey, null); photoInFlight.delete(cacheKey) })
-  }, [place.id, place.image_url, place.google_place_id, place.osm_id])
+
+    fetchPhoto(cacheKey, photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name,
+      entry => { setPhotoSrc(entry.thumbDataUrl || entry.photoUrl) }
+    )
+    return onThumbReady(cacheKey, thumb => setPhotoSrc(thumb))
+  }, [visible, place.id, place.image_url, place.google_place_id, place.osm_id])
 
   const bgColor = category?.color || '#6366f1'
   const IconComp = getCategoryIcon(category?.icon)
@@ -72,10 +76,11 @@ export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarP
 
   if (photoSrc) {
     return (
-      <div style={containerStyle}>
+      <div ref={ref} style={containerStyle}>
         <img
           src={photoSrc}
           alt={place.name}
+          decoding="async"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setPhotoSrc(null)}
         />
@@ -84,8 +89,8 @@ export default function PlaceAvatar({ place, size = 32, category }: PlaceAvatarP
   }
 
   return (
-    <div style={containerStyle}>
+    <div ref={ref} style={containerStyle}>
       <IconComp size={iconSize} strokeWidth={1.8} color="rgba(255,255,255,0.92)" />
     </div>
   )
-}
+})

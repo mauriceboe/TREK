@@ -131,8 +131,10 @@ export default function PackingTemplateManager() {
 
   const handleRenameItem = async (itemId: number) => {
     if (!editItemName.trim() || !expandedId) { setEditingItemId(null); return }
+    const catId = items.find(i => i.id === itemId)?.category_id
+    if (catId == null) return
     try {
-      await adminApi.updateTemplateItem(expandedId, itemId, { name: editItemName.trim() })
+      await adminApi.updateTemplateItem(expandedId, catId, itemId, { name: editItemName.trim() })
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, name: editItemName.trim() } : i))
       setEditingItemId(null)
     } catch { toast.error(t('admin.packingTemplates.saveError')) }
@@ -140,8 +142,10 @@ export default function PackingTemplateManager() {
 
   const handleDeleteItem = async (itemId: number) => {
     if (!expandedId) return
+    const catId = items.find(i => i.id === itemId)?.category_id
+    if (catId == null) return
     try {
-      await adminApi.deleteTemplateItem(expandedId, itemId)
+      await adminApi.deleteTemplateItem(expandedId, catId, itemId)
       setItems(prev => prev.filter(i => i.id !== itemId))
     } catch { toast.error(t('admin.packingTemplates.deleteError')) }
   }

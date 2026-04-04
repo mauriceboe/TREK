@@ -13,22 +13,79 @@ export interface User {
 }
 
 export interface Trip {
-  id: number
+  id: number | string
   name: string
+  title: string | null
   description: string | null
+  currency: string | null
   start_date: string
   end_date: string
   cover_url: string | null
+  cover_image?: string | null
   is_archived: boolean
   owner_id: number
+  user_id?: number
+  reminder_days?: number
+  destination_name: string | null
+  destination_address: string | null
+  destination_lat: number | null
+  destination_lng: number | null
+  destination_viewport_south: number | null
+  destination_viewport_west: number | null
+  destination_viewport_north: number | null
+  destination_viewport_east: number | null
   created_at: string
   updated_at: string
 }
 
+export interface TripLeg {
+  id: number | string
+  trip_id: number | string
+  destination_name: string
+  destination_address: string | null
+  destination_lat: number | null
+  destination_lng: number | null
+  destination_viewport_south: number | null
+  destination_viewport_west: number | null
+  destination_viewport_north: number | null
+  destination_viewport_east: number | null
+  start_day_number: number
+  end_day_number: number
+  color: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RecommendedPlace {
+  google_place_id: string | null
+  name: string
+  address: string
+  lat: number | null
+  lng: number | null
+  rating: number | null
+  rating_count: number | null
+  primary_type: string | null
+  primary_type_label: string | null
+  types: string[]
+  website: string | null
+  phone: string | null
+  google_maps_url: string | null
+  source: 'google'
+}
+
+export interface AutocompleteSuggestion {
+  place_id: string
+  text: string
+  primary_text: string
+  secondary_text: string
+  types: string[]
+}
+
 export interface Day {
-  id: number
-  trip_id: number
+  id: number | string
+  trip_id: number | string
   date: string
+  day_number: number
   title: string | null
   notes: string | null
   assignments: Assignment[]
@@ -36,36 +93,51 @@ export interface Day {
 }
 
 export interface Place {
-  id: number
-  trip_id: number
+  id: number | string
+  trip_id: number | string
   name: string
   description: string | null
+  notes?: string | null
   lat: number | null
   lng: number | null
   address: string | null
   category_id: number | null
+  category?: string | null
+  category_name?: string | null
+  category_icon?: string | null
+  category_color?: string | null
   icon: string | null
   price: string | null
+  currency?: string | null
   image_url: string | null
   google_place_id: string | null
   osm_id: string | null
   place_time: string | null
   end_time: string | null
+  phone?: string | null
+  website?: string | null
+  transport_mode?: string | null
+  route_geometry?: string | null
   created_at: string
 }
 
 export interface Assignment {
-  id: number
-  day_id: number
-  place_id?: number
+  id: number | string
+  day_id: number | string
+  place_id?: number | string
+  start_day_id?: number | string
+  end_day_id?: number | string
   order_index: number
+  sort_order?: number
   notes: string | null
   place: Place
+  place_name?: string
+  participants?: { user_id: number; username: string; avatar?: string | null }[]
 }
 
 export interface DayNote {
-  id: number
-  day_id: number
+  id: number | string
+  day_id: number | string
   text: string
   time: string | null
   icon: string | null
@@ -80,19 +152,22 @@ export interface PackingItem {
   category: string | null
   checked: number
   quantity: number
+  weight_grams: number | null
+  bag_id: number | null
 }
 
 export interface Tag {
-  id: number
+  id: number | string
   name: string
   color: string | null
   user_id: number
 }
 
 export interface Category {
-  id: number
+  id: number | string
   name: string
   icon: string | null
+  color?: string | null
   user_id: number
 }
 
@@ -101,15 +176,22 @@ export interface BudgetItem {
   trip_id: number
   name: string
   amount: number
+  total_price: number | null
   currency: string
   category: string | null
   paid_by: number | null
   persons: number
+  days?: number
+  date?: string | null
+  expense_date?: string | null
+  note?: string | null
   members: BudgetMember[]
 }
 
 export interface BudgetMember {
   user_id: number
+  username: string
+  avatar_url: string | null
   paid: boolean
 }
 
@@ -122,10 +204,15 @@ export interface Reservation {
   status: 'pending' | 'confirmed'
   date: string | null
   time: string | null
+  reservation_time?: string | null
+  reservation_end_time?: string | null
+  location?: string | null
   confirmation_number: string | null
   notes: string | null
   url: string | null
+  assignment_id?: number | string | null
   accommodation_id?: number | null
+  accommodation_name?: string | null
   metadata?: Record<string, string> | null
   created_at: string
 }
@@ -149,6 +236,8 @@ export interface TripFile {
   created_at: string
   reservation_title?: string
   url?: string
+  linked_place_ids?: number[]
+  linked_reservation_ids?: number[]
 }
 
 export interface Settings {
@@ -163,6 +252,9 @@ export interface Settings {
   time_format: string
   show_place_description: boolean
   route_calculation?: boolean
+  blur_booking_codes?: boolean
+  dashboard_currency?: string
+  dashboard_timezone?: string
 }
 
 export interface AssignmentsMap {
@@ -194,6 +286,7 @@ export interface RouteResult {
 export interface Waypoint {
   lat: number
   lng: number
+  _assignmentId?: number | string
 }
 
 // User with optional OIDC fields
@@ -212,6 +305,9 @@ export interface Accommodation {
   confirmation_number: string | null
   notes: string | null
   url: string | null
+  place_id?: number | null
+  start_day_id?: number | string | null
+  end_day_id?: number | string | null
   created_at: string
 }
 
@@ -221,6 +317,7 @@ export interface TripMember {
   username: string
   email?: string
   avatar_url?: string | null
+  avatar?: string | null
   role?: string
 }
 
@@ -232,6 +329,8 @@ export interface Photo {
   original_name: string
   mime_type: string
   size: number
+  file_size: number | null
+  url: string
   caption: string | null
   place_id: number | null
   day_id: number | null
@@ -298,6 +397,7 @@ export interface VacayPlan {
   holidays_region: string | null
   holiday_calendars: VacayHolidayCalendar[]
   block_weekends: boolean
+  weekend_days: string | null
   carry_over_enabled: boolean
   company_holidays_enabled: boolean
   name?: string
@@ -323,6 +423,7 @@ export interface VacayEntry {
 
 export interface VacayStat {
   user_id: number
+  person_name?: string
   vacation_days: number
   used: number
 }

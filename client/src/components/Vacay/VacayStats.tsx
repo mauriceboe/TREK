@@ -10,6 +10,8 @@ interface VacayStatExtended extends VacayStat {
   avatar_url: string | null
   color: string | null
   total_available: number
+  remaining: number
+  carried_over: number
 }
 
 export default function VacayStats() {
@@ -35,7 +37,7 @@ export default function VacayStats() {
           {stats.map(s => (
             <StatCard
               key={s.user_id}
-              stat={s}
+              stat={s as VacayStatExtended}
               isMe={s.user_id === currentUser?.id}
               canEdit={s.user_id === currentUser?.id || isFused}
               selectedYear={selectedYear}
@@ -54,13 +56,13 @@ interface StatCardProps {
   isMe: boolean
   canEdit: boolean
   selectedYear: number
-  onSave: (userId: number, year: number, days: number) => Promise<void>
-  t: (key: string) => string
+  onSave: (year: number, days: number, targetUserId?: number) => Promise<void>
+  t: (key: string, params?: Record<string, string | number>) => string
 }
 
 function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardProps) {
   const [editing, setEditing] = useState(false)
-  const [localDays, setLocalDays] = useState(s.vacation_days)
+  const [localDays, setLocalDays] = useState<number | string>(s.vacation_days)
   const pct = s.total_available > 0 ? Math.min(100, (s.used / s.total_available) * 100) : 0
 
   // Sync local state when stats reload from server
@@ -70,7 +72,7 @@ function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardP
 
   const handleSave = () => {
     setEditing(false)
-    const days = parseInt(localDays)
+    const days = typeof localDays === 'string' ? parseInt(localDays) : localDays
     if (!isNaN(days) && days >= 0 && days <= 365 && days !== s.vacation_days) {
       onSave(selectedYear, days, s.user_id)
     }
@@ -79,7 +81,7 @@ function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardP
   return (
     <div className="rounded-lg p-2.5 space-y-2" style={{ border: '1px solid var(--border-secondary)' }}>
       <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.person_color }} />
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color || undefined }} />
         <span className="text-xs font-semibold flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
           {s.person_name}
           {isMe && <span style={{ color: 'var(--text-faint)' }}> ({t('vacay.you')})</span>}
@@ -87,7 +89,7 @@ function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardP
         <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{s.used}/{s.total_available}</span>
       </div>
       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: s.person_color }} />
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: s.color || undefined }} />
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {/* Days — editable */}

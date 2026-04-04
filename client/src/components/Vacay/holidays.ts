@@ -104,27 +104,27 @@ export function getHolidays(year: number, bundesland: string = 'NW'): Record<str
 }
 
 export function isWeekend(dateStr: string, weekendDays: number[] = [0, 6]): boolean {
-  const d = new Date(dateStr + 'T00:00:00')
-  return weekendDays.includes(d.getDay())
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return weekendDays.includes(d.getUTCDay())
 }
 
 export function getWeekday(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()]
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getUTCDay()]
 }
 
 export function getWeekdayFull(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][d.getDay()]
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][d.getUTCDay()]
 }
 
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
 }
 
-export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+export function formatDate(dateStr: string, locale?: string): string {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return d.toLocaleDateString(locale || undefined, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
 }
 
 export { BUNDESLAENDER }

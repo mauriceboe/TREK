@@ -11,17 +11,19 @@ interface CustomDatePickerProps {
   onChange: (value: string) => void
   placeholder?: string
   style?: React.CSSProperties
+  compact?: boolean
+  borderless?: boolean
 }
 
-export function CustomDatePicker({ value, onChange, placeholder, style = {} }: CustomDatePickerProps) {
+export function CustomDatePicker({ value, onChange, placeholder, style = {}, compact = false, borderless = false }: CustomDatePickerProps) {
   const { locale, t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
-  const parsed = value ? new Date(value + 'T00:00:00') : null
-  const [viewYear, setViewYear] = useState(parsed?.getFullYear() || new Date().getFullYear())
-  const [viewMonth, setViewMonth] = useState(parsed?.getMonth() ?? new Date().getMonth())
+  const parsed = value ? new Date(value + 'T00:00:00Z') : null
+  const [viewYear, setViewYear] = useState(parsed?.getUTCFullYear() || new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(parsed?.getUTCMonth() ?? new Date().getMonth())
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -34,7 +36,7 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
   }, [open])
 
   useEffect(() => {
-    if (open && parsed) { setViewYear(parsed.getFullYear()); setViewMonth(parsed.getMonth()) }
+    if (open && parsed) { setViewYear(parsed.getUTCFullYear()); setViewMonth(parsed.getUTCMonth()) }
   }, [open])
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) } else setViewMonth(m => m - 1) }
@@ -45,7 +47,7 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
   const startDay = (getWeekday(viewYear, viewMonth, 1) + 6) % 7
   const weekdays = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, i + 1).toLocaleDateString(locale, { weekday: 'narrow' }))
 
-  const displayValue = parsed ? parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null
+  const displayValue = parsed ? parsed.toLocaleDateString(locale, compact ? { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' } : { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null
 
   const selectDay = (day: number) => {
     const y = String(viewYear)
@@ -55,7 +57,7 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
     setOpen(false)
   }
 
-  const selectedDay = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth ? parsed.getDate() : null
+  const selectedDay = parsed && parsed.getUTCFullYear() === viewYear && parsed.getUTCMonth() === viewMonth ? parsed.getUTCDate() : null
   const today = new Date()
   const isToday = (d: number) => today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d
 
@@ -97,16 +99,16 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {} }: C
       ) : (
       <button type="button" onClick={() => setOpen(o => !o)} onDoubleClick={() => { setTextInput(value || ''); setIsTyping(true) }}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 10,
-          border: '1px solid var(--border-primary)',
-          background: 'var(--bg-input)', color: displayValue ? 'var(--text-primary)' : 'var(--text-faint)',
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: compact ? 4 : 8,
+          padding: compact ? '4px 6px' : '8px 14px', borderRadius: compact ? 4 : 10,
+          border: borderless ? 'none' : '1px solid var(--border-primary)',
+          background: borderless ? 'transparent' : 'var(--bg-input)', color: displayValue ? 'var(--text-primary)' : 'var(--text-faint)',
           fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
           transition: 'border-color 0.15s',
         }}
         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--text-faint)'}
         onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-primary)' }}>
-        <Calendar size={14} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+        {!compact && <Calendar size={14} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />}
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayValue || placeholder || t('common.date')}</span>
       </button>
       )}

@@ -41,9 +41,14 @@ export default function VacayPage(): React.ReactElement {
     if (selectedYear) { loadEntries(selectedYear); loadStats(selectedYear); loadHolidays(selectedYear) }
   }, [selectedYear])
 
-  const handleAddYear = () => {
+  const handleAddNextYear = () => {
     const nextYear = years.length > 0 ? Math.max(...years) + 1 : new Date().getFullYear()
     addYear(nextYear)
+  }
+
+  const handleAddPrevYear = () => {
+    const prevYear = years.length > 0 ? Math.min(...years) - 1 : new Date().getFullYear()
+    addYear(prevYear)
   }
 
   if (loading) {
@@ -62,20 +67,27 @@ export default function VacayPage(): React.ReactElement {
     <>
       {/* Year Selector */}
       <div className="rounded-xl border p-3" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center mb-2">
           <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>{t('vacay.year')}</span>
-          <button onClick={handleAddYear} className="p-0.5 rounded transition-colors" style={{ color: 'var(--text-faint)' }} title={t('vacay.addYear')}>
-            <Plus size={14} />
-          </button>
         </div>
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => { const idx = years.indexOf(selectedYear); if (idx > 0) setSelectedYear(years[idx - 1]) }} disabled={years.indexOf(selectedYear) <= 0} className="p-1 lg:p-1 p-2 rounded-lg disabled:opacity-20 transition-colors" style={{ background: 'var(--bg-secondary)' }}>
-            <ChevronLeft size={16} style={{ color: 'var(--text-muted)' }} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={handleAddPrevYear} className="p-0.5 rounded transition-colors" style={{ color: 'var(--text-faint)' }} title={t('vacay.addPrevYear')}>
+              <Plus size={14} />
+            </button>
+            <button onClick={() => { const idx = years.indexOf(selectedYear); if (idx > 0) setSelectedYear(years[idx - 1]) }} disabled={years.indexOf(selectedYear) <= 0} className="p-1 rounded-lg disabled:opacity-20 transition-colors" style={{ background: 'var(--bg-secondary)' }}>
+              <ChevronLeft size={16} style={{ color: 'var(--text-muted)' }} />
+            </button>
+          </div>
           <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{selectedYear}</span>
-          <button onClick={() => { const idx = years.indexOf(selectedYear); if (idx < years.length - 1) setSelectedYear(years[idx + 1]) }} disabled={years.indexOf(selectedYear) >= years.length - 1} className="p-1 lg:p-1 p-2 rounded-lg disabled:opacity-20 transition-colors" style={{ background: 'var(--bg-secondary)' }}>
-            <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => { const idx = years.indexOf(selectedYear); if (idx < years.length - 1) setSelectedYear(years[idx + 1]) }} disabled={years.indexOf(selectedYear) >= years.length - 1} className="p-1 rounded-lg disabled:opacity-20 transition-colors" style={{ background: 'var(--bg-secondary)' }}>
+              <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+            </button>
+            <button onClick={handleAddNextYear} className="p-0.5 rounded transition-colors" style={{ color: 'var(--text-faint)' }} title={t('vacay.addYear')}>
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-4 gap-1">
           {years.map(y => (
@@ -219,18 +231,18 @@ export default function VacayPage(): React.ReactElement {
         <div className="fixed inset-0 flex items-center justify-center px-4"
           style={{ zIndex: 99995, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
           {incomingInvites.map(inv => (
-            <div key={inv.id} className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+            <div key={inv.plan_id} className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
               style={{ background: 'var(--bg-card)', animation: 'modalIn 0.25s ease-out' }}>
               <div className="px-6 pt-6 pb-4 text-center">
                 <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center text-lg font-bold"
                   style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
-                  {inv.username?.[0]?.toUpperCase()}
+                  {inv.owner_username?.[0]?.toUpperCase()}
                 </div>
                 <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
                   {t('vacay.inviteTitle')}
                 </h2>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{inv.username}</span> {t('vacay.inviteWantsToFuse')}
+                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{inv.owner_username}</span> {t('vacay.inviteWantsToFuse')}
                 </p>
               </div>
               <div className="px-6 pb-4 space-y-2">
@@ -268,7 +280,7 @@ export default function VacayPage(): React.ReactElement {
   )
 }
 
-function InfoItem({ icon: Icon, text }: { icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>; text: string }): React.ReactElement {
+function InfoItem({ icon: Icon, text }: { icon: React.ComponentType<any>; text: string }): React.ReactElement {
   return (
     <div className="flex items-start gap-3 px-3 py-2 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
       <Icon size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />

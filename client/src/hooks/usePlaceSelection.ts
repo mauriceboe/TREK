@@ -9,9 +9,9 @@ export function usePlaceSelection() {
     setSelectedAssignmentId(null)
   }, [])
 
-  const selectAssignment = useCallback((assignmentId: number | null, placeId: number | null) => {
-    setSelectedAssignmentId(assignmentId)
-    _setSelectedPlaceId(placeId)
+  const selectAssignment = useCallback((assignmentId: number | string | null, placeId?: number | string | null) => {
+    setSelectedAssignmentId(assignmentId as number | null)
+    if (placeId !== undefined) _setSelectedPlaceId(placeId as number | null)
   }, [])
 
   return { selectedPlaceId, selectedAssignmentId, setSelectedPlaceId, selectAssignment }

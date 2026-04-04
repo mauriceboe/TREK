@@ -321,6 +321,111 @@ function runMigrations(db: Database.Database): void {
         UNIQUE(file_id, place_id)
       )`);
     },
+    // Destination fields on trips
+    () => {
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_name TEXT'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_address TEXT'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_lat REAL'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_lng REAL'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_viewport_south REAL'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_viewport_west REAL'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_viewport_north REAL'); } catch {}
+      try { db.exec('ALTER TABLE trips ADD COLUMN destination_viewport_east REAL'); } catch {}
+    },
+    // Multi-city trip legs
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS trip_legs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+          destination_name TEXT NOT NULL,
+          destination_address TEXT,
+          destination_lat REAL,
+          destination_lng REAL,
+          destination_viewport_south REAL,
+          destination_viewport_west REAL,
+          destination_viewport_north REAL,
+          destination_viewport_east REAL,
+          start_day_number INTEGER NOT NULL,
+          end_day_number INTEGER NOT NULL,
+          color TEXT DEFAULT '#0f766e',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_trip_legs_trip_id ON trip_legs(trip_id);
+        CREATE INDEX IF NOT EXISTS idx_trip_legs_trip_range ON trip_legs(trip_id, start_day_number, end_day_number);
+      `);
+    },
+    () => {
+      try { db.exec('ALTER TABLE users ADD COLUMN better_auth_user_id TEXT'); } catch {}
+      try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_better_auth_user_id ON users(better_auth_user_id)'); } catch {}
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS better_auth_users (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          emailVerified INTEGER NOT NULL,
+          image TEXT,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          username TEXT UNIQUE,
+          displayUsername TEXT
+        );
+        CREATE TABLE IF NOT EXISTS better_auth_sessions (
+          id TEXT PRIMARY KEY NOT NULL,
+          expiresAt DATETIME NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL,
+          ipAddress TEXT,
+          userAgent TEXT,
+          userId TEXT NOT NULL REFERENCES better_auth_users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS better_auth_accounts (
+          id TEXT PRIMARY KEY NOT NULL,
+          accountId TEXT NOT NULL,
+          providerId TEXT NOT NULL,
+          userId TEXT NOT NULL REFERENCES better_auth_users(id) ON DELETE CASCADE,
+          accessToken TEXT,
+          refreshToken TEXT,
+          idToken TEXT,
+          accessTokenExpiresAt DATETIME,
+          refreshTokenExpiresAt DATETIME,
+          scope TEXT,
+          password TEXT,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS better_auth_verifications (
+          id TEXT PRIMARY KEY NOT NULL,
+          identifier TEXT NOT NULL,
+          value TEXT NOT NULL,
+          expiresAt DATETIME NOT NULL,
+          createdAt DATETIME NOT NULL,
+          updatedAt DATETIME NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_better_auth_sessions_user_id ON better_auth_sessions(userId);
+        CREATE INDEX IF NOT EXISTS idx_better_auth_accounts_user_id ON better_auth_accounts(userId);
+        CREATE INDEX IF NOT EXISTS idx_better_auth_verifications_identifier ON better_auth_verifications(identifier);
+      `);
+    },
+    // Audit log table
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          action TEXT NOT NULL,
+          resource TEXT,
+          details TEXT,
+          ip TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+        CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {

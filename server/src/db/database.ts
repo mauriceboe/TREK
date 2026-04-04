@@ -72,6 +72,11 @@ function reinitialize(): void {
   console.log('[DB] Database reinitialized successfully');
 }
 
+function getRawDb(): Database.Database {
+  if (!_db) throw new Error('Database connection is not available');
+  return _db;
+}
+
 interface PlaceWithCategory extends Place {
   category_name: string | null;
   category_color: string | null;
@@ -128,4 +133,4 @@ function isOwner(tripId: number | string, userId: number): boolean {
   return !!_db!.prepare('SELECT id FROM trips WHERE id = ? AND user_id = ?').get(tripId, userId);
 }
 
-export { db, closeDb, reinitialize, getPlaceWithTags, canAccessTrip, isOwner };
+export { db, closeDb, reinitialize, getRawDb, getPlaceWithTags, canAccessTrip, isOwner };

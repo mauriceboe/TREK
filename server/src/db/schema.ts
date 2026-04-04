@@ -7,6 +7,7 @@ function createTables(db: Database.Database): void {
       username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      better_auth_user_id TEXT UNIQUE,
       role TEXT NOT NULL DEFAULT 'user',
       maps_api_key TEXT,
       unsplash_api_key TEXT,
@@ -20,6 +21,58 @@ function createTables(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS better_auth_users (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      emailVerified INTEGER NOT NULL,
+      image TEXT,
+      createdAt DATETIME NOT NULL,
+      updatedAt DATETIME NOT NULL,
+      username TEXT UNIQUE,
+      displayUsername TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS better_auth_sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      expiresAt DATETIME NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      createdAt DATETIME NOT NULL,
+      updatedAt DATETIME NOT NULL,
+      ipAddress TEXT,
+      userAgent TEXT,
+      userId TEXT NOT NULL REFERENCES better_auth_users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS better_auth_accounts (
+      id TEXT PRIMARY KEY NOT NULL,
+      accountId TEXT NOT NULL,
+      providerId TEXT NOT NULL,
+      userId TEXT NOT NULL REFERENCES better_auth_users(id) ON DELETE CASCADE,
+      accessToken TEXT,
+      refreshToken TEXT,
+      idToken TEXT,
+      accessTokenExpiresAt DATETIME,
+      refreshTokenExpiresAt DATETIME,
+      scope TEXT,
+      password TEXT,
+      createdAt DATETIME NOT NULL,
+      updatedAt DATETIME NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS better_auth_verifications (
+      id TEXT PRIMARY KEY NOT NULL,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      expiresAt DATETIME NOT NULL,
+      createdAt DATETIME NOT NULL,
+      updatedAt DATETIME NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_better_auth_sessions_user_id ON better_auth_sessions(userId);
+    CREATE INDEX IF NOT EXISTS idx_better_auth_accounts_user_id ON better_auth_accounts(userId);
+    CREATE INDEX IF NOT EXISTS idx_better_auth_verifications_identifier ON better_auth_verifications(identifier);
 
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +92,32 @@ function createTables(db: Database.Database): void {
       currency TEXT DEFAULT 'EUR',
       cover_image TEXT,
       is_archived INTEGER DEFAULT 0,
+      destination_name TEXT,
+      destination_address TEXT,
+      destination_lat REAL,
+      destination_lng REAL,
+      destination_viewport_south REAL,
+      destination_viewport_west REAL,
+      destination_viewport_north REAL,
+      destination_viewport_east REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS trip_legs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      destination_name TEXT NOT NULL,
+      destination_address TEXT,
+      destination_lat REAL,
+      destination_lng REAL,
+      destination_viewport_south REAL,
+      destination_viewport_west REAL,
+      destination_viewport_north REAL,
+      destination_viewport_east REAL,
+      start_day_number INTEGER NOT NULL,
+      end_day_number INTEGER NOT NULL,
+      color TEXT DEFAULT '#0f766e',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -362,6 +441,8 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_day_assignments_place_id ON day_assignments(place_id);
     CREATE INDEX IF NOT EXISTS idx_place_tags_place_id ON place_tags(place_id);
     CREATE INDEX IF NOT EXISTS idx_place_tags_tag_id ON place_tags(tag_id);
+    CREATE INDEX IF NOT EXISTS idx_trip_legs_trip_id ON trip_legs(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_trip_legs_trip_range ON trip_legs(trip_id, start_day_number, end_day_number);
     CREATE INDEX IF NOT EXISTS idx_trip_members_trip_id ON trip_members(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_members_user_id ON trip_members(user_id);
     CREATE INDEX IF NOT EXISTS idx_packing_items_trip_id ON packing_items(trip_id);

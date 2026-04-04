@@ -13,7 +13,7 @@ import BackupPanel from '../components/Admin/BackupPanel'
 import GitHubPanel from '../components/Admin/GitHubPanel'
 import AddonManager from '../components/Admin/AddonManager'
 import PackingTemplateManager from '../components/Admin/PackingTemplateManager'
-import { Users, Map, Briefcase, Shield, Trash2, Edit2, Camera, FileText, Eye, EyeOff, Save, CheckCircle, XCircle, Loader2, UserPlus, ArrowUpCircle, ExternalLink, Download, AlertTriangle, RefreshCw, GitBranch, Sun, Link2, Copy, Plus } from 'lucide-react'
+import { Users, Map, Briefcase, Shield, Trash2, Edit2, Camera, FileText, Eye, EyeOff, Save, CheckCircle, XCircle, Loader2, UserPlus, ArrowUpCircle, ExternalLink, Download, AlertTriangle, RefreshCw, GitBranch, Sun, Link2, Copy, Plus, Activity, Monitor } from 'lucide-react'
 import CustomSelect from '../components/shared/CustomSelect'
 
 interface AdminUser {
@@ -49,6 +49,33 @@ interface UpdateInfo {
   current: string
   release_url?: string
   is_docker?: boolean
+  can_update?: boolean
+}
+
+interface AuditEntry {
+  id: number
+  user_id: number | null
+  username: string | null
+  email: string | null
+  action: string
+  resource: string | null
+  details: string | null
+  ip: string | null
+  created_at: string
+}
+
+interface SessionEntry {
+  id: string
+  userId: string
+  username: string | null
+  name: string | null
+  email: string
+  role: string | null
+  ipAddress: string | null
+  userAgent: string | null
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
 }
 
 export default function AdminPage(): React.ReactElement {
@@ -60,6 +87,7 @@ export default function AdminPage(): React.ReactElement {
     { id: 'config', label: t('admin.tabs.config') },
     { id: 'addons', label: t('admin.tabs.addons') },
     { id: 'settings', label: t('admin.tabs.settings') },
+    { id: 'audit', label: t('admin.tabs.audit') },
     { id: 'backup', label: t('admin.tabs.backup') },
     { id: 'github', label: t('admin.tabs.github') },
   ]
@@ -76,6 +104,14 @@ export default function AdminPage(): React.ReactElement {
   // Bag tracking
   const [bagTrackingEnabled, setBagTrackingEnabled] = useState<boolean>(false)
   useEffect(() => { adminApi.getBagTracking().then(d => setBagTrackingEnabled(d.enabled)).catch(() => {}) }, [])
+
+  // Load audit & sessions when tab is selected
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      if (auditEntries.length === 0) loadAuditLog()
+      if (sessions.length === 0) loadSessions()
+    }
+  }, [activeTab])
 
   // OIDC config
   const [oidcConfig, setOidcConfig] = useState<OidcConfig>({ issuer: '', client_id: '', client_secret: '', client_secret_set: false, display_name: '', oidc_only: false })
@@ -100,6 +136,14 @@ export default function AdminPage(): React.ReactElement {
   const [savingKeys, setSavingKeys] = useState<boolean>(false)
   const [validating, setValidating] = useState<Record<string, boolean>>({})
   const [validation, setValidation] = useState<Record<string, boolean | undefined>>({})
+
+  // Audit log & sessions
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
+  const [auditTotal, setAuditTotal] = useState<number>(0)
+  const [auditPage, setAuditPage] = useState<number>(1)
+  const [auditLoading, setAuditLoading] = useState<boolean>(false)
+  const [sessions, setSessions] = useState<SessionEntry[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState<boolean>(false)
 
   // Version check & update
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
@@ -156,6 +200,32 @@ export default function AdminPage(): React.ReactElement {
       setWeatherKey(data.settings?.openweather_api_key || '')
     } catch (err: unknown) {
       // ignore
+    }
+  }
+
+  const loadAuditLog = async (page = 1, append = false) => {
+    setAuditLoading(true)
+    try {
+      const data = await adminApi.auditLog(page, 50)
+      setAuditEntries(prev => append ? [...prev, ...data.entries] : data.entries)
+      setAuditTotal(data.total)
+      setAuditPage(page)
+    } catch {
+      toast.error(t('admin.toast.loadError'))
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
+  const loadSessions = async () => {
+    setSessionsLoading(true)
+    try {
+      const data = await adminApi.sessions()
+      setSessions(data.sessions)
+    } catch {
+      toast.error(t('admin.toast.loadError'))
+    } finally {
+      setSessionsLoading(false)
     }
   }
 
@@ -364,7 +434,7 @@ export default function AdminPage(): React.ReactElement {
                     {t('admin.update.button')}
                   </a>
                 )}
-                {updateInfo.is_docker ? (
+                {updateInfo.is_docker || updateInfo.can_update === false ? (
                   <button
                     onClick={() => setShowUpdateModal(true)}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-gray-200"
@@ -921,6 +991,184 @@ export default function AdminPage(): React.ReactElement {
             </div>
           )}
 
+          {activeTab === 'audit' && (
+            <div className="space-y-6">
+              {/* Active Sessions */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Monitor className="w-5 h-5 text-slate-600" />
+                    <div>
+                      <h2 className="font-semibold text-slate-900">{t('admin.sessions.title')}</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('admin.sessions.subtitle')}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={loadSessions}
+                    disabled={sessionsLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+                    {t('admin.audit.refresh')}
+                  </button>
+                </div>
+                {sessionsLoading && sessions.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-400">{t('admin.sessions.empty')}</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">
+                          <th className="px-5 py-3">{t('admin.sessions.col.user')}</th>
+                          <th className="px-5 py-3">{t('admin.sessions.col.ip')}</th>
+                          <th className="px-5 py-3">{t('admin.sessions.col.device')}</th>
+                          <th className="px-5 py-3">{t('admin.sessions.col.lastActive')}</th>
+                          <th className="px-5 py-3">{t('admin.sessions.col.expires')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {sessions.map(s => {
+                          const ua = s.userAgent || ''
+                          const browser = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)[\/\s]([\d.]+)/)?.[0] || ''
+                          const os = ua.match(/(Windows|Mac OS X|Linux|Android|iOS)[\s\/]?[\d._]*/)?.[0]?.replace(/_/g, '.') || ''
+                          const deviceLabel = [browser, os].filter(Boolean).join(' · ') || ua.slice(0, 40) || '—'
+                          return (
+                            <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-700">
+                                    {(s.username || s.name || s.email || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-900">{s.username || s.name || s.email}</p>
+                                    {s.role === 'admin' && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-px rounded-full bg-slate-900 text-white">
+                                        <Shield className="w-2.5 h-2.5" /> admin
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 text-sm text-slate-600 font-mono">{s.ipAddress || '—'}</td>
+                              <td className="px-5 py-3 text-sm text-slate-500 max-w-[200px] truncate" title={ua}>{deviceLabel}</td>
+                              <td className="px-5 py-3 text-sm text-slate-500">
+                                {new Date(s.updatedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12 })}
+                              </td>
+                              <td className="px-5 py-3 text-sm text-slate-500">
+                                {new Date(s.expiresAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12 })}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Audit Log */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Activity className="w-5 h-5 text-slate-600" />
+                    <div>
+                      <h2 className="font-semibold text-slate-900">{t('admin.tabs.audit')}</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('admin.audit.subtitle')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {auditTotal > 0 && (
+                      <span className="text-xs text-slate-400">
+                        {t('admin.audit.showing').replace('{count}', String(auditEntries.length)).replace('{total}', String(auditTotal))}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => loadAuditLog(1)}
+                      disabled={auditLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${auditLoading ? 'animate-spin' : ''}`} />
+                      {t('admin.audit.refresh')}
+                    </button>
+                  </div>
+                </div>
+                {auditLoading && auditEntries.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto" />
+                  </div>
+                ) : auditEntries.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-400">{t('admin.audit.empty')}</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">
+                            <th className="px-5 py-3">{t('admin.audit.col.time')}</th>
+                            <th className="px-5 py-3">{t('admin.audit.col.user')}</th>
+                            <th className="px-5 py-3">{t('admin.audit.col.action')}</th>
+                            <th className="px-5 py-3">{t('admin.audit.col.resource')}</th>
+                            <th className="px-5 py-3">{t('admin.audit.col.ip')}</th>
+                            <th className="px-5 py-3">{t('admin.audit.col.details')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {auditEntries.map(entry => {
+                            const actionColor = entry.action.includes('login_failed') || entry.action.includes('delete')
+                              ? 'bg-red-50 text-red-700'
+                              : entry.action.includes('admin')
+                              ? 'bg-amber-50 text-amber-700'
+                              : entry.action.includes('login') || entry.action.includes('register')
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-slate-100 text-slate-600'
+                            let parsedDetails: Record<string, unknown> | null = null
+                            try { if (entry.details) parsedDetails = JSON.parse(entry.details) } catch {}
+                            return (
+                              <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">
+                                  {new Date(entry.created_at).toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12 })}
+                                </td>
+                                <td className="px-5 py-3">
+                                  <p className="text-sm font-medium text-slate-900">{entry.username || entry.email || '—'}</p>
+                                </td>
+                                <td className="px-5 py-3">
+                                  <span className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full ${actionColor}`}>
+                                    {entry.action}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 text-sm text-slate-500">{entry.resource || '—'}</td>
+                                <td className="px-5 py-3 text-sm text-slate-500 font-mono">{entry.ip || '—'}</td>
+                                <td className="px-5 py-3 text-sm text-slate-400 max-w-[200px] truncate" title={entry.details || ''}>
+                                  {parsedDetails ? Object.entries(parsedDetails).map(([k, v]) => `${k}=${v}`).join(', ') : '—'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {auditEntries.length < auditTotal && (
+                      <div className="p-4 border-t border-slate-100 text-center">
+                        <button
+                          onClick={() => loadAuditLog(auditPage + 1, true)}
+                          disabled={auditLoading}
+                          className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                        >
+                          {auditLoading ? <Loader2 className="w-4 h-4 animate-spin inline mr-1.5" /> : null}
+                          {t('admin.audit.loadMore')}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'backup' && <BackupPanel />}
 
           {activeTab === 'github' && <GitHubPanel />}
@@ -1154,6 +1402,30 @@ docker run -d --name nomad \\
                         </div>
                       </div>
                     </>
+                  ) : updateInfo?.can_update === false ? (
+                    <>
+                      <p className="text-gray-700 dark:text-gray-300" style={{ fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+                        Automatic self-update is disabled on this deployment. Use your normal deployment workflow or redeploy the new release manually.
+                      </p>
+
+                      <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12, lineHeight: 1.5 }}
+                        className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                      >
+                        <div className="flex items-start gap-2">
+                          <Download className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>Create a backup first, then update through your host, CI pipeline, or deployment script.</span>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, fontSize: 12, lineHeight: 1.5 }}
+                        className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                      >
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>{t('admin.update.dataInfo')}</span>
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <p className="text-gray-700 dark:text-gray-300" style={{ fontSize: 13, lineHeight: 1.6, margin: 0 }}>
@@ -1206,7 +1478,7 @@ docker run -d --name nomad \\
                   >
                     {t('common.cancel')}
                   </button>
-                  {!updateInfo?.is_docker && (
+                  {!updateInfo?.is_docker && updateInfo?.can_update !== false && (
                     <button
                       onClick={handleInstallUpdate}
                       disabled={updating}

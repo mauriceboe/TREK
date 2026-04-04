@@ -6,11 +6,13 @@ export function currencyDecimals(currency: string): number {
   return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2
 }
 
-export function formatDate(dateStr: string | null | undefined, locale: string): string | null {
+export function formatDate(dateStr: string | null | undefined, locale: string, timeZone?: string): string | null {
   if (!dateStr) return null
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale, {
+  const opts: Intl.DateTimeFormatOptions = {
     weekday: 'short', day: 'numeric', month: 'short',
-  })
+    timeZone: timeZone || 'UTC',
+  }
+  return new Date(dateStr + 'T00:00:00Z').toLocaleDateString(locale, opts)
 }
 
 export function formatTime(timeStr: string | null | undefined, locale: string, timeFormat: string): string {

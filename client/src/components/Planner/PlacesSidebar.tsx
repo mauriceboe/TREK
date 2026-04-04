@@ -7,27 +7,34 @@ import { getCategoryIcon } from '../shared/categoryIcons'
 import { useTranslation } from '../../i18n'
 import CustomSelect from '../shared/CustomSelect'
 import { useContextMenu, ContextMenu } from '../shared/ContextMenu'
-import type { Place, Category, Day, AssignmentsMap } from '../../types'
+import RecommendedPlacesSection from './RecommendedPlacesSection'
+import type { Place, Category, Day, AssignmentsMap, Trip, TripLeg } from '../../types'
 
 interface PlacesSidebarProps {
   places: Place[]
   categories: Category[]
   assignments: AssignmentsMap
-  selectedDayId: number | null
-  selectedPlaceId: number | null
-  onPlaceClick: (placeId: number | null) => void
+  selectedDayId: number | string | null
+  selectedPlaceId: number | string | null
+  onPlaceClick: (placeId: number | string | null, assignmentId?: number | string | null) => void
   onAddPlace: () => void
-  onAssignToDay: (placeId: number, dayId: number) => void
+  onAssignToDay: (placeId: number | string, dayId?: number | string, position?: number) => void | Promise<void>
   onEditPlace: (place: Place) => void
-  onDeletePlace: (placeId: number) => void
+  onDeletePlace: (placeId: number | string) => void
   days: Day[]
-  isMobile: boolean
+  isMobile?: boolean
   onCategoryFilterChange?: (categoryId: string) => void
+  tripId?: string
+  trip?: Trip | null
+  activeLeg?: TripLeg | null
+  onManageLegs?: () => void
+  onAddRecommendation?: (recommendation: unknown, assignToDay: boolean) => Promise<Place | null>
 }
 
 export default function PlacesSidebar({
   places, categories, assignments, selectedDayId, selectedPlaceId,
-  onPlaceClick, onAddPlace, onAssignToDay, onEditPlace, onDeletePlace, days, isMobile, onCategoryFilterChange,
+  onPlaceClick, onAddPlace, onAssignToDay, onEditPlace, onDeletePlace, days, isMobile,
+  onCategoryFilterChange, tripId, trip, activeLeg, onManageLegs, onAddRecommendation,
 }: PlacesSidebarProps) {
   const { t } = useTranslation()
   const ctxMenu = useContextMenu()
@@ -40,6 +47,8 @@ export default function PlacesSidebar({
     onCategoryFilterChange?.(val)
   }
   const [dayPickerPlace, setDayPickerPlace] = useState(null)
+
+  const showRecommendations = filter === 'all' && !search && !categoryFilter
 
   // Alle geplanten Ort-IDs abrufen (einem Tag zugewiesen)
   const plannedIds = new Set(
@@ -130,6 +139,18 @@ export default function PlacesSidebar({
 
       {/* Liste */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        {showRecommendations && trip && (
+          <RecommendedPlacesSection
+            trip={trip}
+            activeLeg={activeLeg || null}
+            places={places}
+            assignments={assignments}
+            selectedDayId={selectedDayId}
+            onPlaceClick={onPlaceClick}
+            onAssignToDay={onAssignToDay}
+            onAddRecommendation={onAddRecommendation}
+          />
+        )}
         {filtered.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 16px', gap: 8 }}>
             <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>
@@ -156,20 +177,21 @@ export default function PlacesSidebar({
                   // Backup in window für Cross-Component Drag (dataTransfer geht bei Re-Render verloren)
                   window.__dragData = { placeId: String(place.id) }
                 }}
+                onDragEnd={() => { window.__dragData = null }}
                 onClick={() => {
                   if (isMobile && days?.length > 0) {
                     setDayPickerPlace(place)
                   } else {
-                    onPlaceClick(isSelected ? null : place.id)
+                    onPlaceClick(isSelected ? null : place.id as number)
                   }
                 }}
                 onContextMenu={e => ctxMenu.open(e, [
                   onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place) },
-                  selectedDayId && { label: t('planner.addToDay'), icon: CalendarDays, onClick: () => onAssignToDay(place.id, selectedDayId) },
+                  selectedDayId && { label: t('planner.addToDay'), icon: CalendarDays, onClick: () => onAssignToDay(place.id as number, selectedDayId) },
                   place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
                   (place.lat && place.lng) && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`, '_blank') },
                   { divider: true },
-                  onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
+                  onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id as number) },
                 ])}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -187,7 +209,7 @@ export default function PlacesSidebar({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
                     {cat && (() => {
                       const CatIcon = getCategoryIcon(cat.icon)
-                      return <CatIcon size={11} strokeWidth={2} color={cat.color || '#6366f1'} style={{ flexShrink: 0 }} title={cat.name} />
+                      return <CatIcon size={11} strokeWidth={2} color={cat.color || '#6366f1'} style={{ flexShrink: 0 }} />
                     })()}
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
                       {place.name}
@@ -204,7 +226,7 @@ export default function PlacesSidebar({
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                   {!inDay && selectedDayId && (
                     <button
-                      onClick={e => { e.stopPropagation(); onAssignToDay(place.id) }}
+                      onClick={e => { e.stopPropagation(); onAssignToDay(place.id as number) }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         width: 20, height: 20, borderRadius: 6,
@@ -240,7 +262,7 @@ export default function PlacesSidebar({
                 return (
                   <button
                     key={day.id}
-                    onClick={() => { onAssignToDay(dayPickerPlace.id, day.id); setDayPickerPlace(null) }}
+                    onClick={() => { onAssignToDay(dayPickerPlace.id as number, day.id as number); setDayPickerPlace(null) }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                       padding: '12px 14px', borderRadius: 12, border: 'none', cursor: 'pointer',

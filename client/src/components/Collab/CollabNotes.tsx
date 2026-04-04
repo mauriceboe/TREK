@@ -5,6 +5,9 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Plus, Trash2, Pin, PinOff, Pencil, X, Check, StickyNote, Settings, ExternalLink, Maximize2 } from 'lucide-react'
 import { collabApi } from '../../api/client'
+import { getAuthUrl } from '../../api/authUrl'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
 import { addListener, removeListener } from '../../api/websocket'
 import { useTranslation } from '../../i18n'
 import type { User } from '../../types'
@@ -31,6 +34,7 @@ interface CollabNote {
   avatar: string | null
   user_id: number
   created_at: string
+  attachments?: NoteFile[]
   author?: { username: string; avatar: string | null }
   user?: { username: string; avatar: string | null }
   files?: NoteFile[]
@@ -94,22 +98,33 @@ interface FilePreviewPortalProps {
 }
 
 function FilePreviewPortal({ file, onClose }: FilePreviewPortalProps) {
+  const [authUrl, setAuthUrl] = useState('')
+  const rawUrl = file?.url || ''
+  useEffect(() => {
+    if (!rawUrl) return
+    getAuthUrl(rawUrl, 'download').then(setAuthUrl)
+  }, [rawUrl])
+
   if (!file) return null
-  const url = file.url || `/uploads/${file.filename}`
   const isImage = file.mime_type?.startsWith('image/')
   const isPdf = file.mime_type === 'application/pdf'
   const isTxt = file.mime_type?.startsWith('text/')
+
+  const openInNewTab = async () => {
+    const u = await getAuthUrl(rawUrl, 'download')
+    window.open(u, '_blank', 'noreferrer')
+  }
 
   return ReactDOM.createPortal(
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       {isImage ? (
         /* Image lightbox — floating controls */
         <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-          <img src={url} alt={file.original_name} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <img src={authUrl} alt={file.original_name} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
           <div style={{ position: 'absolute', top: -36, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{file.original_name}</span>
             <div style={{ display: 'flex', gap: 8 }}>
-              <a href={url} target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.7)', display: 'flex' }}><ExternalLink size={15} /></a>
+              <button onClick={openInNewTab} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', display: 'flex', padding: 0 }}><ExternalLink size={15} /></button>
               <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', display: 'flex', padding: 0 }}><X size={17} /></button>
             </div>
           </div>
@@ -120,19 +135,19 @@ function FilePreviewPortal({ file, onClose }: FilePreviewPortalProps) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid var(--border-primary)', flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{file.original_name}</span>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none' }}><ExternalLink size={13} /></a>
+              <button onClick={openInNewTab} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-muted)', padding: 0 }}><ExternalLink size={13} /></button>
               <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 2 }}><X size={18} /></button>
             </div>
           </div>
           {(isPdf || isTxt) ? (
-            <object data={`${url}#view=FitH`} type={file.mime_type} style={{ flex: 1, width: '100%', border: 'none', background: '#fff' }} title={file.original_name}>
+            <object data={authUrl ? `${authUrl}#view=FitH` : ''} type={file.mime_type} style={{ flex: 1, width: '100%', border: 'none', background: '#fff' }} title={file.original_name}>
               <p style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
-                <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)', textDecoration: 'underline' }}>Download</a>
+                <button onClick={openInNewTab} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', textDecoration: 'underline', fontSize: 14, padding: 0 }}>Download</button>
               </p>
             </object>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-              <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)', textDecoration: 'underline', fontSize: 14 }}>Download {file.original_name}</a>
+              <button onClick={openInNewTab} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', textDecoration: 'underline', fontSize: 14, padding: 0 }}>Download {file.original_name}</button>
             </div>
           )}
         </div>
@@ -140,6 +155,14 @@ function FilePreviewPortal({ file, onClose }: FilePreviewPortalProps) {
     </div>,
     document.body
   )
+}
+
+function AuthedImg({ src, style, onClick, onMouseEnter, onMouseLeave, alt }: { src: string; style?: React.CSSProperties; onClick?: () => void; onMouseEnter?: React.MouseEventHandler<HTMLImageElement>; onMouseLeave?: React.MouseEventHandler<HTMLImageElement>; alt?: string }) {
+  const [authSrc, setAuthSrc] = useState('')
+  useEffect(() => {
+    getAuthUrl(src, 'download').then(setAuthSrc)
+  }, [src])
+  return authSrc ? <img src={authSrc} alt={alt} style={style} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} /> : null
 }
 
 const NOTE_COLORS = [
@@ -155,7 +178,7 @@ const formatTimestamp = (ts, t, locale) => {
   if (!ts) return ''
   const d = new Date(ts.endsWith?.('Z') ? ts : ts + 'Z')
   const now = new Date()
-  const diffMs = now - d
+  const diffMs = now.getTime() - d.getTime()
   const diffMins = Math.floor(diffMs / 60000)
   if (diffMins < 1) return t('collab.chat.justNow') || 'just now'
   if (diffMins < 60) return t('collab.chat.minutesAgo', { n: diffMins }) || `${diffMins}m ago`
@@ -215,8 +238,8 @@ function UserAvatar({ user, size = 14 }: UserAvatarProps) {
 // ── New Note Modal (portal to body) ─────────────────────────────────────────
 interface NoteFormModalProps {
   onClose: () => void
-  onSubmit: (data: { title: string; content: string; category: string; website: string; files?: File[] }) => Promise<void>
-  onDeleteFile: (noteId: number, fileId: number) => Promise<void>
+  onSubmit: (data: { title: string; content: string; category: string | null; color?: string; website: string | null; _pendingFiles?: File[] }) => Promise<void>
+  onDeleteFile?: (noteId: number, fileId: number) => Promise<void>
   existingCategories: string[]
   categoryColors: Record<string, string>
   getCategoryColor: (category: string) => string
@@ -226,6 +249,9 @@ interface NoteFormModalProps {
 }
 
 function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, categoryColors, getCategoryColor, note, tripId, t }: NoteFormModalProps) {
+  const can = useCanDo()
+  const tripObj = useTripStore((s) => s.trip)
+  const canUploadFiles = can('file_upload', tripObj)
   const isEdit = !!note
   const allCategories = [...new Set([...existingCategories, ...Object.keys(categoryColors || {})])].filter(Boolean)
 
@@ -298,6 +324,7 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
         }}
         onClick={e => e.stopPropagation()}
         onPaste={e => {
+          if (!canUploadFiles) return
           const items = e.clipboardData?.items
           if (!items) return
           for (const item of Array.from(items)) {
@@ -450,11 +477,11 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
           </div>
 
           {/* File attachments */}
-          <div>
+          {canUploadFiles && <div>
             <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, fontFamily: FONT }}>
               {t('collab.notes.attachFiles')}
             </div>
-            <input id="note-file-input" ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={e => { setPendingFiles(prev => [...prev, ...Array.from((e.target as HTMLInputElement).files)]); e.target.value = '' }} />
+            <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={e => { const files = e.target.files; if (files?.length) setPendingFiles(prev => [...prev, ...Array.from(files)]); e.target.value = '' }} />
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               {/* Existing attachments (edit mode) */}
               {existingAttachments.map(a => {
@@ -478,12 +505,12 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
                   </button>
                 </div>
               ))}
-              <label htmlFor="note-file-input"
+              <button type="button" onClick={() => fileRef.current?.click()}
                 style={{ padding: '4px 10px', borderRadius: 8, border: '1px dashed var(--border-faint)', background: 'transparent', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 11, fontFamily: FONT, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Plus size={11} /> {t('files.attach') || 'Add'}
-              </label>
+              </button>
             </div>
-          </div>
+          </div>}
 
           {/* Submit */}
           <button
@@ -591,7 +618,7 @@ function CategorySettingsModal({ onClose, categories, categoryColors, onSave, on
   const handleSave = async () => {
     // Apply renames to notes in DB
     for (const [oldName, newName] of Object.entries(renames)) {
-      if (oldName !== newName) await onRenameCategory(oldName, newName)
+      if (oldName !== newName) await onRenameCategory(oldName, newName as string)
     }
     await onSave(localColors)
     onClose()
@@ -689,6 +716,7 @@ function CategorySettingsModal({ onClose, categories, categoryColors, onSave, on
 interface NoteCardProps {
   note: CollabNote
   currentUser: User
+  canEdit: boolean
   onUpdate: (noteId: number, data: Partial<CollabNote>) => Promise<void>
   onDelete: (noteId: number) => Promise<void>
   onEdit: (note: CollabNote) => void
@@ -699,7 +727,7 @@ interface NoteCardProps {
   t: (key: string) => string
 }
 
-function NoteCard({ note, currentUser, onUpdate, onDelete, onEdit, onView, onPreviewFile, getCategoryColor, tripId, t }: NoteCardProps) {
+function NoteCard({ note, currentUser, canEdit, onUpdate, onDelete, onEdit, onView, onPreviewFile, getCategoryColor, tripId, t }: NoteCardProps) {
   const [hovered, setHovered] = useState(false)
 
   const author = note.author || note.user || { username: note.username, avatar: note.avatar_url || (note.avatar ? `/uploads/avatars/${note.avatar}` : null) }
@@ -760,29 +788,29 @@ function NoteCard({ note, currentUser, onUpdate, onDelete, onEdit, onView, onPre
                 <Maximize2 size={10} />
               </button>
             )}
-            <button onClick={handleTogglePin} title={note.pinned ? t('collab.notes.unpin') : t('collab.notes.pin')}
+            {canEdit && <button onClick={handleTogglePin} title={note.pinned ? t('collab.notes.unpin') : t('collab.notes.pin')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = color}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               {note.pinned ? <PinOff size={10} /> : <Pin size={10} />}
-            </button>
-            <button onClick={() => onEdit?.(note)} title={t('collab.notes.edit')}
+            </button>}
+            {canEdit && <button onClick={() => onEdit?.(note)} title={t('collab.notes.edit')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               <Pencil size={10} />
-            </button>
-            <button onClick={handleDelete} title={t('collab.notes.delete')}
+            </button>}
+            {canEdit && <button onClick={handleDelete} title={t('collab.notes.delete')}
               style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}
               onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
               <Trash2 size={10} />
-            </button>
+            </button>}
             <div style={{ width: 1, height: 12, background: 'var(--border-faint)', flexShrink: 0, marginLeft: 1, marginRight: 1 }} />
             {/* Author avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}
-              onMouseEnter={e => { const tip = e.currentTarget.querySelector('[data-tip]'); if (tip) tip.style.opacity = '1' }}
-              onMouseLeave={e => { const tip = e.currentTarget.querySelector('[data-tip]'); if (tip) tip.style.opacity = '0' }}>
+              onMouseEnter={e => { const tip = e.currentTarget.querySelector('[data-tip]') as HTMLElement | null; if (tip) tip.style.opacity = '1' }}
+              onMouseLeave={e => { const tip = e.currentTarget.querySelector('[data-tip]') as HTMLElement | null; if (tip) tip.style.opacity = '0' }}>
               <UserAvatar user={author} size={16} />
               <div data-tip style={{
                 position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
@@ -838,7 +866,7 @@ function NoteCard({ note, currentUser, onUpdate, onDelete, onEdit, onView, onPre
                     const isImage = a.mime_type?.startsWith('image/')
                     const ext = (a.original_name || '').split('.').pop()?.toUpperCase() || '?'
                     return isImage ? (
-                      <img key={a.id} src={a.url} alt={a.original_name}
+                      <AuthedImg key={a.id} src={a.url} alt={a.original_name}
                         style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', transition: 'transform 0.12s, box-shadow 0.12s' }}
                         onClick={() => onPreviewFile?.(a)}
                         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)' }}
@@ -879,6 +907,9 @@ interface CollabNotesProps {
 
 export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
   const { t } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canEdit = can('collab_edit', trip)
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
@@ -964,7 +995,7 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
         for (const file of pendingFiles) {
           const fd = new FormData()
           fd.append('file', file)
-          try { await collabApi.uploadNoteFile(tripId, note.id, fd) } catch {}
+          try { await collabApi.uploadNoteFile(tripId, note.id, fd) } catch (err) { console.error('Failed to upload note attachment:', err) }
         }
         // Reload note with attachments
         const fresh = await collabApi.getNotes(tripId)
@@ -1124,17 +1155,17 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
           {t('collab.notes.title')}
         </h3>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button onClick={() => setShowSettings(true)} title={t('collab.notes.categorySettings') || 'Categories'}
+          {canEdit && <button onClick={() => setShowSettings(true)} title={t('collab.notes.categorySettings') || 'Categories'}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-faint)', transition: 'color 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
             <Settings size={14} />
-          </button>
-          <button onClick={() => setShowNewModal(true)}
+          </button>}
+          {canEdit && <button onClick={() => setShowNewModal(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 99, padding: '6px 12px', background: 'var(--accent)', color: 'var(--accent-text)', fontSize: 11, fontWeight: 600, fontFamily: FONT, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <Plus size={12} />
             {t('collab.notes.new')}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1252,6 +1283,7 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
                 key={note.id}
                 note={note}
                 currentUser={currentUser}
+                canEdit={canEdit}
                 onUpdate={handleUpdateNote}
                 onDelete={handleDeleteNote}
                 onEdit={setEditingNote}
@@ -1303,12 +1335,12 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
                 )}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <button onClick={() => { setViewingNote(null); setEditingNote(viewingNote) }}
+                {canEdit && <button onClick={() => { setViewingNote(null); setEditingNote(viewingNote) }}
                   style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
                   onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}>
                   <Pencil size={16} />
-                </button>
+                </button>}
                 <button onClick={() => setViewingNote(null)}
                   style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', borderRadius: 6 }}
                   onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
@@ -1327,6 +1359,8 @@ export default function CollabNotes({ tripId, currentUser }: CollabNotesProps) {
 
       {showNewModal && (
         <NoteFormModal
+          note={null}
+          tripId={tripId}
           onClose={() => setShowNewModal(false)}
           onSubmit={handleCreateNote}
           existingCategories={categories}

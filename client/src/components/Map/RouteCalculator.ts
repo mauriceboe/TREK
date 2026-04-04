@@ -13,7 +13,7 @@ export async function calculateRoute(
   }
 
   const coords = waypoints.map((p) => `${p.lng},${p.lat}`).join(';')
-  const url = `${OSRM_BASE}/driving/${coords}?overview=full&geometries=geojson&steps=false`
+  const url = `${OSRM_BASE}/${profile}/${coords}?overview=full&geometries=geojson&steps=false`
 
   const response = await fetch(url, { signal })
   if (!response.ok) {

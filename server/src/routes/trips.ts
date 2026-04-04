@@ -7,6 +7,7 @@ import { db, canAccessTrip, isOwner } from '../db/database';
 import { authenticate, demoUploadBlock } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { AuthRequest, Trip, User } from '../types';
+import { parseNullableNumber, syncTripLegsToDayCount } from './legs';
 
 const router = express.Router();
 
@@ -135,15 +136,32 @@ router.get('/', authenticate, (req: Request, res: Response) => {
 
 router.post('/', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { title, description, start_date, end_date, currency } = req.body;
+  const {
+    title, description, start_date, end_date, currency,
+    destination_name, destination_address,
+    destination_lat, destination_lng,
+    destination_viewport_south, destination_viewport_west,
+    destination_viewport_north, destination_viewport_east,
+  } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
 
   const result = db.prepare(`
-    INSERT INTO trips (user_id, title, description, start_date, end_date, currency)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(authReq.user.id, title, description || null, start_date || null, end_date || null, currency || 'EUR');
+    INSERT INTO trips (
+      user_id, title, description,
+      destination_name, destination_address, destination_lat, destination_lng,
+      destination_viewport_south, destination_viewport_west, destination_viewport_north, destination_viewport_east,
+      start_date, end_date, currency
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    authReq.user.id, title, description || null,
+    destination_name || null, destination_address || null,
+    parseNullableNumber(destination_lat) ?? null, parseNullableNumber(destination_lng) ?? null,
+    parseNullableNumber(destination_viewport_south) ?? null, parseNullableNumber(destination_viewport_west) ?? null,
+    parseNullableNumber(destination_viewport_north) ?? null, parseNullableNumber(destination_viewport_east) ?? null,
+    start_date || null, end_date || null, currency || 'EUR'
+  );
 
   const tripId = result.lastInsertRowid;
   generateDays(tripId, start_date, end_date);
@@ -174,13 +192,27 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const { title, description, start_date, end_date, currency, is_archived, cover_image } = req.body;
+  const {
+    title, description, start_date, end_date, currency, is_archived, cover_image,
+    destination_name, destination_address,
+    destination_lat, destination_lng,
+    destination_viewport_south, destination_viewport_west,
+    destination_viewport_north, destination_viewport_east,
+  } = req.body;
 
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
 
   const newTitle = title || trip.title;
   const newDesc = description !== undefined ? description : trip.description;
+  const newDestName = destination_name !== undefined ? (destination_name || null) : trip.destination_name;
+  const newDestAddr = destination_address !== undefined ? (destination_address || null) : trip.destination_address;
+  const newDestLat = destination_lat !== undefined ? parseNullableNumber(destination_lat) ?? null : trip.destination_lat;
+  const newDestLng = destination_lng !== undefined ? parseNullableNumber(destination_lng) ?? null : trip.destination_lng;
+  const newDestSouth = destination_viewport_south !== undefined ? parseNullableNumber(destination_viewport_south) ?? null : trip.destination_viewport_south;
+  const newDestWest = destination_viewport_west !== undefined ? parseNullableNumber(destination_viewport_west) ?? null : trip.destination_viewport_west;
+  const newDestNorth = destination_viewport_north !== undefined ? parseNullableNumber(destination_viewport_north) ?? null : trip.destination_viewport_north;
+  const newDestEast = destination_viewport_east !== undefined ? parseNullableNumber(destination_viewport_east) ?? null : trip.destination_viewport_east;
   const newStart = start_date !== undefined ? start_date : trip.start_date;
   const newEnd = end_date !== undefined ? end_date : trip.end_date;
   const newCurrency = currency || trip.currency;
@@ -188,17 +220,25 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   const newCover = cover_image !== undefined ? cover_image : trip.cover_image;
 
   db.prepare(`
-    UPDATE trips SET title=?, description=?, start_date=?, end_date=?,
+    UPDATE trips SET title=?, description=?, destination_name=?, destination_address=?,
+      destination_lat=?, destination_lng=?, destination_viewport_south=?, destination_viewport_west=?,
+      destination_viewport_north=?, destination_viewport_east=?, start_date=?, end_date=?,
       currency=?, is_archived=?, cover_image=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
-  `).run(newTitle, newDesc, newStart || null, newEnd || null, newCurrency, newArchived, newCover, req.params.id);
+  `).run(
+    newTitle, newDesc, newDestName, newDestAddr,
+    newDestLat, newDestLng, newDestSouth, newDestWest,
+    newDestNorth, newDestEast, newStart || null, newEnd || null,
+    newCurrency, newArchived, newCover, req.params.id
+  );
 
   if (newStart !== trip.start_date || newEnd !== trip.end_date)
     generateDays(req.params.id, newStart, newEnd);
 
+  const legs = syncTripLegsToDayCount(req.params.id);
   const updatedTrip = db.prepare(`${TRIP_SELECT} WHERE t.id = :tripId`).get({ userId: authReq.user.id, tripId: req.params.id });
-  res.json({ trip: updatedTrip });
-  broadcast(req.params.id, 'trip:updated', { trip: updatedTrip }, req.headers['x-socket-id'] as string);
+  res.json({ trip: updatedTrip, legs });
+  broadcast(req.params.id, 'trip:updated', { trip: updatedTrip, legs }, req.headers['x-socket-id'] as string);
 });
 
 router.post('/:id/cover', authenticate, demoUploadBlock, uploadCover.single('cover'), (req: Request, res: Response) => {

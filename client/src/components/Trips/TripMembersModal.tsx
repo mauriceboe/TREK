@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import Modal from '../shared/Modal'
-import { tripsApi, authApi } from '../../api/client'
+import { tripsApi, authApi, shareApi } from '../../api/client'
 import { useToast } from '../shared/Toast'
 import { useAuthStore } from '../../store/authStore'
-import { Crown, UserMinus, UserPlus, Users, LogOut } from 'lucide-react'
+import { useCanDo } from '../../store/permissionsStore'
+import { useTripStore } from '../../store/tripStore'
+import { Crown, UserMinus, UserPlus, Users, LogOut, Link2, Trash2, Copy, Check } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { getApiErrorMessage } from '../../types'
 import CustomSelect from '../shared/CustomSelect'
@@ -32,6 +34,129 @@ function Avatar({ username, avatarUrl, size = 32 }: AvatarProps) {
   )
 }
 
+function ShareLinkSection({ tripId, t }: { tripId: number; t: (key: string, params?: Record<string, string | number>) => string }) {
+  const [shareToken, setShareToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const [perms, setPerms] = useState({ share_map: true, share_bookings: true, share_packing: false, share_budget: false, share_collab: false })
+  const toast = useToast()
+
+  useEffect(() => {
+    shareApi.getLink(tripId).then(d => {
+      setShareToken(d.token)
+      if (d.token) setPerms({ share_map: d.share_map ?? true, share_bookings: d.share_bookings ?? true, share_packing: d.share_packing ?? false, share_budget: d.share_budget ?? false, share_collab: d.share_collab ?? false })
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [tripId])
+
+  const shareUrl = shareToken ? `${window.location.origin}/shared/${shareToken}` : null
+
+  const handleCreate = async () => {
+    try {
+      const d = await shareApi.createLink(tripId, perms)
+      setShareToken(d.token)
+    } catch { toast.error(t('share.createError')) }
+  }
+
+  const handleUpdatePerms = async (key: string, val: boolean) => {
+    const newPerms = { ...perms, [key]: val }
+    setPerms(newPerms)
+    if (shareToken) {
+      try { await shareApi.createLink(tripId, newPerms) } catch {}
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await shareApi.deleteLink(tripId)
+      setShareToken(null)
+    } catch {}
+  }
+
+  const handleCopy = () => {
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <Link2 size={14} style={{ color: 'var(--text-muted)' }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t('share.linkTitle')}</span>
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 10, lineHeight: 1.5 }}>{t('share.linkHint')}</p>
+
+      {/* Permission checkboxes */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        {[
+          { key: 'share_map', label: t('share.permMap'), always: true },
+          { key: 'share_bookings', label: t('share.permBookings') },
+          { key: 'share_packing', label: t('share.permPacking') },
+          { key: 'share_budget', label: t('share.permBudget') },
+          { key: 'share_collab', label: t('share.permCollab') },
+        ].map(opt => (
+          <button key={opt.key} onClick={() => !opt.always && handleUpdatePerms(opt.key, !perms[opt.key])}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20,
+              border: '1.5px solid', fontSize: 11, fontWeight: 500, cursor: opt.always ? 'default' : 'pointer',
+              fontFamily: 'inherit', transition: 'all 0.12s',
+              background: perms[opt.key] ? 'var(--text-primary)' : 'transparent',
+              borderColor: perms[opt.key] ? 'var(--text-primary)' : 'var(--border-primary)',
+              color: perms[opt.key] ? 'var(--bg-primary)' : 'var(--text-muted)',
+              opacity: opt.always ? 0.7 : 1,
+            }}>
+            {perms[opt.key] ? <Check size={10} /> : null}
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {shareUrl ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px',
+            background: 'var(--bg-tertiary)', borderRadius: 8, border: '1px solid var(--border-faint)',
+          }}>
+            <input type="text" value={shareUrl} readOnly style={{
+              flex: 1, border: 'none', background: 'none', fontSize: 11, color: 'var(--text-primary)',
+              outline: 'none', fontFamily: 'monospace',
+            }} />
+            <button onClick={handleCopy} style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 6,
+              border: 'none', background: copied ? '#16a34a' : 'var(--accent)', color: copied ? 'white' : 'var(--accent-text)',
+              fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.2s',
+            }}>
+              {copied ? <><Check size={10} /> {t('common.copied')}</> : <><Copy size={10} /> {t('common.copy')}</>}
+            </button>
+          </div>
+          <button onClick={handleDelete} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            padding: '6px 0', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
+            background: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: 11, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <Trash2 size={11} /> {t('share.deleteLink')}
+          </button>
+        </div>
+      ) : (
+        <button onClick={handleCreate} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          width: '100%', padding: '8px 0', borderRadius: 8, border: '1px dashed var(--border-primary)',
+          background: 'none', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          <Link2 size={12} /> {t('share.createLink')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface TripMembersModalProps {
   isOpen: boolean
   onClose: () => void
@@ -49,6 +174,10 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
   const toast = useToast()
   const { user } = useAuthStore()
   const { t } = useTranslation()
+  const can = useCanDo()
+  const trip = useTripStore((s) => s.trip)
+  const canManageMembers = can('member_manage', trip)
+  const canManageShare = can('share_manage', trip)
 
   useEffect(() => {
     if (isOpen && tripId) {
@@ -123,8 +252,12 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
   ] : []
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('members.shareTrip')} size="sm">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
+    <Modal isOpen={isOpen} onClose={onClose} title={t('members.shareTrip')} size="3xl">
+      <div style={{ display: 'grid', gridTemplateColumns: canManageShare ? '1fr 1fr' : '1fr', gap: 24, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }} className="share-modal-grid">
+        <style>{`@media (max-width: 640px) { .share-modal-grid { grid-template-columns: 1fr !important; } }`}</style>
+
+        {/* Left column: Members */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Trip name */}
         <div style={{ padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border-secondary)' }}>
@@ -133,7 +266,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
         </div>
 
         {/* Add member dropdown */}
-        <div>
+        {canManageMembers && <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
             {t('members.inviteUser')}
           </label>
@@ -166,10 +299,10 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
               <UserPlus size={13} /> {adding ? '…' : t('members.invite')}
             </button>
           </div>
-          {availableUsers.length === 0 && allUsers.length > 0 && (
+          {availableUsers.length === 0 && allUsers.length > 0 && canManageMembers && (
             <p style={{ fontSize: 11.5, color: 'var(--text-faint)', margin: '6px 0 0' }}>{t('members.allHaveAccess')}</p>
           )}
-        </div>
+        </div>}
 
         {/* Members list */}
         <div>
@@ -190,7 +323,7 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {allMembers.map(member => {
                 const isSelf = member.id === user?.id
-                const canRemove = isCurrentOwner ? member.role !== 'owner' : isSelf
+                const canRemove = isSelf || (canManageMembers && member.role !== 'owner')
                 return (
                   <div key={member.id} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
@@ -227,6 +360,13 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
             </div>
           )}
         </div>
+
+        </div>
+
+        {/* Right column: Share Link */}
+        {canManageShare && <div style={{ borderLeft: '1px solid var(--border-faint)', paddingLeft: 24 }}>
+        <ShareLinkSection tripId={tripId} t={t} />
+        </div>}
 
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
       </div>

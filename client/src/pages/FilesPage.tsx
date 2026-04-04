@@ -88,7 +88,7 @@ export default function FilesPage(): React.ReactElement {
             onUpload={handleUpload}
             onDelete={handleDelete}
             places={places}
-            tripId={tripId}
+            tripId={Number(tripId)}
           />
         </div>
       </div>

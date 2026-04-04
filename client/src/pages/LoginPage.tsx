@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n'
+import { useTranslation } from '../i18n'
 import { authApi } from '../api/client'
-import { Plane, Eye, EyeOff, Mail, Lock, MapPin, Calendar, Package, User, Globe, Zap, Users, Wallet, Map, CheckSquare, BookMarked, FolderOpen, Route, Shield, KeyRound } from 'lucide-react'
+import { Plane, Eye, EyeOff, Mail, Lock, MapPin, Calendar, Package, User, Globe, Zap, Users, Wallet, Map, CheckSquare, BookMarked, FolderOpen, Route, Shield } from 'lucide-react'
 
 interface AppConfig {
   has_users: boolean
@@ -12,7 +12,6 @@ interface AppConfig {
   demo_mode: boolean
   oidc_configured: boolean
   oidc_display_name?: string
-  oidc_only_mode: boolean
 }
 
 export default function LoginPage(): React.ReactElement {
@@ -25,10 +24,8 @@ export default function LoginPage(): React.ReactElement {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
-  const [inviteToken, setInviteToken] = useState<string>('')
-  const [inviteValid, setInviteValid] = useState<boolean>(false)
 
-  const { login, register, demoLogin, completeMfaLogin } = useAuthStore()
+  const { login, register, demoLogin } = useAuthStore()
   const { setLanguageLocal } = useSettingsStore()
   const navigate = useNavigate()
 
@@ -37,33 +34,11 @@ export default function LoginPage(): React.ReactElement {
       if (config) {
         setAppConfig(config)
         if (!config.has_users) setMode('register')
-        // Auto-redirect to OIDC if password auth is disabled
-        if (config.oidc_only_mode && config.oidc_configured && config.has_users) {
-          const params = new URLSearchParams(window.location.search)
-          if (!params.get('oidc_code') && !params.get('oidc_error') && !params.get('invite')) {
-            window.location.href = '/api/auth/oidc/login'
-          }
-        }
       }
     })
 
-    // Handle query params (invite token, OIDC callback)
-    const params = new URLSearchParams(window.location.search)
-
-    // Check for invite token in URL (/register?invite=xxx or /login?invite=xxx)
-    const invite = params.get('invite')
-    if (invite) {
-      setInviteToken(invite)
-      setMode('register')
-      authApi.validateInvite(invite).then(() => {
-        setInviteValid(true)
-      }).catch(() => {
-        setError('Invalid or expired invite link')
-      })
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-
     // Handle OIDC callback via short-lived auth code (secure exchange)
+    const params = new URLSearchParams(window.location.search)
     const oidcCode = params.get('oidc_code')
     const oidcError = params.get('oidc_error')
     if (oidcCode) {
@@ -108,39 +83,18 @@ export default function LoginPage(): React.ReactElement {
   }
 
   const [showTakeoff, setShowTakeoff] = useState<boolean>(false)
-  const [mfaStep, setMfaStep] = useState(false)
-  const [mfaToken, setMfaToken] = useState('')
-  const [mfaCode, setMfaCode] = useState('')
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
     try {
-      if (mode === 'login' && mfaStep) {
-        if (!mfaCode.trim()) {
-          setError(t('login.mfaCodeRequired'))
-          setIsLoading(false)
-          return
-        }
-        await completeMfaLogin(mfaToken, mfaCode)
-        setShowTakeoff(true)
-        setTimeout(() => navigate('/dashboard'), 2600)
-        return
-      }
       if (mode === 'register') {
         if (!username.trim()) { setError('Username is required'); setIsLoading(false); return }
-        if (password.length < 6) { setError('Password must be at least 6 characters'); setIsLoading(false); return }
-        await register(username, email, password, inviteToken || undefined)
+        if (password.length < 8) { setError('Password must be at least 8 characters'); setIsLoading(false); return }
+        await register(username, email, password)
       } else {
-        const result = await login(email, password)
-        if ('mfa_required' in result && result.mfa_required && 'mfa_token' in result) {
-          setMfaToken(result.mfa_token)
-          setMfaStep(true)
-          setMfaCode('')
-          setIsLoading(false)
-          return
-        }
+        await login(email, password)
       }
       setShowTakeoff(true)
       setTimeout(() => navigate('/dashboard'), 2600)
@@ -150,10 +104,7 @@ export default function LoginPage(): React.ReactElement {
     }
   }
 
-  const showRegisterOption = (appConfig?.allow_registration || !appConfig?.has_users || inviteValid) && !appConfig?.oidc_only_mode
-
-  // In OIDC-only mode, show a minimal page that redirects directly to the IdP
-  const oidcOnly = appConfig?.oidc_only_mode && appConfig?.oidc_configured
+  const showRegisterOption = appConfig?.allow_registration || !appConfig?.has_users
 
   const inputBase: React.CSSProperties = {
     width: '100%', padding: '11px 12px 11px 40px', border: '1px solid #e5e7eb',
@@ -315,14 +266,9 @@ export default function LoginPage(): React.ReactElement {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif", position: 'relative' }}>
 
-      {/* Language toggle */}
+      {/* Sprach-Toggle oben rechts */}
       <button
-        onClick={() => {
-          const languages = SUPPORTED_LANGUAGES.map(({ value }) => value)
-          const currentIndex = languages.findIndex(code => code === language)
-          const nextLanguage = languages[(currentIndex + 1) % languages.length]
-          setLanguageLocal(nextLanguage)
-        }}
+        onClick={() => setLanguageLocal(language === 'en' ? 'de' : 'en')}
         style={{
           position: 'absolute', top: 16, right: 16, zIndex: 10,
           display: 'flex', alignItems: 'center', gap: 6,
@@ -336,7 +282,7 @@ export default function LoginPage(): React.ReactElement {
         onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.background = 'rgba(0,0,0,0.06)'}
       >
         <Globe size={14} />
-        {language.toUpperCase()}
+        {language === 'en' ? 'EN' : 'DE'}
       </button>
 
       {/* Left — branding */}
@@ -488,82 +434,17 @@ export default function LoginPage(): React.ReactElement {
           </div>
 
           <div style={{ background: 'white', borderRadius: 20, border: '1px solid #e5e7eb', padding: '36px 32px', boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
-            {oidcOnly ? (
-              <>
-                <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 800, color: '#111827' }}>{t('login.title')}</h2>
-                <p style={{ margin: '0 0 24px', fontSize: 13.5, color: '#9ca3af' }}>{t('login.oidcOnly')}</p>
-                {error && (
-                  <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, fontSize: 13, color: '#dc2626', marginBottom: 16 }}>
-                    {error}
-                  </div>
-                )}
-                <a href="/api/auth/oidc/login"
-                  style={{
-                    width: '100%', padding: '12px',
-                    background: '#111827', color: 'white',
-                    border: 'none', borderRadius: 12,
-                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                    fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    textDecoration: 'none', transition: 'all 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.background = '#1f2937' }}
-                  onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.background = '#111827' }}
-                >
-                  <Shield size={16} />
-                  {t('login.oidcSignIn', { name: appConfig?.oidc_display_name || 'SSO' })}
-                </a>
-              </>
-            ) : (
-            <>
             <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 800, color: '#111827' }}>
-              {mode === 'login' && mfaStep
-                ? t('login.mfaTitle')
-                : mode === 'register'
-                  ? (!appConfig?.has_users ? t('login.createAdmin') : t('login.createAccount'))
-                  : t('login.title')}
+              {mode === 'register' ? (!appConfig?.has_users ? t('login.createAdmin') : t('login.createAccount')) : t('login.title')}
             </h2>
             <p style={{ margin: '0 0 28px', fontSize: 13.5, color: '#9ca3af' }}>
-              {mode === 'login' && mfaStep
-                ? t('login.mfaSubtitle')
-                : mode === 'register'
-                  ? (!appConfig?.has_users ? t('login.createAdminHint') : t('login.createAccountHint'))
-                  : t('login.subtitle')}
+              {mode === 'register' ? (!appConfig?.has_users ? t('login.createAdminHint') : t('login.createAccountHint')) : t('login.subtitle')}
             </p>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {error && (
                 <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, fontSize: 13, color: '#dc2626' }}>
                   {error}
-                </div>
-              )}
-
-              {mode === 'login' && mfaStep && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('login.mfaCodeLabel')}</label>
-                  <div style={{ position: 'relative' }}>
-                    <KeyRound size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={mfaCode}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                      placeholder="000000"
-                      required
-                      style={inputBase}
-                      onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.target.style.borderColor = '#111827'}
-                      onBlur={(e: React.FocusEvent<HTMLInputElement>) => e.target.style.borderColor = '#e5e7eb'}
-                    />
-                  </div>
-                  <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>{t('login.mfaHint')}</p>
-                  <button
-                    type="button"
-                    onClick={() => { setMfaStep(false); setMfaToken(''); setMfaCode(''); setError('') }}
-                    style={{ marginTop: 8, background: 'none', border: 'none', color: '#6b7280', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
-                  >
-                    {t('login.mfaBack')}
-                  </button>
                 </div>
               )}
 
@@ -584,7 +465,6 @@ export default function LoginPage(): React.ReactElement {
               )}
 
               {/* Email */}
-              {!(mode === 'login' && mfaStep) && (
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('common.email')}</label>
                 <div style={{ position: 'relative' }}>
@@ -597,10 +477,8 @@ export default function LoginPage(): React.ReactElement {
                   />
                 </div>
               </div>
-              )}
 
               {/* Password */}
-              {!(mode === 'login' && mfaStep) && (
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('common.password')}</label>
                 <div style={{ position: 'relative' }}>
@@ -619,7 +497,6 @@ export default function LoginPage(): React.ReactElement {
                   </button>
                 </div>
               </div>
-              )}
 
               <button type="submit" disabled={isLoading} style={{
                 marginTop: 4, width: '100%', padding: '12px', background: '#111827', color: 'white',
@@ -631,8 +508,8 @@ export default function LoginPage(): React.ReactElement {
                 onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.background = '#111827'}
               >
                 {isLoading
-                  ? <><div style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />{mode === 'register' ? t('login.creating') : (mode === 'login' && mfaStep ? t('login.mfaVerify') : t('login.signingIn'))}</>
-                  : <><Plane size={16} />{mode === 'register' ? t('login.createAccount') : (mode === 'login' && mfaStep ? t('login.mfaVerify') : t('login.signIn'))}</>
+                  ? <><div style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />{mode === 'register' ? t('login.creating') : t('login.signingIn')}</>
+                  : <><Plane size={16} />{mode === 'register' ? t('login.createAccount') : t('login.signIn')}</>
                 }
               </button>
             </form>
@@ -641,17 +518,16 @@ export default function LoginPage(): React.ReactElement {
             {showRegisterOption && appConfig?.has_users && !appConfig?.demo_mode && (
               <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: '#9ca3af' }}>
                 {mode === 'login' ? t('login.noAccount') + ' ' : t('login.hasAccount') + ' '}
-                <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); setMfaStep(false); setMfaToken(''); setMfaCode('') }}
+                <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError('') }}
                   style={{ background: 'none', border: 'none', color: '#111827', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
                   {mode === 'login' ? t('login.register') : t('login.signIn')}
                 </button>
               </p>
             )}
-            </>)}
           </div>
 
-          {/* OIDC / SSO login button (only when OIDC is configured but not in oidc-only mode) */}
-          {appConfig?.oidc_configured && !oidcOnly && (
+          {/* OIDC / SSO login button */}
+          {appConfig?.oidc_configured && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
                 <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />

@@ -7,6 +7,57 @@ metadata:
 data:
   NODE_ENV: {{ .Values.env.NODE_ENV | quote }}
   PORT: {{ .Values.env.PORT | quote }}
+  {{- if .Values.env.TZ }}
+  TZ: {{ .Values.env.TZ | quote }}
+  {{- end }}
+  {{- if .Values.env.LOG_LEVEL }}
+  LOG_LEVEL: {{ .Values.env.LOG_LEVEL | quote }}
+  {{- end }}
   {{- if .Values.env.ALLOWED_ORIGINS }}
   ALLOWED_ORIGINS: {{ .Values.env.ALLOWED_ORIGINS | quote }}
+  {{- end }}
+  {{- if .Values.env.APP_URL }}
+  APP_URL: {{ .Values.env.APP_URL | quote }}
+  {{- end }}
+  {{- if .Values.env.FORCE_HTTPS }}
+  FORCE_HTTPS: {{ .Values.env.FORCE_HTTPS | quote }}
+  {{- end }}
+  {{- if .Values.env.COOKIE_SECURE }}
+  COOKIE_SECURE: {{ .Values.env.COOKIE_SECURE | quote }}
+  {{- end }}
+  {{- if .Values.env.TRUST_PROXY }}
+  TRUST_PROXY: {{ .Values.env.TRUST_PROXY | quote }}
+  {{- end }}
+  {{- if .Values.env.ALLOW_INTERNAL_NETWORK }}
+  ALLOW_INTERNAL_NETWORK: {{ .Values.env.ALLOW_INTERNAL_NETWORK | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_ISSUER }}
+  OIDC_ISSUER: {{ .Values.env.OIDC_ISSUER | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_CLIENT_ID }}
+  OIDC_CLIENT_ID: {{ .Values.env.OIDC_CLIENT_ID | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_DISPLAY_NAME }}
+  OIDC_DISPLAY_NAME: {{ .Values.env.OIDC_DISPLAY_NAME | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_ONLY }}
+  OIDC_ONLY: {{ .Values.env.OIDC_ONLY | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_ADMIN_CLAIM }}
+  OIDC_ADMIN_CLAIM: {{ .Values.env.OIDC_ADMIN_CLAIM | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_ADMIN_VALUE }}
+  OIDC_ADMIN_VALUE: {{ .Values.env.OIDC_ADMIN_VALUE | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_SCOPE }}
+  OIDC_SCOPE: {{ .Values.env.OIDC_SCOPE | quote }}
+  {{- end }}
+  {{- if .Values.env.OIDC_DISCOVERY_URL }}
+  OIDC_DISCOVERY_URL: {{ .Values.env.OIDC_DISCOVERY_URL | quote }}
+  {{- end }}
+  {{- if .Values.env.DEMO_MODE }}
+  DEMO_MODE: {{ .Values.env.DEMO_MODE | quote }}
+  {{- end }}
+  {{- if .Values.env.MCP_RATE_LIMIT }}
+  MCP_RATE_LIMIT: {{ .Values.env.MCP_RATE_LIMIT | quote }}
   {{- end }}

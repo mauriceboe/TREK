@@ -23,12 +23,12 @@ const TYPE_OPTIONS = [
   { value: 'other',      labelKey: 'reservations.type.other',      Icon: FileText },
 ]
 
-function buildAssignmentOptions(days, assignments, t, locale) {
-  const options = []
+function buildAssignmentOptions(days: any[], assignments: any, t: any, locale: string) {
+  const options: any[] = []
   for (const day of (days || [])) {
-    const da = (assignments?.[String(day.id)] || []).slice().sort((a, b) => a.order_index - b.order_index)
+    const da = (assignments?.[String(day.id)] || []).slice().sort((a: any, b: any) => a.order_index - b.order_index)
     if (da.length === 0) continue
-    const dayLabel = day.title || t('dayplan.dayN', { n: day.day_number })
+    const dayLabel = day.title || t('dayplan.dayN', { n: day.day_number ?? '' })
     const dateStr = day.date ? ` · ${formatDate(day.date, locale)}` : ''
     const groupLabel = `${dayLabel}${dateStr}`
     // Group header (non-selectable)
@@ -52,15 +52,15 @@ function buildAssignmentOptions(days, assignments, t, locale) {
 interface ReservationModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Record<string, string | number | null>) => Promise<void> | void
+  onSave: (data: Record<string, string | number | null>) => Promise<any> | void
   reservation: Reservation | null
   days: Day[]
   places: Place[]
   assignments: AssignmentsMap
-  selectedDayId: number | null
+  selectedDayId: number | string | null
   files?: TripFile[]
-  onFileUpload: (fd: FormData) => Promise<void>
-  onFileDelete: (fileId: number) => Promise<void>
+  onFileUpload?: (fd: FormData) => Promise<any>
+  onFileDelete: (fileId: number) => Promise<any>
   accommodations?: Accommodation[]
 }
 
@@ -104,8 +104,8 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         location: reservation.location || '',
         confirmation_number: reservation.confirmation_number || '',
         notes: reservation.notes || '',
-        assignment_id: reservation.assignment_id || '',
-        accommodation_id: reservation.accommodation_id || '',
+        assignment_id: reservation.assignment_id ? String(reservation.assignment_id) : '',
+        accommodation_id: reservation.accommodation_id ? String(reservation.accommodation_id) : '',
         meta_airline: meta.airline || '',
         meta_flight_number: meta.flight_number || '',
         meta_departure_airport: meta.departure_airport || '',
@@ -115,9 +115,9 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         meta_seat: meta.seat || '',
         meta_check_in_time: meta.check_in_time || '',
         meta_check_out_time: meta.check_out_time || '',
-        hotel_place_id: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.place_id || '' })(),
-        hotel_start_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.start_day_id || '' })(),
-        hotel_end_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.end_day_id || '' })(),
+        hotel_place_id: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.place_id ? String(acc.place_id) : '' })(),
+        hotel_start_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.start_day_id ? String(acc.start_day_id) : '' })(),
+        hotel_end_day: (() => { const acc = accommodations.find(a => a.id == reservation.accommodation_id); return acc?.end_day_id ? String(acc.end_day_id) : '' })(),
       })
     } else {
       setForm({
@@ -127,6 +127,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
         meta_train_number: '', meta_platform: '', meta_seat: '',
         meta_check_in_time: '', meta_check_out_time: '',
+        hotel_place_id: '', hotel_start_day: '', hotel_end_day: '',
       })
       setPendingFiles([])
     }
@@ -173,12 +174,12 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
           confirmation: form.confirmation_number || null,
         }
       }
-      const saved = await onSave(saveData)
+      const saved = await onSave(saveData) as any
       if (!reservation?.id && saved?.id && pendingFiles.length > 0) {
         for (const file of pendingFiles) {
           const fd = new FormData()
           fd.append('file', file)
-          fd.append('reservation_id', saved.id)
+          fd.append('reservation_id', String(saved.id))
           fd.append('description', form.title)
           await onFileUpload(fd)
         }
@@ -196,8 +197,8 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
       try {
         const fd = new FormData()
         fd.append('file', file)
-        fd.append('reservation_id', reservation.id)
-        fd.append('description', reservation.title)
+        fd.append('reservation_id', String(reservation.id))
+        fd.append('description', reservation.title || '')
         await onFileUpload(fd)
         toast.success(t('reservations.toast.fileUploaded'))
       } catch {
@@ -220,12 +221,12 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
       )
     : []
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     width: '100%', border: '1px solid var(--border-primary)', borderRadius: 10,
     padding: '8px 12px', fontSize: 13, fontFamily: 'inherit',
     outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)', background: 'var(--bg-input)',
   }
-  const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.03em' }
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.03em' }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={reservation ? t('reservations.editTitle') : t('reservations.newTitle')} size="2xl">
@@ -395,7 +396,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
                   placeholder={t('reservations.meta.pickHotel')}
                   options={[
                     { value: '', label: '—' },
-                    ...places.map(p => ({ value: p.id, label: p.name })),
+                    ...places.map(p => ({ value: String(p.id), label: p.name })),
                   ]}
                   searchable
                   size="sm"
@@ -407,7 +408,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
                   value={form.hotel_start_day}
                   onChange={value => set('hotel_start_day', value)}
                   placeholder={t('reservations.meta.selectDay')}
-                  options={days.map(d => ({ value: d.id, label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
+                  options={days.map(d => ({ value: String(d.id), label: d.title || `${t('dayplan.dayN', { n: d.day_number ?? '' })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
                   size="sm"
                 />
               </div>
@@ -417,7 +418,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
                   value={form.hotel_end_day}
                   onChange={value => set('hotel_end_day', value)}
                   placeholder={t('reservations.meta.selectDay')}
-                  options={days.map(d => ({ value: d.id, label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
+                  options={days.map(d => ({ value: String(d.id), label: d.title || `${t('dayplan.dayN', { n: d.day_number ?? '' })}${d.date ? ` · ${formatDate(d.date, locale)}` : ''}` }))}
                   size="sm"
                 />
               </div>
@@ -504,14 +505,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             ))}
             <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }} onChange={handleFileChange} />
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
+              {onFileUpload && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
                 border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
                 fontSize: 11, color: 'var(--text-faint)', cursor: uploadingFile ? 'default' : 'pointer', fontFamily: 'inherit',
               }}>
                 <Paperclip size={11} />
                 {uploadingFile ? t('reservations.uploading') : t('reservations.attachFile')}
-              </button>
+              </button>}
               {/* Link existing file picker */}
               {reservation?.id && files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).length > 0 && (
                 <div style={{ position: 'relative' }}>
@@ -572,6 +573,6 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
 
 function formatDate(dateStr, locale) {
   if (!dateStr) return ''
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString(locale || 'de-DE', { day: 'numeric', month: 'short' })
+  const d = new Date(dateStr + 'T00:00:00Z')
+  return d.toLocaleDateString(locale || undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }

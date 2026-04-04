@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-interface DragDataPayload { placeId?: string; assignmentId?: string; noteId?: string; fromDayId?: string }
+interface DragDataPayload {
+  placeId?: string
+  assignmentId?: string
+  noteId?: string
+  fromDayId?: string
+  recommendedPlace?: string
+}
 declare global { interface Window { __dragData: DragDataPayload | null } }
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -19,7 +25,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
 import { useDayNotes } from '../../hooks/useDayNotes'
-import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult } from '../../types'
+import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RecommendedPlace, RouteResult } from '../../types'
 
 const NOTE_ICONS = [
   { id: 'FileText', Icon: FileText },
@@ -52,28 +58,29 @@ const TYPE_ICONS = {
 }
 
 interface DayPlanSidebarProps {
-  tripId: number
-  trip: Trip
+  tripId: number | string
+  trip: Trip | null
   days: Day[]
   places: Place[]
   categories: Category[]
   assignments: AssignmentsMap
-  selectedDayId: number | null
-  selectedPlaceId: number | null
-  selectedAssignmentId: number | null
-  onSelectDay: (dayId: number | null) => void
-  onPlaceClick: (placeId: number) => void
+  selectedDayId: number | string | null
+  selectedPlaceId: number | string | null
+  selectedAssignmentId: number | string | null
+  onSelectDay: (dayId: number | string, skipFit?: boolean) => void
+  onPlaceClick: (placeId: number | string | null, assignmentId?: number | string | null) => void
   onDayDetail: (day: Day) => void
-  accommodations?: Assignment[]
-  onReorder: (dayId: number, orderedIds: number[]) => void
-  onUpdateDayTitle: (dayId: number, title: string) => void
-  onRouteCalculated: (dayId: number, route: RouteResult | null) => void
-  onAssignToDay: (placeId: number, dayId: number) => void
-  onRemoveAssignment: (assignmentId: number, dayId: number) => void
-  onEditPlace: (place: Place) => void
-  onDeletePlace: (placeId: number) => void
+  accommodations?: any[]
+  onReorder: (dayId: number | string, orderedIds: (number | string)[]) => void
+  onUpdateDayTitle: (dayId: number | string, title: string) => void
+  onRouteCalculated: (route: RouteResult | null) => void
+  onAssignToDay: (placeId: number | string, dayId: number | string, position?: number) => void
+  onDropRecommendedPlace?: (recommendation: RecommendedPlace, dayId: number | string, position?: number) => Promise<void> | void
+  onRemoveAssignment: (dayId: number | string, assignmentId: number | string) => void
+  onEditPlace: (place: Place, assignmentId?: number | string | null) => void
+  onDeletePlace: (placeId: number | string) => void
   reservations?: Reservation[]
-  onAddReservation: () => void
+  onAddReservation: (dayId: number | string) => void
 }
 
 export default function DayPlanSidebar({
@@ -82,7 +89,7 @@ export default function DayPlanSidebar({
   selectedDayId, selectedPlaceId, selectedAssignmentId,
   onSelectDay, onPlaceClick, onDayDetail, accommodations = [],
   onReorder, onUpdateDayTitle, onRouteCalculated,
-  onAssignToDay, onRemoveAssignment, onEditPlace, onDeletePlace,
+  onAssignToDay, onDropRecommendedPlace, onRemoveAssignment, onEditPlace, onDeletePlace,
   reservations = [],
   onAddReservation,
 }: DayPlanSidebarProps) {
@@ -112,9 +119,27 @@ export default function DayPlanSidebar({
   const [dragOverDayId, setDragOverDayId] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
   const inputRef = useRef(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const dragDataRef = useRef(null) // Speichert Drag-Daten als Backup (dataTransfer geht bei Re-Render verloren)
 
   const currency = trip?.currency || 'EUR'
+
+  const parseRecommendedPlace = (serialized: string): RecommendedPlace | null => {
+    try {
+      return JSON.parse(serialized) as RecommendedPlace
+    } catch {
+      toast.error('Could not read dragged recommendation')
+      return null
+    }
+  }
+
+  const handleRecommendedDrop = (serialized: string, dayId: number, position?: number): void => {
+    const recommendation = parseRecommendedPlace(serialized)
+    if (!recommendation) return
+    Promise.resolve(onDropRecommendedPlace?.(recommendation, dayId, position)).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Unknown error')
+    })
+  }
 
   // Drag-Daten aus dataTransfer, Ref oder window lesen (dataTransfer geht bei Re-Render verloren)
   const getDragData = (e) => {
@@ -131,7 +156,8 @@ export default function DayPlanSidebar({
     // Externer Drag (aus PlacesSidebar)
     const ext = window.__dragData || {}
     const placeId = dt?.getData('placeId') || ext.placeId || ''
-    return { placeId, assignmentId: '', noteId: '', fromDayId: 0 }
+    const recommendedPlace = dt?.getData('recommendedPlace') || ext.recommendedPlace || ''
+    return { placeId, recommendedPlace, assignmentId: '', noteId: '', fromDayId: 0 }
   }
 
   // Only auto-expand genuinely new days (not on initial load from storage)
@@ -179,12 +205,12 @@ export default function DayPlanSidebar({
   const getDayAssignments = (dayId) =>
     (assignments[String(dayId)] || []).slice().sort((a, b) => a.order_index - b.order_index)
 
-  const getMergedItems = (dayId) => {
+  const getMergedItems = (dayId: number | string) => {
     const da = getDayAssignments(dayId)
-    const dn = (dayNotes[String(dayId)] || []).slice().sort((a, b) => a.sort_order - b.sort_order)
+    const dn = (dayNotes[String(dayId)] || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     return [
-      ...da.map(a => ({ type: 'place', sortKey: a.order_index, data: a })),
-      ...dn.map(n => ({ type: 'note', sortKey: n.sort_order, data: n })),
+      ...da.map(a => ({ type: 'assignment' as const, sortKey: a.order_index, data: a as any })),
+      ...dn.map(n => ({ type: 'note' as const, sortKey: n.sort_order ?? 0, data: n as any })),
     ].sort((a, b) => a.sortKey - b.sortKey)
   }
 
@@ -195,12 +221,12 @@ export default function DayPlanSidebar({
     })
   }
 
-  const openEditNote = (dayId, note, e) => {
+  const openEditNote = (dayId: any, note: any, e?: any) => {
     e?.stopPropagation()
     _openEditNote(dayId, note)
   }
 
-  const deleteNote = async (dayId, noteId, e) => {
+  const deleteNote = async (dayId: any, noteId: any, e?: any) => {
     e?.stopPropagation()
     await _deleteNote(dayId, noteId)
   }
@@ -219,20 +245,20 @@ export default function DayPlanSidebar({
     newOrder.splice(adjustedTo, 0, moved)
 
     // Orte: neuer order_index über onReorder
-    const assignmentIds = newOrder.filter(i => i.type === 'place').map(i => i.data.id)
+    const assignmentIds = newOrder.filter(i => i.type === 'assignment').map(i => i.data.id as number)
 
     // Notizen: sort_order muss ZWISCHEN den umgebenden order_indices der Orte liegen, niemals gleich sein.
     // Formel: Notiz zwischen placesBefore-1 und placesBefore ergibt (placesBefore - 1) + rank/(count+1)
     // z.B. einzelne Notiz nach 2 Orten → (2-1) + 0.5 = 1.5  (zwischen order_index 1 und 2)
-    const groups = {}
+    const groups: Record<number, any[]> = {}
     let pc = 0
     newOrder.forEach(item => {
-      if (item.type === 'place') { pc++ }
+      if (item.type === 'assignment') { pc++ }
       else { if (!groups[pc]) groups[pc] = []; groups[pc].push(item.data.id) }
     })
-    const noteChanges = []
+    const noteChanges: { id: any; sort_order: number }[] = []
     Object.entries(groups).forEach(([pb, ids]) => {
-      ids.forEach((id, i) => {
+      (ids as any[]).forEach((id, i) => {
         noteChanges.push({ id, sort_order: (Number(pb) - 1) + (i + 1) / (ids.length + 1) })
       })
     })
@@ -272,7 +298,7 @@ export default function DayPlanSidebar({
     try {
       const result = await calculateRoute(waypoints, 'walking')
       // Luftlinien zwischen Wegpunkten anzeigen
-      const lineCoords = waypoints.map(p => [p.lat, p.lng])
+      const lineCoords = waypoints.map(p => [p.lat, p.lng] as [number, number])
       setRouteInfo({ distance: result.distanceText, duration: result.durationText })
       onRouteCalculated?.({ ...result, coordinates: lineCoords })
     } catch { toast.error(t('dayplan.toast.routeError')) }
@@ -331,10 +357,13 @@ export default function DayPlanSidebar({
 
   const handleDropOnDay = (e, dayId) => {
     e.preventDefault()
+    e.stopPropagation()
     setDragOverDayId(null)
-    const { placeId, assignmentId, noteId, fromDayId } = getDragData(e)
+    const { placeId, recommendedPlace, assignmentId, noteId, fromDayId } = getDragData(e)
     if (placeId) {
       onAssignToDay?.(parseInt(placeId), dayId)
+    } else if (recommendedPlace) {
+      handleRecommendedDrop(recommendedPlace, dayId)
     } else if (assignmentId && fromDayId !== dayId) {
       tripStore.moveAssignment(tripId, Number(assignmentId), fromDayId, dayId).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
     } else if (noteId && fromDayId !== dayId) {
@@ -350,21 +379,37 @@ export default function DayPlanSidebar({
     e.preventDefault()
     e.stopPropagation()
     setDragOverDayId(null)
-    const placeId = e.dataTransfer.getData('placeId')
-    const fromAssignmentId = e.dataTransfer.getData('assignmentId')
+    const { placeId, recommendedPlace, assignmentId: fromAssignmentId } = getDragData(e)
 
     if (placeId) {
       onAssignToDay?.(parseInt(placeId), dayId)
+    } else if (recommendedPlace) {
+      handleRecommendedDrop(recommendedPlace, dayId, toIdx)
     } else if (fromAssignmentId) {
       const da = getDayAssignments(dayId)
       const fromIdx = da.findIndex(a => String(a.id) === fromAssignmentId)
       if (fromIdx === -1 || fromIdx === toIdx) { setDraggingId(null); dragDataRef.current = null; return }
-      const ids = da.map(a => a.id)
+      const ids = da.map(a => a.id as number)
       const [removed] = ids.splice(fromIdx, 1)
       ids.splice(toIdx, 0, removed)
       onReorder(dayId, ids)
     }
     setDraggingId(null)
+  }
+
+  const handleSidebarDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const edgeThreshold = 56
+    const scrollStep = 24
+
+    if (e.clientY < rect.top + edgeThreshold) {
+      container.scrollTop -= scrollStep
+    } else if (e.clientY > rect.bottom - edgeThreshold) {
+      container.scrollTop += scrollStep
+    }
   }
 
   const totalCost = days.reduce((s, d) => {
@@ -396,7 +441,7 @@ export default function DayPlanSidebar({
                 notes.map(n => ({ ...n, day_id: Number(dayId) }))
               )
               try {
-                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes, t, locale })
+                await downloadTripPDF({ trip, days, places, assignments, categories, dayNotes: flatNotes as any, t, locale })
               } catch (e) {
                 console.error('PDF error:', e)
                 toast.error(t('dayplan.pdfError') + ': ' + (e?.message || String(e)))
@@ -417,26 +462,31 @@ export default function DayPlanSidebar({
       </div>
 
       {/* Tagesliste */}
-      <div className="scroll-container" style={{ flex: 1, overflowY: 'auto', minHeight: 0, scrollbarWidth: 'thin', scrollbarColor: 'var(--scrollbar-thumb) transparent' }}>
+      <div
+        ref={scrollContainerRef}
+        className="scroll-container"
+        onDragOver={handleSidebarDragOver}
+        style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 24, scrollbarWidth: 'thin', scrollbarColor: 'var(--scrollbar-thumb) transparent' }}
+      >
         {days.map((day, index) => {
           const isSelected = selectedDayId === day.id
           const isExpanded = expandedDays.has(day.id)
           const da = getDayAssignments(day.id)
-          const cost = dayTotalCost(day.id, assignments, currency)
+          const cost = dayTotalCost(day.id as number, assignments, currency)
           const formattedDate = formatDate(day.date, locale)
           const loc = da.find(a => a.place?.lat && a.place?.lng)
           const isDragTarget = dragOverDayId === day.id
           const merged = getMergedItems(day.id)
           const dayNoteUi = noteUi[day.id]
-          const placeItems = merged.filter(i => i.type === 'place')
+          const placeItems = merged.filter(i => i.type === 'assignment')
 
           return (
             <div key={day.id} style={{ borderBottom: '1px solid var(--border-faint)' }}>
               {/* Tages-Header — akzeptiert Drops aus der PlacesSidebar */}
               <div
-                onClick={() => { onSelectDay(day.id); if (onDayDetail) onDayDetail(day) }}
+                onClick={() => { onSelectDay(day.id as number); if (onDayDetail) onDayDetail(day) }}
                 onDragOver={e => { e.preventDefault(); setDragOverDayId(day.id) }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDayId(null) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDayId(null) }}
                 onDrop={e => handleDropOnDay(e, day.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -500,7 +550,7 @@ export default function DayPlanSidebar({
                           const border = isCheckOut && !isCheckIn ? 'rgba(239,68,68,0.2)' : isCheckIn ? 'rgba(34,197,94,0.2)' : 'var(--border-primary)'
                           const iconColor = isCheckOut && !isCheckIn ? '#ef4444' : isCheckIn ? '#22c55e' : 'var(--text-muted)'
                           return (
-                            <span key={acc.id} onClick={e => { e.stopPropagation(); onPlaceClick(acc.place_id) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 5, background: bg, border: `1px solid ${border}`, flexShrink: 1, minWidth: 0, maxWidth: '40%', cursor: 'pointer' }}>
+                            <span key={acc.id} onClick={e => { e.stopPropagation(); onPlaceClick(acc.place_id as number) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 5, background: bg, border: `1px solid ${border}`, flexShrink: 1, minWidth: 0, maxWidth: '40%', cursor: 'pointer' }}>
                               <Hotel size={8} style={{ color: iconColor, flexShrink: 0 }} />
                               <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.place_name}</span>
                             </span>
@@ -514,8 +564,8 @@ export default function DayPlanSidebar({
                     {cost && <span style={{ fontSize: 11, color: '#059669' }}>{cost}</span>}
                     {day.date && anyGeoPlace && <span style={{ width: 1, height: 10, background: 'var(--text-faint)', opacity: 0.3, flexShrink: 0 }} />}
                     {day.date && anyGeoPlace && (() => {
-                      const wLat = loc?.place.lat ?? anyGeoPlace?.place?.lat ?? anyGeoPlace?.lat
-                      const wLng = loc?.place.lng ?? anyGeoPlace?.place?.lng ?? anyGeoPlace?.lng
+                      const wLat = loc?.place.lat ?? (anyGeoPlace as any)?.place?.lat ?? (anyGeoPlace as any)?.lat
+                      const wLng = loc?.place.lng ?? (anyGeoPlace as any)?.place?.lng ?? (anyGeoPlace as any)?.lng
                       return <WeatherWidget lat={wLat} lng={wLng} date={day.date} compact />
                     })()}
                   </div>
@@ -545,7 +595,20 @@ export default function DayPlanSidebar({
                   onDragOver={e => { e.preventDefault(); if (draggingId) setDropTargetKey(`end-${day.id}`) }}
                   onDrop={e => {
                     e.preventDefault()
-                    const { assignmentId, noteId, fromDayId } = getDragData(e)
+                    e.stopPropagation()
+                    const { placeId, recommendedPlace, assignmentId, noteId, fromDayId } = getDragData(e)
+                    if (placeId) {
+                      onAssignToDay?.(parseInt(placeId), day.id as number)
+                      setDropTargetKey(null)
+                      window.__dragData = null
+                      return
+                    }
+                    if (recommendedPlace) {
+                      handleRecommendedDrop(recommendedPlace, day.id as number)
+                      setDropTargetKey(null)
+                      window.__dragData = null
+                      return
+                    }
                     if (!assignmentId && !noteId) { dragDataRef.current = null; window.__dragData = null; return }
                     if (assignmentId && fromDayId !== day.id) {
                       tripStore.moveAssignment(tripId, Number(assignmentId), fromDayId, day.id).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
@@ -559,7 +622,7 @@ export default function DayPlanSidebar({
                     if (m.length === 0) return
                     const lastItem = m[m.length - 1]
                     if (assignmentId && String(lastItem?.data?.id) !== assignmentId)
-                      handleMergedDrop(day.id, 'place', Number(assignmentId), lastItem.type, lastItem.data.id, true)
+                      handleMergedDrop(day.id, 'assignment', Number(assignmentId), lastItem.type, lastItem.data.id, true)
                     else if (noteId && String(lastItem?.data?.id) !== noteId)
                       handleMergedDrop(day.id, 'note', Number(noteId), lastItem.type, lastItem.data.id, true)
                   }}
@@ -577,11 +640,11 @@ export default function DayPlanSidebar({
                     </div>
                   ) : (
                     merged.map((item, idx) => {
-                      const itemKey = item.type === 'place' ? `place-${item.data.id}` : `note-${item.data.id}`
+                      const itemKey = item.type === 'assignment' ? `place-${item.data.id}` : `note-${item.data.id}`
                       const showDropLine = (!!draggingId || !!dropTargetKey) && dropTargetKey === itemKey
 
-                      if (item.type === 'place') {
-                        const assignment = item.data
+                      if (item.type === 'assignment') {
+                        const assignment = item.data as any
                         const place = assignment.place
                         if (!place) return null
                         const cat = categories.find(c => c.id === place.category_id)
@@ -593,16 +656,16 @@ export default function DayPlanSidebar({
                         const moveUp = (e) => {
                           e.stopPropagation()
                           if (placeIdx === 0) return
-                          const ids = placeItems.map(i => i.data.id)
+                          const ids = placeItems.map(i => i.data.id as number)
                           ;[ids[placeIdx - 1], ids[placeIdx]] = [ids[placeIdx], ids[placeIdx - 1]]
-                          onReorder(day.id, ids)
+                          onReorder(day.id as number, ids)
                         }
                         const moveDown = (e) => {
                           e.stopPropagation()
                           if (placeIdx === placeItems.length - 1) return
-                          const ids = placeItems.map(i => i.data.id)
+                          const ids = placeItems.map(i => i.data.id as number)
                           ;[ids[placeIdx], ids[placeIdx + 1]] = [ids[placeIdx + 1], ids[placeIdx]]
-                          onReorder(day.id, ids)
+                          onReorder(day.id as number, ids)
                         }
 
                         return (
@@ -620,36 +683,40 @@ export default function DayPlanSidebar({
                             onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverDayId(null); if (dropTargetKey !== `place-${assignment.id}`) setDropTargetKey(`place-${assignment.id}`) }}
                             onDrop={e => {
                               e.preventDefault(); e.stopPropagation()
-                              const { placeId, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
+                              const { placeId, recommendedPlace, assignmentId: fromAssignmentId, noteId, fromDayId } = getDragData(e)
                               if (placeId) {
                                 const pos = placeItems.findIndex(i => i.data.id === assignment.id)
-                                onAssignToDay?.(parseInt(placeId), day.id, pos >= 0 ? pos : undefined)
+                                onAssignToDay?.(parseInt(placeId), day.id as number, pos >= 0 ? pos : undefined)
+                                setDropTargetKey(null); window.__dragData = null
+                              } else if (recommendedPlace) {
+                                const pos = placeItems.findIndex(i => i.data.id === assignment.id)
+                                handleRecommendedDrop(recommendedPlace, day.id as number, pos >= 0 ? pos : undefined)
                                 setDropTargetKey(null); window.__dragData = null
                               } else if (fromAssignmentId && fromDayId !== day.id) {
                                 const toIdx = getDayAssignments(day.id).findIndex(a => a.id === assignment.id)
                                 tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
                                 setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
                               } else if (fromAssignmentId) {
-                                handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'place', assignment.id)
+                                handleMergedDrop(day.id, 'assignment', Number(fromAssignmentId), 'assignment', assignment.id)
                               } else if (noteId && fromDayId !== day.id) {
                                 const tm = getMergedItems(day.id)
-                                const toIdx = tm.findIndex(i => i.type === 'place' && i.data.id === assignment.id)
+                                const toIdx = tm.findIndex(i => i.type === 'assignment' && i.data.id === assignment.id)
                                 const so = toIdx <= 0 ? (tm[0]?.sortKey ?? 0) - 1 : (tm[toIdx - 1].sortKey + tm[toIdx].sortKey) / 2
                                 tripStore.moveDayNote(tripId, fromDayId, day.id, Number(noteId), so).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
                                 setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null
                               } else if (noteId) {
-                                handleMergedDrop(day.id, 'note', Number(noteId), 'place', assignment.id)
+                                handleMergedDrop(day.id, 'note', Number(noteId), 'assignment', assignment.id)
                               }
                             }}
                             onDragEnd={() => { setDraggingId(null); setDragOverDayId(null); setDropTargetKey(null); dragDataRef.current = null }}
-                            onClick={() => { onPlaceClick(isPlaceSelected ? null : place.id, isPlaceSelected ? null : assignment.id); if (!isPlaceSelected) onSelectDay(day.id, true) }}
+                            onClick={() => { onPlaceClick(isPlaceSelected ? null : place.id as number, isPlaceSelected ? null : assignment.id as number); if (!isPlaceSelected) onSelectDay(day.id as number, true) }}
                             onContextMenu={e => ctxMenu.open(e, [
-                              onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id) },
-                              onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id, assignment.id) },
+                              onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id as number) },
+                              onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id as number, assignment.id as number) },
                               place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
                               (place.lat && place.lng) && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`, '_blank') },
                               { divider: true },
-                              onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
+                              onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id as number) },
                             ])}
                             onMouseEnter={() => setHoveredId(assignment.id)}
                             onMouseLeave={() => setHoveredId(null)}
@@ -707,7 +774,7 @@ export default function DayPlanSidebar({
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                                 {cat && (() => {
                                   const CatIcon = getCategoryIcon(cat.icon)
-                                  return <CatIcon size={10} strokeWidth={2} color={cat.color || 'var(--text-muted)'} title={cat.name} style={{ flexShrink: 0 }} />
+                                  return <CatIcon size={10} strokeWidth={2} color={cat.color || 'var(--text-muted)'} style={{ flexShrink: 0 }} />
                                 })()}
                                 <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
                                   {place.name}
@@ -786,7 +853,7 @@ export default function DayPlanSidebar({
                       }
 
                       // Notizkarte
-                      const note = item.data
+                      const note = item.data as any
                       const isNoteHovered = hoveredId === `note-${note.id}`
                       const NoteIcon = getNoteIcon(note.icon)
                       const noteIdx = idx
@@ -812,11 +879,11 @@ export default function DayPlanSidebar({
                             } else if (fromAssignmentId && fromDayId !== day.id) {
                               const tm = getMergedItems(day.id)
                               const noteIdx = tm.findIndex(i => i.type === 'note' && i.data.id === note.id)
-                              const toIdx = tm.slice(0, noteIdx).filter(i => i.type === 'place').length
+                              const toIdx = tm.slice(0, noteIdx).filter(i => i.type === 'assignment').length
                               tripStore.moveAssignment(tripId, Number(fromAssignmentId), fromDayId, day.id, toIdx).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error'))
                               setDraggingId(null); setDropTargetKey(null)
                             } else if (fromAssignmentId) {
-                              handleMergedDrop(day.id, 'place', Number(fromAssignmentId), 'note', note.id)
+                              handleMergedDrop(day.id, 'assignment', Number(fromAssignmentId), 'note', note.id)
                             }
                           }}
                           onContextMenu={e => ctxMenu.open(e, [
@@ -870,10 +937,14 @@ export default function DayPlanSidebar({
                     onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dropTargetKey !== `end-${day.id}`) setDropTargetKey(`end-${day.id}`) }}
                     onDrop={e => {
                       e.preventDefault(); e.stopPropagation()
-                      const { placeId, assignmentId, noteId, fromDayId } = getDragData(e)
+                      const { placeId, recommendedPlace, assignmentId, noteId, fromDayId } = getDragData(e)
                       // Neuer Ort von der Orte-Liste
                       if (placeId) {
-                        onAssignToDay?.(parseInt(placeId), day.id)
+                        onAssignToDay?.(parseInt(placeId), day.id as number)
+                        setDropTargetKey(null); window.__dragData = null; return
+                      }
+                      if (recommendedPlace) {
+                        handleRecommendedDrop(recommendedPlace, day.id as number)
                         setDropTargetKey(null); window.__dragData = null; return
                       }
                       if (!assignmentId && !noteId) { dragDataRef.current = null; window.__dragData = null; return }
@@ -889,7 +960,7 @@ export default function DayPlanSidebar({
                       if (m.length === 0) return
                       const lastItem = m[m.length - 1]
                       if (assignmentId && String(lastItem?.data?.id) !== assignmentId)
-                        handleMergedDrop(day.id, 'place', Number(assignmentId), lastItem.type, lastItem.data.id, true)
+                        handleMergedDrop(day.id, 'assignment', Number(assignmentId), lastItem.type, lastItem.data.id, true)
                       else if (noteId && String(lastItem?.data?.id) !== noteId)
                         handleMergedDrop(day.id, 'note', Number(noteId), lastItem.type, lastItem.data.id, true)
                     }}

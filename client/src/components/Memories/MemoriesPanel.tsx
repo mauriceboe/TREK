@@ -12,6 +12,7 @@ interface TripPhoto {
   username: string
   shared: number
   added_at: string
+  city: string | null
 }
 
 interface ImmichAsset {

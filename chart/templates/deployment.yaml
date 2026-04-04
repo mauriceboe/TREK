@@ -11,6 +11,9 @@ spec:
       app: {{ include "trek.name" . }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         app: {{ include "trek.name" . }}
     spec:
@@ -20,21 +23,46 @@ spec:
         - name: {{ .name }}
         {{- end }}
       {{- end }}
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: trek
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - containerPort: 3000
           envFrom:
             - configMapRef:
                 name: {{ include "trek.fullname" . }}-config
           env:
-            - name: JWT_SECRET
+            - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ default (printf "%s-secret" (include "trek.fullname" .)) .Values.existingSecret }}
-                  key: {{ .Values.existingSecretKey | default "JWT_SECRET" }}
+                  key: {{ .Values.existingSecretKey | default "ENCRYPTION_KEY" }}
+                  optional: true
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-secret" (include "trek.fullname" .)) .Values.existingSecret }}
+                  key: ADMIN_EMAIL
+                  optional: true
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-secret" (include "trek.fullname" .)) .Values.existingSecret }}
+                  key: ADMIN_PASSWORD
+                  optional: true
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-secret" (include "trek.fullname" .)) .Values.existingSecret }}
+                  key: OIDC_CLIENT_SECRET
+                  optional: true
           volumeMounts:
             - name: data
               mountPath: /app/data
