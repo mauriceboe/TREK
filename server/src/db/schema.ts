@@ -281,9 +281,10 @@ function createTables(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS vacay_company_holidays (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       plan_id INTEGER NOT NULL REFERENCES vacay_plans(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       date TEXT NOT NULL,
       note TEXT DEFAULT '',
-      UNIQUE(plan_id, date)
+      UNIQUE(plan_id, user_id, date)
     );
 
     CREATE TABLE IF NOT EXISTS vacay_holiday_calendars (

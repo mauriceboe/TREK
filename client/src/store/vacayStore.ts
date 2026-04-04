@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import apiClient from '../api/client'
 import type { AxiosResponse } from 'axios'
-import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo, VacayHolidayCalendar } from '../types'
+import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo, VacayHolidayCalendar, VacayCompanyHoliday } from '../types'
 
 const ax = apiClient
 
@@ -30,7 +30,7 @@ interface VacayYearsResponse {
 
 interface VacayEntriesResponse {
   entries: VacayEntry[]
-  companyHolidays: string[]
+  companyHolidays: VacayCompanyHoliday[]
 }
 
 interface VacayStatsResponse {
@@ -60,7 +60,7 @@ interface VacayApi {
   removeYear: (year: number) => Promise<VacayYearsResponse>
   getEntries: (year: number) => Promise<VacayEntriesResponse>
   toggleEntry: (date: string, targetUserId?: number) => Promise<unknown>
-  toggleCompanyHoliday: (date: string) => Promise<unknown>
+  toggleCompanyHoliday: (date: string, targetUserId?: number) => Promise<unknown>
   getStats: (year: number) => Promise<VacayStatsResponse>
   updateStats: (year: number, days: number, targetUserId?: number) => Promise<unknown>
   getCountries: () => Promise<{ countries: string[] }>
@@ -85,7 +85,7 @@ const api: VacayApi = {
   removeYear: (year) => ax.delete(`/addons/vacay/years/${year}`).then((r: AxiosResponse) => r.data),
   getEntries: (year) => ax.get(`/addons/vacay/entries/${year}`).then((r: AxiosResponse) => r.data),
   toggleEntry: (date, targetUserId) => ax.post('/addons/vacay/entries/toggle', { date, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
-  toggleCompanyHoliday: (date) => ax.post('/addons/vacay/entries/company-holiday', { date }).then((r: AxiosResponse) => r.data),
+  toggleCompanyHoliday: (date, targetUserId) => ax.post('/addons/vacay/entries/company-holiday', { date, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
   getStats: (year) => ax.get(`/addons/vacay/stats/${year}`).then((r: AxiosResponse) => r.data),
   updateStats: (year, days, targetUserId) => ax.put(`/addons/vacay/stats/${year}`, { vacation_days: days, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
   getCountries: () => ax.get('/addons/vacay/holidays/countries').then((r: AxiosResponse) => r.data),
@@ -104,7 +104,7 @@ interface VacayState {
   isFused: boolean
   years: number[]
   entries: VacayEntry[]
-  companyHolidays: string[]
+  companyHolidays: VacayCompanyHoliday[]
   stats: VacayStat[]
   selectedYear: number
   selectedUserId: number | null
@@ -126,7 +126,7 @@ interface VacayState {
   removeYear: (year: number) => Promise<void>
   loadEntries: (year?: number) => Promise<void>
   toggleEntry: (date: string, targetUserId?: number) => Promise<void>
-  toggleCompanyHoliday: (date: string) => Promise<void>
+  toggleCompanyHoliday: (date: string, targetUserId?: number) => Promise<void>
   loadStats: (year?: number) => Promise<void>
   updateVacationDays: (year: number, days: number, targetUserId?: number) => Promise<void>
   loadHolidays: (year?: number) => Promise<void>
@@ -244,8 +244,8 @@ export const useVacayStore = create<VacayState>((set, get) => ({
     await get().loadStats()
   },
 
-  toggleCompanyHoliday: async (date: string) => {
-    await api.toggleCompanyHoliday(date)
+  toggleCompanyHoliday: async (date: string, targetUserId?: number) => {
+    await api.toggleCompanyHoliday(date, targetUserId)
     await get().loadEntries()
     await get().loadStats()
   },

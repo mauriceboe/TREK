@@ -9,7 +9,7 @@ import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLi
 const RES_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 import { assignmentsApi, reservationsApi } from '../../api/client'
 import { downloadTripPDF } from '../PDF/TripPDF'
-import { calculateRoute, generateGoogleMapsUrl, normalizeTransportProfile, optimizeRoute } from '../Map/RouteCalculator'
+import { generateGoogleMapsUrl, normalizeTransportProfile, optimizeRoute } from '../Map/RouteCalculator'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { useContextMenu, ContextMenu } from '../shared/ContextMenu'
 import Markdown from 'react-markdown'
@@ -23,7 +23,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
 import { useDayNotes } from '../../hooks/useDayNotes'
-import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, RouteResult } from '../../types'
+import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap } from '../../types'
 
 const NOTE_ICONS = [
   { id: 'FileText', Icon: FileText },
@@ -71,7 +71,7 @@ interface DayPlanSidebarProps {
   accommodations?: Assignment[]
   onReorder: (dayId: number, orderedIds: number[]) => void
   onUpdateDayTitle: (dayId: number, title: string) => void
-  onRouteCalculated: (route: RouteResult | null) => void
+  onRouteCalculated: (route: null) => void
   onAssignToDay: (placeId: number, dayId: number) => void
   onRemoveAssignment: (assignmentId: number, dayId: number) => void
   onEditPlace: (place: Place) => void
@@ -122,13 +122,12 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   useEffect(() => { onExpandedDaysChange?.(expandedDays) }, [expandedDays])
   const [editingDayId, setEditingDayId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
-  const [isCalculating, setIsCalculating] = useState(false)
-  const [routeInfo, setRouteInfo] = useState(null)
-  const [routeUnavailable, setRouteUnavailable] = useState(false)
   const [draggingId, setDraggingId] = useState(null)
   const [lockedIds, setLockedIds] = useState(new Set())
   const [lockHoverId, setLockHoverId] = useState(null)
   const [optimizationPreview, setOptimizationPreview] = useState(null)
+  const routeInfo = null
+  const routeUnavailable = false
   const [undoHover, setUndoHover] = useState(false)
   const [pdfHover, setPdfHover] = useState(false)
   const [icsHover, setIcsHover] = useState(false)
@@ -617,25 +616,6 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     return 'walking'
   }
 
-  const updateDisplayedRoute = async (dayAssignments) => {
-    const waypoints = dayAssignments
-      .map(a => a.place)
-      .filter(p => p?.lat && p?.lng)
-      .map(p => ({ lat: p.lat, lng: p.lng }))
-    if (waypoints.length < 2) {
-      setRouteInfo(null)
-      setRouteUnavailable(false)
-      onRouteCalculated?.(null)
-      return
-    }
-
-    const profile = getRouteProfileForAssignments(dayAssignments)
-    const result = await calculateRoute(waypoints, profile)
-    setRouteInfo({ distance: result.distanceText, duration: result.durationText })
-    setRouteUnavailable(false)
-    onRouteCalculated?.(result)
-  }
-
   const buildOptimizationPreview = async (dayId) => {
     const dayAssignments = getDayAssignments(dayId)
     if (dayAssignments.length < 3) return null
@@ -671,53 +651,12 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     const nextIds = result.map(a => a.id)
     if (nextIds.every((id, index) => id === prevIds[index])) return null
 
-    const currentGeoAssignments = dayAssignments.filter(a => a.place?.lat && a.place?.lng)
-    const nextGeoAssignments = result.filter(a => a.place?.lat && a.place?.lng)
-    let currentRoute = null
-    let nextRoute = null
-    let secondsSaved = 0
-    if (currentGeoAssignments.length >= 2 && nextGeoAssignments.length >= 2) {
-      try {
-        ;[currentRoute, nextRoute] = await Promise.all([
-          calculateRoute(
-            currentGeoAssignments.map(a => ({ lat: a.place.lat, lng: a.place.lng })),
-            profile
-          ),
-          calculateRoute(
-            nextGeoAssignments.map(a => ({ lat: a.place.lat, lng: a.place.lng })),
-            profile
-          ),
-        ])
-        secondsSaved = Math.max(0, Math.round(currentRoute.duration - nextRoute.duration))
-      } catch {}
-    }
-
     return {
       dayId,
-      profile,
       prevIds,
       nextIds,
       result,
-      currentRoute,
-      nextRoute,
-      secondsSaved,
     }
-  }
-
-  const handleCalculateRoute = async () => {
-    if (!selectedDayId) return
-    const da = getDayAssignments(selectedDayId)
-    const geoAssignments = da.filter(a => a.place?.lat && a.place?.lng)
-    if (geoAssignments.length < 2) { toast.error(t('dayplan.toast.needTwoPlaces')); return }
-    setIsCalculating(true)
-    try {
-      await updateDisplayedRoute(geoAssignments)
-    } catch {
-      setRouteInfo(null)
-      setRouteUnavailable(true)
-      toast.error(t('dayplan.toast.routeError'))
-    }
-    finally { setIsCalculating(false) }
   }
 
   useEffect(() => {
@@ -766,9 +705,6 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     }
 
     await onReorder(selectedDayId, preview.nextIds)
-    try {
-      await updateDisplayedRoute(preview.result)
-    } catch {}
     setOptimizationPreview(null)
     toast.success(t('dayplan.toast.routeOptimized'))
     const capturedDayId = selectedDayId

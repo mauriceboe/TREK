@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from '../../i18n'
 import { isWeekend } from './holidays'
-import type { HolidaysMap, VacayEntry } from '../../types'
+import type { HolidaysMap, VacayCompanyHoliday, VacayEntry } from '../../types'
 
 const WEEKDAY_KEYS = ['vacay.mon', 'vacay.tue', 'vacay.wed', 'vacay.thu', 'vacay.fri', 'vacay.sat', 'vacay.sun'] as const
 
@@ -12,11 +12,40 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
+function renderPeopleOverlay(items: Array<{ user_id: number; person_color?: string }>, showBorder = false) {
+  if (items.length === 0) return null
+  const colors = items.slice(0, 4).map(item => item.person_color || '#6366f1')
+  if (colors.length === 1) {
+    return <div className="absolute inset-0.5 rounded" style={{ backgroundColor: colors[0], opacity: 0.4, border: showBorder ? '1px solid rgba(245,158,11,0.8)' : undefined }} />
+  }
+  if (colors.length === 2) {
+    return <div className="absolute inset-0.5 rounded" style={{ background: `linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%)`, opacity: 0.4, border: showBorder ? '1px solid rgba(245,158,11,0.8)' : undefined }} />
+  }
+  if (colors.length === 3) {
+    return (
+      <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4, border: showBorder ? '1px solid rgba(245,158,11,0.8)' : undefined }}>
+        <div className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: colors[0] }} />
+        <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: colors[1] }} />
+        <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: colors[2] }} />
+      </div>
+    )
+  }
+  return (
+    <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4, border: showBorder ? '1px solid rgba(245,158,11,0.8)' : undefined }}>
+      <div className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: colors[0] }} />
+      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: colors[1] }} />
+      <div className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: colors[2] }} />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: colors[3] }} />
+    </div>
+  )
+}
+
 interface VacayMonthCardProps {
   year: number
   month: number
   holidays: HolidaysMap
-  companyHolidaySet: Set<string>
+  companyHolidayMap: Record<string, VacayCompanyHoliday[]>
+  blockedCompanyHolidaySet: Set<string>
   companyHolidaysEnabled?: boolean
   entryMap: Record<string, VacayEntry[]>
   onCellClick: (date: string) => void
@@ -26,29 +55,29 @@ interface VacayMonthCardProps {
 }
 
 export default function VacayMonthCard({
-  year, month, holidays, companyHolidaySet, companyHolidaysEnabled = true, entryMap,
-  onCellClick, companyMode, blockWeekends, weekendDays = [0, 6]
+  year, month, holidays, companyHolidayMap, blockedCompanyHolidaySet, companyHolidaysEnabled = true, entryMap,
+  onCellClick, companyMode, blockWeekends, weekendDays = [0, 6],
 }: VacayMonthCardProps) {
   const { t, locale } = useTranslation()
 
   const weekdays = WEEKDAY_KEYS.map(k => t(k))
   const monthName = useMemo(() => new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(year, month, 1)), [locale, year, month])
-  
+
   const weeks = useMemo(() => {
     const firstDay = new Date(year, month, 1)
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     let startDow = firstDay.getDay() - 1
     if (startDow < 0) startDow = 6
-    const cells = []
+    const cells: Array<number | null> = []
     for (let i = 0; i < startDow; i++) cells.push(null)
     for (let d = 1; d <= daysInMonth; d++) cells.push(d)
     while (cells.length % 7 !== 0) cells.push(null)
-    const w = []
+    const w: Array<Array<number | null>> = []
     for (let i = 0; i < cells.length; i += 7) w.push(cells.slice(i, i + 7))
     return w
   }, [year, month])
 
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
 
   return (
     <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
@@ -74,9 +103,9 @@ export default function VacayMonthCard({
               const dayOfWeek = new Date(year, month, day).getDay()
               const weekend = weekendDays.includes(dayOfWeek)
               const holiday = holidays[dateStr]
-              const isCompany = companyHolidaysEnabled && companyHolidaySet.has(dateStr)
-              const dayEntries = entryMap[dateStr] || []
-              const isBlocked = !!holiday || (weekend && blockWeekends) || (isCompany && !companyMode)
+              const companyEntries = companyHolidaysEnabled ? (companyHolidayMap[dateStr] || []) : []
+              const vacationEntries = (entryMap[dateStr] || []).filter(entry => !companyEntries.some(company => company.user_id === entry.user_id))
+              const isBlocked = !!holiday || (weekend && blockWeekends) || (blockedCompanyHolidaySet.has(dateStr) && !companyMode)
 
               return (
                 <div
@@ -95,36 +124,13 @@ export default function VacayMonthCard({
                   onMouseLeave={e => { e.currentTarget.style.background = weekend ? 'var(--bg-secondary)' : 'transparent' }}
                 >
                   {holiday && <div className="absolute inset-0.5 rounded" style={{ background: hexToRgba(holiday.color, 0.12) }} />}
-                  {isCompany && <div className="absolute inset-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)' }} />}
-
-                  {dayEntries.length === 1 && (
-                    <div className="absolute inset-0.5 rounded" style={{ backgroundColor: dayEntries[0].person_color, opacity: 0.4 }} />
-                  )}
-                  {dayEntries.length === 2 && (
-                    <div className="absolute inset-0.5 rounded" style={{
-                      background: `linear-gradient(135deg, ${dayEntries[0].person_color} 50%, ${dayEntries[1].person_color} 50%)`,
-                      opacity: 0.4,
-                    }} />
-                  )}
-                  {dayEntries.length === 3 && (
-                    <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
-                    </div>
-                  )}
-                  {dayEntries.length >= 4 && (
-                    <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[3].person_color }} />
-                    </div>
-                  )}
+                  {vacationEntries.length > 0 && renderPeopleOverlay(vacationEntries)}
+                  {companyEntries.length > 0 && renderPeopleOverlay(companyEntries, true)}
+                  {companyEntries.length > 0 && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: '#d97706' }} />}
 
                   <span className="relative z-[1] text-[11px] font-medium" style={{
-                    color: holiday ? holiday.color : weekend ? 'var(--text-faint)' : 'var(--text-primary)',
-                    fontWeight: dayEntries.length > 0 ? 700 : 500,
+                    color: companyEntries.length > 0 ? '#b45309' : holiday ? holiday.color : weekend ? 'var(--text-faint)' : 'var(--text-primary)',
+                    fontWeight: vacationEntries.length > 0 || companyEntries.length > 0 ? 700 : 500,
                   }}>
                     {day}
                   </span>

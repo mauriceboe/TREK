@@ -156,7 +156,6 @@ export async function applyHolidayCalendars(planId: number): Promise<void> {
         for (const h of holidays) {
           if (h.global || !h.counties || (region && h.counties.includes(region))) {
             db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, h.date);
-            db.prepare('DELETE FROM vacay_company_holidays WHERE plan_id = ? AND date = ?').run(planId, h.date);
           }
         }
       } catch { /* API error, skip */ }
@@ -205,9 +204,9 @@ export async function updatePlan(planId: number, body: UpdatePlanBody, socketId:
   }
 
   if (company_holidays_enabled === true) {
-    const companyDates = db.prepare('SELECT date FROM vacay_company_holidays WHERE plan_id = ?').all(planId) as { date: string }[];
-    for (const { date } of companyDates) {
-      db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, date);
+    const companyDates = db.prepare('SELECT user_id, date FROM vacay_company_holidays WHERE plan_id = ?').all(planId) as { user_id: number; date: string }[];
+    for (const { user_id, date } of companyDates) {
+      db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND user_id = ? AND date = ?').run(planId, user_id, date);
     }
   }
 
@@ -359,6 +358,7 @@ export function acceptInvite(userId: number, planId: number, socketId: string | 
   const ownPlan = db.prepare('SELECT id FROM vacay_plans WHERE owner_id = ?').get(userId) as { id: number } | undefined;
   if (ownPlan && ownPlan.id !== planId) {
     db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(planId, ownPlan.id, userId);
+    db.prepare('UPDATE vacay_company_holidays SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(planId, ownPlan.id, userId);
     const ownYears = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ?').all(userId, ownPlan.id) as VacayUserYear[];
     for (const y of ownYears) {
       db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, ?, ?)').run(userId, planId, y.year, y.vacation_days, y.carried_over);
@@ -416,23 +416,23 @@ export function dissolvePlan(userId: number, socketId: string | undefined): void
   const isOwnerFlag = plan.owner_id === userId;
 
   const allUserIds = getPlanUsers(plan.id).map(u => u.id);
-  const companyHolidays = db.prepare('SELECT date, note FROM vacay_company_holidays WHERE plan_id = ?').all(plan.id) as { date: string; note: string }[];
+  const companyHolidays = db.prepare('SELECT user_id, date, note FROM vacay_company_holidays WHERE plan_id = ?').all(plan.id) as { user_id: number; date: string; note: string }[];
 
   if (isOwnerFlag) {
     const members = db.prepare("SELECT user_id FROM vacay_plan_members WHERE plan_id = ? AND status = 'accepted'").all(plan.id) as { user_id: number }[];
     for (const m of members) {
       const memberPlan = getOwnPlan(m.user_id);
       db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(memberPlan.id, plan.id, m.user_id);
-      for (const ch of companyHolidays) {
-        db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(memberPlan.id, ch.date, ch.note);
+      for (const ch of companyHolidays.filter(ch => ch.user_id === m.user_id)) {
+        db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, user_id, date, note) VALUES (?, ?, ?, ?)').run(memberPlan.id, m.user_id, ch.date, ch.note);
       }
     }
     db.prepare('DELETE FROM vacay_plan_members WHERE plan_id = ?').run(plan.id);
   } else {
     const ownPlan = getOwnPlan(userId);
     db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(ownPlan.id, plan.id, userId);
-    for (const ch of companyHolidays) {
-      db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(ownPlan.id, ch.date, ch.note);
+    for (const ch of companyHolidays.filter(ch => ch.user_id === userId)) {
+      db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, user_id, date, note) VALUES (?, ?, ?, ?)').run(ownPlan.id, userId, ch.date, ch.note);
     }
     db.prepare("DELETE FROM vacay_plan_members WHERE plan_id = ? AND user_id = ?").run(plan.id, userId);
   }
@@ -536,7 +536,13 @@ export function getEntries(planId: number, year: string) {
     LEFT JOIN vacay_user_colors c ON c.user_id = e.user_id AND c.plan_id = e.plan_id
     WHERE e.plan_id = ? AND e.date LIKE ?
   `).all(planId, `${year}-%`);
-  const companyHolidays = db.prepare("SELECT * FROM vacay_company_holidays WHERE plan_id = ? AND date LIKE ?").all(planId, `${year}-%`);
+  const companyHolidays = db.prepare(`
+    SELECT ch.*, u.username as person_name, COALESCE(c.color, '#6366f1') as person_color
+    FROM vacay_company_holidays ch
+    JOIN users u ON ch.user_id = u.id
+    LEFT JOIN vacay_user_colors c ON c.user_id = ch.user_id AND c.plan_id = ch.plan_id
+    WHERE ch.plan_id = ? AND ch.date LIKE ?
+  `).all(planId, `${year}-%`);
   return { entries, companyHolidays };
 }
 
@@ -553,15 +559,15 @@ export function toggleEntry(userId: number, planId: number, date: string, socket
   }
 }
 
-export function toggleCompanyHoliday(planId: number, date: string, note: string | undefined, socketId: string | undefined): { action: string } {
-  const existing = db.prepare('SELECT id FROM vacay_company_holidays WHERE plan_id = ? AND date = ?').get(planId, date) as { id: number } | undefined;
+export function toggleCompanyHoliday(userId: number, planId: number, date: string, note: string | undefined, socketId: string | undefined): { action: string } {
+  const existing = db.prepare('SELECT id FROM vacay_company_holidays WHERE plan_id = ? AND user_id = ? AND date = ?').get(planId, userId, date) as { id: number } | undefined;
   if (existing) {
     db.prepare('DELETE FROM vacay_company_holidays WHERE id = ?').run(existing.id);
     notifyPlanUsers(planId, socketId);
     return { action: 'removed' };
   } else {
-    db.prepare('INSERT INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(planId, date, note || '');
-    db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, date);
+    db.prepare('INSERT INTO vacay_company_holidays (plan_id, user_id, date, note) VALUES (?, ?, ?, ?)').run(planId, userId, date, note || '');
+    db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND user_id = ? AND date = ?').run(planId, userId, date);
     notifyPlanUsers(planId, socketId);
     return { action: 'added' };
   }

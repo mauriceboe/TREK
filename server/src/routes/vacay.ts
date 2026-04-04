@@ -152,9 +152,19 @@ router.post('/entries/toggle', (req: Request, res: Response) => {
 
 router.post('/entries/company-holiday', (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { date, note } = req.body;
+  const { date, note, target_user_id } = req.body;
+  if (!date) return res.status(400).json({ error: 'date required' });
   const planId = svc.getActivePlanId(authReq.user.id);
-  res.json(svc.toggleCompanyHoliday(planId, date, note, req.headers['x-socket-id'] as string));
+  let userId = authReq.user.id;
+  if (target_user_id && parseInt(target_user_id) !== authReq.user.id) {
+    const planUsers = svc.getPlanUsers(planId);
+    const tid = parseInt(target_user_id);
+    if (!planUsers.find(u => u.id === tid)) {
+      return res.status(403).json({ error: 'User not in plan' });
+    }
+    userId = tid;
+  }
+  res.json(svc.toggleCompanyHoliday(userId, planId, date, note, req.headers['x-socket-id'] as string));
 });
 
 router.get('/stats/:year', (req: Request, res: Response) => {
