@@ -23,7 +23,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
 import { useDayNotes } from '../../hooks/useDayNotes'
-import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap } from '../../types'
+import type { Trip, Day, Place, Category, Assignment, Reservation, AssignmentsMap, DayNote, DaySection, MergedItem } from '../../types'
 
 const NOTE_ICONS = [
   { id: 'FileText', Icon: FileText },
@@ -53,6 +53,14 @@ function getNoteIcon(iconId) { return NOTE_ICON_MAP[iconId] || FileText }
 const TYPE_ICONS = {
   flight: '✈️', hotel: '🏨', restaurant: '🍽️', train: '🚆',
   car: '🚗', cruise: '🚢', event: '🎫', other: '📋',
+}
+
+const SECTION_ORDER: DaySection[] = ['morning', 'afternoon', 'night', 'unscheduled']
+const SECTION_LABELS: Record<DaySection, string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  night: 'Night',
+  unscheduled: 'Unscheduled',
 }
 
 interface DayPlanSidebarProps {
@@ -143,6 +151,14 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     fromType?: string; toType?: string; toId?: number; insertAfter?: boolean;
     // For arrow reorder
     reorderIds?: number[];
+  } | null>(null)
+  const [sectionDropConfirm, setSectionDropConfirm] = useState<{
+    itemType: 'place' | 'note';
+    itemId: number;
+    fromDayId: number;
+    targetDayId: number;
+    targetSection: DaySection;
+    time: string;
   } | null>(null)
   const inputRef = useRef(null)
   const dragDataRef = useRef(null)
@@ -237,6 +253,31 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     const parts = time.split(':').map(Number)
     if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts[0] * 60 + parts[1]
     return null
+  }
+
+  const inferSectionFromTime = (time?: string | null): DaySection | null => {
+    const minutes = parseTimeToMinutes(time)
+    if (minutes === null) return null
+    if (minutes < 12 * 60) return 'morning'
+    if (minutes < 17 * 60) return 'afternoon'
+    return 'night'
+  }
+
+  const resolveAssignmentSection = (assignment: Assignment): DaySection => {
+    if (assignment.day_section) return assignment.day_section
+    return inferSectionFromTime(assignment.place?.place_time) ?? 'unscheduled'
+  }
+
+  const resolveNoteSection = (note: DayNote): DaySection => {
+    if (note.day_section) return note.day_section
+    return inferSectionFromTime(note.time) ?? 'unscheduled'
+  }
+
+  const getItemSection = (item: MergedItem): DaySection => {
+    if (item.type === 'place') return resolveAssignmentSection(item.data)
+    if (item.type === 'note') return resolveNoteSection(item.data)
+    if (item.type === 'transport') return inferSectionFromTime(item.data?.reservation_time) ?? 'unscheduled'
+    return 'unscheduled'
   }
 
   // Compute initial day_plan_position for a transport based on time
@@ -340,7 +381,11 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
       result.push({ type: timed.type, sortKey, data: timed.data })
     }
 
-    return result.sort((a, b) => a.sortKey - b.sortKey)
+    return result.sort((a, b) => {
+      const sectionDelta = SECTION_ORDER.indexOf(getItemSection(a)) - SECTION_ORDER.indexOf(getItemSection(b))
+      if (sectionDelta !== 0) return sectionDelta
+      return a.sortKey - b.sortKey
+    })
   }
 
   // Pre-compute merged items for all days so the render loop doesn't recompute on unrelated state changes (e.g. hover)
@@ -352,6 +397,174 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   // getMergedItems is redefined each render but captures assignments/dayNotes/reservations/days via closure
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, assignments, dayNotes, reservations])
+
+  const getSectionCounts = (dayId: number) => {
+    const counts: Record<DaySection, number> = { morning: 0, afternoon: 0, night: 0, unscheduled: 0 }
+    for (const item of mergedItemsMap[dayId] || []) counts[getItemSection(item)] += 1
+    return counts
+  }
+
+  const getSectionItems = (dayId: number, section: DaySection) =>
+    (mergedItemsMap[dayId] || []).filter(item => getItemSection(item) === section)
+
+  const getSectionAnchorTime = (section: DaySection): string | null => {
+    if (section === 'morning') return '09:00'
+    if (section === 'afternoon') return '13:00'
+    if (section === 'night') return '17:00'
+    return null
+  }
+
+  const formatSectionAnchorTime = (section: DaySection): string | null => {
+    const anchor = getSectionAnchorTime(section)
+    return anchor ? formatTime(anchor, locale, timeFormat) : null
+  }
+
+  const shiftTimeByMinutes = (time: string, deltaMinutes: number): string | null => {
+    const minutes = parseTimeToMinutes(time)
+    if (minutes === null) return null
+    const normalized = ((minutes + deltaMinutes) % (24 * 60) + (24 * 60)) % (24 * 60)
+    const hours = Math.floor(normalized / 60).toString().padStart(2, '0')
+    const mins = (normalized % 60).toString().padStart(2, '0')
+    return `${hours}:${mins}`
+  }
+
+  const updateAssignmentInStore = (updatedAssignment: Assignment) => {
+    const nextAssignments = { ...useTripStore.getState().assignments }
+    for (const dayKey of Object.keys(nextAssignments)) {
+      nextAssignments[dayKey] = (nextAssignments[dayKey] || []).map(a =>
+        a.id === updatedAssignment.id ? updatedAssignment : a
+      )
+    }
+    tripActions.setAssignments(nextAssignments)
+  }
+
+  const updateItemSection = async (dayId: number, item: MergedItem, daySection: DaySection | null) => {
+    if (item.type === 'place') {
+      await tripActions.updateAssignmentSection(tripId, item.data.id, dayId, daySection ?? 'unscheduled')
+      return
+    }
+    if (item.type === 'note') {
+      await tripActions.updateDayNote(tripId, dayId, item.data.id, { day_section: daySection })
+    }
+  }
+
+  const applyAssignmentTime = async (assignmentId: number, nextStartTime: string | null, currentEndTime?: string | null, currentStartTime?: string | null) => {
+    let nextEndTime = currentEndTime ?? null
+    if (nextStartTime && currentStartTime && currentEndTime) {
+      const startMinutes = parseTimeToMinutes(currentStartTime)
+      const endMinutes = parseTimeToMinutes(currentEndTime)
+      const anchorMinutes = parseTimeToMinutes(nextStartTime)
+      if (startMinutes !== null && endMinutes !== null && anchorMinutes !== null) {
+        nextEndTime = shiftTimeByMinutes(currentEndTime, anchorMinutes - startMinutes)
+      }
+    }
+    const result = await assignmentsApi.updateTime(tripId, assignmentId, { place_time: nextStartTime, end_time: nextEndTime })
+    if (result?.assignment) updateAssignmentInStore(result.assignment)
+    return result?.assignment
+  }
+
+  const moveItemToSection = async (
+    itemType: 'place' | 'note',
+    itemId: number,
+    fromDayId: number,
+    targetDayId: number,
+    targetSection: DaySection,
+    setTime = false,
+  ) => {
+    if (itemType === 'place') {
+      const existing = (useTripStore.getState().assignments[String(fromDayId)] || []).find(a => a.id === itemId)
+      if (!existing) return
+      if (fromDayId !== targetDayId) {
+        const targetItems = getDayAssignments(targetDayId)
+        await tripActions.moveAssignment(tripId, itemId, fromDayId, targetDayId, targetItems.length)
+      }
+      if (setTime) {
+        const anchor = getSectionAnchorTime(targetSection)
+        await applyAssignmentTime(itemId, anchor, existing.place?.end_time ?? null, existing.place?.place_time ?? null)
+      }
+      await tripActions.updateAssignmentSection(tripId, itemId, targetDayId, targetSection)
+      return
+    }
+
+    const existingNote = (useTripStore.getState().dayNotes[String(fromDayId)] || []).find(n => n.id === itemId)
+    if (!existingNote) return
+    const nextTime = setTime ? getSectionAnchorTime(targetSection) : existingNote.time
+    if (fromDayId !== targetDayId) {
+      await tripActions.moveDayNote(tripId, fromDayId, targetDayId, itemId, 9999, targetSection)
+      if (setTime) {
+        await tripActions.updateDayNote(tripId, targetDayId, itemId, { time: nextTime })
+      }
+      return
+    }
+    await tripActions.updateDayNote(tripId, targetDayId, itemId, { day_section: targetSection, time: nextTime })
+  }
+
+  const handleDropOnSection = async (e, dayId: number, targetSection: DaySection) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { placeId, assignmentId, noteId, fromDayId } = getDragData(e)
+
+    try {
+      if (placeId) {
+        const created = await tripActions.assignPlaceToDay(tripId, dayId, parseInt(placeId), getDayAssignments(dayId).length)
+        if (created && targetSection !== 'unscheduled') {
+          await tripActions.updateAssignmentSection(tripId, created.id, dayId, targetSection)
+        }
+        return
+      }
+
+      if (assignmentId) {
+        const sourceDayId = Number(fromDayId)
+        const assignment = (useTripStore.getState().assignments[String(sourceDayId)] || []).find(a => a.id === Number(assignmentId))
+        if (!assignment) return
+        const currentSection = resolveAssignmentSection(assignment)
+        const hasExplicitTime = parseTimeToMinutes(assignment.place?.place_time) !== null
+        if (hasExplicitTime && currentSection !== targetSection) {
+          const placeTime = assignment.place?.place_time || ''
+          setSectionDropConfirm({
+            itemType: 'place',
+            itemId: Number(assignmentId),
+            fromDayId: sourceDayId,
+            targetDayId: dayId,
+            targetSection,
+            time: placeTime.includes(':') ? placeTime.substring(0, 5) : placeTime,
+          })
+          return
+        }
+        await moveItemToSection('place', Number(assignmentId), sourceDayId, dayId, targetSection, false)
+        return
+      }
+
+      if (noteId) {
+        const sourceDayId = Number(fromDayId)
+        const note = (useTripStore.getState().dayNotes[String(sourceDayId)] || []).find(n => n.id === Number(noteId))
+        if (!note) return
+        const currentSection = resolveNoteSection(note)
+        const hasExplicitTime = parseTimeToMinutes(note.time) !== null
+        if (hasExplicitTime && currentSection !== targetSection) {
+          const noteTime = note.time || ''
+          setSectionDropConfirm({
+            itemType: 'note',
+            itemId: Number(noteId),
+            fromDayId: sourceDayId,
+            targetDayId: dayId,
+            targetSection,
+            time: noteTime.includes(':') ? noteTime.substring(0, 5) : noteTime,
+          })
+          return
+        }
+        await moveItemToSection('note', Number(noteId), sourceDayId, dayId, targetSection, false)
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDraggingId(null)
+      setDropTargetKey(null)
+      setDragOverDayId(null)
+      dragDataRef.current = null
+      window.__dragData = null
+    }
+  }
 
   const openAddNote = (dayId, e) => {
     e?.stopPropagation()
@@ -586,6 +799,30 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
       newOrder.splice(adjustedTo, 0, moved)
 
       await applyMergedOrder(dayId, newOrder)
+    }
+  }
+
+  const confirmSectionDrop = async (setTime: boolean) => {
+    if (!sectionDropConfirm) return
+    const pending = { ...sectionDropConfirm }
+    setSectionDropConfirm(null)
+    try {
+      await moveItemToSection(
+        pending.itemType,
+        pending.itemId,
+        pending.fromDayId,
+        pending.targetDayId,
+        pending.targetSection,
+        setTime,
+      )
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDraggingId(null)
+      setDropTargetKey(null)
+      setDragOverDayId(null)
+      dragDataRef.current = null
+      window.__dragData = null
     }
   }
 
@@ -920,6 +1157,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
           const loc = da.find(a => a.place?.lat && a.place?.lng)
           const isDragTarget = dragOverDayId === day.id
           const merged = mergedItemsMap[day.id] || []
+          const sectionCounts = getSectionCounts(day.id)
           const dayNoteUi = noteUi[day.id]
           const placeItems = merged.filter(i => i.type === 'place')
 
@@ -1018,6 +1256,11 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
                     {formattedDate && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{formattedDate}</span>}
                     {cost && <span style={{ fontSize: 11, color: '#059669' }}>{cost}</span>}
+                    {SECTION_ORDER.map(section => sectionCounts[section] > 0 ? (
+                      <span key={section} style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                        {sectionCounts[section]} {SECTION_LABELS[section].toLowerCase()}
+                      </span>
+                    ) : null)}
                     {day.date && anyGeoPlace && <span style={{ width: 1, height: 10, background: 'var(--text-faint)', opacity: 0.3, flexShrink: 0 }} />}
                     {day.date && anyGeoPlace && (() => {
                       const wLat = loc?.place.lat ?? anyGeoPlace?.place?.lat ?? anyGeoPlace?.lat
@@ -1106,7 +1349,52 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                       <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{t('dayplan.emptyDay')}</span>
                     </div>
                   ) : (
-                    merged.map((item, idx) => {
+                    SECTION_ORDER.map(section => {
+                      const sectionItems = getSectionItems(day.id, section)
+                      const sectionKey = `section-${day.id}-${section}`
+                      const isSectionDropTarget = dropTargetKey === sectionKey
+                      return (
+                        <div key={section} style={{ paddingBottom: 4 }}>
+                          <div
+                            onDragOver={e => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setDragOverDayId(null)
+                              if (dropTargetKey !== sectionKey) setDropTargetKey(sectionKey)
+                            }}
+                            onDragLeave={e => {
+                              if (!e.currentTarget.contains(e.relatedTarget)) setDropTargetKey(null)
+                            }}
+                            onDrop={e => handleDropOnSection(e, day.id, section)}
+                            style={{
+                              margin: '10px 8px 6px',
+                              padding: '8px 12px',
+                              background: isSectionDropTarget ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)',
+                              border: isSectionDropTarget ? '1px dashed var(--text-primary)' : '1px solid var(--border-faint)',
+                              borderRadius: 10,
+                              backdropFilter: 'blur(10px)',
+                              WebkitBackdropFilter: 'blur(10px)',
+                              transition: 'background 0.12s, border-color 0.12s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                            }}
+                          >
+                            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.92)' }}>
+                              {SECTION_LABELS[section]}
+                            </div>
+                            {isSectionDropTarget && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                                Drop here
+                              </span>
+                            )}
+                          </div>
+                          {sectionItems.length === 0 ? (
+                            <div style={{ height: 6 }} />
+                          ) : sectionItems.map((item) => {
+                      const idx = merged.findIndex(candidate => candidate.type === item.type && candidate.data.id === item.data.id)
+                      const itemSection = getItemSection(item)
                       const itemKey = item.type === 'transport' ? `transport-${item.data.id}` : (item.type === 'place' ? `place-${item.data.id}` : `note-${item.data.id}`)
                       const showDropLine = (!!draggingId || !!dropTargetKey) && dropTargetKey === itemKey
 
@@ -1320,13 +1608,36 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                                 </div>
                               )}
                             </div>
-                            {canEditDays && <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
+                            {canEditDays && <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, opacity: isHovered ? 1 : 0.65, transition: 'opacity 0.15s' }}>
+                              <div style={{ display: 'flex', gap: 2 }}>
+                                {SECTION_ORDER.map(section => (
+                                  <button
+                                    key={section}
+                                    onClick={e => { e.stopPropagation(); updateItemSection(day.id, item, section).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error')) }}
+                                    title={SECTION_LABELS[section]}
+                                    style={{
+                                      border: '1px solid var(--border-faint)',
+                                      background: itemSection === section ? 'var(--bg-hover)' : 'transparent',
+                                      color: itemSection === section ? 'var(--text-primary)' : 'var(--text-faint)',
+                                      borderRadius: 999,
+                                      padding: '1px 5px',
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {section === 'morning' ? 'M' : section === 'afternoon' ? 'A' : section === 'night' ? 'N' : 'U'}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="reorder-buttons" style={{ display: 'flex', gap: 1 }}>
                               <button onClick={moveUp} disabled={idx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === 0 ? 'default' : 'pointer', color: idx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
                                 <ChevronUp size={12} strokeWidth={2} />
                               </button>
                               <button onClick={moveDown} disabled={idx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: idx === merged.length - 1 ? 'default' : 'pointer', color: idx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}>
                                 <ChevronDown size={12} strokeWidth={2} />
                               </button>
+                              </div>
                             </div>}
                           </div>
                           </React.Fragment>
@@ -1487,12 +1798,38 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                             <button onClick={e => openEditNote(day.id, note, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Pencil size={10} /></button>
                             <button onClick={e => deleteNote(day.id, note.id, e)} style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-faint)', display: 'flex' }}><Trash2 size={10} /></button>
                           </div>}
-                          {canEditDays && <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, opacity: isNoteHovered ? 1 : undefined, transition: 'opacity 0.15s' }}>
-                            <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'up') }} disabled={noteIdx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === 0 ? 'default' : 'pointer', color: noteIdx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronUp size={12} strokeWidth={2} /></button>
-                            <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'down') }} disabled={noteIdx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === merged.length - 1 ? 'default' : 'pointer', color: noteIdx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronDown size={12} strokeWidth={2} /></button>
+                          {canEditDays && <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, opacity: isNoteHovered ? 1 : 0.65, transition: 'opacity 0.15s' }}>
+                            <div style={{ display: 'flex', gap: 2 }}>
+                              {SECTION_ORDER.map(section => (
+                                <button
+                                  key={section}
+                                  onClick={e => { e.stopPropagation(); updateItemSection(day.id, item, section).catch((err: unknown) => toast.error(err instanceof Error ? err.message : 'Unknown error')) }}
+                                  title={SECTION_LABELS[section]}
+                                  style={{
+                                    border: '1px solid var(--border-faint)',
+                                    background: itemSection === section ? 'var(--bg-hover)' : 'transparent',
+                                    color: itemSection === section ? 'var(--text-primary)' : 'var(--text-faint)',
+                                    borderRadius: 999,
+                                    padding: '1px 5px',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {section === 'morning' ? 'M' : section === 'afternoon' ? 'A' : section === 'night' ? 'N' : 'U'}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="reorder-buttons" style={{ display: 'flex', gap: 1 }}>
+                              <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'up') }} disabled={noteIdx === 0} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === 0 ? 'default' : 'pointer', color: noteIdx === 0 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronUp size={12} strokeWidth={2} /></button>
+                              <button onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'down') }} disabled={noteIdx === merged.length - 1} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === merged.length - 1 ? 'default' : 'pointer', color: noteIdx === merged.length - 1 ? 'var(--border-primary)' : 'var(--text-faint)', display: 'flex', lineHeight: 1 }}><ChevronDown size={12} strokeWidth={2} /></button>
+                            </div>
                           </div>}
                         </div>
                         </React.Fragment>
+                      )
+                    })}
+                        </div>
                       )
                     })
                   )}
@@ -1693,6 +2030,56 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                 fontSize: 12, background: '#ef4444', color: 'white',
                 border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit',
               }}>{t('common.confirm')}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {sectionDropConfirm && ReactDOM.createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(3px)',
+        }} onClick={() => setSectionDropConfirm(null)}>
+          <div style={{
+            width: 360, background: 'var(--bg-card)', borderRadius: 16,
+            boxShadow: '0 16px 48px rgba(0,0,0,0.22)', padding: '22px 22px 18px',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: '50%', background: 'rgba(59,130,246,0.12)',
+              }}>
+                <Clock size={18} strokeWidth={1.8} color="#3b82f6" />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                Move to {SECTION_LABELS[sectionDropConfirm.targetSection]}
+              </div>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {sectionDropConfirm.targetSection === 'unscheduled'
+                ? `This item already has a time at ${sectionDropConfirm.time}. You can keep that time and just move it into the section, or clear the time and move it to Unscheduled.`
+                : `This item already has a time at ${sectionDropConfirm.time}. You can keep that time and just move it into the section, or snap it to ${formatSectionAnchorTime(sectionDropConfirm.targetSection)}.`}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
+              <button onClick={() => setSectionDropConfirm(null)} style={{
+                fontSize: 12, background: 'none', border: '1px solid var(--border-primary)',
+                borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'inherit',
+              }}>{t('common.cancel')}</button>
+              <button onClick={() => confirmSectionDrop(false)} style={{
+                fontSize: 12, background: 'var(--bg-hover)', color: 'var(--text-primary)',
+                border: '1px solid var(--border-faint)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit',
+              }}>
+                Move only
+              </button>
+              <button onClick={() => confirmSectionDrop(true)} style={{
+                fontSize: 12, background: '#3b82f6', color: 'white',
+                border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit',
+              }}>
+                {sectionDropConfirm.targetSection === 'unscheduled' ? 'Move and clear time' : 'Move and set time'}
+              </button>
             </div>
           </div>
         </div>,

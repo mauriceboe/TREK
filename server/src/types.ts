@@ -95,6 +95,7 @@ export interface DayAssignment {
   day_id: number;
   place_id: number;
   order_index: number;
+  day_section?: 'unscheduled' | 'morning' | 'afternoon' | 'night' | null;
   notes?: string | null;
   reservation_status?: string;
   reservation_notes?: string | null;
@@ -193,6 +194,7 @@ export interface DayNote {
   text: string;
   time?: string | null;
   icon: string;
+  day_section?: 'unscheduled' | 'morning' | 'afternoon' | 'night' | null;
   sort_order: number;
   created_at?: string;
 }

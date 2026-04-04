@@ -16,6 +16,7 @@ import {
   moveAssignment,
   getParticipants,
   updateTime,
+  updateSection,
   setParticipants,
 } from '../services/assignmentService';
 import { AuthRequest } from '../types';
@@ -114,6 +115,21 @@ router.put('/trips/:tripId/assignments/:id/time', authenticate, requireTripAcces
 
   const { place_time, end_time } = req.body;
   const updated = updateTime(id, place_time, end_time);
+  res.json({ assignment: updated });
+  broadcast(Number(tripId), 'assignment:updated', { assignment: updated }, req.headers['x-socket-id'] as string);
+});
+
+router.put('/trips/:tripId/assignments/:id/section', authenticate, requireTripAccess, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!checkPermission('day_edit', authReq.user.role, authReq.trip!.user_id, authReq.user.id, authReq.trip!.user_id !== authReq.user.id))
+    return res.status(403).json({ error: 'No permission' });
+
+  const { tripId, id } = req.params;
+  const existing = getAssignmentForTrip(id, tripId);
+  if (!existing) return res.status(404).json({ error: 'Assignment not found' });
+
+  const { day_section } = req.body;
+  const updated = updateSection(id, day_section);
   res.json({ assignment: updated });
   broadcast(Number(tripId), 'assignment:updated', { assignment: updated }, req.headers['x-socket-id'] as string);
 });

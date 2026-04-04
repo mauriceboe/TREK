@@ -539,6 +539,65 @@ function runMigrations(db: Database.Database): void {
         ALTER TABLE vacay_company_holidays_new RENAME TO vacay_company_holidays;
       `);
     },
+    () => {
+      try { db.exec("ALTER TABLE day_assignments ADD COLUMN day_section TEXT"); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+      try { db.exec("ALTER TABLE day_notes ADD COLUMN day_section TEXT"); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+    },
+    () => {
+      const packingItemColumns = db.prepare("SELECT name FROM pragma_table_info('packing_items')").all() as { name: string }[]
+      const hasPackingItemUser = packingItemColumns.some((column) => column.name === 'user_id')
+      if (!hasPackingItemUser) {
+        db.exec(`
+          CREATE TABLE packing_items_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            checked INTEGER DEFAULT 0,
+            category TEXT,
+            sort_order INTEGER DEFAULT 0,
+            weight_grams INTEGER,
+            bag_id INTEGER REFERENCES packing_bags(id) ON DELETE SET NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO packing_items_new (id, trip_id, user_id, name, checked, category, sort_order, weight_grams, bag_id, created_at)
+          SELECT pi.id, pi.trip_id, t.user_id, pi.name, pi.checked, pi.category, pi.sort_order, pi.weight_grams, pi.bag_id, pi.created_at
+          FROM packing_items pi
+          JOIN trips t ON t.id = pi.trip_id;
+          DROP TABLE packing_items;
+          ALTER TABLE packing_items_new RENAME TO packing_items;
+        `)
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_packing_items_trip_user_id ON packing_items(trip_id, user_id)')
+
+      const packingBagColumns = db.prepare("SELECT name FROM pragma_table_info('packing_bags')").all() as { name: string }[]
+      const hasPackingBagUser = packingBagColumns.some((column) => column.name === 'user_id')
+      if (!hasPackingBagUser) {
+        db.exec(`
+          CREATE TABLE packing_bags_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL DEFAULT '#6366f1',
+            weight_limit_grams INTEGER,
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO packing_bags_new (id, trip_id, user_id, name, color, weight_limit_grams, sort_order, created_at)
+          SELECT pb.id, pb.trip_id, t.user_id, pb.name, pb.color, pb.weight_limit_grams, pb.sort_order, pb.created_at
+          FROM packing_bags pb
+          JOIN trips t ON t.id = pb.trip_id;
+          DROP TABLE packing_bags;
+          ALTER TABLE packing_bags_new RENAME TO packing_bags;
+        `)
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_packing_bags_trip_user_id ON packing_bags(trip_id, user_id)')
+
+      try { db.exec("ALTER TABLE packing_templates ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0"); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_packing_templates_creator ON packing_templates(created_by)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_packing_templates_global ON packing_templates(is_global, created_at DESC)')
+    },
   ];
 
   if (currentVersion < migrations.length) {

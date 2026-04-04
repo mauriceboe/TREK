@@ -111,6 +111,7 @@ function createTables(db: Database.Database): void {
       day_id INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
       place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
       order_index INTEGER DEFAULT 0,
+      day_section TEXT,
       notes TEXT,
       reservation_status TEXT DEFAULT 'none',
       reservation_notes TEXT,
@@ -121,9 +122,12 @@ function createTables(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS packing_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       checked INTEGER DEFAULT 0,
       category TEXT,
+      weight_grams INTEGER,
+      bag_id INTEGER REFERENCES packing_bags(id) ON DELETE SET NULL,
       sort_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -187,6 +191,7 @@ function createTables(db: Database.Database): void {
       trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
       text TEXT NOT NULL,
       time TEXT,
+      day_section TEXT,
       icon TEXT DEFAULT '📝',
       sort_order REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -384,6 +389,38 @@ function createTables(db: Database.Database): void {
       UNIQUE(assignment_id, user_id)
     );
     CREATE INDEX IF NOT EXISTS idx_assignment_participants_assignment ON assignment_participants(assignment_id);
+
+    CREATE TABLE IF NOT EXISTS packing_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      is_global INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS packing_template_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER NOT NULL REFERENCES packing_templates(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS packing_template_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER NOT NULL REFERENCES packing_template_categories(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS packing_bags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#6366f1',
+      weight_limit_grams INTEGER,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
 
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

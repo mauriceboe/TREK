@@ -57,6 +57,7 @@ function formatAssignmentWithPlace(a: AssignmentRow, tags: Partial<Tag>[], parti
     id: a.id,
     day_id: a.day_id,
     order_index: a.order_index,
+    day_section: a.day_section,
     notes: a.notes,
     participants: participants || [],
     created_at: a.created_at,

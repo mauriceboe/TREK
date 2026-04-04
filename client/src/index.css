@@ -258,6 +258,16 @@ body {
 .leaflet-container {
   z-index: 0;
 }
+.leaflet-container img,
+.leaflet-container .leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}
+.leaflet-tile-container img,
+.leaflet-pane img.leaflet-tile {
+  width: 256px !important;
+  height: 256px !important;
+}
 .leaflet-pane {
   z-index: 0 !important;
 }

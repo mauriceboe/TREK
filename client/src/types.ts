@@ -63,6 +63,7 @@ export interface Assignment {
   day_id: number
   place_id?: number
   order_index: number
+  day_section?: DaySection | null
   notes: string | null
   place: Place
 }
@@ -73,9 +74,12 @@ export interface DayNote {
   text: string
   time: string | null
   icon: string | null
+  day_section?: DaySection | null
   sort_order?: number
   created_at: string
 }
+
+export type DaySection = 'unscheduled' | 'morning' | 'afternoon' | 'night'
 
 export interface PackingItem {
   id: number

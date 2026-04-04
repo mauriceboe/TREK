@@ -36,6 +36,7 @@ export function getAssignmentWithPlace(assignmentId: number | bigint) {
     id: a.id,
     day_id: a.day_id,
     order_index: a.order_index,
+    day_section: a.day_section,
     notes: a.notes,
     participants,
     created_at: a.created_at,
@@ -113,6 +114,12 @@ export function createAssignment(dayId: string | number, placeId: string | numbe
   ).run(dayId, placeId, orderIndex, notes || null);
 
   return getAssignmentWithPlace(result.lastInsertRowid);
+}
+
+export function updateSection(id: string | number, daySection: string | null) {
+  db.prepare('UPDATE day_assignments SET day_section = ? WHERE id = ?')
+    .run(daySection ?? null, id);
+  return getAssignmentWithPlace(Number(id));
 }
 
 export function assignmentExistsInDay(id: string | number, dayId: string | number, tripId: string | number) {

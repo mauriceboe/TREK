@@ -118,6 +118,7 @@ export const assignmentsApi = {
   getParticipants: (tripId: number | string, id: number) => apiClient.get(`/trips/${tripId}/assignments/${id}/participants`).then(r => r.data),
   setParticipants: (tripId: number | string, id: number, userIds: number[]) => apiClient.put(`/trips/${tripId}/assignments/${id}/participants`, { user_ids: userIds }).then(r => r.data),
   updateTime: (tripId: number | string, id: number, times: Record<string, unknown>) => apiClient.put(`/trips/${tripId}/assignments/${id}/time`, times).then(r => r.data),
+  updateSection: (tripId: number | string, id: number, daySection: string) => apiClient.put(`/trips/${tripId}/assignments/${id}/section`, { day_section: daySection }).then(r => r.data),
 }
 
 export const packingApi = {

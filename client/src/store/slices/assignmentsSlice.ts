@@ -1,7 +1,7 @@
 import { assignmentsApi } from '../../api/client'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
-import type { Assignment, AssignmentsMap } from '../../types'
+import type { Assignment, AssignmentsMap, DaySection } from '../../types'
 import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
@@ -12,6 +12,7 @@ export interface AssignmentsSlice {
   removeAssignment: (tripId: number | string, dayId: number | string, assignmentId: number) => Promise<void>
   reorderAssignments: (tripId: number | string, dayId: number | string, orderedIds: number[]) => Promise<void>
   moveAssignment: (tripId: number | string, assignmentId: number, fromDayId: number | string, toDayId: number | string, toOrderIndex?: number | null) => Promise<void>
+  updateAssignmentSection: (tripId: number | string, assignmentId: number, dayId: number | string, daySection: DaySection) => Promise<Assignment>
   setAssignments: (assignments: AssignmentsMap) => void
 }
 
@@ -159,6 +160,34 @@ export const createAssignmentsSlice = (set: SetState, get: GetState): Assignment
     } catch (err: unknown) {
       set({ assignments: prevAssignments })
       throw new Error(getApiErrorMessage(err, 'Error moving assignment'))
+    }
+  },
+
+  updateAssignmentSection: async (tripId, assignmentId, dayId, daySection) => {
+    const prevAssignments = get().assignments
+    set(state => ({
+      assignments: {
+        ...state.assignments,
+        [String(dayId)]: (state.assignments[String(dayId)] || []).map(a =>
+          a.id === assignmentId ? { ...a, day_section: daySection } : a
+        ),
+      }
+    }))
+
+    try {
+      const result = await assignmentsApi.updateSection(tripId, assignmentId, daySection)
+      set(state => ({
+        assignments: {
+          ...state.assignments,
+          [String(dayId)]: (state.assignments[String(dayId)] || []).map(a =>
+            a.id === assignmentId ? result.assignment : a
+          ),
+        }
+      }))
+      return result.assignment
+    } catch (err: unknown) {
+      set({ assignments: prevAssignments })
+      throw new Error(getApiErrorMessage(err, 'Error updating section'))
     }
   },
 

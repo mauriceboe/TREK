@@ -24,10 +24,10 @@ router.post('/', authenticate, validateStringLengths({ text: 500, time: 150 }), 
     return res.status(403).json({ error: 'No permission' });
   if (!dayNoteService.dayExists(dayId, tripId)) return res.status(404).json({ error: 'Day not found' });
 
-  const { text, time, icon, sort_order } = req.body;
+  const { text, time, icon, day_section, sort_order } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Text required' });
 
-  const note = dayNoteService.createNote(dayId, tripId, text, time, icon, sort_order);
+  const note = dayNoteService.createNote(dayId, tripId, text, time, icon, day_section, sort_order);
   res.status(201).json({ note });
   broadcast(tripId, 'dayNote:created', { dayId: Number(dayId), note }, req.headers['x-socket-id'] as string);
 });
@@ -43,8 +43,8 @@ router.put('/:id', authenticate, validateStringLengths({ text: 500, time: 150 })
   const current = dayNoteService.getNote(id, dayId, tripId);
   if (!current) return res.status(404).json({ error: 'Note not found' });
 
-  const { text, time, icon, sort_order } = req.body;
-  const updated = dayNoteService.updateNote(id, current, { text, time, icon, sort_order });
+  const { text, time, icon, day_section, sort_order } = req.body;
+  const updated = dayNoteService.updateNote(id, current, { text, time, icon, day_section, sort_order });
   res.json({ note: updated });
   broadcast(tripId, 'dayNote:updated', { dayId: Number(dayId), note: updated }, req.headers['x-socket-id'] as string);
 });

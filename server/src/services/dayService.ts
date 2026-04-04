@@ -32,41 +32,9 @@ export function getAssignmentsForDay(dayId: number | string) {
       JOIN place_tags pt ON t.id = pt.tag_id
       WHERE pt.place_id = ?
     `).all(a.place_id);
+    const participants = loadParticipantsByAssignmentIds([a.id])[a.id] || [];
 
-    return {
-      id: a.id,
-      day_id: a.day_id,
-      order_index: a.order_index,
-      notes: a.notes,
-      created_at: a.created_at,
-      place: {
-        id: a.place_id,
-        name: a.place_name,
-        description: a.place_description,
-        lat: a.lat,
-        lng: a.lng,
-        address: a.address,
-        category_id: a.category_id,
-        price: a.price,
-        currency: a.place_currency,
-        place_time: a.place_time,
-        end_time: a.end_time,
-        duration_minutes: a.duration_minutes,
-        notes: a.place_notes,
-        image_url: a.image_url,
-        transport_mode: a.transport_mode,
-        google_place_id: a.google_place_id,
-        website: a.website,
-        phone: a.phone,
-        category: a.category_id ? {
-          id: a.category_id,
-          name: a.category_name,
-          color: a.category_color,
-          icon: a.category_icon,
-        } : null,
-        tags,
-      }
-    };
+    return formatAssignmentWithPlace(a, tags, participants);
   });
 }
 

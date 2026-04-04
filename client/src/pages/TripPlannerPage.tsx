@@ -247,8 +247,18 @@ export default function TripPlannerPage(): React.ReactElement | null {
       await tripActions.updatePlace(tripId, editingPlace.id, placeData)
       // If editing from assignment context, save time per-assignment
       if (editingAssignmentId) {
-        await assignmentsApi.updateTime(tripId, editingAssignmentId, { place_time: place_time || null, end_time: end_time || null })
-        await tripActions.refreshDays(tripId)
+        const result = await assignmentsApi.updateTime(tripId, editingAssignmentId, { place_time: place_time || null, end_time: end_time || null })
+        if (result?.assignment) {
+          const nextAssignments = { ...useTripStore.getState().assignments }
+          for (const dayKey of Object.keys(nextAssignments)) {
+            nextAssignments[dayKey] = (nextAssignments[dayKey] || []).map(a =>
+              a.id === editingAssignmentId ? result.assignment : a
+            )
+          }
+          tripActions.setAssignments(nextAssignments)
+        } else {
+          await tripActions.refreshDays(tripId)
+        }
       }
       // Upload pending files with place_id
       if (pendingFiles?.length > 0) {
@@ -427,7 +437,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
     return da.map(a => a.place).filter(p => p?.lat && p?.lng)
   }, [selectedDayId, assignments])
 
-  const mapTileUrl = settings.map_tile_url || 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+  const mapTileUrl = settings.map_tile_url || 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
   const defaultCenter = [settings.default_lat || 48.8566, settings.default_lng || 2.3522]
   const defaultZoom = settings.default_zoom || 10
 

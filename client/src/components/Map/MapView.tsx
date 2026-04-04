@@ -217,6 +217,38 @@ function MapContextMenuHandler({ onContextMenu }: { onContextMenu: ((e: L.Leafle
   return null
 }
 
+function MapSizeController({ deps }: { deps: Array<string | number | boolean | null | undefined> }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    const invalidate = () => map.invalidateSize({ animate: false })
+
+    // Leaflet can mis-measure tiles when the planner layout changes after mount.
+    // Invalidating twice catches both the immediate render and the next frame.
+    const raf1 = requestAnimationFrame(() => {
+      invalidate()
+      requestAnimationFrame(invalidate)
+    })
+    const onWindowResize = () => invalidate()
+    window.addEventListener('resize', onWindowResize)
+
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      observer = new ResizeObserver(() => invalidate())
+      observer.observe(container)
+    }
+
+    return () => {
+      cancelAnimationFrame(raf1)
+      window.removeEventListener('resize', onWindowResize)
+      observer?.disconnect()
+    }
+  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
+}
+
 // ── Route travel time label ──
 interface RouteLabelProps {
   midpoint: [number, number]
@@ -269,6 +301,15 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
 
 // Module-level photo cache shared with PlaceAvatar
 import { getCached, isLoading, fetchPhoto, onThumbReady, getAllThumbs } from '../../services/photoService'
+
+const DEFAULT_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+
+function resolveTileUrl(url: string | undefined | null): string {
+  const trimmed = (url || '').trim()
+  if (!trimmed) return DEFAULT_TILE_URL
+  if (!trimmed.includes('{x}') || !trimmed.includes('{y}') || !trimmed.includes('{z}')) return DEFAULT_TILE_URL
+  return trimmed
+}
 
 // Live location tracker — blue dot with pulse animation (like Apple/Google Maps)
 function LocationTracker() {
@@ -371,7 +412,7 @@ export const MapView = memo(function MapView({
   onMapContextMenu = null,
   center = [48.8566, 2.3522],
   zoom = 10,
-  tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  tileUrl = DEFAULT_TILE_URL,
   fitKey = 0,
   dayOrderMap = {},
   leftWidth = 0,
@@ -489,17 +530,21 @@ export const MapView = memo(function MapView({
     )
   }), [places, selectedPlaceId, dayOrderMap, photoUrls, onMarkerClick, isTouchDevice])
 
+  const resolvedTileUrl = resolveTileUrl(tileUrl)
+
   return (
     <MapContainer
+      key={resolvedTileUrl}
       id="trek-map"
       center={center}
       zoom={zoom}
       zoomControl={false}
       className="w-full h-full"
-      style={{ background: '#e5e7eb' }}
+      style={{ width: '100%', height: '100%', background: '#e5e7eb' }}
     >
       <TileLayer
-        url={tileUrl}
+        key={resolvedTileUrl}
+        url={resolvedTileUrl}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         maxZoom={19}
         keepBuffer={8}
@@ -509,6 +554,7 @@ export const MapView = memo(function MapView({
       />
 
       <MapController center={center} zoom={zoom} />
+      <MapSizeController deps={[leftWidth, rightWidth, hasInspector, resolvedTileUrl, places.length, dayPlaces.length]} />
       <BoundsController places={dayPlaces.length > 0 ? dayPlaces : places} fitKey={fitKey} paddingOpts={paddingOpts} />
       <SelectionController places={places} selectedPlaceId={selectedPlaceId} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
       <MapClickHandler onClick={onMapClick} />

@@ -1,7 +1,7 @@
 import { daysApi, dayNotesApi } from '../../api/client'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
-import type { DayNote } from '../../types'
+import type { DayNote, DaySection } from '../../types'
 import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
@@ -13,7 +13,7 @@ export interface DayNotesSlice {
   addDayNote: (tripId: number | string, dayId: number | string, data: Partial<DayNote>) => Promise<DayNote>
   updateDayNote: (tripId: number | string, dayId: number | string, id: number, data: Partial<DayNote>) => Promise<DayNote>
   deleteDayNote: (tripId: number | string, dayId: number | string, id: number) => Promise<void>
-  moveDayNote: (tripId: number | string, fromDayId: number | string, toDayId: number | string, noteId: number, sort_order?: number) => Promise<void>
+  moveDayNote: (tripId: number | string, fromDayId: number | string, toDayId: number | string, noteId: number, sort_order?: number, day_section?: DaySection) => Promise<void>
 }
 
 export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice => ({
@@ -99,7 +99,7 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
     }
   },
 
-  moveDayNote: async (tripId, fromDayId, toDayId, noteId, sort_order = 9999) => {
+  moveDayNote: async (tripId, fromDayId, toDayId, noteId, sort_order = 9999, day_section) => {
     const state = get()
     const note = (state.dayNotes[String(fromDayId)] || []).find(n => n.id === noteId)
     if (!note) return
@@ -114,7 +114,7 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
     try {
       await dayNotesApi.delete(tripId, fromDayId, noteId)
       const result = await dayNotesApi.create(tripId, toDayId, {
-        text: note.text, time: note.time, icon: note.icon, sort_order,
+        text: note.text, time: note.time, icon: note.icon, sort_order, day_section: day_section ?? note.day_section,
       })
       set(s => ({
         dayNotes: {
