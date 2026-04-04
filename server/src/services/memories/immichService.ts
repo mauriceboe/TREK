@@ -343,7 +343,8 @@ export function deleteAlbumLink(linkId: string, tripId: string, userId: number) 
 export async function syncAlbumAssets(
   tripId: string,
   linkId: string,
-  userId: number
+  userId: number,
+  sid: string,
 ): Promise<{ success?: boolean; added?: number; total?: number; error?: string; status?: number }> {
   const response = getAlbumIdFromLink(tripId, linkId, userId);
   if (!response.success) return { error: 'Album link not found', status: 404 };
@@ -365,7 +366,7 @@ export async function syncAlbumAssets(
       asset_ids: assets.map((a: any) => a.id),
     };
 
-    const result = await addTripPhotos(tripId, userId, true, [selection]);
+    const result = await addTripPhotos(tripId, userId, true, [selection], sid, linkId);
     if ('error' in result) return { error: result.error.message, status: result.error.status };
 
     updateSyncTimeForAlbumLink(linkId);

@@ -72,8 +72,9 @@ router.get('/albums', authenticate, async (req: Request, res: Response) => {
 router.post('/trips/:tripId/album-links/:linkId/sync', authenticate, async (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
     const { tripId, linkId } = req.params;
+    const sid = req.headers['x-socket-id'] as string;
 
-    handleServiceResult(res, await syncSynologyAlbumLink(authReq.user.id, tripId, linkId));
+    handleServiceResult(res, await syncSynologyAlbumLink(authReq.user.id, tripId, sid, linkId));
 });
 
 router.post('/search', authenticate, async (req: Request, res: Response) => {

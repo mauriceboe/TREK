@@ -136,7 +136,8 @@ router.get('/albums', authenticate, async (req: Request, res: Response) => {
 router.post('/trips/:tripId/album-links/:linkId/sync', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId, linkId } = req.params;
-  const result = await syncAlbumAssets(tripId, linkId, authReq.user.id);
+  const sid = req.headers['x-socket-id'] as string;
+  const result = await syncAlbumAssets(tripId, linkId, authReq.user.id, sid);
   if (result.error) return res.status(result.status!).json({ error: result.error });
   res.json({ success: true, added: result.added, total: result.total });
   if (result.added! > 0) {

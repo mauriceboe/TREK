@@ -348,7 +348,7 @@ export async function listSynologyAlbums(userId: number): Promise<ServiceResult<
 }
 
 
-export async function syncSynologyAlbumLink(userId: number, tripId: string, linkId: string): Promise<ServiceResult<SyncAlbumResult>> {
+export async function syncSynologyAlbumLink(userId: number, tripId: string, linkId: string, sid: string): Promise<ServiceResult<SyncAlbumResult>> {
     const response = getAlbumIdFromLink(tripId, linkId, userId);
     if (!response.success) return response as ServiceResult<SyncAlbumResult>;
 
@@ -380,11 +380,12 @@ export async function syncSynologyAlbumLink(userId: number, tripId: string, link
         asset_ids: allItems.map(item => String(item.additional?.thumbnail?.cache_key || '')).filter(id => id),
     };
 
-    updateSyncTimeForAlbumLink(linkId);
-
-    const result = await addTripPhotos(tripId, userId, true, [selection]);
+    
+    const result = await addTripPhotos(tripId, userId, true, [selection], sid, linkId);
     if (!result.success) return result as ServiceResult<SyncAlbumResult>;
-
+    
+    updateSyncTimeForAlbumLink(linkId);
+    
     return success({ added: result.data.added, total: allItems.length });
 }
 

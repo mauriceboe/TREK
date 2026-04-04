@@ -67,10 +67,10 @@ export function listTripAlbumLinks(tripId: string, userId: number): ServiceResul
 //-----------------------------------------------
 // managing photos in trip
 
-function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, shared: boolean): boolean {
+function _addTripPhoto(tripId: string, userId: number, provider: string, assetId: string, shared: boolean, albumLinkId?: string): boolean {
   const result = db.prepare(
-    'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, shared) VALUES (?, ?, ?, ?, ?)'
-  ).run(tripId, userId, assetId, provider, shared ? 1 : 0);
+    'INSERT OR IGNORE INTO trip_photos (trip_id, user_id, asset_id, provider, shared, album_link_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(tripId, userId, assetId, provider, shared ? 1 : 0, albumLinkId || null);
   return result.changes > 0;
 }
 
@@ -79,7 +79,8 @@ export async function addTripPhotos(
   userId: number,
   shared: boolean,
   selections: Selection[],
-  sid?: string,
+  sid: string,
+  albumLinkId?: string,
 ): Promise<ServiceResult<{ added: number; shared: boolean }>> {
   const access = canAccessTrip(tripId, userId);
   if (!access) {
@@ -96,7 +97,7 @@ export async function addTripPhotos(
       for (const raw of selection.asset_ids) {
         const assetId = String(raw || '').trim();
         if (!assetId) continue;
-        if (_addTripPhoto(tripId, userId, selection.provider, assetId, shared)) {
+        if (_addTripPhoto(tripId, userId, selection.provider, assetId, shared, albumLinkId)) {
           added++;
         }
       }
@@ -213,9 +214,10 @@ export function removeAlbumLink(tripId: string, linkId: string, userId: number):
   }
 
   try {
+    db.prepare('DELETE FROM trip_photos WHERE trip_id = ? AND album_link_id = ?')
+      .run(tripId, linkId);
     db.prepare('DELETE FROM trip_album_links WHERE id = ? AND trip_id = ? AND user_id = ?')
       .run(linkId, tripId, userId);
-
     return success(true);
   } catch (error) {
     return mapDbError(error, 'Failed to remove album link');
