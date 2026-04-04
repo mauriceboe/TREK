@@ -9,7 +9,7 @@ import { ChevronDown, ChevronRight, ChevronUp, Navigation, RotateCcw, ExternalLi
 const RES_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 import { assignmentsApi, reservationsApi } from '../../api/client'
 import { downloadTripPDF } from '../PDF/TripPDF'
-import { calculateRoute, generateGoogleMapsUrl, optimizeRoute } from '../Map/RouteCalculator'
+import { calculateRoute, generateGoogleMapsUrl, normalizeTransportProfile, optimizeRoute } from '../Map/RouteCalculator'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { useContextMenu, ContextMenu } from '../shared/ContextMenu'
 import Markdown from 'react-markdown'
@@ -603,18 +603,44 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     await onUpdateDayTitle?.(dayId, editTitle.trim())
   }
 
+  const getRouteProfileForAssignments = (dayAssignments) => {
+    const counts = { walking: 0, driving: 0, cycling: 0 }
+    dayAssignments.forEach(assignment => {
+      if (!assignment.place?.lat || !assignment.place?.lng) return
+      const profile = normalizeTransportProfile(assignment.place?.transport_mode)
+      counts[profile] += 1
+    })
+    if (counts.driving >= counts.walking && counts.driving >= counts.cycling && counts.driving > 0) return 'driving'
+    if (counts.cycling >= counts.walking && counts.cycling > 0) return 'cycling'
+    return 'walking'
+  }
+
+  const updateDisplayedRoute = async (dayAssignments) => {
+    const waypoints = dayAssignments
+      .map(a => a.place)
+      .filter(p => p?.lat && p?.lng)
+      .map(p => ({ lat: p.lat, lng: p.lng }))
+    if (waypoints.length < 2) {
+      setRouteInfo(null)
+      onRouteCalculated?.(null)
+      return
+    }
+
+    const profile = getRouteProfileForAssignments(dayAssignments)
+    const result = await calculateRoute(waypoints, profile)
+    const lineCoords = waypoints.map(p => [p.lat, p.lng])
+    setRouteInfo({ distance: result.distanceText, duration: result.durationText })
+    onRouteCalculated?.({ ...result, coordinates: lineCoords })
+  }
+
   const handleCalculateRoute = async () => {
     if (!selectedDayId) return
     const da = getDayAssignments(selectedDayId)
-    const waypoints = da.map(a => a.place).filter(p => p?.lat && p?.lng).map(p => ({ lat: p.lat, lng: p.lng }))
-    if (waypoints.length < 2) { toast.error(t('dayplan.toast.needTwoPlaces')); return }
+    const geoAssignments = da.filter(a => a.place?.lat && a.place?.lng)
+    if (geoAssignments.length < 2) { toast.error(t('dayplan.toast.needTwoPlaces')); return }
     setIsCalculating(true)
     try {
-      const result = await calculateRoute(waypoints, 'walking')
-      // Luftlinien zwischen Wegpunkten anzeigen
-      const lineCoords = waypoints.map(p => [p.lat, p.lng])
-      setRouteInfo({ distance: result.distanceText, duration: result.durationText })
-      onRouteCalculated?.({ ...result, coordinates: lineCoords })
+      await updateDisplayedRoute(geoAssignments)
     } catch { toast.error(t('dayplan.toast.routeError')) }
     finally { setIsCalculating(false) }
   }
@@ -648,9 +674,17 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
     // Optimize only unlocked assignments (work on assignments, not places)
     const unlockedWithCoords = unlocked.filter(a => a.place?.lat && a.place?.lng)
     const unlockedNoCoords = unlocked.filter(a => !a.place?.lat || !a.place?.lng)
-    const optimizedAssignments = unlockedWithCoords.length >= 2
-      ? optimizeRoute(unlockedWithCoords.map(a => ({ ...a.place, _assignmentId: a.id }))).map(p => unlockedWithCoords.find(a => a.id === p._assignmentId)).filter(Boolean)
-      : unlockedWithCoords
+    if (unlockedWithCoords.length < 2) {
+      toast.error(t('dayplan.toast.needTwoPlaces'))
+      return
+    }
+
+    const profile = getRouteProfileForAssignments(unlockedWithCoords)
+    const optimization = await optimizeRoute(
+      unlockedWithCoords.map(a => ({ assignment: a, lat: a.place.lat, lng: a.place.lng })),
+      profile
+    )
+    const optimizedAssignments = optimization.waypoints.map(item => item.assignment)
     const optimizedQueue = [...optimizedAssignments, ...unlockedNoCoords]
 
     // Merge: locked stay at their index, fill gaps with optimized
@@ -661,7 +695,13 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
       if (!result[i]) result[i] = optimizedQueue[qi++]
     }
 
+    const nextIds = result.map(a => a.id)
+    if (nextIds.every((id, index) => id === prevIds[index])) return
+
     await onReorder(selectedDayId, result.map(a => a.id))
+    try {
+      await updateDisplayedRoute(result)
+    } catch {}
     toast.success(t('dayplan.toast.routeOptimized'))
     const capturedDayId = selectedDayId
     pushUndo?.(t('undo.optimize'), async () => {
