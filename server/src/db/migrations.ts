@@ -822,6 +822,10 @@ function runMigrations(db: Database.Database): void {
     () => {
       db.exec('DROP TABLE IF EXISTS notification_preferences;');
     },
+    // Migration 73: Add reservation_id to budget_items for linking budget entries to reservations
+    () => {
+      try { db.exec('ALTER TABLE budget_items ADD COLUMN reservation_id INTEGER REFERENCES reservations(id) ON DELETE SET NULL DEFAULT NULL'); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+    },
   ];
 
   if (currentVersion < migrations.length) {

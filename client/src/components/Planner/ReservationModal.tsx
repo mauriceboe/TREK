@@ -207,13 +207,10 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         accommodation_id: form.type === 'hotel' ? (form.accommodation_id || null) : null,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
       }
-      // Auto-create budget entry if price is set
-      if (form.price && parseFloat(form.price) > 0) {
-        saveData.create_budget_entry = {
-          total_price: parseFloat(form.price),
-          category: form.budget_category || t(`reservations.type.${form.type}`) || 'Other',
-        }
-      }
+      // Auto-create/update budget entry if price is set, or signal removal if cleared
+      saveData.create_budget_entry = form.price && parseFloat(form.price) > 0
+        ? { total_price: parseFloat(form.price), category: form.budget_category || t(`reservations.type.${form.type}`) || 'Other' }
+        : { total_price: 0 }
       // If hotel with place + days, pass hotel data for auto-creation or update
       if (form.type === 'hotel' && form.hotel_place_id && form.hotel_start_day && form.hotel_end_day) {
         saveData.create_accommodation = {

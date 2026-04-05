@@ -1005,6 +1005,7 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'budget.totalBudget': 'Gesamtbudget',
   'budget.byCategory': 'Nach Kategorie',
   'budget.editTooltip': 'Klicken zum Bearbeiten',
+  'budget.linkedToReservation': 'Verknüpft mit einer Buchung — Name dort bearbeiten',
   'budget.confirm.deleteCategory': 'Möchtest du die Kategorie "{name}" mit {count} Einträgen wirklich löschen?',
   'budget.deleteCategory': 'Kategorie löschen',
   'budget.perPerson': 'Pro Person',

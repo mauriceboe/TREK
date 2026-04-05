@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { checkPermission } from '../services/permissions';
 import { AuthRequest } from '../types';
+import { db } from '../db/database';
 import {
   verifyTripAccess,
   listBudgetItems,
@@ -67,6 +68,22 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 
   const updated = updateBudgetItem(id, tripId, req.body);
   if (!updated) return res.status(404).json({ error: 'Budget item not found' });
+
+  // Sync price back to linked reservation
+  if (updated.reservation_id && req.body.total_price !== undefined) {
+    try {
+      const reservation = db.prepare('SELECT id, metadata FROM reservations WHERE id = ? AND trip_id = ?').get(updated.reservation_id, tripId) as { id: number; metadata: string | null } | undefined;
+      if (reservation) {
+        const meta = reservation.metadata ? JSON.parse(reservation.metadata) : {};
+        meta.price = String(updated.total_price);
+        db.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify(meta), reservation.id);
+        const updatedRes = db.prepare('SELECT * FROM reservations WHERE id = ?').get(reservation.id);
+        broadcast(tripId, 'reservation:updated', { reservation: updatedRes }, req.headers['x-socket-id'] as string);
+      }
+    } catch (err) {
+      console.error('[budget] Failed to sync price to reservation:', err);
+    }
+  }
 
   res.json({ item: updated });
   broadcast(tripId, 'budget:updated', { item: updated }, req.headers['x-socket-id'] as string);

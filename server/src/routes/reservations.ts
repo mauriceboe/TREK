@@ -59,6 +59,8 @@ router.post('/', authenticate, (req: Request, res: Response) => {
         category: create_budget_entry.category || type || 'Other',
         total_price: create_budget_entry.total_price,
       });
+      db.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(reservation.id, budgetItem.id);
+      budgetItem.reservation_id = reservation.id;
       broadcast(tripId, 'budget:created', { item: budgetItem }, req.headers['x-socket-id'] as string);
     } catch (err) {
       console.error('[reservations] Failed to create budget entry:', err);
@@ -119,18 +121,41 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
     broadcast(tripId, 'accommodation:updated', {}, req.headers['x-socket-id'] as string);
   }
 
-  // Auto-create budget entry if price was provided
+  // Remove linked budget entry if price was cleared
+  if (!create_budget_entry || !create_budget_entry.total_price) {
+    const linked = db.prepare('SELECT id FROM budget_items WHERE trip_id = ? AND reservation_id = ?').get(tripId, id) as { id: number } | undefined;
+    if (linked) {
+      const { deleteBudgetItem } = require('../services/budgetService');
+      deleteBudgetItem(linked.id, tripId);
+      broadcast(tripId, 'budget:deleted', { id: linked.id }, req.headers['x-socket-id'] as string);
+    }
+  }
+
+  // Auto-create or update budget entry if price was provided
   if (create_budget_entry && create_budget_entry.total_price > 0) {
     try {
-      const { createBudgetItem } = require('../services/budgetService');
-      const budgetItem = createBudgetItem(tripId, {
-        name: title || current.title,
-        category: create_budget_entry.category || type || current.type || 'Other',
-        total_price: create_budget_entry.total_price,
-      });
-      broadcast(tripId, 'budget:created', { item: budgetItem }, req.headers['x-socket-id'] as string);
+      const { createBudgetItem, updateBudgetItem } = require('../services/budgetService');
+      const itemName = title || current.title;
+      const existing = db.prepare('SELECT id FROM budget_items WHERE trip_id = ? AND reservation_id = ?').get(tripId, id) as { id: number } | undefined;
+      if (existing) {
+        const updated = updateBudgetItem(existing.id, tripId, {
+          name: itemName,
+          category: create_budget_entry.category || type || current.type || 'Other',
+          total_price: create_budget_entry.total_price,
+        });
+        broadcast(tripId, 'budget:updated', { item: updated }, req.headers['x-socket-id'] as string);
+      } else {
+        const budgetItem = createBudgetItem(tripId, {
+          name: itemName,
+          category: create_budget_entry.category || type || current.type || 'Other',
+          total_price: create_budget_entry.total_price,
+        });
+        db.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(id, budgetItem.id);
+        budgetItem.reservation_id = Number(id);
+        broadcast(tripId, 'budget:created', { item: budgetItem }, req.headers['x-socket-id'] as string);
+      }
     } catch (err) {
-      console.error('[reservations] Failed to create budget entry:', err);
+      console.error('[reservations] Failed to create/update budget entry:', err);
     }
   }
 

@@ -633,7 +633,7 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
                             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             <td style={td}>
-                              <InlineEditCell value={item.name} onSave={v => handleUpdateField(item.id, 'name', v)} placeholder={t('budget.table.name')} locale={locale} editTooltip={t('budget.editTooltip')} readOnly={!canEdit} />
+                              <InlineEditCell value={item.name} onSave={v => handleUpdateField(item.id, 'name', v)} placeholder={t('budget.table.name')} locale={locale} editTooltip={item.reservation_id ? t('budget.linkedToReservation') : t('budget.editTooltip')} readOnly={!canEdit || !!item.reservation_id} />
                               {/* Mobile: larger chips under name since Persons column is hidden */}
                               {hasMultipleMembers && (
                                 <div className="sm:hidden" style={{ marginTop: 4 }}>

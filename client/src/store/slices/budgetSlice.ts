@@ -42,6 +42,9 @@ export const createBudgetSlice = (set: SetState, get: GetState): BudgetSlice => 
       set(state => ({
         budgetItems: state.budgetItems.map(item => item.id === id ? result.item : item)
       }))
+      if (result.item.reservation_id && data.total_price !== undefined) {
+        get().loadReservations(tripId)
+      }
       return result.item
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error updating budget item'))
