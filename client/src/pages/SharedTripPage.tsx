@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -13,6 +13,43 @@ import { Clock, MapPin, FileText, Train, Plane, Bus, Car, Ship, Ticket, Hotel, M
 
 const TRANSPORT_TYPES = new Set(['flight', 'train', 'bus', 'car', 'cruise'])
 const TRANSPORT_ICONS = { flight: Plane, train: Train, bus: Bus, car: Car, cruise: Ship }
+const SECTION_ORDER = ['morning', 'afternoon', 'night', 'unscheduled'] as const
+const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  night: 'Night',
+  unscheduled: 'Unscheduled',
+}
+
+function parseTimeToMinutes(value?: string | null) {
+  if (!value) return null
+  const match = value.match(/(\d{1,2}):(\d{2})/)
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+  return hours * 60 + minutes
+}
+
+function inferSectionFromTime(value?: string | null): (typeof SECTION_ORDER)[number] | null {
+  const minutes = parseTimeToMinutes(value)
+  if (minutes == null) return null
+  if (minutes < 12 * 60) return 'morning'
+  if (minutes < 17 * 60) return 'afternoon'
+  return 'night'
+}
+
+function resolveAssignmentSection(assignment: any): (typeof SECTION_ORDER)[number] {
+  return assignment?.day_section || inferSectionFromTime(assignment?.place?.place_time) || 'unscheduled'
+}
+
+function resolveNoteSection(note: any): (typeof SECTION_ORDER)[number] {
+  return note?.day_section || inferSectionFromTime(note?.time) || 'unscheduled'
+}
+
+function resolveTransportSection(reservation: any): (typeof SECTION_ORDER)[number] {
+  return inferSectionFromTime(reservation?.reservation_time) || 'unscheduled'
+}
 
 function createMarkerIcon(place: any) {
   const cat = place.category
@@ -29,11 +66,85 @@ function createMarkerIcon(place: any) {
 
 function FitBoundsToPlaces({ places }: { places: any[] }) {
   const map = useMap()
+  const prevKeyRef = useRef('')
   useEffect(() => {
     if (places.length === 0) return
-    const bounds = L.latLngBounds(places.map(p => [p.lat, p.lng]))
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
+    const nextKey = places.map(p => `${p.id}:${p.lat}:${p.lng}`).join('|')
+    if (prevKeyRef.current === nextKey) return
+    prevKeyRef.current = nextKey
+
+    const fit = () => {
+      const anyMap = map as any
+      if (!anyMap?._container || !anyMap?._mapPane) return
+      const container = map.getContainer()
+      if (!container || container.clientWidth < 80 || container.clientHeight < 80) return
+      const bounds = L.latLngBounds(places.map(p => [p.lat, p.lng]))
+      if (!bounds.isValid()) return
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14, animate: false })
+      map.invalidateSize({ animate: false, pan: false })
+    }
+
+    const raf1 = requestAnimationFrame(() => {
+      fit()
+      requestAnimationFrame(fit)
+    })
+    const timeout1 = window.setTimeout(fit, 120)
+    const timeout2 = window.setTimeout(fit, 350)
+
+    return () => {
+      cancelAnimationFrame(raf1)
+      window.clearTimeout(timeout1)
+      window.clearTimeout(timeout2)
+    }
   }, [places, map])
+  return null
+}
+
+function SharedMapSizeController({ deps }: { deps: Array<string | number | boolean | null | undefined> }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const invalidate = () => {
+      const anyMap = map as any
+      if (!anyMap?._container || !anyMap?._mapPane) return
+      map.invalidateSize({ animate: false, pan: false })
+    }
+
+    const raf1 = requestAnimationFrame(() => {
+      invalidate()
+      requestAnimationFrame(invalidate)
+    })
+    const timeout1 = window.setTimeout(invalidate, 120)
+    const timeout2 = window.setTimeout(invalidate, 350)
+    const onWindowResize = () => invalidate()
+    const onPageShow = () => invalidate()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') invalidate()
+    }
+
+    window.addEventListener('resize', onWindowResize)
+    window.addEventListener('pageshow', onPageShow)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      const container = map.getContainer()
+      observer = new ResizeObserver(() => invalidate())
+      observer.observe(container)
+      if (container.parentElement) observer.observe(container.parentElement)
+    }
+
+    return () => {
+      cancelAnimationFrame(raf1)
+      window.clearTimeout(timeout1)
+      window.clearTimeout(timeout2)
+      window.removeEventListener('resize', onWindowResize)
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      observer?.disconnect()
+    }
+  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+
   return null
 }
 
@@ -167,8 +278,9 @@ export default function SharedTripPage() {
         {/* Map */}
         {activeTab === 'plan' && (<>
         <div style={{ borderRadius: 16, overflow: 'hidden', height: 300, marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-          <MapContainer center={center as [number, number]} zoom={11} zoomControl={false} style={{ width: '100%', height: '100%' }}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" referrerPolicy="strict-origin-when-cross-origin" />
+          <MapContainer center={center as [number, number]} zoom={11} zoomControl={false} zoomAnimation={false} fadeAnimation={false} markerZoomAnimation={false} style={{ width: '100%', height: '100%' }}>
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png" referrerPolicy="strict-origin-when-cross-origin" />
+            <SharedMapSizeController deps={[activeTab, selectedDay, mapPlaces.length]} />
             <FitBoundsToPlaces places={mapPlaces} />
             {mapPlaces.map((p: any) => (
               <Marker key={p.id} position={[p.lat, p.lng]} icon={createMarkerIcon(p)}>
@@ -191,6 +303,16 @@ export default function SharedTripPage() {
               ...notes.map((n: any) => ({ type: 'note', k: n.sort_order ?? 0, data: n })),
               ...dayTransport.map((r: any) => ({ type: 'transport', k: r.day_plan_position ?? 999, data: r })),
             ].sort((a, b) => a.k - b.k)
+            const grouped = merged.reduce((acc: Record<(typeof SECTION_ORDER)[number], any[]>, item: any) => {
+              const section =
+                item.type === 'place'
+                  ? resolveAssignmentSection(item.data)
+                  : item.type === 'note'
+                    ? resolveNoteSection(item.data)
+                    : resolveTransportSection(item.data)
+              acc[section].push(item)
+              return acc
+            }, { morning: [], afternoon: [], night: [], unscheduled: [] })
 
             return (
               <div key={day.id} style={{ background: 'var(--bg-card, white)', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border-faint, #e5e7eb)' }}>
@@ -209,9 +331,17 @@ export default function SharedTripPage() {
                   <span style={{ fontSize: 11, color: '#9ca3af' }}>{da.length} {t('shared.places')}</span>
                 </div>
 
-                {selectedDay === day.id && merged.length > 0 && (
-                  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {merged.map((item: any, idx: number) => {
+                {selectedDay === day.id && (
+                  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {SECTION_ORDER.map((section) => (
+                      <div key={section} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(148, 163, 184, 0.14)', background: 'rgba(248, 250, 252, 0.42)' }}>
+                        <div style={{ padding: '8px 10px', background: 'rgba(148, 163, 184, 0.12)', color: 'rgba(17, 24, 39, 0.78)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          {SECTION_LABELS[section]}
+                        </div>
+                        <div style={{ padding: grouped[section].length > 0 ? '8px' : '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {grouped[section].length === 0 ? (
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>Nothing planned yet</div>
+                          ) : grouped[section].map((item: any) => {
                       if (item.type === 'transport') {
                         const r = item.data
                         const TIcon = TRANSPORT_ICONS[r.type] || Ticket
@@ -259,6 +389,9 @@ export default function SharedTripPage() {
                         </div>
                       )
                     })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
