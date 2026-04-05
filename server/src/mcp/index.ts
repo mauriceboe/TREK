@@ -19,10 +19,10 @@ interface McpSession {
 const sessions = new Map<string, McpSession>();
 
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_SESSIONS_PER_USER = 5;
+export const MAX_SESSIONS_PER_USER = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const parsed = Number.parseInt(process.env.MCP_RATE_LIMIT ?? "");
-const RATE_LIMIT_MAX = Number.isFinite(parsed) && parsed > 0 ? parsed : 60; // requests per minute per user
+export const RATE_LIMIT_MAX = Number.isFinite(parsed) && parsed > 0 ? parsed : 60000; // requests per minute per user
 
 interface RateLimitEntry {
   count: number;

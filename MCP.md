@@ -67,7 +67,7 @@ The Settings page shows a ready-to-copy client configuration snippet. For **Clau
 | **No image uploads**                    | Cover images cannot be set through MCP. Use the web UI to upload trip covers.                                                                    |
 | **Reservations are created as pending** | When the AI creates a reservation, it starts with `pending` status. You must confirm it manually or ask the AI to set the status to `confirmed`. |
 | **Demo mode restrictions**              | If TREK is running in demo mode, all write operations through MCP are blocked.                                                                   |
-| **Rate limiting**                       | 60 requests per minute per user. Exceeding this returns a `429` error.                                                                           |
+| **Rate limiting**                       | 60,000 requests per minute per user. Exceeding this returns a `429` error.                                                                           |
 | **Session limits**                      | Maximum 5 concurrent MCP sessions per user. Sessions expire after 1 hour of inactivity.                                                          |
 | **Token limits**                        | Maximum 10 API tokens per user.                                                                                                                  |
 | **Token revocation**                    | Deleting a token immediately terminates all active MCP sessions for that user.                                                                   |

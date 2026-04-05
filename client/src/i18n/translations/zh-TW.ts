@@ -556,6 +556,14 @@ const zhTW: Record<string, string> = {
   'admin.mcpTokens.usage.noData': '尚無使用資料',
   'admin.mcpTokens.usage.loadError': '載入使用資料失敗',
   'admin.mcpTokens.usage.requests': '次請求',
+  'admin.mcpTokens.usage.config': '目前設定',
+  'admin.mcpTokens.usage.rateLimitMax': 'Rate limit',
+  'admin.mcpTokens.usage.rateLimitUnit': '次請求 / 分鐘 / 使用者',
+  'admin.mcpTokens.usage.maxSessions': '最大並行 Session 數',
+  'admin.mcpTokens.usage.sessionsUnit': '個 session / 使用者',
+  'admin.mcpTokens.usage.sessionTtl': 'Session 逾時',
+  'admin.mcpTokens.usage.sessionTtlUnit': '分鐘無活動後失效',
+  'admin.mcpTokens.usage.envHint': '可透過 MCP_RATE_LIMIT 環境變數覆蓋',
 
   // GitHub
   'admin.tabs.github': 'GitHub',

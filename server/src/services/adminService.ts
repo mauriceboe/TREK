@@ -7,7 +7,7 @@ import { User, Addon } from '../types';
 import { updateJwtSecret } from '../config';
 import { maybe_encrypt_api_key, decrypt_api_key } from './apiKeyCrypto';
 import { getAllPermissions, savePermissions as savePerms, PERMISSION_ACTIONS } from './permissions';
-import { revokeUserSessions } from '../mcp';
+import { revokeUserSessions, RATE_LIMIT_MAX, MAX_SESSIONS_PER_USER } from '../mcp';
 import { validatePassword } from './passwordPolicy';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -533,7 +533,17 @@ export function getMcpTokenUsage() {
     ORDER BY total_30d DESC
   `).all() as { id: number; name: string; token_prefix: string; username: string; total_30d: number; total_24h: number }[];
 
-  return { hourly, daily, byToken };
+  return {
+    hourly,
+    daily,
+    byToken,
+    config: {
+      rateLimitMax: RATE_LIMIT_MAX,
+      rateLimitWindowSec: 60,
+      maxSessionsPerUser: MAX_SESSIONS_PER_USER,
+      sessionTtlMin: 60,
+    },
+  };
 }
 
 // ── JWT Rotation ───────────────────────────────────────────────────────────

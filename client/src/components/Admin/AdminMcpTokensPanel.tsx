@@ -22,6 +22,12 @@ interface UsageData {
   hourly:  HourlyBucket[]
   daily:   DailyBucket[]
   byToken: TokenStat[]
+  config: {
+    rateLimitMax: number
+    rateLimitWindowSec: number
+    maxSessionsPerUser: number
+    sessionTtlMin: number
+  }
 }
 
 // Fill in zero-count buckets so the chart always shows a continuous timeline
@@ -118,6 +124,40 @@ function UsagePanel() {
 
   return (
     <div className="space-y-6">
+      {/* Active configuration */}
+      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-card)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{t('admin.mcpTokens.usage.config')}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            {
+              label: t('admin.mcpTokens.usage.rateLimitMax'),
+              value: data.config.rateLimitMax,
+              unit: t('admin.mcpTokens.usage.rateLimitUnit'),
+              hint: t('admin.mcpTokens.usage.envHint'),
+            },
+            {
+              label: t('admin.mcpTokens.usage.maxSessions'),
+              value: data.config.maxSessionsPerUser,
+              unit: t('admin.mcpTokens.usage.sessionsUnit'),
+            },
+            {
+              label: t('admin.mcpTokens.usage.sessionTtl'),
+              value: data.config.sessionTtlMin,
+              unit: t('admin.mcpTokens.usage.sessionTtlUnit'),
+            },
+          ].map(item => (
+            <div key={item.label} className="rounded-lg px-3 py-2.5 space-y-0.5" style={{ background: 'var(--bg-secondary)' }}>
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.label}</p>
+              <p className="text-xl font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>{item.value}</p>
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.unit}</p>
+              {item.hint && (
+                <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>{item.hint}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3">
         {[
