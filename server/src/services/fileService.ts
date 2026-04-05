@@ -42,6 +42,7 @@ export function formatFile(file: TripFile & { trip_id?: number }) {
   return {
     ...file,
     url: `/api/trips/${tripId}/files/${file.id}/download`,
+    uploaded_by_avatar: file.uploaded_by_avatar ? `/uploads/avatars/${file.uploaded_by_avatar}` : null,
   };
 }
 
