@@ -1048,6 +1048,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'packing.menuDeleteCat': 'Delete Category',
   'packing.exportQr': 'Export to QR code',
   'packing.importQr': 'Scan QR code',
+  'packing.useCamera': 'Use Camera',
+  'packing.uploadImage': 'Upload Image',
   'packing.scanQr': 'Scan QR',
   'packing.assignUser': 'Assign user',
   'packing.noMembers': 'No trip members',

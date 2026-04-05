@@ -1051,6 +1051,8 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'packing.menuDeleteCat': 'Kategorie löschen',
   'packing.exportQr': 'Als QR-Code exportieren',
   'packing.importQr': 'QR-Code scannen',
+  'packing.useCamera': 'Kamera nutzen',
+  'packing.uploadImage': 'Bild hochladen',
   'packing.scanQr': 'QR scannen',
   'packing.assignUser': 'Benutzer zuweisen',
   'packing.noMembers': 'Keine Mitglieder',
@@ -1546,4 +1548,4 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'notifications.test.tripText': 'Testbenachrichtigung für Reise "{trip}".',
 }
 
-export default de
+export default de

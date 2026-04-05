@@ -1,5 +1,6 @@
 // Trip PDF via browser print window
 import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark } from 'lucide-react'
 import { mapsApi } from '../../api/client'
@@ -7,16 +8,14 @@ import type { Trip, Day, Place, Category, AssignmentsMap, DayNotesMap } from '..
 
 const NOTE_ICON_MAP = { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark }
 function noteIconSvg(iconId) {
-  if (!_renderToStaticMarkup) return ''
   const Icon = NOTE_ICON_MAP[iconId] || FileText
-  return _renderToStaticMarkup(createElement(Icon, { size: 14, strokeWidth: 1.8, color: '#94a3b8' }))
+  return renderToStaticMarkup(createElement(Icon, { size: 14, strokeWidth: 1.8, color: '#94a3b8' }))
 }
 
 const TRANSPORT_ICON_MAP = { flight: Plane, train: Train, bus: Bus, car: Car, cruise: Ship }
 function transportIconSvg(type) {
-  if (!_renderToStaticMarkup) return ''
   const Icon = TRANSPORT_ICON_MAP[type] || Ticket
-  return _renderToStaticMarkup(createElement(Icon, { size: 14, strokeWidth: 1.8, color: '#3b82f6' }))
+  return renderToStaticMarkup(createElement(Icon, { size: 14, strokeWidth: 1.8, color: '#3b82f6' }))
 }
 
 // ── SVG inline icons (for chips) ─────────────────────────────────────────────
@@ -44,17 +43,9 @@ function safeImg(url) {
 }
 
 // Generate SVG string from Lucide icon name (for category thumbnails)
-let _renderToStaticMarkup = null
-async function ensureRenderer() {
-  if (!_renderToStaticMarkup) {
-    const mod = await import('react-dom/server')
-    _renderToStaticMarkup = mod.renderToStaticMarkup
-  }
-}
 function categoryIconSvg(iconName, color = '#6366f1', size = 24) {
-  if (!_renderToStaticMarkup) return ''
   const Icon = getCategoryIcon(iconName)
-  return _renderToStaticMarkup(
+  return renderToStaticMarkup(
     createElement(Icon, { size, strokeWidth: 1.8, color: 'rgba(255,255,255,0.92)' })
   )
 }
@@ -109,7 +100,6 @@ interface downloadTripPDFProps {
 }
 
 export async function downloadTripPDF({ trip, days, places, assignments, categories, dayNotes, reservations = [], t: _t, locale: _locale }: downloadTripPDFProps) {
-  await ensureRenderer()
   const loc = _locale || undefined
   const tr = _t || (k => k)
   const sorted = [...(days || [])].sort((a, b) => a.day_number - b.day_number)
@@ -451,7 +441,7 @@ ${daysHtml}
 
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'flex:1;width:100%;border:none;'
-  iframe.sandbox = 'allow-same-origin allow-modals'
+  iframe.sandbox = 'allow-same-origin allow-modals allow-scripts'
   iframe.srcdoc = html
 
   card.appendChild(header)

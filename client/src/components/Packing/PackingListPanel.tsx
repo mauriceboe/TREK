@@ -525,7 +525,7 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
 
       {showQrModal && (
         <QRDisplayModal
-          title={`Export ${kategorie}`}
+          title={kategorie}
           value={encodePackingList(kategorie, items)}
           onClose={() => setShowQrModal(false)}
         />

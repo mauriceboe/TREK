@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import QRCode from 'react-qr-code'
 import { X, Copy, Check, Printer } from 'lucide-react'
@@ -11,6 +11,7 @@ interface QRDisplayModalProps {
 
 export function QRDisplayModal({ title, value, onClose }: QRDisplayModalProps) {
   const [copied, setCopied] = useState(false)
+  const qrRef = useRef<HTMLDivElement>(null)
 
   const handleCopy = async () => {
     try {
@@ -23,8 +24,13 @@ export function QRDisplayModal({ title, value, onClose }: QRDisplayModalProps) {
   }
 
   const handlePrint = () => {
+    const qrSvg = qrRef.current?.querySelector('svg')
+    if (!qrSvg) return
+
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
+
+    const svgHtml = qrSvg.outerHTML
 
     printWindow.document.write(`
       <html>
@@ -36,41 +42,40 @@ export function QRDisplayModal({ title, value, onClose }: QRDisplayModalProps) {
               flex-direction: column; 
               align-items: center; 
               justify-content: center; 
-              height: 100vh; 
+              min-height: 100vh; 
               margin: 0; 
+              padding: 40px;
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             }
-            .container { text-align: center; padding: 40px; border: 1px solid #eee; border-radius: 20px; }
-            h1 { margin-bottom: 30px; color: #333; font-size: 24px; }
-            .qr-wrapper { background: white; padding: 20px; display: inline-block; border: 1px solid #eee; border-radius: 10px; }
+            .container { text-align: center; max-width: 500px; width: 100%; }
+            h1 { margin-bottom: 40px; color: #000; font-size: 28px; font-weight: 700; }
+            .qr-wrapper { background: white; padding: 20px; display: inline-block; border: 2px solid #000; border-radius: 20px; }
+            .qr-wrapper svg { width: 400px !important; height: 400px !important; display: block; }
             @media print {
-              body { height: auto; }
-              .container { border: none; }
+              body { min-height: auto; padding: 0; }
+              .container { margin: 20px auto; border: none; }
+              .qr-wrapper { border: none; padding: 0; }
             }
           </style>
         </head>
         <body>
           <div class="container">
             <h1>${title}</h1>
-            <div class="qr-wrapper" id="qr-content"></div>
+            <div class="qr-wrapper">
+              ${svgHtml}
+            </div>
           </div>
           <script>
-            setTimeout(() => {
-              window.print();
-              window.close();
-            }, 500);
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 500);
+            };
           </script>
         </body>
       </html>
     `)
-
-    const qrElement = document.querySelector('svg')
-    if (qrElement && printWindow.document.getElementById('qr-content')) {
-      const clonedSvg = qrElement.cloneNode(true) as SVGElement
-      clonedSvg.setAttribute('width', '400')
-      clonedSvg.setAttribute('height', '400')
-      printWindow.document.getElementById('qr-content')?.appendChild(clonedSvg)
-    }
 
     printWindow.document.close()
   }
@@ -103,7 +108,7 @@ export function QRDisplayModal({ title, value, onClose }: QRDisplayModalProps) {
           </button>
         </div>
 
-        <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
+        <div ref={qrRef} style={{ background: 'white', padding: 16, borderRadius: 12 }}>
           <QRCode
             value={value}
             size={256}
