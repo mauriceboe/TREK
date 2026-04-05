@@ -1251,7 +1251,7 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
                   border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
                   fontSize: 11, color: 'var(--text-faint)', cursor: 'pointer', fontFamily: 'inherit',
                 }}>
-                  <QrCode size={11} /> Scan QR
+                  <QrCode size={11} /> {t('packing.scanQr')}
                 </button>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -1273,7 +1273,7 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
 
       {showQrScanner && (
         <QRScannerModal
-          title="Scan Packing List"
+          title={t('packing.importQr')}
           onScan={handleScanQr}
           onClose={() => setShowQrScanner(false)}
         />
