@@ -528,6 +528,10 @@ function runMigrations(db: Database.Database): void {
       CREATE INDEX IF NOT EXISTS idx_mcp_token_usage_token_id ON mcp_token_usage(token_id);
       CREATE INDEX IF NOT EXISTS idx_mcp_token_usage_requested_at ON mcp_token_usage(requested_at);
     `),
+    // Flight API key per user (AeroDataBox via RapidAPI)
+    () => {
+      try { db.exec('ALTER TABLE users ADD COLUMN flight_api_key TEXT'); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+    },
   ];
 
   if (currentVersion < migrations.length) {

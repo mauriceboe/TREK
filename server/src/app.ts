@@ -36,6 +36,7 @@ import atlasRoutes from './routes/atlas';
 import immichRoutes from './routes/immich';
 import notificationRoutes from './routes/notifications';
 import shareRoutes from './routes/share';
+import flightsRoutes from './routes/flights';
 import { mcpHandler } from './mcp';
 import { Addon } from './types';
 
@@ -201,6 +202,7 @@ export function createApp(): express.Application {
   app.use('/api/addons/atlas', atlasRoutes);
   app.use('/api/integrations/immich', immichRoutes);
   app.use('/api/maps', mapsRoutes);
+  app.use('/api/flights', flightsRoutes);
   app.use('/api/weather', weatherRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/backup', backupRoutes);

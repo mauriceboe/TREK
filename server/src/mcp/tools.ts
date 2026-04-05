@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { db, canAccessTrip, isOwner } from '../db/database';
 import { broadcast } from '../websocket';
+import { lookupFlight } from '../services/flightService';
 
 const MS_PER_DAY = 86400000;
 const MAX_TRIP_DAYS = 90;
@@ -496,7 +497,7 @@ export function registerTools(server: McpServer, userId: number): void {
   server.registerTool(
     'create_reservation',
     {
-      description: 'Recommend a reservation for a trip. Created as pending — the user must confirm it. Linking: hotel → use place_id + start_day_id + end_day_id (all three required to create the accommodation link); restaurant/train/car/cruise/event/tour/activity/other → use assignment_id; flight → no linking.',
+      description: 'Recommend a reservation for a trip. Created as pending — the user must confirm it. Linking: hotel → use place_id + start_day_id + end_day_id (all three required to create the accommodation link); restaurant/train/car/cruise/event/tour/activity/other → use assignment_id; flight → no linking. For flight type: call lookup_flight first to auto-populate airline, airports, terminals, and times into metadata.',
       inputSchema: {
         tripId: z.number().int().positive(),
         title: z.string().min(1).max(200),
@@ -1219,6 +1220,49 @@ export function registerTools(server: McpServer, userId: number): void {
       db.prepare('DELETE FROM day_notes WHERE id = ?').run(noteId);
       broadcast(tripId, 'dayNote:deleted', { noteId, dayId });
       return ok({ success: true });
+    }
+  );
+
+  // --- FLIGHT LOOKUP ---
+
+  server.registerTool(
+    'lookup_flight',
+    {
+      description: 'Look up flight details by IATA flight number and date using AeroDataBox (RapidAPI). Returns airline name, departure/arrival airports with terminals and gates, scheduled times (local + UTC), aircraft type, and flight status. Call this before create_reservation(type:"flight") to auto-fill metadata. Returns an error object if no Flight API key is configured — ask the user to add their AeroDataBox key in Admin Settings → API Keys, or set FLIGHT_API_KEY in the server environment.',
+      inputSchema: {
+        flight_number: z.string().min(2).max(12).describe('IATA flight number, e.g. "BR115" or "LH 123"'),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Flight date in YYYY-MM-DD format'),
+      },
+    },
+    async ({ flight_number, date }) => {
+      let result;
+      try {
+        result = await lookupFlight(flight_number, date, userId);
+      } catch {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: 'Flight data provider returned an error.',
+              hint: 'Check the flight number, date, and try again. If the problem persists, verify your AeroDataBox API key in Admin Settings.',
+            }),
+          }],
+          isError: true,
+        };
+      }
+      if (!result) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: 'Flight not found or no Flight API key configured.',
+              hint: 'Ask the user to add their AeroDataBox (RapidAPI) key in Admin Settings → API Keys, or set FLIGHT_API_KEY in the server .env / docker-compose environment.',
+            }),
+          }],
+          isError: true,
+        };
+      }
+      return ok(result);
     }
   );
 }

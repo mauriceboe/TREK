@@ -81,3 +81,23 @@ export interface CreateDayNoteRequest {
   time?: string;
   icon?: string;
 }
+
+export interface FlightInfo {
+  flight_number: string;
+  airline: string;
+  airline_iata: string;
+  departure_airport_iata: string;
+  departure_airport_name: string;
+  departure_terminal: string | null;
+  departure_gate: string | null;
+  departure_scheduled_local: string | null;
+  departure_scheduled_utc: string | null;
+  arrival_airport_iata: string;
+  arrival_airport_name: string;
+  arrival_terminal: string | null;
+  arrival_baggage_belt: string | null;
+  arrival_scheduled_local: string | null;
+  arrival_scheduled_utc: string | null;
+  aircraft_type: string | null;
+  status: string | null;
+}

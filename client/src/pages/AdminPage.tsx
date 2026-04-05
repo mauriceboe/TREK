@@ -118,6 +118,7 @@ export default function AdminPage(): React.ReactElement {
   // API Keys
   const [mapsKey, setMapsKey] = useState<string>('')
   const [weatherKey, setWeatherKey] = useState<string>('')
+  const [flightKey, setFlightKey] = useState<string>('')
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [savingKeys, setSavingKeys] = useState<boolean>(false)
   const [validating, setValidating] = useState<Record<string, boolean>>({})
@@ -178,6 +179,7 @@ export default function AdminPage(): React.ReactElement {
       const data = await authApi.getSettings()
       setMapsKey(data.settings?.maps_api_key || '')
       setWeatherKey(data.settings?.openweather_api_key || '')
+      setFlightKey(data.settings?.flight_api_key || '')
     } catch (err: unknown) {
       // ignore
     }
@@ -215,6 +217,7 @@ export default function AdminPage(): React.ReactElement {
       await updateApiKeys({
         maps_api_key: mapsKey,
         openweather_api_key: weatherKey,
+        flight_api_key: flightKey,
       })
       toast.success(t('admin.keySaved'))
     } catch (err: unknown) {
@@ -228,7 +231,7 @@ export default function AdminPage(): React.ReactElement {
     setValidating({ maps: true, weather: true })
     try {
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey })
+      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, flight_api_key: flightKey })
       const result = await authApi.validateKeys()
       setValidation(result)
     } catch (err: unknown) {
@@ -242,7 +245,7 @@ export default function AdminPage(): React.ReactElement {
     setValidating(prev => ({ ...prev, [keyType]: true }))
     try {
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey })
+      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, flight_api_key: flightKey })
       const result = await authApi.validateKeys()
       setValidation(prev => ({ ...prev, [keyType]: result[keyType] }))
     } catch (err: unknown) {
@@ -858,6 +861,34 @@ export default function AdminPage(): React.ReactElement {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Flight API Key */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                      ✈️ AeroDataBox Flight API Key
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showKeys.flight ? 'text' : 'password'}
+                          value={flightKey}
+                          onChange={e => setFlightKey(e.target.value)}
+                          placeholder="Paste your RapidAPI AeroDataBox key"
+                          className="w-full text-sm px-3 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                        />
+                        <button type="button" onClick={() => setShowKeys(prev => ({ ...prev, flight: !prev.flight }))}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          {showKeys.flight ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Get a free key at{' '}
+                      <a href="https://rapidapi.com/aedbx-aedbx/api/aerodatabox" target="_blank" rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline">rapidapi.com/aedbx-aedbx/api/aerodatabox</a>.
+                      Used for the ✈️ flight 🔍 lookup feature.
+                    </p>
                   </div>
 
                   <button

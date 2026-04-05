@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import apiClient from '../../api/client'
+import apiClient, { flightApi } from '../../api/client'
 import { useTripStore } from '../../store/tripStore'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
@@ -77,11 +77,14 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
     reservation_time: '', reservation_end_time: '', location: '', confirmation_number: '',
     notes: '', assignment_id: '', accommodation_id: '',
     meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
+    meta_flight_date: '',
     meta_train_number: '', meta_platform: '', meta_seat: '',
     meta_check_in_time: '', meta_check_out_time: '',
     hotel_place_id: '', hotel_start_day: '', hotel_end_day: '',
   })
   const [isSaving, setIsSaving] = useState(false)
+  const [flightLookupLoading, setFlightLookupLoading] = useState(false)
+  const [flightLookupError, setFlightLookupError] = useState<string | null>(null)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [pendingFiles, setPendingFiles] = useState([])
   const [showFilePicker, setShowFilePicker] = useState(false)
@@ -134,6 +137,70 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
   }, [reservation, isOpen, selectedDayId])
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+
+  const handleFlightLookup = async () => {
+    if (!form.meta_flight_number.trim()) return
+    setFlightLookupLoading(true)
+    setFlightLookupError(null)
+    try {
+      // Date: from reservation_time if full ISO, else from meta_flight_date, else today
+      let lookupDate = ''
+      if (form.reservation_time && /^\d{4}-\d{2}-\d{2}/.test(form.reservation_time)) {
+        lookupDate = form.reservation_time.slice(0, 10)
+      } else if (form.meta_flight_date) {
+        lookupDate = form.meta_flight_date
+      } else {
+        lookupDate = new Date().toISOString().slice(0, 10)
+      }
+
+      const info = await flightApi.lookup(form.meta_flight_number.trim(), lookupDate)
+
+      if (info.airline)                 set('meta_airline', info.airline)
+      if (info.departure_airport_iata)  set('meta_departure_airport', info.departure_airport_iata)
+      if (info.arrival_airport_iata)    set('meta_arrival_airport', info.arrival_airport_iata)
+
+      const depTime = info.departure_scheduled_local?.match(/\d{2}:\d{2}/)?.[0]
+      const arrTime = info.arrival_scheduled_local?.match(/\d{2}:\d{2}/)?.[0]
+      if (depTime && !form.reservation_time) set('reservation_time', depTime)
+      if (arrTime && !form.reservation_end_time) set('reservation_end_time', arrTime)
+
+      if (!form.title && info.airline && info.departure_airport_iata && info.arrival_airport_iata) {
+        set('title', `${info.airline} ${info.flight_number} ${info.departure_airport_iata} → ${info.arrival_airport_iata}`)
+      }
+
+      // Build rich notes
+      const lines: string[] = []
+      if (info.airline)   lines.push(`✈️ ${info.airline} ${info.flight_number}`)
+      if (info.departure_airport_iata) {
+        let line = `🛫 ${info.departure_airport_name} (${info.departure_airport_iata})`
+        if (info.departure_terminal) line += ` — Terminal ${info.departure_terminal}`
+        if (info.departure_gate)     line += ` Gate ${info.departure_gate}`
+        if (depTime)                 line += ` — ${depTime}`
+        lines.push(line)
+      }
+      if (info.arrival_airport_iata) {
+        let line = `🛬 ${info.arrival_airport_name} (${info.arrival_airport_iata})`
+        if (info.arrival_terminal)    line += ` — Terminal ${info.arrival_terminal}`
+        if (info.arrival_baggage_belt) line += ` 🧳 Belt ${info.arrival_baggage_belt}`
+        if (arrTime)                  line += ` — ${arrTime}`
+        lines.push(line)
+      }
+      if (info.aircraft_type) lines.push(`🛩️  ${info.aircraft_type}`)
+      if (info.status)        lines.push(`📋 ${info.status}`)
+      if (lines.length > 0)   set('notes', lines.join('\n'))
+    } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 404) {
+        setFlightLookupError('Flight not found. Check the number and date.')
+      } else if (status === 403 || status === 401) {
+        setFlightLookupError('No Flight API key configured — add AeroDataBox key in Admin Settings.')
+      } else {
+        setFlightLookupError('Lookup failed. Please try again.')
+      }
+    } finally {
+      setFlightLookupLoading(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -324,27 +391,65 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
 
         {/* Type-specific fields */}
         {form.type === 'flight' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.airline') || 'Airline'}</label>
-              <input type="text" value={form.meta_airline} onChange={e => set('meta_airline', e.target.value)}
-                placeholder="Lufthansa" style={inputStyle} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+              <div>
+                <label style={labelStyle}>{t('reservations.meta.airline') || 'Airline'}</label>
+                <input type="text" value={form.meta_airline} onChange={e => set('meta_airline', e.target.value)}
+                  placeholder="EVA Air" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>{t('reservations.meta.flightNumber') || 'Flight No.'}</label>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input type="text" value={form.meta_flight_number} onChange={e => { set('meta_flight_number', e.target.value); setFlightLookupError(null) }}
+                    placeholder="BR115" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+                  <button
+                    type="button"
+                    onClick={handleFlightLookup}
+                    disabled={flightLookupLoading || !form.meta_flight_number.trim()}
+                    title="Look up flight details"
+                    style={{
+                      padding: '0.35rem 0.55rem', borderRadius: 6,
+                      border: '1px solid rgba(96,165,250,0.4)',
+                      background: 'rgba(30,58,138,0.6)', color: '#93c5fd',
+                      cursor: flightLookupLoading || !form.meta_flight_number.trim() ? 'not-allowed' : 'pointer',
+                      fontSize: '0.9rem', lineHeight: 1, flexShrink: 0,
+                      opacity: flightLookupLoading || !form.meta_flight_number.trim() ? 0.45 : 1,
+                      transition: 'opacity 0.15s',
+                    }}
+                  >
+                    {flightLookupLoading ? '⏳' : '🔍'}
+                  </button>
+                </div>
+                {flightLookupError && (
+                  <div style={{ color: '#f87171', fontSize: '0.72rem', marginTop: '0.25rem', lineHeight: 1.3 }}>
+                    {flightLookupError}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={labelStyle}>{t('reservations.meta.from') || 'From'}</label>
+                <input type="text" value={form.meta_departure_airport} onChange={e => set('meta_departure_airport', e.target.value)}
+                  placeholder="TPE" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>{t('reservations.meta.to') || 'To'}</label>
+                <input type="text" value={form.meta_arrival_airport} onChange={e => set('meta_arrival_airport', e.target.value)}
+                  placeholder="NRT" style={inputStyle} />
+              </div>
             </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.flightNumber') || 'Flight No.'}</label>
-              <input type="text" value={form.meta_flight_number} onChange={e => set('meta_flight_number', e.target.value)}
-                placeholder="LH 123" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.from') || 'From'}</label>
-              <input type="text" value={form.meta_departure_airport} onChange={e => set('meta_departure_airport', e.target.value)}
-                placeholder="FRA" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>{t('reservations.meta.to') || 'To'}</label>
-              <input type="text" value={form.meta_arrival_airport} onChange={e => set('meta_arrival_airport', e.target.value)}
-                placeholder="NRT" style={inputStyle} />
-            </div>
+            {/* Lookup date — only shown when reservation_time has no date component */}
+            {!/^\d{4}-\d{2}-\d{2}/.test(form.reservation_time) && (
+              <div style={{ maxWidth: 200 }}>
+                <label style={labelStyle}>{'Lookup Date'}</label>
+                <input
+                  type="date"
+                  value={form.meta_flight_date}
+                  onChange={e => set('meta_flight_date', e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            )}
           </div>
         )}
 

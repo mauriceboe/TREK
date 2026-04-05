@@ -348,4 +348,9 @@ export const inAppNotificationsApi = {
     apiClient.post(`/notifications/in-app/${id}/respond`, { response }).then(r => r.data),
 }
 
+export const flightApi = {
+  lookup: (flight_number: string, date: string) =>
+    apiClient.get<{ flight: import('./types').FlightInfo }>('/flights/lookup', { params: { flight_number, date } }).then(r => r.data.flight),
+}
+
 export default apiClient
