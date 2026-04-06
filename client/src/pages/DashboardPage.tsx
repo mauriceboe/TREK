@@ -14,7 +14,7 @@ import { useToast } from '../components/shared/Toast'
 import {
   Plus, Calendar, Trash2, Edit2, Map, ChevronDown, ChevronUp,
   Archive, ArchiveRestore, Clock, MapPin, Settings, X, ArrowRightLeft,
-  LayoutGrid, List,
+  LayoutGrid, List, Copy,
 } from 'lucide-react'
 
 interface DashboardTrip {
@@ -139,6 +139,7 @@ function LiquidGlass({ children, dark, style, className = '', onClick }: LiquidG
 interface TripCardProps {
   trip: DashboardTrip
   onEdit: (trip: DashboardTrip) => void
+  onCopy?: (trip: DashboardTrip) => void
   onDelete: (trip: DashboardTrip) => void
   onArchive: (id: number) => void
   onClick: (trip: DashboardTrip) => void
@@ -147,7 +148,7 @@ interface TripCardProps {
   dark?: boolean
 }
 
-function SpotlightCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale, dark }: TripCardProps): React.ReactElement {
+function SpotlightCard({ trip, onEdit, onCopy, onDelete, onArchive, onClick, t, locale, dark }: TripCardProps): React.ReactElement {
   const status = getTripStatus(trip)
 
   const coverBg = trip.cover_image
@@ -189,6 +190,7 @@ function SpotlightCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale, 
         <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 6 }}
           onClick={e => e.stopPropagation()}>
           <IconBtn onClick={() => onEdit(trip)} title={t('common.edit')}><Edit2 size={14} /></IconBtn>
+          {onCopy && <IconBtn onClick={() => onCopy(trip)} title={t('dashboard.copyTrip')}><Copy size={14} /></IconBtn>}
           <IconBtn onClick={() => onArchive(trip.id)} title={t('dashboard.archive')}><Archive size={14} /></IconBtn>
           <IconBtn onClick={() => onDelete(trip)} title={t('common.delete')} danger><Trash2 size={14} /></IconBtn>
         </div>
@@ -228,7 +230,7 @@ function SpotlightCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale, 
 }
 
 // ── Regular Trip Card ────────────────────────────────────────────────────────
-function TripCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omit<TripCardProps, 'dark'>): React.ReactElement {
+function TripCard({ trip, onEdit, onCopy, onDelete, onArchive, onClick, t, locale }: Omit<TripCardProps, 'dark'>): React.ReactElement {
   const status = getTripStatus(trip)
   const [hovered, setHovered] = useState(false)
 
@@ -308,6 +310,7 @@ function TripCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omi
         <div style={{ display: 'flex', gap: 6, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}
           onClick={e => e.stopPropagation()}>
           <CardAction onClick={() => onEdit(trip)} icon={<Edit2 size={12} />} label={t('common.edit')} />
+          {onCopy && <CardAction onClick={() => onCopy(trip)} icon={<Copy size={12} />} label={t('dashboard.copyTrip')} />}
           <CardAction onClick={() => onArchive(trip.id)} icon={<Archive size={12} />} label={t('dashboard.archive')} />
           <CardAction onClick={() => onDelete(trip)} icon={<Trash2 size={12} />} label={t('common.delete')} danger />
         </div>
@@ -317,7 +320,7 @@ function TripCard({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omi
 }
 
 // ── List View Item ──────────────────────────────────────────────────────────
-function TripListItem({ trip, onEdit, onDelete, onArchive, onClick, t, locale }: Omit<TripCardProps, 'dark'>): React.ReactElement {
+function TripListItem({ trip, onEdit, onCopy, onDelete, onArchive, onClick, t, locale }: Omit<TripCardProps, 'dark'>): React.ReactElement {
   const status = getTripStatus(trip)
   const [hovered, setHovered] = useState(false)
 
@@ -405,6 +408,7 @@ function TripListItem({ trip, onEdit, onDelete, onArchive, onClick, t, locale }:
       {/* Actions */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
         <CardAction onClick={() => onEdit(trip)} icon={<Edit2 size={12} />} label="" />
+        {onCopy && <CardAction onClick={() => onCopy(trip)} icon={<Copy size={12} />} label="" />}
         <CardAction onClick={() => onArchive(trip.id)} icon={<Archive size={12} />} label="" />
         <CardAction onClick={() => onDelete(trip)} icon={<Trash2 size={12} />} label="" danger />
       </div>
@@ -592,6 +596,16 @@ export default function DashboardPage(): React.ReactElement {
       toast.success(t('dashboard.toast.updated'))
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, t('dashboard.toast.updateError')))
+    }
+  }
+
+  const handleCopy = async (trip: DashboardTrip) => {
+    try {
+      const data = await tripsApi.copy(trip.id, `${trip.title} (Copy)`)
+      setTrips(prev => sortTrips([data.trip, ...prev]))
+      toast.success(t('dashboard.toast.copied'))
+    } catch {
+      toast.error(t('dashboard.toast.copyError'))
     }
   }
 
@@ -783,6 +797,7 @@ export default function DashboardPage(): React.ReactElement {
               trip={spotlight}
               t={t} locale={locale} dark={dark}
               onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
+              onCopy={handleCopy}
               onDelete={handleDelete}
               onArchive={handleArchive}
               onClick={tr => navigate(`/trips/${tr.id}`)}
@@ -799,6 +814,7 @@ export default function DashboardPage(): React.ReactElement {
                     trip={trip}
                     t={t} locale={locale}
                     onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
+                    onCopy={handleCopy}
                     onDelete={handleDelete}
                     onArchive={handleArchive}
                     onClick={tr => navigate(`/trips/${tr.id}`)}
@@ -813,6 +829,7 @@ export default function DashboardPage(): React.ReactElement {
                     trip={trip}
                     t={t} locale={locale}
                     onEdit={tr => { setEditingTrip(tr); setShowForm(true) }}
+                    onCopy={handleCopy}
                     onDelete={handleDelete}
                     onArchive={handleArchive}
                     onClick={tr => navigate(`/trips/${tr.id}`)}
