@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import apiClient from '../../api/client'
 import { useTripStore } from '../../store/tripStore'
+import { useAddonStore } from '../../store/addonStore'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import { Plane, Hotel, Utensils, Train, Car, Ship, Ticket, FileText, Users, Paperclip, X, ExternalLink, Link2 } from 'lucide-react'
@@ -71,10 +72,19 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
   const { t, locale } = useTranslation()
   const fileInputRef = useRef(null)
 
+  const isBudgetEnabled = useAddonStore(s => s.isEnabled('budget'))
+  const budgetItems = useTripStore(s => s.budgetItems)
+  const budgetCategories = useMemo(() => {
+    const cats = new Set<string>()
+    budgetItems.forEach(i => { if (i.category) cats.add(i.category) })
+    return Array.from(cats).sort()
+  }, [budgetItems])
+
   const [form, setForm] = useState({
     title: '', type: 'other', status: 'pending',
     reservation_time: '', reservation_end_time: '', location: '', confirmation_number: '',
     notes: '', assignment_id: '', accommodation_id: '',
+    price: '', budget_category: '',
     meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
     meta_train_number: '', meta_platform: '', meta_seat: '',
     meta_check_in_time: '', meta_check_out_time: '',
@@ -106,6 +116,8 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         notes: reservation.notes || '',
         assignment_id: reservation.assignment_id ? String(reservation.assignment_id) : '',
         accommodation_id: reservation.accommodation_id ? String(reservation.accommodation_id) : '',
+        price: meta.price || '',
+        budget_category: (meta.budget_category && budgetItems.some(i => i.category === meta.budget_category)) ? meta.budget_category : '',
         meta_airline: meta.airline || '',
         meta_flight_number: meta.flight_number || '',
         meta_departure_airport: meta.departure_airport || '',
@@ -124,6 +136,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         title: '', type: 'other', status: 'pending',
         reservation_time: '', reservation_end_time: '', location: '', confirmation_number: '',
         notes: '', assignment_id: '', accommodation_id: '',
+        price: '', budget_category: '',
         meta_airline: '', meta_flight_number: '', meta_departure_airport: '', meta_arrival_airport: '',
         meta_train_number: '', meta_platform: '', meta_seat: '',
         meta_check_in_time: '', meta_check_out_time: '',
@@ -154,6 +167,10 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         if (form.meta_platform) metadata.platform = form.meta_platform
         if (form.meta_seat) metadata.seat = form.meta_seat
       }
+      if (isBudgetEnabled) {
+        if (form.price) metadata.price = form.price
+        if (form.budget_category) metadata.budget_category = form.budget_category
+      }
       const saveData: Record<string, any> = {
         title: form.title, type: form.type, status: form.status,
         reservation_time: form.reservation_time, reservation_end_time: form.reservation_end_time,
@@ -162,6 +179,12 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         assignment_id: form.assignment_id || null,
         accommodation_id: form.type === 'hotel' ? (form.accommodation_id || null) : null,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
+      }
+      // Auto-create/update budget entry if price is set
+      if (isBudgetEnabled) {
+        saveData.create_budget_entry = form.price && parseFloat(form.price) > 0
+          ? { total_price: parseFloat(form.price), category: form.budget_category || t(`reservations.type.${form.type}`) || 'Other' }
+          : { total_price: 0 }
       }
       // If hotel with place + days, pass hotel data for auto-creation or update
       if (form.type === 'hotel' && form.hotel_place_id && form.hotel_start_day && form.hotel_end_day) {
@@ -556,6 +579,39 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
             </div>
           </div>
         </div>
+
+        {/* Price + Budget Category — only shown when budget addon is enabled */}
+        {isBudgetEnabled && (
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label style={labelStyle}>{t('reservations.price')}</label>
+                <input type="text" inputMode="decimal" value={form.price}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) set('price', v) }}
+                  placeholder="0.00"
+                  style={inputStyle} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label style={labelStyle}>{t('reservations.budgetCategory')}</label>
+                <CustomSelect
+                  value={form.budget_category}
+                  onChange={v => set('budget_category', v)}
+                  options={[
+                    { value: '', label: t('reservations.budgetCategoryAuto') },
+                    ...budgetCategories.map(c => ({ value: c, label: c })),
+                  ]}
+                  placeholder={t('reservations.budgetCategoryAuto')}
+                  size="sm"
+                />
+              </div>
+            </div>
+            {form.price && parseFloat(form.price) > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: -4 }}>
+                {t('reservations.budgetHint')}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4, borderTop: '1px solid var(--border-secondary)' }}>
