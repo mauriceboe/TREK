@@ -37,23 +37,62 @@ function formatDateWithLocale(dateStr, locale) {
   } catch { return '' }
 }
 
-// Image lightbox
+// Image lightbox with gallery navigation
 interface ImageLightboxProps {
-  file: TripFile & { url: string }
+  files: (TripFile & { url: string })[]
+  initialIndex: number
   onClose: () => void
 }
 
-function ImageLightbox({ file, onClose }: ImageLightboxProps) {
+function ImageLightbox({ files, initialIndex, onClose }: ImageLightboxProps) {
   const { t } = useTranslation()
+  const [index, setIndex] = useState(initialIndex)
   const [imgSrc, setImgSrc] = useState('')
+  const touchStart = useRef<number | null>(null)
+  const file = files[index]
+
   useEffect(() => {
+    setImgSrc('')
     getAuthUrl(file.url, 'download').then(setImgSrc)
   }, [file.url])
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') setIndex(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setIndex(i => Math.min(files.length - 1, i + 1))
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [files.length, onClose])
+
+  const hasPrev = index > 0
+  const hasNext = index < files.length - 1
+
+  const navBtn = (side: 'left' | 'right', onClick: () => void, enabled: boolean) => enabled ? (
+    <button onClick={e => { e.stopPropagation(); onClick() }} style={{
+      position: 'absolute', top: '50%', [side]: 12, transform: 'translateY(-50%)',
+      width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: 'pointer',
+      background: 'rgba(0,0,0,0.5)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 20, zIndex: 10, transition: 'background 0.15s',
+    }}>{side === 'left' ? '‹' : '›'}</button>
+  ) : null
+
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={onClose}
+      onTouchStart={e => { touchStart.current = e.touches[0].clientX }}
+      onTouchEnd={e => {
+        if (touchStart.current === null) return
+        const diff = touchStart.current - e.changedTouches[0].clientX
+        if (diff > 60 && hasNext) setIndex(i => i + 1)
+        else if (diff < -60 && hasPrev) setIndex(i => i - 1)
+        touchStart.current = null
+      }}
     >
+      {navBtn('left', () => setIndex(i => i - 1), hasPrev)}
+      {navBtn('right', () => setIndex(i => i + 1), hasNext)}
       <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
         <img
           src={imgSrc}
@@ -61,7 +100,9 @@ function ImageLightbox({ file, onClose }: ImageLightboxProps) {
           style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }}
         />
         <div style={{ position: 'absolute', top: -40, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>{file.original_name}</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+            {file.original_name} {files.length > 1 && <span style={{ opacity: 0.5 }}>({index + 1}/{files.length})</span>}
+          </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={async () => { const u = await getAuthUrl(file.url, 'download'); window.open(u, '_blank', 'noreferrer') }}
@@ -169,7 +210,7 @@ interface FileManagerProps {
 export default function FileManager({ files = [], onUpload, onDelete, onUpdate, places, days = [], assignments = {}, reservations = [], tripId, allowedFileTypes }: FileManagerProps) {
   const [uploading, setUploading] = useState(false)
   const [filterType, setFilterType] = useState('all')
-  const [lightboxFile, setLightboxFile] = useState(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [showTrash, setShowTrash] = useState(false)
   const [trashFiles, setTrashFiles] = useState<TripFile[]>([])
   const [loadingTrash, setLoadingTrash] = useState(false)
@@ -326,7 +367,9 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
 
   const openFile = (file) => {
     if (isImage(file.mime_type)) {
-      setLightboxFile(file)
+      const imageFiles = filteredFiles.filter(f => isImage(f.mime_type))
+      const idx = imageFiles.findIndex(f => f.id === file.id)
+      setLightboxIndex(idx >= 0 ? idx : 0)
     } else {
       setPreviewFile(file)
     }
@@ -453,7 +496,10 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
   return (
     <div className="flex flex-col h-full" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }} onPaste={handlePaste} tabIndex={-1}>
       {/* Lightbox */}
-      {lightboxFile && <ImageLightbox file={lightboxFile} onClose={() => setLightboxFile(null)} />}
+      {lightboxIndex !== null && (() => {
+        const imageFiles = filteredFiles.filter(f => isImage(f.mime_type)) as (TripFile & { url: string })[]
+        return <ImageLightbox files={imageFiles} initialIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+      })()}
 
       {/* Assign modal */}
       {assignFileId && ReactDOM.createPortal(
