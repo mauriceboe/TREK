@@ -78,7 +78,7 @@ router.get('/summary/per-person', authenticate, (req: Request, res: Response) =>
 router.post('/', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId } = req.params;
-  const { category, name, total_price, persons, days, note } = req.body;
+  const { category, name, total_price, persons, days, note, expense_date } = req.body;
 
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
@@ -89,7 +89,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   const sortOrder = (maxOrder.max !== null ? maxOrder.max : -1) + 1;
 
   const result = db.prepare(
-    'INSERT INTO budget_items (trip_id, category, name, total_price, persons, days, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO budget_items (trip_id, category, name, total_price, persons, days, note, sort_order, expense_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(
     tripId,
     category || 'Other',
@@ -98,7 +98,8 @@ router.post('/', authenticate, (req: Request, res: Response) => {
     persons != null ? persons : null,
     days !== undefined && days !== null ? days : null,
     note || null,
-    sortOrder
+    sortOrder,
+    expense_date || null
   );
 
   const item = db.prepare('SELECT * FROM budget_items WHERE id = ?').get(result.lastInsertRowid) as BudgetItem & { members?: BudgetItemMember[] };
@@ -110,7 +111,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
 router.put('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId, id } = req.params;
-  const { category, name, total_price, persons, days, note, sort_order } = req.body;
+  const { category, name, total_price, persons, days, note, sort_order, expense_date } = req.body;
 
   const trip = verifyTripOwnership(tripId, authReq.user.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
@@ -126,7 +127,8 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
       persons = CASE WHEN ? IS NOT NULL THEN ? ELSE persons END,
       days = CASE WHEN ? THEN ? ELSE days END,
       note = CASE WHEN ? THEN ? ELSE note END,
-      sort_order = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END
+      sort_order = CASE WHEN ? IS NOT NULL THEN ? ELSE sort_order END,
+      expense_date = CASE WHEN ? THEN ? ELSE expense_date END
     WHERE id = ?
   `).run(
     category || null,
@@ -136,6 +138,7 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
     days !== undefined ? 1 : 0, days !== undefined ? days : null,
     note !== undefined ? 1 : 0, note !== undefined ? note : null,
     sort_order !== undefined ? 1 : null, sort_order !== undefined ? sort_order : 0,
+    expense_date !== undefined ? 1 : 0, expense_date !== undefined ? (expense_date || null) : null,
     id
   );
 

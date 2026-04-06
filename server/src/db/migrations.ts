@@ -426,6 +426,10 @@ function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
       `);
     },
+    // Migration: Add expense_date to budget_items
+    () => {
+      try { db.exec('ALTER TABLE budget_items ADD COLUMN expense_date TEXT DEFAULT NULL'); } catch {}
+    },
   ];
 
   if (currentVersion < migrations.length) {
