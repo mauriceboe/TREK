@@ -6,9 +6,9 @@ import { isDemoUser } from '../services/authService';
 
 function safeBroadcast(tripId: number, event: string, payload: Record<string, unknown>): void {
   try {
-    safeBroadcast(tripId, event, payload);
+    broadcast(tripId, event, payload);
   } catch (err) {
-    console.error(`[MCP] broadcast failed for ${event}:`, err);
+    console.error(`[MCP] broadcast failed for ${event}:`, err?.message ?? err);
   }
 }
 import {
