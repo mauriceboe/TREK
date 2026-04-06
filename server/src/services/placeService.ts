@@ -47,9 +47,11 @@ export function listPlaces(
   }
 
   if (filters.assignment === 'unassigned') {
-    query += ' AND p.id NOT IN (SELECT place_id FROM day_assignments)';
+    query += ` AND p.id NOT IN (SELECT da.place_id FROM day_assignments da JOIN days d ON da.day_id = d.id WHERE d.trip_id = ?)`;
+    params.push(tripId);
   } else if (filters.assignment === 'assigned') {
-    query += ' AND p.id IN (SELECT place_id FROM day_assignments)';
+    query += ` AND p.id IN (SELECT da.place_id FROM day_assignments da JOIN days d ON da.day_id = d.id WHERE d.trip_id = ?)`;
+    params.push(tripId);
   }
 
   query += ' ORDER BY p.created_at DESC';
