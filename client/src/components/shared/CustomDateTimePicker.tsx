@@ -22,7 +22,8 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {}, com
   const ref = useRef<HTMLDivElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
-  const parsed = value ? new Date(value + 'T00:00:00Z') : null
+  const parsedValue = value ? value.slice(0, 10) : ''
+  const parsed = parsedValue ? new Date(parsedValue + 'T00:00:00Z') : null
   const [viewYear, setViewYear] = useState(parsed?.getUTCFullYear() || new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed?.getUTCMonth() ?? new Date().getMonth())
   const [textInput, setTextInput] = useState('')
@@ -39,14 +40,13 @@ export function CustomDatePicker({ value, onChange, placeholder, style = {}, com
   }, [open])
 
   useEffect(() => {
-    if (open) {
-      setPanelMode('days')
-      if (parsed) {
-        setViewYear(parsed.getUTCFullYear())
-        setViewMonth(parsed.getUTCMonth())
-      }
+    if (!open) return
+    setPanelMode('days')
+    if (parsed) {
+      setViewYear(parsed.getUTCFullYear())
+      setViewMonth(parsed.getUTCMonth())
     }
-  }, [open, parsed])
+  }, [open, parsedValue])
 
   const monthOptions = Array.from({ length: 12 }, (_, month) => ({
     value: month,
