@@ -21,7 +21,7 @@ import {
 } from './helpersService';
 
 const SYNOLOGY_PROVIDER = 'synologyphotos';
-const SYNOLOGY_ENDPOINT_PATH = '/photo/webapi/entry.cgi';
+const SYNOLOGY_ENDPOINT_PATH = '/webapi/entry.cgi';
 
 const ERROR_MESSAGES: Record<number, string> = {
   101: 'Missing API, method, or version parameter.',
