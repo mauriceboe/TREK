@@ -43,7 +43,7 @@ vi.mock('../../../src/services/mapsService', () => ({ searchPlaces: searchPlaces
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
-import { createUser, createTrip, createPlace } from '../../helpers/factories';
+import { createUser, createTrip, createPlace, createDay } from '../../helpers/factories';
 import { createMcpHarness, parseToolResult, type McpHarness } from '../../helpers/mcp-harness';
 
 beforeAll(() => {
@@ -317,6 +317,99 @@ describe('Tool: search_place', () => {
 
     await withHarness(user.id, async (h) => {
       const result = await h.client.callTool({ name: 'search_place', arguments: { query: 'something' } });
+      expect(result.isError).toBe(true);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// list_places
+// ---------------------------------------------------------------------------
+
+describe('Tool: list_places', () => {
+  it('returns all places by default', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place1 = createPlace(testDb, trip.id, { name: 'Orphan Place' });
+    const place2 = createPlace(testDb, trip.id, { name: 'Assigned Place' });
+    const day = createDay(testDb, trip.id);
+    testDb.prepare('INSERT INTO day_assignments (day_id, place_id) VALUES (?, ?)').run(day.id, place2.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id } });
+      const data = parseToolResult(result) as any;
+      expect(data.places).toHaveLength(2);
+    });
+  });
+
+  it('returns only unassigned places with assignment=unassigned', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const orphan = createPlace(testDb, trip.id, { name: 'Orphan Place' });
+    const assigned = createPlace(testDb, trip.id, { name: 'Assigned Place' });
+    const day = createDay(testDb, trip.id);
+    testDb.prepare('INSERT INTO day_assignments (day_id, place_id) VALUES (?, ?)').run(day.id, assigned.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id, assignment: 'unassigned' } });
+      const data = parseToolResult(result) as any;
+      expect(data.places).toHaveLength(1);
+      expect(data.places[0].name).toBe('Orphan Place');
+    });
+  });
+
+  it('returns only assigned places with assignment=assigned', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const orphan = createPlace(testDb, trip.id, { name: 'Orphan Place' });
+    const assigned = createPlace(testDb, trip.id, { name: 'Assigned Place' });
+    const day = createDay(testDb, trip.id);
+    testDb.prepare('INSERT INTO day_assignments (day_id, place_id) VALUES (?, ?)').run(day.id, assigned.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id, assignment: 'assigned' } });
+      const data = parseToolResult(result) as any;
+      expect(data.places).toHaveLength(1);
+      expect(data.places[0].name).toBe('Assigned Place');
+    });
+  });
+
+  it('returns empty array when all places are assigned', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place = createPlace(testDb, trip.id, { name: 'Only Place' });
+    const day = createDay(testDb, trip.id);
+    testDb.prepare('INSERT INTO day_assignments (day_id, place_id) VALUES (?, ?)').run(day.id, place.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id, assignment: 'unassigned' } });
+      const data = parseToolResult(result) as any;
+      expect(data.places).toHaveLength(0);
+    });
+  });
+
+  it('composes with search filter', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const orphan = createPlace(testDb, trip.id, { name: 'Louvre Museum' });
+    const assigned = createPlace(testDb, trip.id, { name: 'Eiffel Tower' });
+    const day = createDay(testDb, trip.id);
+    testDb.prepare('INSERT INTO day_assignments (day_id, place_id) VALUES (?, ?)').run(day.id, assigned.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id, assignment: 'unassigned', search: 'Louvre' } });
+      const data = parseToolResult(result) as any;
+      expect(data.places).toHaveLength(1);
+      expect(data.places[0].name).toBe('Louvre Museum');
+    });
+  });
+
+  it('returns access denied for non-member', async () => {
+    const { user } = createUser(testDb);
+    const { user: other } = createUser(testDb);
+    const trip = createTrip(testDb, other.id);
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'list_places', arguments: { tripId: trip.id } });
       expect(result.isError).toBe(true);
     });
   });

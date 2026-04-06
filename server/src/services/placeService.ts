@@ -20,7 +20,7 @@ interface UnsplashSearchResponse {
 
 export function listPlaces(
   tripId: string,
-  filters: { search?: string; category?: string; tag?: string },
+  filters: { search?: string; category?: string; tag?: string; assignment?: 'all' | 'unassigned' | 'assigned' },
 ) {
   let query = `
     SELECT DISTINCT p.*, c.name as category_name, c.color as category_color, c.icon as category_icon
@@ -44,6 +44,14 @@ export function listPlaces(
   if (filters.tag) {
     query += ' AND p.id IN (SELECT place_id FROM place_tags WHERE tag_id = ?)';
     params.push(filters.tag);
+  }
+
+  if (filters.assignment === 'unassigned') {
+    query += ` AND p.id NOT IN (SELECT da.place_id FROM day_assignments da JOIN days d ON da.day_id = d.id WHERE d.trip_id = ?)`;
+    params.push(tripId);
+  } else if (filters.assignment === 'assigned') {
+    query += ` AND p.id IN (SELECT da.place_id FROM day_assignments da JOIN days d ON da.day_id = d.id WHERE d.trip_id = ?)`;
+    params.push(tripId);
   }
 
   query += ' ORDER BY p.created_at DESC';

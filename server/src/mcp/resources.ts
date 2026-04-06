@@ -79,11 +79,12 @@ export function registerResources(server: McpServer, userId: number): void {
   server.registerResource(
     'trip-places',
     new ResourceTemplate('trek://trips/{tripId}/places', { list: undefined }),
-    { description: 'All places/POIs saved in a trip', mimeType: 'application/json' },
+    { description: 'All places/POIs in a trip, optionally filtered by assignment status (e.g. ?assignment=unassigned)', mimeType: 'application/json' },
     async (uri, { tripId }) => {
       const id = parseId(tripId);
       if (id === null || !canAccessTrip(id, userId)) return accessDenied(uri.href);
-      const places = listPlaces(String(id), {});
+      const assignment = uri.searchParams.get('assignment') as 'all' | 'unassigned' | 'assigned' | null;
+      const places = listPlaces(String(id), { assignment: assignment ?? undefined });
       return jsonContent(uri.href, places);
     }
   );

@@ -246,6 +246,26 @@ export function registerTools(server: McpServer, userId: number): void {
     }
   );
 
+  server.registerTool(
+    'list_places',
+    {
+      description: 'List all places/POIs in a trip, optionally filtered by assignment status. Use assignment=unassigned to find orphan activities not yet scheduled on any day.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        search: z.string().optional(),
+        category: z.string().optional(),
+        tag: z.string().optional(),
+        assignment: z.enum(['all', 'unassigned', 'assigned']).optional().default('all'),
+      },
+      annotations: TOOL_ANNOTATIONS_READONLY,
+    },
+    async ({ tripId, search, category, tag, assignment }) => {
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const places = listPlaces(String(tripId), { search, category, tag, assignment });
+      return ok({ places });
+    }
+  );
+
   // --- CATEGORIES ---
 
   server.registerTool(
