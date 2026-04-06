@@ -154,7 +154,6 @@ export async function mcpHandler(req: Request, res: Response): Promise<void> {
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
-    allowedOrigins: ['*'],
     onsessioninitialized: (sid) => {
       sessions.set(sid, { server, transport, userId: user.id, lastActivity: Date.now() });
       console.log(`[MCP] Session ${sid} created for user ${user.id}. Active sessions: ${sessions.size}`);
