@@ -82,6 +82,10 @@ interface DayPlanSidebarProps {
   onDeletePlace: (placeId: number | string) => void
   reservations?: Reservation[]
   onAddReservation: (dayId: number | string) => void
+  pushUndo?: (label: string, undoFn: () => Promise<void> | void) => void
+  canUndo?: boolean
+  lastActionLabel?: string | null
+  onUndo?: () => void
 }
 
 export default function DayPlanSidebar({
@@ -93,6 +97,10 @@ export default function DayPlanSidebar({
   onAssignToDay, onDropRecommendedPlace, onRemoveAssignment, onEditPlace, onDeletePlace,
   reservations = [],
   onAddReservation,
+  pushUndo,
+  canUndo = false,
+  lastActionLabel = null,
+  onUndo,
 }: DayPlanSidebarProps) {
   const toast = useToast()
   const { t, language, locale } = useTranslation()
@@ -490,7 +498,11 @@ export default function DayPlanSidebar({
       if (!result[i]) result[i] = optimizedQueue[qi++]
     }
 
+    const prevOrder = da.map(a => a.id)
     await onReorder(selectedDayId, result.map(a => a.id))
+    pushUndo?.(t('undo.optimize'), async () => {
+      await onReorder(selectedDayId!, prevOrder)
+    })
     toast.success(t('dayplan.toast.routeOptimized'))
   }
 
@@ -582,6 +594,23 @@ export default function DayPlanSidebar({
               </div>
             )}
           </div>
+          {onUndo && (
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              title={canUndo && lastActionLabel ? t('undo.tooltip', { action: lastActionLabel }) : t('undo.button')}
+              style={{
+                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border-primary)',
+                background: 'none', color: canUndo ? 'var(--text-primary)' : 'var(--border-primary)',
+                fontSize: 11, fontWeight: 500, cursor: canUndo ? 'pointer' : 'default',
+                fontFamily: 'inherit', opacity: canUndo ? 1 : 0.5, transition: 'opacity 0.15s',
+              }}
+            >
+              <RotateCcw size={13} strokeWidth={2} />
+              {t('undo.button')}
+            </button>
+          )}
           <button
             onClick={async () => {
               const flatNotes = Object.entries(dayNotes).flatMap(([dayId, notes]) =>
