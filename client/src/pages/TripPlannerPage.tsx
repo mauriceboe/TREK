@@ -50,7 +50,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const convexEnabled = isConvexConfigured()
   const convexBridge = useConvexTripData(convexEnabled ? tripId : undefined)
 
-  const [enabledAddons, setEnabledAddons] = useState<Record<string, boolean>>({ packing: true, budget: true, documents: true })
+  const [enabledAddons, setEnabledAddons] = useState<Record<string, boolean>>({ packing: true, budget: true, documents: true, collab: true, memories: true })
   const [tripAccommodations, setTripAccommodations] = useState<Accommodation[]>([])
   const [allowedFileTypes, setAllowedFileTypes] = useState<string | null>(null)
   const [tripMembers, setTripMembers] = useState<TripMember[]>([])
@@ -87,6 +87,14 @@ export default function TripPlannerPage(): React.ReactElement | null {
     const saved = sessionStorage.getItem(`trip-tab-${tripId}`)
     return saved || 'plan'
   })
+
+  useEffect(() => {
+    const validTabIds = TRIP_TABS.map(t => t.id)
+    if (!validTabIds.includes(activeTab)) {
+      setActiveTab('plan')
+      sessionStorage.setItem(`trip-tab-${tripId}`, 'plan')
+    }
+  }, [enabledAddons])
 
   const handleTabChange = (tabId: string): void => {
     setActiveTab(tabId)
@@ -407,10 +415,38 @@ export default function TripPlannerPage(): React.ReactElement | null {
 
   if (showTripLoader) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', ...fontStyle }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, border: '3px solid rgba(0,0,0,0.1)', borderTopColor: '#111827', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ fontSize: 13, color: '#9ca3af' }}>{t('trip.loading')}</span>
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg-primary)', ...fontStyle,
+      }}>
+        <style>{`
+          @keyframes dotPulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1); }
+          }
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+        <div style={{ marginBottom: 28 }}>
+          <img
+            src={document.documentElement.classList.contains('dark') ? '/icons/trek-loading-light.gif' : '/icons/trek-loading-dark.gif'}
+            alt="Loading"
+            width={64}
+            height={64}
+          />
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', marginBottom: 6, animation: 'fadeInUp 0.5s ease-out' }}>
+          {trip?.title || 'TREK'}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: 7, height: 7, borderRadius: '50%', background: 'var(--text-faint)',
+              animation: `dotPulse 1.4s ease-in-out ${i * 0.2}s infinite`,
+            }} />
+          ))}
         </div>
       </div>
     )
