@@ -255,7 +255,7 @@ export function registerTools(server: McpServer, userId: number): void {
         search: z.string().optional(),
         category: z.string().optional(),
         tag: z.string().optional(),
-        assignment: z.enum(['all', 'unassigned', 'assigned']).optional().default('all'),
+        assignment: z.enum(['all', 'unassigned', 'assigned']).optional().default('all').describe('Filter by assignment status: "all" (default), "unassigned" (not on any day), or "assigned" (scheduled on a day)'),
       },
       annotations: TOOL_ANNOTATIONS_READONLY,
     },
