@@ -141,7 +141,7 @@ export function updatePlace(
     category_id?: number; price?: number; currency?: string;
     place_time?: string; end_time?: string;
     duration_minutes?: number; notes?: string; image_url?: string;
-    google_place_id?: string; website?: string; phone?: string;
+    google_place_id?: string; osm_id?: string; website?: string; phone?: string;
     transport_mode?: string; tags?: number[];
   },
 ) {
@@ -151,7 +151,7 @@ export function updatePlace(
   const {
     name, description, lat, lng, address, category_id, price, currency,
     place_time, end_time,
-    duration_minutes, notes, image_url, google_place_id, website, phone,
+    duration_minutes, notes, image_url, google_place_id, osm_id, website, phone,
     transport_mode, tags,
   } = body;
 
@@ -171,6 +171,7 @@ export function updatePlace(
       notes = ?,
       image_url = ?,
       google_place_id = ?,
+      osm_id = ?,
       website = ?,
       phone = ?,
       transport_mode = COALESCE(?, transport_mode),
@@ -191,6 +192,7 @@ export function updatePlace(
     notes !== undefined ? notes : existingPlace.notes,
     image_url !== undefined ? image_url : existingPlace.image_url,
     google_place_id !== undefined ? google_place_id : existingPlace.google_place_id,
+    osm_id !== undefined ? osm_id : existingPlace.osm_id,
     website !== undefined ? website : existingPlace.website,
     phone !== undefined ? phone : existingPlace.phone,
     transport_mode || null,
