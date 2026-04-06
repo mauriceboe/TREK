@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { Html5Qrcode } from 'html5-qrcode'
-import { X, QrCode, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { X, QrCode, Image as ImageIcon, Loader2, Camera, RefreshCw } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 
 interface QRScannerModalProps {
@@ -17,6 +17,8 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
   const [error, setError] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [isProcessingFile, setIsProcessingFile] = useState(false)
+  const [isCameraActive, setIsCameraActive] = useState(true)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   // Force stop video tracks within this specific modal instance
   const killLocalVideoTracks = () => {
@@ -39,40 +41,60 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
     }
   }
 
+  const startScanner = async () => {
+    if (!scannerRef.current) return
+    setError(null)
+    setIsInitialized(false)
+    setIsCameraActive(true)
+    setImagePreview(null)
+
+    try {
+      const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
+        const minEdgePercentage = 0.7; // 70%
+        const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+        const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+        return {
+          width: qrboxSize,
+          height: qrboxSize
+        };
+      }
+
+      await scannerRef.current.start(
+        { facingMode: "environment" },
+        { 
+          fps: 30, 
+          qrbox: qrboxFunction,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          }
+        },
+        async (decodedText) => {
+          try {
+            if (scannerRef.current?.isScanning) {
+              await scannerRef.current.stop()
+              killLocalVideoTracks()
+              setIsCameraActive(false)
+            }
+          } catch (e) {}
+          onScan(decodedText)
+        },
+        () => {} // ignore scan errors
+      )
+      setIsInitialized(true)
+    } catch (err) {
+      console.error("Failed to start QR scanner:", err)
+      setError("Could not access camera. Please check permissions.")
+      setIsCameraActive(false)
+    }
+  }
+
   useEffect(() => {
-    // Prevent background scrolling
     document.body.style.overflow = 'hidden'
 
-    // Create a unique ID for this instance to avoid conflicts
     const readerId = "qr-reader-instance"
     const scanner = new Html5Qrcode(readerId)
     scannerRef.current = scanner
 
-    const startScanner = async () => {
-      try {
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          async (decodedText) => {
-            // On Success: Stop camera first, then callback
-            try {
-              if (scanner.isScanning) {
-                await scanner.stop()
-                killLocalVideoTracks()
-              }
-            } catch (e) {}
-            onScan(decodedText)
-          },
-          () => {} // ignore scan errors
-        )
-        setIsInitialized(true)
-      } catch (err) {
-        console.error("Failed to start QR scanner:", err)
-        setError("Could not access camera. Please check permissions.")
-      }
-    }
-
-    // Delay start slightly to ensure DOM is ready
     const timer = setTimeout(startScanner, 100)
 
     return () => {
@@ -101,32 +123,23 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
   }, [])
 
   /**
-   * Resizes an image file if it's too large, to improve QR detection reliability.
+   * Resizes and enhances an image for better QR detection.
    */
-  const preprocessImage = (file: File): Promise<File | Blob> => {
+  const preprocessImage = (file: File, options: { grayscale?: boolean, contrast?: boolean } = {}): Promise<File> => {
     return new Promise((resolve) => {
+      const url = URL.createObjectURL(file)
       const img = new Image()
       img.onload = () => {
-        const MAX_WIDTH = 1500
-        const MAX_HEIGHT = 1500
+        URL.revokeObjectURL(url)
+        const MAX_DIM = 1200
         let width = img.width
         let height = img.height
 
-        if (width <= MAX_WIDTH && height <= MAX_HEIGHT) {
-          resolve(file)
-          return
-        }
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width
-            width = MAX_WIDTH
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height
-            height = MAX_HEIGHT
-          }
+        // Downscale if needed
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const ratio = Math.min(MAX_DIM / width, MAX_DIM / height)
+          width *= ratio
+          height *= ratio
         }
 
         const canvas = document.createElement('canvas')
@@ -137,13 +150,43 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
           resolve(file)
           return
         }
+
         ctx.drawImage(img, 0, 0, width, height)
+
+        if (options.grayscale || options.contrast) {
+          const imageData = ctx.getImageData(0, 0, width, height)
+          const data = imageData.data
+          for (let i = 0; i < data.length; i += 4) {
+            if (options.grayscale) {
+              const avg = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114)
+              data[i] = avg
+              data[i + 1] = avg
+              data[i + 2] = avg
+            }
+            if (options.contrast) {
+              const factor = 1.6
+              data[i] = Math.min(255, Math.max(0, (data[i] - 128) * factor + 128))
+              data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * factor + 128))
+              data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * factor + 128))
+            }
+          }
+          ctx.putImageData(imageData, 0, 0)
+        }
+
         canvas.toBlob((blob) => {
-          resolve(blob || file)
-        }, file.type)
+          if (blob) {
+            const processedFile = new File([blob], file.name, { type: 'image/jpeg' })
+            resolve(processedFile)
+          } else {
+            resolve(file)
+          }
+        }, 'image/jpeg', 0.9)
       }
-      img.onerror = () => resolve(file)
-      img.src = URL.createObjectURL(file)
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        resolve(file)
+      }
+      img.src = url
     })
   }
 
@@ -153,30 +196,52 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
 
     setError(null)
     setIsProcessingFile(true)
+    
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+
     const s = scannerRef.current
     
     try {
-      // If camera is active, stop it before scanning file
       if (s.isScanning) {
         await s.stop()
         killLocalVideoTracks()
+        setIsCameraActive(false)
       }
       
-      // Preprocess image (resize if too large)
-      const processedFile = await preprocessImage(file)
-      
-      // Attempt to scan the file
-      console.log("Scanning file:", file.name, "Processed size:", processedFile.size)
-      const decodedText = await s.scanFile(processedFile as File, false)
-      console.log("File scan success")
-      
+      // 1. Try original file (unless it's massive)
+      if (file.size < 8 * 1024 * 1024) {
+        try {
+          const decodedText = await s.scanFile(file, false)
+          onScan(decodedText)
+          return
+        } catch (err) {
+          console.log("Original scan failed, trying enhancements...")
+        }
+      }
+
+      // 2. Try Standard Resize
+      const resized = await preprocessImage(file)
+      try {
+        const decodedText = await s.scanFile(resized, false)
+        onScan(decodedText)
+        return
+      } catch (err) {}
+
+      // 3. Try Grayscale + Contrast
+      const enhanced = await preprocessImage(file, { grayscale: true, contrast: true })
+      const decodedText = await s.scanFile(enhanced, false)
       onScan(decodedText)
+
     } catch (err) {
-      console.error("Failed to scan file:", err)
+      console.error("All file scan attempts failed:", err)
       setError(t('packing.qrNoCodeFound', 'No QR code found in this image. Please ensure the QR code is clear, well-lit, and not blurry.'))
     } finally {
       setIsProcessingFile(false)
-      // Clear input so same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -188,7 +253,7 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
     }} onClick={onClose}>
       <div style={{
-        background: 'var(--bg-card)', borderRadius: 20, padding: '24px 24px 32px',
+        background: 'var(--bg-card)', borderRadius: 24, padding: '24px 24px 32px',
         maxWidth: 420, width: '100%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24
       }} onClick={e => e.stopPropagation()}>
@@ -212,33 +277,69 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
           width: '100%', 
           aspectRatio: '1/1', 
           background: 'black', 
-          borderRadius: 16, 
+          borderRadius: 20, 
           overflow: 'hidden', 
-          position: 'relative'
+          position: 'relative',
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)'
         }}>
-          {/* IMPORTANT: ID matches the one in new Html5Qrcode() */}
-          <div id="qr-reader-instance" style={{ width: '100%', height: '100%' }}></div>
+          {/* Camera Container */}
+          <div id="qr-reader-instance" style={{ 
+            width: '100%', 
+            height: '100%',
+            display: isCameraActive ? 'block' : 'none'
+          }}></div>
+
+          {/* Image Preview */}
+          {imagePreview && !isCameraActive && (
+            <div style={{ 
+              position: 'absolute', 
+              inset: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              background: '#000'
+            }}>
+              <img 
+                src={imagePreview} 
+                alt="Preview" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '100%', 
+                  objectFit: 'contain',
+                  opacity: isProcessingFile ? 0.5 : 1,
+                  transition: 'opacity 0.2s'
+                }} 
+              />
+            </div>
+          )}
           
-          {(isProcessingFile || (!isInitialized && !error)) && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', background: 'rgba(0,0,0,0.6)', gap: 12 }}>
+          {(isProcessingFile || (!isInitialized && isCameraActive)) && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', background: 'rgba(0,0,0,0.7)', gap: 12, zIndex: 5 }}>
               <Loader2 className="animate-spin" size={32} />
               <div style={{ fontSize: 14, fontWeight: 500 }}>
                 {isProcessingFile ? t('packing.processingImage', 'Analyzing image...') : t('packing.startingCamera', 'Starting camera...')}
               </div>
             </div>
           )}
+
+          {!isCameraActive && !isProcessingFile && !imagePreview && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', background: 'rgba(0,0,0,0.4)', gap: 16, zIndex: 4 }}>
+              <div style={{ opacity: 0.6 }}><ImageIcon size={48} /></div>
+            </div>
+          )}
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
           {error && (
             <div style={{ 
               fontSize: 13, 
               color: '#ef4444', 
               textAlign: 'center', 
-              padding: '10px 14px', 
+              padding: '12px 16px', 
               background: 'rgba(239, 68, 68, 0.1)', 
-              borderRadius: 10,
-              fontWeight: 500
+              borderRadius: 12,
+              fontWeight: 500,
+              lineHeight: 1.5
             }}>
               {error}
             </div>
@@ -252,13 +353,32 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
               style={{ display: 'none' }} 
               onChange={handleFileUpload}
             />
+            
+            {!isCameraActive && !isProcessingFile ? (
+              <button 
+                onClick={startScanner}
+                style={{
+                  flex: 1,
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '14px 16px', borderRadius: 14, border: 'none',
+                  background: 'var(--accent)', color: 'white',
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
+                  justifyContent: 'center', transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(var(--accent-rgb), 0.3)'
+                }}
+              >
+                <Camera size={18} />
+                {t('packing.useCamera', 'Use Camera')}
+              </button>
+            ) : null}
+
             <button 
               disabled={isProcessingFile}
               onClick={() => fileInputRef.current?.click()}
               style={{
                 flex: 1,
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-primary)',
+                padding: '14px 16px', borderRadius: 14, border: '1px solid var(--border-primary)',
                 background: 'var(--bg-secondary)', color: 'var(--text-primary)',
                 cursor: isProcessingFile ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
                 justifyContent: 'center', transition: 'all 0.2s',
@@ -266,8 +386,8 @@ export function QRScannerModal({ title, onScan, onClose }: QRScannerModalProps) 
                 opacity: isProcessingFile ? 0.6 : 1
               }}
             >
-              {isProcessingFile ? <Loader2 className="animate-spin" size={18} /> : <ImageIcon size={18} />}
-              {t('packing.uploadImage')}
+              {isProcessingFile ? <Loader2 className="animate-spin" size={18} /> : (imagePreview ? <RefreshCw size={18} /> : <ImageIcon size={18} />)}
+              {imagePreview ? t('packing.tryAnother', 'Try Another') : t('packing.uploadImage')}
             </button>
           </div>
         </div>
