@@ -775,10 +775,25 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
     }
   }
 
+  // Parse CSV line respecting quoted values (e.g. "Shirt, blue" stays as one field)
+  const parseCsvLine = (line: string): string[] => {
+    const parts: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') { inQuotes = !inQuotes; continue }
+      if (!inQuotes && (ch === ',' || ch === ';' || ch === '\t')) { parts.push(current.trim()); current = ''; continue }
+      current += ch
+    }
+    parts.push(current.trim())
+    return parts
+  }
+
   const parseImportLines = (text: string) => {
     return text.split('\n').map(line => line.trim()).filter(Boolean).map(line => {
       // Format: Category, Name, Weight (optional), Bag (optional), checked/unchecked (optional)
-      const parts = line.split(/[,;\t]/).map(s => s.trim())
+      const parts = parseCsvLine(line)
       if (parts.length >= 2) {
         const category = parts[0]
         const name = parts[1]
@@ -1187,18 +1202,29 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
           }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{t('packing.importTitle')}</div>
             <div style={{ fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5 }}>{t('packing.importHint')}</div>
-            <textarea
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-              rows={10}
-              placeholder={t('packing.importPlaceholder')}
-              style={{
-                width: '100%', border: '1px solid var(--border-primary)', borderRadius: 10,
-                padding: '10px 12px', fontSize: 13, fontFamily: 'monospace',
-                outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)',
-                background: 'var(--bg-input)', resize: 'vertical', lineHeight: 1.5,
-              }}
-            />
+            <div style={{ display: 'flex', border: '1px solid var(--border-primary)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg-input)' }}>
+              <div style={{
+                padding: '10px 0', fontSize: 13, fontFamily: 'monospace', lineHeight: 1.5,
+                color: 'var(--text-faint)', textAlign: 'right', userSelect: 'none',
+                background: 'var(--bg-hover)', borderRight: '1px solid var(--border-faint)',
+                minWidth: 32, flexShrink: 0,
+              }}>
+                {(importText || ' ').split('\n').map((_, i) => (
+                  <div key={i} style={{ padding: '0 6px' }}>{i + 1}</div>
+                ))}
+              </div>
+              <textarea
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                rows={10}
+                placeholder={t('packing.importPlaceholder')}
+                style={{
+                  flex: 1, border: 'none', padding: '10px 12px', fontSize: 13, fontFamily: 'monospace',
+                  outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)',
+                  background: 'transparent', resize: 'vertical', lineHeight: 1.5,
+                }}
+              />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <input ref={csvInputRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleCsvFile} />
