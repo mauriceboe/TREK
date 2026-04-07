@@ -337,11 +337,16 @@ export async function updateSynologySettings(userId: number, synologyUrl: string
     }
 
     _clearSynologySID(userId);
+    console.log(synologyOtp, synologyOtp?.trim(), synologyOtp && synologyOtp.trim()); //debug log to verify OTP presence
     if (synologyOtp && synologyOtp.trim()) {
         const resp = await _loginToSynology(synologyUrl, synologyUsername, synologyPassword || decrypt_api_key(existingEncryptedPassword || '') || '', synologyOtp);
+        console.log('Login response after settings update:', resp); //debug log to verify login response
         if ('error' in resp) {
             return fail("Failed to connect to Synology with provided OTP: " + resp.error.message, resp.error.status);
         }
+        const encrypted = encrypt_api_key(resp.data);
+        db.prepare('UPDATE users SET synology_sid = ? WHERE id = ?').run(encrypted, userId);
+        return success(resp.data);
     }
     return success("settings updated");
 }
