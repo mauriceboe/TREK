@@ -1,6 +1,6 @@
 {
   "name": "trek-server",
-  "version": "2.9.11",
+  "version": "2.9.12",
   "main": "src/index.ts",
   "scripts": {
     "start": "node --import tsx src/index.ts",
