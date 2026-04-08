@@ -4,7 +4,10 @@ import { useVacayStore } from '../../store/vacayStore'
 import { getIntlLanguage, useTranslation } from '../../i18n'
 import { useToast } from '../shared/Toast'
 import CustomSelect from '../shared/CustomSelect'
-import apiClient from '../../api/client'
+// Vacay holiday settings stubbed
+const apiClient: any = {
+  get: async (_url: string, _opts?: any) => ({ data: [] as any[] }),
+}
 import type { VacayHolidayCalendar } from '../../types'
 
 interface VacaySettingsProps {

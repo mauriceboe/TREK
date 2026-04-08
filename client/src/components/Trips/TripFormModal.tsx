@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import Modal from '../shared/Modal'
 import { Calendar, Camera, X, Clipboard, UserPlus, Bell } from 'lucide-react'
-import { tripsApi, authApi } from '../../api/client'
+import { convexUpdateTrip } from '../../convex/mutationClient'
+// Cover upload stubbed until Convex file storage migration
+const tripsApi = {
+  uploadCover: async (_id: any, _fd: any) => { console.warn('Cover upload not yet migrated to Convex'); return { cover_image: null } },
+  update: async (id: any, data: any) => convexUpdateTrip(id as any, data),
+}
+import { convexAddTripMember } from '../../convex/mutationClient'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
+import { fetchAppConfig } from '../../hooks/useAppConfig'
 import CustomSelect from '../shared/CustomSelect'
 import { useAuthStore } from '../../store/authStore'
 import { useCanDo } from '../../store/permissionsStore'
@@ -70,12 +79,14 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
     setSelectedMembers([])
     setError('')
     if (isOpen) {
-      authApi.getAppConfig().then((c: { trip_reminders_enabled?: boolean }) => {
+      fetchAppConfig().then((c: any) => {
         if (c?.trip_reminders_enabled !== undefined) setTripRemindersEnabled(c.trip_reminders_enabled)
       }).catch(() => {})
     }
     if (!trip) {
-      authApi.listUsers().then(d => setAllUsers(d.users || [])).catch(() => {})
+      if (convexClient) {
+        convexClient.query(api.users.listUsers, {}).then(users => setAllUsers(users as any[])).catch(() => {})
+      }
     }
   }, [trip, isOpen])
 
@@ -106,9 +117,9 @@ export default function TripFormModal({ isOpen, onClose, onSave, trip, onCoverUp
       // Add selected members for newly created trips
       if (selectedMembers.length > 0 && newTripId) {
         for (const userId of selectedMembers) {
-          const user = allUsers.find(u => u.id === userId)
+          const user = allUsers.find((u: any) => u.id === userId)
           if (user) {
-            try { await tripsApi.addMember(newTripId, user.username) } catch {}
+            try { await convexAddTripMember(newTripId as any, (user as any).username || (user as any).email) } catch {}
           }
         }
       }

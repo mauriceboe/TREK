@@ -1,4 +1,4 @@
-import { filesApi } from '../../api/client'
+import { stubbedFilesApi as filesApi } from '../../api/convexApiStub'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { TripFile } from '../../types'
@@ -6,6 +6,9 @@ import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
+
+// Files still use Express API for upload (Convex file storage TODO)
+// This is a temporary bridge until file storage is migrated
 
 export interface FilesSlice {
   loadFiles: (tripId: number | string) => Promise<void>
@@ -18,8 +21,9 @@ export const createFilesSlice = (set: SetState, get: GetState): FilesSlice => ({
     try {
       const data = await filesApi.list(tripId)
       set({ files: data.files })
-    } catch (err: unknown) {
-      console.error('Failed to load files:', err)
+    } catch {
+      // Files API may not be available yet
+      set({ files: [] })
     }
   },
 

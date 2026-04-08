@@ -1,4 +1,3 @@
-import { daysApi, dayNotesApi } from '../../api/client'
 import {
   convexUpdateDay,
   convexCreateDayNote,
@@ -8,7 +7,6 @@ import {
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { DayNote } from '../../types'
-import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
@@ -23,38 +21,27 @@ export interface DayNotesSlice {
 }
 
 export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice => ({
-  updateDayNotes: async (tripId, dayId, notes) => {
-    // Optimistic update
+  updateDayNotes: async (_tripId, dayId, notes) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) return
     set(state => ({
       days: state.days.map(d => String(d.id) === String(dayId) ? { ...d, notes } : d)
     }))
-    try {
-      if (get().tripBackend === 'convex') {
-        await convexUpdateDay(tripId as any, dayId as any, { notes })
-      } else {
-        await daysApi.update(tripId, dayId, { notes })
-      }
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error updating notes'))
-    }
+    await convexUpdateDay(convexTripId as any, dayId as any, { notes })
   },
 
-  updateDayTitle: async (tripId, dayId, title) => {
+  updateDayTitle: async (_tripId, dayId, title) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) return
     set(state => ({
       days: state.days.map(d => String(d.id) === String(dayId) ? { ...d, title } : d)
     }))
-    try {
-      if (get().tripBackend === 'convex') {
-        await convexUpdateDay(tripId as any, dayId as any, { title })
-      } else {
-        await daysApi.update(tripId, dayId, { title })
-      }
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error updating day name'))
-    }
+    await convexUpdateDay(convexTripId as any, dayId as any, { title })
   },
 
-  addDayNote: async (tripId, dayId, data) => {
+  addDayNote: async (_tripId, dayId, data) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) throw new Error('Trip not loaded')
     const tempId = `temp_${Date.now()}`
     const tempNote: DayNote = { id: tempId, day_id: dayId, ...data, created_at: new Date().toISOString() } as DayNote
     set(state => ({
@@ -64,19 +51,8 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
       }
     }))
     try {
-      if (get().tripBackend === 'convex') {
-        const result = await convexCreateDayNote(tripId as any, dayId as any, data as any)
-        // Convex reactivity will replace the temp note
-        return result as any as DayNote
-      }
-      const result = await dayNotesApi.create(tripId, dayId, data)
-      set(state => ({
-        dayNotes: {
-          ...state.dayNotes,
-          [String(dayId)]: (state.dayNotes[String(dayId)] || []).map(n => n.id === tempId ? result.note : n),
-        }
-      }))
-      return result.note
+      const result = await convexCreateDayNote(convexTripId as any, dayId as any, data as any)
+      return result as any as DayNote
     } catch (err: unknown) {
       set(state => ({
         dayNotes: {
@@ -84,30 +60,16 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
           [String(dayId)]: (state.dayNotes[String(dayId)] || []).filter(n => n.id !== tempId),
         }
       }))
-      throw new Error(getApiErrorMessage(err, 'Error adding note'))
+      throw new Error(String(err))
     }
   },
 
-  updateDayNote: async (tripId, dayId, id, data) => {
-    try {
-      if (get().tripBackend === 'convex') {
-        const result = await convexUpdateDayNote(id as any, data as any)
-        return result as any as DayNote
-      }
-      const result = await dayNotesApi.update(tripId, dayId, id as number, data)
-      set(state => ({
-        dayNotes: {
-          ...state.dayNotes,
-          [String(dayId)]: (state.dayNotes[String(dayId)] || []).map(n => n.id === id ? result.note : n),
-        }
-      }))
-      return result.note
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error updating note'))
-    }
+  updateDayNote: async (_tripId, _dayId, id, data) => {
+    const result = await convexUpdateDayNote(id as any, data as any)
+    return result as any as DayNote
   },
 
-  deleteDayNote: async (tripId, dayId, id) => {
+  deleteDayNote: async (_tripId, dayId, id) => {
     const prev = get().dayNotes
     set(state => ({
       dayNotes: {
@@ -116,23 +78,20 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
       }
     }))
     try {
-      if (get().tripBackend === 'convex') {
-        await convexDeleteDayNote(id as any)
-      } else {
-        await dayNotesApi.delete(tripId, dayId, id as number)
-      }
+      await convexDeleteDayNote(id as any)
     } catch (err: unknown) {
       set({ dayNotes: prev })
-      throw new Error(getApiErrorMessage(err, 'Error deleting note'))
+      throw new Error(String(err))
     }
   },
 
-  moveDayNote: async (tripId, fromDayId, toDayId, noteId, sort_order = 9999) => {
+  moveDayNote: async (_tripId, fromDayId, toDayId, noteId, sort_order = 9999) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) return
     const state = get()
     const note = (state.dayNotes[String(fromDayId)] || []).find(n => n.id === noteId)
     if (!note) return
 
-    // Optimistic: remove from source
     set(s => ({
       dayNotes: {
         ...s.dayNotes,
@@ -141,24 +100,10 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
     }))
 
     try {
-      if (get().tripBackend === 'convex') {
-        await convexDeleteDayNote(noteId as any)
-        const result = await convexCreateDayNote(tripId as any, toDayId as any, {
-          text: note.text, time: note.time, icon: note.icon, sort_order,
-        })
-        // Convex reactivity handles the rest
-        return
-      }
-      await dayNotesApi.delete(tripId, fromDayId, noteId as number)
-      const result = await dayNotesApi.create(tripId, toDayId, {
+      await convexDeleteDayNote(noteId as any)
+      await convexCreateDayNote(convexTripId as any, toDayId as any, {
         text: note.text, time: note.time, icon: note.icon, sort_order,
       })
-      set(s => ({
-        dayNotes: {
-          ...s.dayNotes,
-          [String(toDayId)]: [...(s.dayNotes[String(toDayId)] || []), result.note],
-        }
-      }))
     } catch (err: unknown) {
       set(s => ({
         dayNotes: {
@@ -166,7 +111,7 @@ export const createDayNotesSlice = (set: SetState, get: GetState): DayNotesSlice
           [String(fromDayId)]: [...(s.dayNotes[String(fromDayId)] || []), note],
         }
       }))
-      throw new Error(getApiErrorMessage(err, 'Error moving note'))
+      throw new Error(String(err))
     }
   },
 })

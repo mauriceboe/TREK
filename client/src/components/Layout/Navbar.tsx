@@ -4,7 +4,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
-import { addonsApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api as convexApi } from '../../../convex/_generated/api'
 import { Plane, LogOut, Settings, ChevronDown, Shield, ArrowLeft, Users, Moon, Sun, Monitor, CalendarDays, Briefcase, Globe } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -39,7 +40,7 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
 
   const loadAddons = () => {
     if (user) {
-      addonsApi.enabled().then(data => {
+      (convexClient ? convexClient.query(convexApi.addons.enabled, {}) : Promise.resolve({ addons: [] })).then((data: any) => {
         setGlobalAddons(data.addons.filter(a => a.type === 'global'))
       }).catch(() => {})
     }
@@ -53,8 +54,8 @@ export default function Navbar({ tripTitle, tripId, onBack, showBack, onShare }:
   }, [user])
 
   useEffect(() => {
-    import('../../api/client').then(({ authApi }) => {
-      authApi.getAppConfig?.().then(c => setAppVersion(c?.version)).catch(() => {})
+    import('../../hooks/useAppConfig').then(({ fetchAppConfig }) => {
+      fetchAppConfig().then(c => setAppVersion((c as any)?.version)).catch(() => {})
     })
   }, [])
 

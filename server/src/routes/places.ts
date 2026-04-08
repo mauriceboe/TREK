@@ -1,5 +1,8 @@
 import express, { Request, Response } from 'express';
 import fetch from 'node-fetch';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { db, getPlaceWithTags } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { requireTripAccess } from '../middleware/tripAccess';
@@ -20,6 +23,28 @@ interface UnsplashSearchResponse {
 }
 
 const router = express.Router({ mergeParams: true });
+
+const gpxUpload = multer({ dest: path.join(__dirname, '../../uploads/tmp') });
+
+router.post('/import/gpx', authenticate, requireTripAccess, gpxUpload.single('file'), (req: Request, res: Response) => {
+  const { tripId } = req.params;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const xml = fs.readFileSync(req.file.path, 'utf8');
+  fs.unlinkSync(req.file.path);
+  const matches = [...xml.matchAll(/<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>[\s\S]*?<name>([^<]+)<\/name>|<wpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>[\s\S]*?<name>([^<]+)<\/name>/g)];
+  const created: unknown[] = [];
+
+  for (const match of matches) {
+    const lat = Number(match[1] || match[4]);
+    const lng = Number(match[2] || match[5]);
+    const name = match[3] || match[6] || 'Imported waypoint';
+    const result = db.prepare('INSERT INTO places (trip_id, name, lat, lng) VALUES (?, ?, ?, ?)').run(tripId, name, lat, lng);
+    created.push(getPlaceWithTags(Number(result.lastInsertRowid)));
+  }
+
+  res.status(201).json({ places: created, count: created.length });
+});
 
 router.get('/', authenticate, requireTripAccess, (req: Request, res: Response) => {
   const { tripId } = req.params 

@@ -3,6 +3,7 @@ import { db, canAccessTrip } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { AuthRequest, BudgetItem, BudgetItemMember } from '../types';
+import { calculateSettlement } from '../services/budgetService';
 
 const router = express.Router({ mergeParams: true });
 
@@ -73,6 +74,13 @@ router.get('/summary/per-person', authenticate, (req: Request, res: Response) =>
   `).all(tripId) as { user_id: number; username: string; avatar: string | null; total_assigned: number; total_paid: number; items_count: number }[];
 
   res.json({ summary: summary.map(s => ({ ...s, avatar_url: avatarUrl(s) })) });
+});
+
+router.get('/settlement', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { tripId } = req.params;
+  if (!canAccessTrip(Number(tripId), authReq.user.id)) return res.status(404).json({ error: 'Trip not found' });
+  res.json(calculateSettlement(tripId));
 });
 
 router.post('/', authenticate, (req: Request, res: Response) => {

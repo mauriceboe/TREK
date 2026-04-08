@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { adminApi } from '../../api/client'
+import { stubbedAdminApi as adminApi } from '../../api/convexApiStub'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { Plus, Trash2, Edit2, Package, X, Check, ChevronDown, ChevronRight, FolderPlus } from 'lucide-react'

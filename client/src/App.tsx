@@ -14,7 +14,7 @@ import AtlasPage from './pages/AtlasPage'
 import { ToastContainer } from './components/shared/Toast'
 import { TranslationProvider, useTranslation } from './i18n'
 import DemoBanner from './components/Layout/DemoBanner'
-import { authApi } from './api/client'
+import { fetchAppConfig } from './hooks/useAppConfig'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -67,9 +67,9 @@ export default function App() {
 
   useEffect(() => {
     loadUser()
-    authApi.getAppConfig().then((config: { demo_mode?: boolean; has_maps_key?: boolean }) => {
+    fetchAppConfig().then((config) => {
       if (config?.demo_mode) setDemoMode(true)
-      if (config?.has_maps_key !== undefined) setHasMapsKey(config.has_maps_key)
+      if ((config as any)?.has_maps_key !== undefined) setHasMapsKey((config as any).has_maps_key)
     }).catch(() => {})
   }, [])
 

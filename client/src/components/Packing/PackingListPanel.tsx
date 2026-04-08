@@ -3,7 +3,35 @@ import { useTripStore } from '../../store/tripStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
-import { packingApi, tripsApi, adminApi } from '../../api/client'
+import { stubbedAdminApi as adminApi } from '../../api/convexApiStub'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
+
+function getClient() {
+  if (!convexClient) throw new Error('Convex is not configured')
+  return convexClient
+}
+
+async function resolveTripId(tripId: number | string): Promise<any> {
+  return getClient().query(api.trips.resolveTripId, { tripParam: String(tripId) })
+}
+
+const packingApi: any = {
+  getCategoryAssignees: async (_tripId: any) => ({ assignees: {} as Record<string, any[]> }),
+  setCategoryAssignees: async (_tripId: any, _cat: any, _ids: any) => ({ assignees: {} as Record<string, any[]> }),
+  listBags: async (_tripId: any) => ({ bags: [] as any[] }),
+  createBag: async (_tripId: any, data: any) => ({ bag: { id: Date.now(), ...data } }),
+  deleteBag: async (_tripId: any, _bagId: any) => ({}),
+  applyTemplate: async (tripId: any, templateId: any) => {
+    const convexTripId = await resolveTripId(tripId)
+    return getClient().mutation(api.packing.applyTemplate, { tripId: convexTripId, templateId })
+  },
+  bulkImport: async (tripId: any, items: any[]) => {
+    const convexTripId = await resolveTripId(tripId)
+    return getClient().mutation(api.packing.bulkImport, { tripId: convexTripId, items })
+  },
+}
+import { convexGetTripMembers } from '../../convex/mutationClient'
 import ReactDOM from 'react-dom'
 import {
   CheckSquare, Square, Trash2, Plus, ChevronDown, ChevronRight,
@@ -611,10 +639,14 @@ export default function PackingListPanel({ tripId, items }: PackingListPanelProp
   const [categoryAssignees, setCategoryAssignees] = useState<Record<string, CategoryAssignee[]>>({})
 
   useEffect(() => {
-    tripsApi.getMembers(tripId).then(data => {
-      const all: TripMember[] = []
-      if (data.owner) all.push({ id: data.owner.id, username: data.owner.username, avatar: data.owner.avatar_url })
-      if (data.members) all.push(...data.members.map((m: any) => ({ id: m.id, username: m.username, avatar: m.avatar_url })))
+    const tripDoc = useTripStore.getState().trip as any
+    const convexId = tripDoc?._id || tripId
+    convexGetTripMembers(convexId as any).then((members: any[]) => {
+      const all: TripMember[] = members.map((m: any) => ({
+        id: m._id || m.id,
+        username: m.username,
+        avatar: m.avatar_url,
+      }))
       setTripMembers(all)
     }).catch(() => {})
     packingApi.getCategoryAssignees(tripId).then(data => {

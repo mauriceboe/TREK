@@ -38,6 +38,7 @@ export interface Trip {
   destination_viewport_west?: number | null;
   destination_viewport_north?: number | null;
   destination_viewport_east?: number | null;
+  reminder_days?: number | null;
   created_at?: string;
   updated_at?: string;
 }

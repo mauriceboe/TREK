@@ -1,4 +1,4 @@
-import { mapsApi } from '../api/client'
+import { convexMapsApi as mapsApi } from '../convex/mapsClient'
 
 // Shared photo cache — used by PlaceAvatar (sidebar) and MapView (map markers)
 interface PhotoEntry {

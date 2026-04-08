@@ -46,6 +46,43 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   broadcast(tripId, 'packing:created', { item }, req.headers['x-socket-id'] as string);
 });
 
+router.post('/import', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { tripId } = req.params;
+  const { items } = req.body;
+
+  const trip = verifyTripOwnership(tripId, authReq.user.id);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items must be a non-empty array' });
+
+  const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM packing_items WHERE trip_id = ?').get(tripId) as { max: number | null };
+  let sortOrder = (maxOrder.max !== null ? maxOrder.max : -1) + 1;
+  const insert = db.prepare('INSERT INTO packing_items (trip_id, name, checked, category, sort_order) VALUES (?, ?, 0, ?, ?)');
+  const created = items.map((item: any) => {
+    const result = insert.run(tripId, item.name, item.category || 'Allgemein', sortOrder++);
+    return db.prepare('SELECT * FROM packing_items WHERE id = ?').get(result.lastInsertRowid);
+  });
+
+  res.status(201).json({ items: created, count: created.length });
+});
+
+router.put('/reorder', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const { tripId } = req.params;
+  const { orderedIds } = req.body;
+
+  const trip = verifyTripOwnership(tripId, authReq.user.id);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  const update = db.prepare('UPDATE packing_items SET sort_order = ? WHERE id = ? AND trip_id = ?');
+  const updateMany = db.transaction((ids: number[]) => {
+    ids.forEach((id, index) => update.run(index, id, tripId));
+  });
+
+  updateMany(orderedIds || []);
+  res.json({ success: true });
+});
+
 router.put('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { tripId, id } = req.params;
@@ -231,25 +268,6 @@ router.put('/category-assignees/:categoryName', authenticate, (req: Request, res
 
   res.json({ assignees: rows });
   broadcast(tripId, 'packing:assignees', { category: cat, assignees: rows }, req.headers['x-socket-id'] as string);
-});
-
-router.put('/reorder', authenticate, (req: Request, res: Response) => {
-  const authReq = req as AuthRequest;
-  const { tripId } = req.params;
-  const { orderedIds } = req.body;
-
-  const trip = verifyTripOwnership(tripId, authReq.user.id);
-  if (!trip) return res.status(404).json({ error: 'Trip not found' });
-
-  const update = db.prepare('UPDATE packing_items SET sort_order = ? WHERE id = ? AND trip_id = ?');
-  const updateMany = db.transaction((ids: number[]) => {
-    ids.forEach((id, index) => {
-      update.run(index, id, tripId);
-    });
-  });
-
-  updateMany(orderedIds);
-  res.json({ success: true });
 });
 
 export default router;

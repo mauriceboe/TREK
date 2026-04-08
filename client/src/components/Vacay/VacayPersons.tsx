@@ -8,7 +8,7 @@ import { useTranslation } from '../../i18n'
 import { getApiErrorMessage } from '../../types'
 import { useToast } from '../shared/Toast'
 import CustomSelect from '../shared/CustomSelect'
-import apiClient from '../../api/client'
+// Vacay stubbed
 
 const PRESET_COLORS = [
   '#6366f1', '#ec4899', '#14b8a6', '#8b5cf6', '#ef4444',
@@ -35,7 +35,7 @@ export default function VacayPersons() {
 
   const loadAvailable = async () => {
     try {
-      const data = await apiClient.get('/addons/vacay/available-users').then(r => r.data)
+      const data = { users: [] } // Vacay stubbed until migrated
       setAvailableUsers(data.users)
     } catch { /* */ }
   }

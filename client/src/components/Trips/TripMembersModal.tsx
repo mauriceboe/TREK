@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import Modal from '../shared/Modal'
-import { tripsApi, authApi, shareApi } from '../../api/client'
+import { stubbedShareApi as shareApi } from '../../api/convexApiStub'
+import { convexGetTripMembers, convexAddTripMember, convexRemoveTripMember } from '../../convex/mutationClient'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
 import { useToast } from '../shared/Toast'
 import { useAuthStore } from '../../store/authStore'
 import { useCanDo } from '../../store/permissionsStore'
@@ -42,9 +45,10 @@ function ShareLinkSection({ tripId, t }: { tripId: number; t: (key: string, para
   const toast = useToast()
 
   useEffect(() => {
-    shareApi.getLink(tripId).then(d => {
-      setShareToken(d.token)
-      if (d.token) setPerms({ share_map: d.share_map ?? true, share_bookings: d.share_bookings ?? true, share_packing: d.share_packing ?? false, share_budget: d.share_budget ?? false, share_collab: d.share_collab ?? false })
+    shareApi.getLink(tripId).then((result: any) => {
+      const d = result?.link || result
+      setShareToken(d?.token || null)
+      if (d?.token) setPerms({ share_map: d.share_map ?? true, share_bookings: d.share_bookings ?? true, share_packing: d.share_packing ?? false, share_budget: d.share_budget ?? false, share_collab: d.share_collab ?? false })
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [tripId])
@@ -53,8 +57,9 @@ function ShareLinkSection({ tripId, t }: { tripId: number; t: (key: string, para
 
   const handleCreate = async () => {
     try {
-      const d = await shareApi.createLink(tripId, perms)
-      setShareToken(d.token)
+      const result: any = await shareApi.createLink(tripId, perms)
+      const d = result?.link || result
+      setShareToken(d?.token || null)
     } catch { toast.error(t('share.createError')) }
   }
 
@@ -189,8 +194,12 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
   const loadMembers = async () => {
     setLoading(true)
     try {
-      const d = await tripsApi.getMembers(tripId)
-      setData(d)
+      const tripDoc = trip as any
+      const convexId = tripDoc?._id || tripId
+      const members = await convexGetTripMembers(convexId as any)
+      const owner = (members as any[]).find((m: any) => m.role === 'owner')
+      const membersList = (members as any[]).filter((m: any) => m.role !== 'owner')
+      setData({ owner, members: membersList })
     } catch {
       toast.error(t('members.loadError'))
     } finally {
@@ -200,8 +209,9 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
 
   const loadAllUsers = async () => {
     try {
-      const d = await authApi.listUsers()
-      setAllUsers(d.users)
+      if (!convexClient) return
+      const users = await convexClient.query(api.users.listUsers, {})
+      setAllUsers(users as any[])
     } catch {}
   }
 
@@ -209,8 +219,10 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
     if (!selectedUserId) return
     setAdding(true)
     try {
-      const target = allUsers.find(u => String(u.id) === String(selectedUserId))
-      await tripsApi.addMember(tripId, target.username)
+      const target = allUsers.find((u: any) => String(u.id) === String(selectedUserId))
+      const tripDoc = trip as any
+      const convexId = tripDoc?._id || tripId
+      await convexAddTripMember(convexId as any, target.username || target.email)
       setSelectedUserId('')
       await loadMembers()
       toast.success(`${target.username} ${t('members.added')}`)
@@ -221,14 +233,19 @@ export default function TripMembersModal({ isOpen, onClose, tripId, tripTitle }:
     }
   }
 
-  const handleRemove = async (userId, isSelf) => {
+  const handleRemove = async (userId: any, isSelf: boolean) => {
     const msg = isSelf
       ? t('members.confirmLeave')
       : t('members.confirmRemove')
     if (!confirm(msg)) return
     setRemovingId(userId)
     try {
-      await tripsApi.removeMember(tripId, userId)
+      const tripDoc = trip as any
+      const convexId = tripDoc?._id || tripId
+      // userId here is the auth_user_key from the members list
+      const member = (data as any)?.members?.find((m: any) => String(m._id) === String(userId) || String(m.id) === String(userId))
+      const authKey = member?.auth_user_key || userId
+      await convexRemoveTripMember(convexId as any, authKey)
       if (isSelf) { onClose(); window.location.reload() }
       else { await loadMembers(); toast.success(t('members.removed')) }
     } catch {

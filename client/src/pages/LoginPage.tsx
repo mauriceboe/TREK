@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTranslation } from '../i18n'
-import { authApi } from '../api/client'
+import { fetchAppConfig } from '../hooks/useAppConfig'
 import { Plane, Eye, EyeOff, Mail, Lock, MapPin, Calendar, Package, User, Globe, Zap, Users, Wallet, Map, CheckSquare, BookMarked, FolderOpen, Route, Shield } from 'lucide-react'
 
 interface AppConfig {
@@ -30,42 +30,12 @@ export default function LoginPage(): React.ReactElement {
   const navigate = useNavigate()
 
   useEffect(() => {
-    authApi.getAppConfig?.().catch(() => null).then((config: AppConfig | null) => {
+    fetchAppConfig().then((config) => {
       if (config) {
         setAppConfig(config)
         if (!config.has_users) setMode('register')
       }
     })
-
-    // Handle OIDC callback via short-lived auth code (secure exchange)
-    const params = new URLSearchParams(window.location.search)
-    const oidcCode = params.get('oidc_code')
-    const oidcError = params.get('oidc_error')
-    if (oidcCode) {
-      window.history.replaceState({}, '', '/login')
-      fetch('/api/auth/oidc/exchange?code=' + encodeURIComponent(oidcCode))
-        .then(r => r.json())
-        .then(data => {
-          if (data.token) {
-            localStorage.setItem('auth_token', data.token)
-            navigate('/dashboard')
-            window.location.reload()
-          } else {
-            setError(data.error || 'OIDC login failed')
-          }
-        })
-        .catch(() => setError('OIDC login failed'))
-    }
-    if (oidcError) {
-      const errorMessages: Record<string, string> = {
-        registration_disabled: t('login.oidc.registrationDisabled'),
-        no_email: t('login.oidc.noEmail'),
-        token_failed: t('login.oidc.tokenFailed'),
-        invalid_state: t('login.oidc.invalidState'),
-      }
-      setError(errorMessages[oidcError] || oidcError)
-      window.history.replaceState({}, '', '/login')
-    }
   }, [])
 
   const handleDemoLogin = async (): Promise<void> => {

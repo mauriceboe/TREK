@@ -10,6 +10,8 @@ import { db } from '../db/database';
 import { authenticate, clearAuthCookie, demoUploadBlock, setAuthCookie } from '../middleware/auth';
 import { JWT_SECRET } from '../config';
 import { AuthRequest, User } from '../types';
+import { maybe_encrypt_api_key, decrypt_api_key } from '../services/apiKeyCrypto';
+import { createEphemeralToken } from '../services/ephemeralTokens';
 import {
   changeBetterAuthPassword,
   deleteBetterAuthUser,
@@ -46,10 +48,14 @@ const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 const RATE_LIMIT_CLEANUP = 5 * 60 * 1000; // 5 minutes
 
 const loginAttempts = new Map<string, { count: number; first: number }>();
+const mfaAttempts = new Map<string, { count: number; first: number }>();
 setInterval(() => {
   const now = Date.now();
   for (const [key, record] of loginAttempts) {
     if (now - record.first >= RATE_LIMIT_WINDOW) loginAttempts.delete(key);
+  }
+  for (const [key, record] of mfaAttempts) {
+    if (now - record.first >= RATE_LIMIT_WINDOW) mfaAttempts.delete(key);
   }
 }, RATE_LIMIT_CLEANUP);
 
@@ -327,7 +333,7 @@ router.post('/logout', (_req: Request, res: Response) => {
 router.get('/me', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const user = db.prepare(
-    'SELECT id, username, email, role, avatar, oidc_issuer, created_at FROM users WHERE id = ?'
+    'SELECT * FROM users WHERE id = ?'
   ).get(authReq.user.id) as User | undefined;
 
   if (!user) {
@@ -338,7 +344,15 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
     setAuthCookie(res, authReq.authToken);
   }
 
-  res.json({ user: { ...user, avatar_url: avatarUrl(user) } });
+  const { password_hash, mfa_secret, ...safeUser } = user as User & { password_hash?: string; mfa_secret?: string; must_change_password?: number | boolean };
+  res.json({
+    user: {
+      ...safeUser,
+      mfa_enabled: Boolean(user.mfa_enabled),
+      must_change_password: Boolean((user as any).must_change_password),
+      avatar_url: avatarUrl(user),
+    },
+  });
 });
 
 router.put('/me/password', authenticate, rateLimiter(5, RATE_LIMIT_WINDOW), async (req: Request, res: Response) => {
@@ -414,7 +428,7 @@ router.put('/me/maps-key', authenticate, (req: Request, res: Response) => {
 
   db.prepare(
     'UPDATE users SET maps_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(maps_api_key || null, authReq.user.id);
+  ).run(maybe_encrypt_api_key(maps_api_key), authReq.user.id);
 
   res.json({ success: true, maps_api_key: maps_api_key || null });
 });
@@ -427,8 +441,8 @@ router.put('/me/api-keys', authenticate, (req: Request, res: Response) => {
   db.prepare(
     'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run(
-    maps_api_key !== undefined ? (maps_api_key || null) : current.maps_api_key,
-    openweather_api_key !== undefined ? (openweather_api_key || null) : current.openweather_api_key,
+    maps_api_key !== undefined ? maybe_encrypt_api_key(maps_api_key) : current.maps_api_key,
+    openweather_api_key !== undefined ? maybe_encrypt_api_key(openweather_api_key) : current.openweather_api_key,
     authReq.user.id
   );
 
@@ -492,8 +506,8 @@ router.put('/me/settings', authenticate, async (req: Request, res: Response) => 
     }
   }
 
-  if (maps_api_key !== undefined) { updates.push('maps_api_key = ?'); params.push(maps_api_key || null); }
-  if (openweather_api_key !== undefined) { updates.push('openweather_api_key = ?'); params.push(openweather_api_key || null); }
+  if (maps_api_key !== undefined) { updates.push('maps_api_key = ?'); params.push(maybe_encrypt_api_key(maps_api_key)); }
+  if (openweather_api_key !== undefined) { updates.push('openweather_api_key = ?'); params.push(maybe_encrypt_api_key(openweather_api_key)); }
   if (authReq.authProvider !== 'better-auth') {
     if (username !== undefined) { updates.push('username = ?'); params.push(username.trim()); }
     if (email !== undefined) { updates.push('email = ?'); params.push(email.trim().toLowerCase()); }
@@ -519,10 +533,18 @@ router.get('/me/settings', authenticate, (req: Request, res: Response) => {
   ).get(authReq.user.id) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key'> | undefined;
   if (user?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
 
-  res.json({ settings: { maps_api_key: user.maps_api_key, openweather_api_key: user.openweather_api_key } });
+  res.json({ settings: { maps_api_key: decrypt_api_key(user.maps_api_key), openweather_api_key: decrypt_api_key(user.openweather_api_key) } });
 });
 
-router.post('/avatar', authenticate, demoUploadBlock, avatarUpload.single('avatar'), async (req: Request, res: Response) => {
+router.post('/resource-token', authenticate, (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose : 'download';
+  const token = createEphemeralToken(authReq.user.id, purpose);
+  if (!token) return res.status(503).json({ error: 'Could not create token' });
+  res.json({ token, purpose });
+});
+
+router.post('/avatar', authenticate, avatarUpload.single('avatar'), demoUploadBlock, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
 
@@ -725,4 +747,5 @@ router.get('/github-releases', authenticate, async (req: Request, res: Response)
   }
 });
 
+export { avatarUrl, generateToken, loginAttempts, mfaAttempts };
 export default router;

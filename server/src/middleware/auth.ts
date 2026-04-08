@@ -7,6 +7,7 @@ import { getBetterAuthSession } from '../lib/betterAuth';
 import { ensureLocalUserFromBetterAuth } from '../lib/localUserBridge';
 
 const AUTH_COOKIE_NAME = 'auth_token';
+const LEGACY_AUTH_COOKIE_NAME = 'trek_session';
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -24,39 +25,43 @@ function getRequestToken(req: Request): string | null {
   const bearer = authHeader && authHeader.split(' ')[1];
   if (bearer) return bearer;
   const cookies = parseCookies(req.headers.cookie);
-  return cookies[AUTH_COOKIE_NAME] || null;
+  return cookies[AUTH_COOKIE_NAME] || cookies[LEGACY_AUTH_COOKIE_NAME] || null;
 }
 
 function buildAuthCookie(token: string): string {
+  return buildCookie(AUTH_COOKIE_NAME, token, false);
+}
+
+function buildLegacyAuthCookie(token: string): string {
+  return buildCookie(LEGACY_AUTH_COOKIE_NAME, token, false);
+}
+
+function buildCookie(name: string, token: string, clear: boolean): string {
   const parts = [
-    `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    `${name}=${clear ? '' : encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
-    `Max-Age=${24 * 60 * 60}`,
+    `Max-Age=${clear ? 0 : 24 * 60 * 60}`,
   ];
   if (process.env.NODE_ENV === 'production') parts.push('Secure');
   return parts.join('; ');
 }
 
 function buildClearedAuthCookie(): string {
-  const parts = [
-    `${AUTH_COOKIE_NAME}=`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    'Max-Age=0',
-  ];
-  if (process.env.NODE_ENV === 'production') parts.push('Secure');
-  return parts.join('; ');
+  return buildCookie(AUTH_COOKIE_NAME, '', true);
+}
+
+function buildClearedLegacyAuthCookie(): string {
+  return buildCookie(LEGACY_AUTH_COOKIE_NAME, '', true);
 }
 
 function setAuthCookie(res: Response, token: string): void {
-  res.setHeader('Set-Cookie', buildAuthCookie(token));
+  res.setHeader('Set-Cookie', [buildAuthCookie(token), buildLegacyAuthCookie(token)]);
 }
 
 function clearAuthCookie(res: Response): void {
-  res.setHeader('Set-Cookie', buildClearedAuthCookie());
+  res.setHeader('Set-Cookie', [buildClearedAuthCookie(), buildClearedLegacyAuthCookie()]);
 }
 
 function authenticateWithLegacyToken(token: string): User | null {
@@ -93,7 +98,7 @@ const authenticate = async (req: Request, res: Response, next: NextFunction): Pr
   const token = getRequestToken(req);
 
   if (!token) {
-    res.status(401).json({ error: 'Access token required' });
+    res.status(401).json({ error: 'Access token required', code: 'AUTH_REQUIRED' });
     return;
   }
 
@@ -178,6 +183,12 @@ const adminOnly = (req: Request, res: Response, next: NextFunction): void => {
 const demoUploadBlock = (req: Request, res: Response, next: NextFunction): void => {
   const authReq = req as AuthRequest;
   if (process.env.DEMO_MODE === 'true' && authReq.user?.email === 'demo@nomad.app') {
+    const uploadPath = (req as Request & { file?: { path?: string } }).file?.path;
+    if (uploadPath) {
+      try {
+        require('fs').unlinkSync(uploadPath);
+      } catch {}
+    }
     res.status(403).json({ error: 'Uploads are disabled in demo mode. Self-host NOMAD for full functionality.' });
     return;
   }

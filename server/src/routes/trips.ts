@@ -8,6 +8,7 @@ import { authenticate, demoUploadBlock } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { AuthRequest, Trip, User } from '../types';
 import { parseNullableNumber, syncTripLegsToDayCount } from './legs';
+import { checkPermission } from '../services/permissions';
 
 const router = express.Router();
 
@@ -121,6 +122,15 @@ function generateDays(tripId: number | bigint | string, startDate: string | null
   }
 }
 
+function getTripPermissionContext(tripId: string | number, userId: number) {
+  return db.prepare(`
+    SELECT t.user_id,
+      CASE WHEN EXISTS(SELECT 1 FROM trip_members WHERE trip_id = t.id AND user_id = ?) THEN 1 ELSE 0 END AS is_member
+    FROM trips t
+    WHERE t.id = ?
+  `).get(userId, tripId) as { user_id: number; is_member: number } | undefined;
+}
+
 router.get('/', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const archived = req.query.archived === '1' ? 1 : 0;
@@ -143,9 +153,24 @@ router.post('/', authenticate, (req: Request, res: Response) => {
     destination_viewport_south, destination_viewport_west,
     destination_viewport_north, destination_viewport_east,
   } = req.body;
+  if (!checkPermission('trip_create', authReq.user.role, null, authReq.user.id, false)) {
+    return res.status(403).json({ error: 'No permission' });
+  }
+
   if (!title) return res.status(400).json({ error: 'Title is required' });
   if (start_date && end_date && new Date(end_date) < new Date(start_date))
     return res.status(400).json({ error: 'End date must be after start date' });
+
+  let resolvedStartDate = start_date || null;
+  let resolvedEndDate = end_date || null;
+  if (!resolvedStartDate && !resolvedEndDate) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const end = new Date(tomorrow);
+    end.setDate(end.getDate() + 7);
+    resolvedStartDate = tomorrow.toISOString().slice(0, 10);
+    resolvedEndDate = end.toISOString().slice(0, 10);
+  }
 
   const result = db.prepare(`
     INSERT INTO trips (
@@ -160,11 +185,11 @@ router.post('/', authenticate, (req: Request, res: Response) => {
     parseNullableNumber(destination_lat) ?? null, parseNullableNumber(destination_lng) ?? null,
     parseNullableNumber(destination_viewport_south) ?? null, parseNullableNumber(destination_viewport_west) ?? null,
     parseNullableNumber(destination_viewport_north) ?? null, parseNullableNumber(destination_viewport_east) ?? null,
-    start_date || null, end_date || null, currency || 'EUR'
+    resolvedStartDate, resolvedEndDate, currency || 'EUR'
   );
 
   const tripId = result.lastInsertRowid;
-  generateDays(tripId, start_date, end_date);
+  generateDays(tripId, resolvedStartDate, resolvedEndDate);
   const trip = db.prepare(`${TRIP_SELECT} WHERE t.id = :tripId`).get({ userId: authReq.user.id, tripId });
   res.status(201).json({ trip });
 });
@@ -183,15 +208,17 @@ router.get('/:id', authenticate, (req: Request, res: Response) => {
 
 router.put('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const access = canAccessTrip(req.params.id, authReq.user.id);
-  if (!access) return res.status(404).json({ error: 'Trip not found' });
-
-  const ownerOnly = req.body.is_archived !== undefined || req.body.cover_image !== undefined;
-  if (ownerOnly && !isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'Only the owner can change this setting' });
-
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const context = getTripPermissionContext(req.params.id, authReq.user.id);
+  const isMember = !!context?.is_member && context?.user_id !== authReq.user.id;
+
+  const actionKey = req.body.is_archived !== undefined || req.body.cover_image !== undefined
+    ? 'trip_archive'
+    : 'trip_edit';
+  if (!checkPermission(actionKey, authReq.user.role, trip.user_id, authReq.user.id, isMember)) {
+    return res.status(403).json({ error: 'No permission' });
+  }
   const {
     title, description, start_date, end_date, currency, is_archived, cover_image,
     destination_name, destination_address,
@@ -429,8 +456,13 @@ router.post('/:id/copy', authenticate, (req: Request, res: Response) => {
 
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  if (!isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'Only the owner can delete the trip' });
+  const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(req.params.id) as Trip | undefined;
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const context = getTripPermissionContext(req.params.id, authReq.user.id);
+  const isMember = !!context?.is_member && trip.user_id !== authReq.user.id;
+  if (!checkPermission('trip_delete', authReq.user.role, trip.user_id, authReq.user.id, isMember)) {
+    return res.status(403).json({ error: 'No permission' });
+  }
   const deletedTripId = Number(req.params.id);
   db.prepare('DELETE FROM trips WHERE id = ?').run(req.params.id);
   res.json({ success: true });
@@ -469,6 +501,14 @@ router.post('/:id/members', authenticate, (req: Request, res: Response) => {
   if (!canAccessTrip(req.params.id, authReq.user.id))
     return res.status(404).json({ error: 'Trip not found' });
 
+  const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number } | undefined;
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const context = getTripPermissionContext(req.params.id, authReq.user.id);
+  const isMember = !!context?.is_member && trip.user_id !== authReq.user.id;
+  if (!checkPermission('member_manage', authReq.user.role, trip.user_id, authReq.user.id, isMember)) {
+    return res.status(403).json({ error: 'No permission' });
+  }
+
   const { identifier } = req.body;
   if (!identifier) return res.status(400).json({ error: 'Email or username required' });
 
@@ -478,7 +518,6 @@ router.post('/:id/members', authenticate, (req: Request, res: Response) => {
 
   if (!target) return res.status(404).json({ error: 'User not found' });
 
-  const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number };
   if (target.id === trip.user_id)
     return res.status(400).json({ error: 'Trip owner is already a member' });
 
@@ -497,8 +536,15 @@ router.delete('/:id/members/:userId', authenticate, (req: Request, res: Response
 
   const targetId = parseInt(req.params.userId);
   const isSelf = targetId === authReq.user.id;
-  if (!isSelf && !isOwner(req.params.id, authReq.user.id))
-    return res.status(403).json({ error: 'No permission' });
+  if (!isSelf) {
+    const trip = db.prepare('SELECT user_id FROM trips WHERE id = ?').get(req.params.id) as { user_id: number } | undefined;
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    const context = getTripPermissionContext(req.params.id, authReq.user.id);
+    const isMember = !!context?.is_member && trip.user_id !== authReq.user.id;
+    if (!checkPermission('member_manage', authReq.user.role, trip.user_id, authReq.user.id, isMember)) {
+      return res.status(403).json({ error: 'No permission' });
+    }
+  }
 
   db.prepare('DELETE FROM trip_members WHERE trip_id = ? AND user_id = ?').run(req.params.id, targetId);
   res.json({ success: true });

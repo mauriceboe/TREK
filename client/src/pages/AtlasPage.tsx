@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { getIntlLanguage, getLocaleForLanguage, useTranslation } from '../i18n'
 import { useSettingsStore } from '../store/settingsStore'
 import Navbar from '../components/Layout/Navbar'
-import apiClient, { mapsApi } from '../api/client'
+// Atlas stubbed until migrated to Convex
+const apiClient: any = {
+  get: async (_url: string, _opts?: any) => ({ data: { countries: [], stats: { countries: [], cities: [], totalTrips: 0, totalDays: 0, totalPlaces: 0, totalCountries: 0, coords: [] }, items: [], country: {}, places: [], trips: [] } }),
+  post: async (_url: string, _data?: any) => ({ data: { item: {}, success: true } }),
+  delete: async (_url: string, _opts?: any) => ({ data: {} }),
+}
+import { convexMapsApi as mapsApi } from '../convex/mapsClient'
 import CustomSelect from '../components/shared/CustomSelect'
 import { Globe, MapPin, Briefcase, Calendar, Flag, ChevronRight, PanelLeftOpen, PanelLeftClose, X, Star, Plus, Trash2, Search } from 'lucide-react'
 import L from 'leaflet'

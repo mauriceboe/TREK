@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Camera, Plus, Share2, EyeOff, Eye, X, Check, Search, ArrowUpDown, MapPin, Filter } from 'lucide-react'
-import apiClient from '../../api/client'
+// Immich integration stubbed until migrated
+const apiClient: any = {
+  get: async (_url: string, _opts?: any) => ({ data: { photos: [], status: 'disconnected', connected: false, assets: [] } }),
+  post: async (_url: string, _data?: any) => ({ data: { assets: [], connected: false, user: null } }),
+  delete: async (_url: string, _opts?: any) => ({ data: {} }),
+  put: async (_url: string, _data?: any) => ({ data: {} }),
+}
 import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { adminApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
 import { useTranslation } from '../../i18n'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useToast } from '../shared/Toast'
@@ -43,8 +44,9 @@ export default function AddonManager({ bagTrackingEnabled, onToggleBagTracking }
   const loadAddons = async () => {
     setLoading(true)
     try {
-      const data = await adminApi.addons()
-      setAddons(data.addons)
+      if (!convexClient) return
+      const data = await convexClient.query(api.addons.enabled, {})
+      setAddons((data.addons || []) as any[])
     } catch (err: unknown) {
       toast.error(t('admin.addons.toast.error'))
     } finally {
@@ -57,7 +59,7 @@ export default function AddonManager({ bagTrackingEnabled, onToggleBagTracking }
     // Optimistic update
     setAddons(prev => prev.map(a => a.id === addon.id ? { ...a, enabled: newEnabled } : a))
     try {
-      await adminApi.updateAddon(addon.id, { enabled: newEnabled })
+      await convexClient!.mutation(api.addons.updateAddon, { addonId: addon.id, enabled: newEnabled })
       window.dispatchEvent(new Event('addons-changed'))
       toast.success(t('admin.addons.toast.updated'))
     } catch (err: unknown) {

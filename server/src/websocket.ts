@@ -7,6 +7,7 @@ import http from 'http';
 import type { Request } from 'express';
 import { getRequestToken } from './middleware/auth';
 import { verifyConvexToken } from './lib/convexAuth';
+import { consumeEphemeralToken } from './services/ephemeralTokens';
 
 interface NomadWebSocket extends WebSocket {
   isAlive: boolean;
@@ -25,9 +26,18 @@ const socketUser = new WeakMap<NomadWebSocket, User>();
 const socketId = new WeakMap<NomadWebSocket, number>();
 let nextSocketId = 1;
 
+// Simple per-socket message rate limit
+const socketRateLimit = new WeakMap<NomadWebSocket, { count: number; windowStart: number }>();
+
 let wss: WebSocketServer | null = null;
 
 async function authenticateSocketToken(token: string): Promise<User | undefined> {
+  const ephemeralUserId = consumeEphemeralToken(token, 'ws');
+  if (ephemeralUserId) {
+    return db.prepare(
+      'SELECT id, username, email, role, better_auth_user_id FROM users WHERE id = ?'
+    ).get(ephemeralUserId) as User | undefined;
+  }
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: number };
     return db.prepare(
@@ -91,11 +101,25 @@ function setupWebSocket(server: http.Server): void {
     socketId.set(nws, sid);
     socketUser.set(nws, user);
     socketRooms.set(nws, new Set());
+    socketRateLimit.set(nws, { count: 0, windowStart: Date.now() });
     nws.send(JSON.stringify({ type: 'welcome', socketId: sid }));
 
     nws.on('pong', () => { nws.isAlive = true; });
 
     nws.on('message', (data) => {
+      const rate = socketRateLimit.get(nws) || { count: 0, windowStart: Date.now() };
+      const now = Date.now();
+      if (now - rate.windowStart >= 1000) {
+        rate.count = 0;
+        rate.windowStart = now;
+      }
+      rate.count += 1;
+      socketRateLimit.set(nws, rate);
+      if (rate.count > 30) {
+        nws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }));
+        return;
+      }
+
       let msg: { type: string; tripId?: number | string };
       try {
         msg = JSON.parse(data.toString());

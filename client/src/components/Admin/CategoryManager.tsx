@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { categoriesApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
 import { useToast } from '../shared/Toast'
 import { Plus, Edit2, Trash2, Pipette } from 'lucide-react'
 import { CATEGORY_ICON_MAP, ICON_LABELS, getCategoryIcon } from '../shared/categoryIcons'
@@ -30,8 +31,9 @@ export default function CategoryManager() {
   const loadCategories = async () => {
     setIsLoading(true)
     try {
-      const data = await categoriesApi.list()
-      setCategories(data.categories || [])
+      if (!convexClient) return
+      const categories = await convexClient.query(api.categories.listCategories, {})
+      setCategories(categories as any[] || [])
     } catch (err: unknown) {
       toast.error(t('categories.toast.loadError'))
     } finally {
@@ -61,13 +63,13 @@ export default function CategoryManager() {
     setIsSaving(true)
     try {
       if (editingId) {
-        const result = await categoriesApi.update(editingId, form)
-        setCategories(prev => prev.map(c => c.id === editingId ? result.category : c))
+        const result = await convexClient!.mutation(api.categories.updateCategory, { categoryId: editingId as any, name: form.name, color: form.color, icon: form.icon })
+        setCategories(prev => prev.map(c => c.id === editingId ? result as any : c))
         setEditingId(null)
         toast.success(t('categories.toast.updated'))
       } else {
-        const result = await categoriesApi.create(form)
-        setCategories(prev => [...prev, result.category])
+        const result = await convexClient!.mutation(api.categories.createCategory, { name: form.name, color: form.color, icon: form.icon, global: true })
+        setCategories(prev => [...prev, result as any])
         setShowForm(false)
         toast.success(t('categories.toast.created'))
       }
@@ -82,7 +84,7 @@ export default function CategoryManager() {
   const handleDelete = async (id) => {
     if (!confirm(t('categories.confirm.delete'))) return
     try {
-      await categoriesApi.delete(id)
+      await convexClient!.mutation(api.categories.deleteCategory, { categoryId: id as any })
       setCategories(prev => prev.filter(c => c.id !== id))
       toast.success(t('categories.toast.deleted'))
     } catch (err: unknown) {

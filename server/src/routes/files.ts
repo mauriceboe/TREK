@@ -8,6 +8,7 @@ import { authenticate, demoUploadBlock } from '../middleware/auth';
 import { requireTripAccess } from '../middleware/tripAccess';
 import { broadcast } from '../websocket';
 import { AuthRequest, TripFile } from '../types';
+import { authenticateDownload, resolveFilePath } from '../services/fileService';
 
 const router = express.Router({ mergeParams: true });
 
@@ -67,7 +68,7 @@ const FILE_SELECT = `
 function formatFile(file: TripFile) {
   return {
     ...file,
-    url: file.filename?.startsWith('files/') ? `/uploads/${file.filename}` : `/uploads/files/${file.filename}`,
+    url: `/api/trips/${file.trip_id}/files/${file.id}/download`,
   };
 }
 
@@ -85,7 +86,7 @@ router.get('/', authenticate, (req: Request, res: Response) => {
 
   // Get all file_links for this trip's files
   const fileIds = files.map(f => f.id);
-  let linksMap: Record<number, number[]> = {};
+  let linksMap: Record<number, { file_id: number; reservation_id: number | null; place_id: number | null }[]> = {};
   if (fileIds.length > 0) {
     const placeholders = fileIds.map(() => '?').join(',');
     const links = db.prepare(`SELECT file_id, reservation_id, place_id FROM file_links WHERE file_id IN (${placeholders})`).all(...fileIds) as { file_id: number; reservation_id: number | null; place_id: number | null }[];
@@ -133,6 +134,27 @@ router.post('/', authenticate, requireTripAccess, demoUploadBlock, upload.single
   const file = db.prepare(`${FILE_SELECT} WHERE f.id = ?`).get(result.lastInsertRowid) as TripFile;
   res.status(201).json({ file: formatFile(file) });
   broadcast(tripId, 'file:created', { file: formatFile(file) }, req.headers['x-socket-id'] as string);
+});
+
+router.get('/:id/download', (req: Request, res: Response) => {
+  const bearer = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice('Bearer '.length)
+    : undefined;
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const auth = authenticateDownload(bearer, queryToken);
+  if ('error' in auth) return res.status(auth.status).json({ error: auth.error });
+
+  const { tripId, id } = req.params;
+  const trip = verifyTripOwnership(tripId, auth.userId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+  const file = db.prepare('SELECT * FROM trip_files WHERE id = ? AND trip_id = ?').get(id, tripId) as TripFile | undefined;
+  if (!file) return res.status(404).json({ error: 'File not found' });
+
+  const { resolved, safe } = resolveFilePath(file.filename);
+  if (!safe || !fs.existsSync(resolved)) return res.status(404).json({ error: 'File not found' });
+
+  res.sendFile(resolved);
 });
 
 // Update file metadata

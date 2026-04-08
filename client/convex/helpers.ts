@@ -180,6 +180,7 @@ export function formatCategory(doc: Doc<'plannerCategories'>) {
     _id: doc._id,
     id: doc.legacyId ?? doc._id,
     name: doc.name,
+    color: doc.color || null,
     icon: doc.icon || null,
     user_id: 0,
   };

@@ -22,23 +22,44 @@ function toIsoString(timestamp: number): string {
   return new Date(timestamp).toISOString();
 }
 
-async function getViewer(ctx: { auth: { getUserIdentity: () => Promise<unknown> } }, tripId: number) {
+async function getViewer(ctx: { auth: { getUserIdentity: () => Promise<unknown> }; db: any }, tripId: number) {
   const identity = await ctx.auth.getUserIdentity() as IdentityLike | null;
   if (!identity) throw new ConvexError('Authentication required');
 
-  const rawTripIds = identity.trip_ids;
-  const tripIds = Array.isArray(rawTripIds)
-    ? rawTripIds.map((value) => Number(value)).filter((value) => Number.isFinite(value))
-    : [];
+  const authUserKey = String(identity.subject || '');
+  if (!authUserKey) throw new ConvexError('Authentication required');
 
-  if (!tripIds.includes(Number(tripId))) {
-    throw new ConvexError('Trip access denied');
+  // Look up trip by legacy ID
+  const trip = await ctx.db
+    .query('plannerTrips')
+    .withIndex('by_legacyId', (q: any) => q.eq('legacyId', tripId))
+    .unique();
+
+  if (!trip) throw new ConvexError('Trip not found');
+
+  // Check if user is the owner
+  if (trip.ownerAuthUserKey !== authUserKey) {
+    // Check membership
+    const membership = await ctx.db
+      .query('plannerTripMembers')
+      .withIndex('by_trip_memberAuthUserKey', (q: any) =>
+        q.eq('tripId', trip._id).eq('memberAuthUserKey', authUserKey),
+      )
+      .unique();
+
+    if (!membership) throw new ConvexError('Trip access denied');
   }
 
+  // Look up user record for display info
+  const user = await ctx.db
+    .query('plannerUsers')
+    .withIndex('by_authUserKey', (q: any) => q.eq('authUserKey', authUserKey))
+    .unique();
+
   return {
-    id: String(identity.subject || ''),
-    username: String(identity.name || identity.email || 'Traveler'),
-    avatarUrl: typeof identity.avatar_url === 'string' ? identity.avatar_url : null,
+    id: authUserKey,
+    username: user?.username || String(identity.name || identity.email || 'Traveler'),
+    avatarUrl: user?.avatarUrl || (typeof identity.avatar_url === 'string' ? identity.avatar_url : null),
   };
 }
 

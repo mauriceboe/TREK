@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, X, Check, BarChart3, Lock, Clock } from 'lucide-react'
-import { collabApi } from '../../api/client'
+import { stubbedCollabApi as collabApi } from '../../api/convexApiStub'
 import { addListener, removeListener } from '../../api/websocket'
 import { useTranslation } from '../../i18n'
 import { useCanDo } from '../../store/permissionsStore'

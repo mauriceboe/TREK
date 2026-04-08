@@ -64,7 +64,7 @@ function formatNote(note: CollabNote) {
   return {
     ...note,
     avatar_url: avatarUrl(note),
-    attachments: attachments.map(a => ({ ...a, url: `/uploads/${a.filename}` })),
+    attachments: attachments.map(a => ({ ...a, url: `/api/trips/${note.trip_id}/files/${a.id}/download` })),
   };
 }
 
@@ -199,7 +199,7 @@ router.post('/notes/:id/files', authenticate, noteUpload.single('file'), (req: R
   ).run(tripId, id, `files/${req.file.filename}`, req.file.originalname, req.file.size, req.file.mimetype);
 
   const file = db.prepare('SELECT * FROM trip_files WHERE id = ?').get(result.lastInsertRowid) as TripFile;
-  res.status(201).json({ file: { ...file, url: `/uploads/${file.filename}` } });
+  res.status(201).json({ file: { ...file, url: `/api/trips/${tripId}/files/${file.id}/download` } });
   broadcast(Number(tripId), 'collab:note:updated', { note: formatNote(db.prepare('SELECT n.*, u.username, u.avatar FROM collab_notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?').get(id) as CollabNote) }, req.headers['x-socket-id'] as string);
 });
 

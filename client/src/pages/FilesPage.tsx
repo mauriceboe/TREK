@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTripStore } from '../store/tripStore'
-import { tripsApi, placesApi } from '../api/client'
+import { convexResolveTripId, convexGetTrip } from '../convex/mutationClient'
+import { convexClient } from '../convex/provider'
+import { api as convexApi } from '../../convex/_generated/api'
 import Navbar from '../components/Layout/Navbar'
 import FileManager from '../components/Files/FileManager'
 import { ArrowLeft } from 'lucide-react'
@@ -26,12 +28,13 @@ export default function FilesPage(): React.ReactElement {
   const loadData = async (): Promise<void> => {
     setIsLoading(true)
     try {
+      const convexId = await convexResolveTripId(String(tripId))
       const [tripData, placesData] = await Promise.all([
-        tripsApi.get(tripId),
-        placesApi.list(tripId),
+        convexId ? convexGetTrip(convexId) : Promise.resolve(null),
+        convexId ? convexClient!.query(convexApi.places.listPlaces, { tripId: convexId }) : Promise.resolve([]),
       ])
-      setTrip(tripData.trip)
-      setPlaces(placesData.places)
+      setTrip(tripData as any)
+      setPlaces((placesData as any[]) || [])
       await tripStore.loadFiles(tripId)
     } catch (err: unknown) {
       navigate('/dashboard')

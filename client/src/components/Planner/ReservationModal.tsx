@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import apiClient from '../../api/client'
+// File-link operations stubbed until Convex file storage migration
+const apiClient: any = {
+  put: async (_url: string, _data?: any) => ({ data: {} }),
+  get: async (_url: string, _opts?: any) => ({ data: { links: [] } }),
+  delete: async (_url: string, _opts?: any) => ({ data: {} }),
+  post: async (_url: string, _data?: any) => ({ data: {} }),
+}
 import { useTripStore } from '../../store/tripStore'
 import { useAddonStore } from '../../store/addonStore'
 import Modal from '../shared/Modal'

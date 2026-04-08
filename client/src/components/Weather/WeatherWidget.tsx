@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind } from 'lucide-react'
-import { weatherApi } from '../../api/client'
+import { convexWeatherApi as weatherApi } from '../../convex/mapsClient'
 import { useSettingsStore } from '../../store/settingsStore'
 
 const WEATHER_ICON_MAP = {

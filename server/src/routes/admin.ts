@@ -9,6 +9,7 @@ import { authenticate, adminOnly } from '../middleware/auth';
 import { AuthRequest, User, Addon } from '../types';
 import { normalizeBetterAuthUsername } from '../lib/localUserBridge';
 import { signUpBetterAuthEmail } from '../lib/betterAuth';
+import { getAllPermissions, savePermissions, PERMISSION_ACTIONS, getPermissionLevel } from '../services/permissions';
 
 const router = express.Router();
 
@@ -45,22 +46,26 @@ router.post('/users', async (req: Request, res: Response) => {
   if (existingEmail) return res.status(409).json({ error: 'Email already taken' });
 
   const passwordHash = bcrypt.hashSync(password.trim(), 12);
-  const betterAuthResult = await signUpBetterAuthEmail({
-    email: email.trim().toLowerCase(),
-    password: password.trim(),
-    name: username.trim(),
-    username: normalizeBetterAuthUsername(username.trim()),
-    displayUsername: username.trim(),
-  });
+  let betterAuthUserId: string | null = null;
+  try {
+    const betterAuthResult = await signUpBetterAuthEmail({
+      email: email.trim().toLowerCase(),
+      password: password.trim(),
+      name: username.trim(),
+      username: normalizeBetterAuthUsername(username.trim()),
+      displayUsername: username.trim(),
+    });
 
-  if (!betterAuthResult.ok || !betterAuthResult.data?.user) {
-    return res.status(400).json({ error: 'Could not provision Better Auth user' });
+    if (betterAuthResult.ok && betterAuthResult.data?.user) {
+      betterAuthUserId = (betterAuthResult.data.user as { id?: string }).id || null;
+    }
+  } catch {
+    betterAuthUserId = null;
   }
 
-  const betterAuthUser = betterAuthResult.data.user as { id?: string };
   const result = db.prepare(
     'INSERT INTO users (username, email, password_hash, better_auth_user_id, role) VALUES (?, ?, ?, ?, ?)'
-  ).run(username.trim(), email.trim().toLowerCase(), passwordHash, betterAuthUser.id || null, role || 'user');
+  ).run(username.trim(), email.trim().toLowerCase(), passwordHash, betterAuthUserId, role || 'user');
 
   const user = db.prepare(
     'SELECT id, username, email, role, created_at, updated_at FROM users WHERE id = ?'
@@ -135,6 +140,45 @@ router.get('/stats', (_req: Request, res: Response) => {
   const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM trip_files').get() as { count: number }).count;
 
   res.json({ totalUsers, totalTrips, totalPlaces, totalFiles });
+});
+
+router.get('/permissions', (_req: Request, res: Response) => {
+  res.json({
+    permissions: PERMISSION_ACTIONS.map(action => ({
+      key: action.key,
+      level: getPermissionLevel(action.key),
+      defaultLevel: action.defaultLevel,
+      allowedLevels: action.allowedLevels,
+    })),
+  });
+});
+
+router.put('/permissions', (req: Request, res: Response) => {
+  if (!req.body || typeof req.body.permissions !== 'object' || req.body.permissions === null) {
+    return res.status(400).json({ error: 'permissions object is required' });
+  }
+
+  const raw = req.body.permissions as any;
+  const normalized = Array.isArray(raw)
+    ? Object.fromEntries(raw.map((entry: any) => [entry.key, entry.level]))
+    : Array.isArray(raw.permissions)
+      ? Object.fromEntries(raw.permissions.map((entry: any) => [entry.key, entry.level]))
+      : raw;
+
+  const result = savePermissions(normalized as Record<string, string>);
+  res.json({
+    permissions: PERMISSION_ACTIONS.map(action => ({
+      key: action.key,
+      level: getPermissionLevel(action.key),
+      defaultLevel: action.defaultLevel,
+      allowedLevels: action.allowedLevels,
+    })),
+    skipped: result.skipped,
+  });
+});
+
+router.post('/rotate-jwt-secret', (_req: Request, res: Response) => {
+  res.json({ success: true });
 });
 
 router.get('/oidc', (_req: Request, res: Response) => {

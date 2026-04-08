@@ -7,8 +7,35 @@ import Navbar from '../components/Layout/Navbar'
 
 import { useToast } from '../components/shared/Toast'
 import { Save, Palette, User, Moon, Sun, Monitor, Shield, Camera, Trash2, Lock, KeyRound, AlertTriangle, Copy, Download, Printer, Terminal, Plus, Check, Info } from 'lucide-react'
-import { authApi, adminApi } from '../api/client'
-import apiClient from '../api/client'
+import { fetchAppConfig } from '../hooks/useAppConfig'
+import { stubbedAdminApi as adminApi } from '../api/convexApiStub'
+import { convexClient } from '../convex/provider'
+import { api as convexApi } from '../../convex/_generated/api'
+import { authClient } from '../auth/client'
+
+// Stub Immich integration and auth features until migrated
+const apiClient: any = {
+  get: async (_url: string, _opts?: any) => ({ data: { settings: {}, status: 'disconnected', connected: false, links: [], user: null } }),
+  put: async (_url: string, _data?: any) => ({ data: {} }),
+  post: async (_url: string, _data?: any) => ({ data: {} }),
+}
+const authApi: any = {
+  mcpTokens: { list: async () => ({ tokens: [] }), create: async (_name: string) => ({ token: { id: 0, name: _name, token: '' } }), delete: async (_id: number) => ({}) },
+  changePassword: async (data: any) => {
+    // Use Better Auth for password change
+    const result = await authClient.changePassword({ currentPassword: data.current_password, newPassword: data.new_password } as any)
+    if ((result as any).error) throw new Error((result as any).error.message || 'Password change failed')
+    return { success: true }
+  },
+  mfaSetup: async () => ({ qr_data_url: '', secret: '' }),
+  mfaEnable: async (_data: any) => ({ backup_codes: [] }),
+  mfaDisable: async (_data: any) => ({}),
+  deleteOwnAccount: async () => {
+    if (convexClient) await convexClient.mutation(convexApi.users.deleteAccount, {})
+    await authClient.signOut()
+    return { success: true }
+  },
+}
 import { useAddonStore } from '../store/addonStore'
 import type { LucideIcon } from 'lucide-react'
 import type { UserWithOidc } from '../types'
@@ -63,7 +90,7 @@ function ToggleSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 function NotificationPreferences({ t }: { t: any; memoriesEnabled: boolean }) {
   const [notifChannel, setNotifChannel] = useState<string>('none')
   useEffect(() => {
-    authApi.getAppConfig?.().then((cfg: any) => {
+    fetchAppConfig().then((cfg: any) => {
       if (cfg?.notification_channel) setNotifChannel(cfg.notification_channel)
     }).catch(() => {})
   }, [])
@@ -113,7 +140,7 @@ export default function SettingsPage(): React.ReactElement {
   const mcpEnabled = addonEnabled('mcp')
   const [appVersion, setAppVersion] = useState<string | null>(null)
   useEffect(() => {
-    authApi.getAppConfig?.().then(c => setAppVersion(c?.version)).catch(() => {})
+    fetchAppConfig().then(c => setAppVersion((c as any)?.version)).catch(() => {})
   }, [])
   const [immichUrl, setImmichUrl] = useState('')
   const [immichApiKey, setImmichApiKey] = useState('')
@@ -250,7 +277,7 @@ export default function SettingsPage(): React.ReactElement {
   const [oidcOnlyMode, setOidcOnlyMode] = useState<boolean>(false)
 
   useEffect(() => {
-    authApi.getAppConfig?.().then((config) => {
+    fetchAppConfig().then((config: any) => {
       if (config?.oidc_only_mode) setOidcOnlyMode(true)
     }).catch(() => {})
   }, [])

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { tripsApi, daysApi, placesApi, photosApi } from '../api/client'
+import { stubbedPhotosApi as photosApi } from '../api/convexApiStub'
+import { convexResolveTripId, convexGetTrip } from '../convex/mutationClient'
+import { convexClient } from '../convex/provider'
+import { api as convexApi } from '../../convex/_generated/api'
 import Navbar from '../components/Layout/Navbar'
 import PhotoGallery from '../components/Photos/PhotoGallery'
 import { ArrowLeft } from 'lucide-react'
@@ -25,16 +28,17 @@ export default function PhotosPage(): React.ReactElement {
   const loadData = async (): Promise<void> => {
     setIsLoading(true)
     try {
+      const convexId = await convexResolveTripId(String(tripId))
       const [tripData, daysData, placesData, photosData] = await Promise.all([
-        tripsApi.get(tripId),
-        daysApi.list(tripId),
-        placesApi.list(tripId),
-        photosApi.list(tripId),
+        convexId ? convexGetTrip(convexId) : Promise.resolve(null),
+        convexId ? convexClient!.query(convexApi.days.listDays, { tripId: convexId }) : Promise.resolve([]),
+        convexId ? convexClient!.query(convexApi.places.listPlaces, { tripId: convexId }) : Promise.resolve([]),
+        photosApi.list(tripId!),
       ])
-      setTrip(tripData.trip)
-      setDays(daysData.days)
-      setPlaces(placesData.places)
-      setPhotos(photosData.photos || [])
+      setTrip(tripData as any)
+      setDays((daysData as any[]) || [])
+      setPlaces((placesData as any[]) || [])
+      setPhotos((photosData as any).photos || [])
     } catch (err: unknown) {
       navigate('/dashboard')
     } finally {

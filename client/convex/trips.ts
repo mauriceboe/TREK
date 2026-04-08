@@ -556,6 +556,178 @@ export const unarchiveTrip = mutation({
   },
 });
 
+export const copyTrip = mutation({
+  args: {
+    tripId: v.id('plannerTrips'),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const trip = await requireTripAccess(ctx, args.tripId);
+    const authUserKey = await getViewerAuthKey(ctx);
+    const now = Date.now();
+
+    // 1. Create new trip
+    const newTripId = await ctx.db.insert('plannerTrips', {
+      ownerAuthUserKey: authUserKey,
+      title: args.title || `${trip.title} (Copy)`,
+      description: trip.description,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      currency: trip.currency,
+      coverImage: trip.coverImage,
+      isArchived: false,
+      destinationName: trip.destinationName,
+      destinationAddress: trip.destinationAddress,
+      destinationLat: trip.destinationLat,
+      destinationLng: trip.destinationLng,
+      destinationViewportSouth: trip.destinationViewportSouth,
+      destinationViewportWest: trip.destinationViewportWest,
+      destinationViewportNorth: trip.destinationViewportNorth,
+      destinationViewportEast: trip.destinationViewportEast,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Copy days
+    const oldDays = await ctx.db
+      .query('plannerDays')
+      .withIndex('by_trip_dayNumber', (q: any) => q.eq('tripId', args.tripId))
+      .collect();
+    const dayIdMap = new Map<string, any>();
+    for (const day of oldDays) {
+      const newDayId = await ctx.db.insert('plannerDays', {
+        tripId: newTripId,
+        dayNumber: day.dayNumber,
+        date: day.date,
+        notes: day.notes,
+        title: day.title,
+      });
+      dayIdMap.set(String(day._id), newDayId);
+    }
+
+    // 3. Copy places
+    const oldPlaces = await ctx.db
+      .query('plannerPlaces')
+      .withIndex('by_trip_createdAt', (q: any) => q.eq('tripId', args.tripId))
+      .collect();
+    const placeIdMap = new Map<string, any>();
+    for (const place of oldPlaces) {
+      const newPlaceId = await ctx.db.insert('plannerPlaces', {
+        tripId: newTripId,
+        name: place.name,
+        description: place.description,
+        lat: place.lat,
+        lng: place.lng,
+        address: place.address,
+        categoryId: place.categoryId,
+        price: place.price,
+        currency: place.currency,
+        reservationStatus: place.reservationStatus,
+        reservationNotes: place.reservationNotes,
+        reservationDatetime: place.reservationDatetime,
+        placeTime: place.placeTime,
+        endTime: place.endTime,
+        durationMinutes: place.durationMinutes,
+        notes: place.notes,
+        imageUrl: place.imageUrl,
+        googlePlaceId: place.googlePlaceId,
+        website: place.website,
+        phone: place.phone,
+        transportMode: place.transportMode,
+        createdAt: now,
+        updatedAt: now,
+      });
+      placeIdMap.set(String(place._id), newPlaceId);
+    }
+
+    // 4. Copy assignments
+    const oldAssignments = await ctx.db
+      .query('plannerDayAssignments')
+      .withIndex('by_tripId', (q: any) => q.eq('tripId', args.tripId))
+      .collect();
+    for (const assignment of oldAssignments) {
+      const newDayId = dayIdMap.get(String(assignment.dayId));
+      const newPlaceId = placeIdMap.get(String(assignment.placeId));
+      if (newDayId && newPlaceId) {
+        await ctx.db.insert('plannerDayAssignments', {
+          tripId: newTripId,
+          dayId: newDayId,
+          placeId: newPlaceId,
+          orderIndex: assignment.orderIndex,
+          notes: assignment.notes,
+          assignmentTime: assignment.assignmentTime,
+          assignmentEndTime: assignment.assignmentEndTime,
+          createdAt: now,
+        });
+      }
+    }
+
+    // 5. Copy place tags
+    for (const place of oldPlaces) {
+      const oldTags = await ctx.db
+        .query('plannerPlaceTags')
+        .withIndex('by_placeId', (q: any) => q.eq('placeId', place._id))
+        .collect();
+      const newPlaceId = placeIdMap.get(String(place._id));
+      if (newPlaceId) {
+        for (const pt of oldTags) {
+          await ctx.db.insert('plannerPlaceTags', {
+            placeId: newPlaceId,
+            tagId: pt.tagId,
+          });
+        }
+      }
+    }
+
+    // 6. Copy legs
+    const oldLegs = await ctx.db
+      .query('plannerTripLegs')
+      .withIndex('by_tripId', (q: any) => q.eq('tripId', args.tripId))
+      .collect();
+    for (const leg of oldLegs) {
+      await ctx.db.insert('plannerTripLegs', {
+        tripId: newTripId,
+        destinationName: leg.destinationName,
+        destinationAddress: leg.destinationAddress,
+        destinationLat: leg.destinationLat,
+        destinationLng: leg.destinationLng,
+        destinationViewportSouth: leg.destinationViewportSouth,
+        destinationViewportWest: leg.destinationViewportWest,
+        destinationViewportNorth: leg.destinationViewportNorth,
+        destinationViewportEast: leg.destinationViewportEast,
+        startDayNumber: leg.startDayNumber,
+        endDayNumber: leg.endDayNumber,
+        color: leg.color,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 7. Copy day notes
+    const oldDayNotes = await ctx.db
+      .query('plannerDayNotes')
+      .withIndex('by_tripId', (q: any) => q.eq('tripId', args.tripId))
+      .collect();
+    for (const note of oldDayNotes) {
+      const newDayId = dayIdMap.get(String(note.dayId));
+      if (newDayId) {
+        await ctx.db.insert('plannerDayNotes', {
+          dayId: newDayId,
+          tripId: newTripId,
+          text: note.text,
+          time: note.time,
+          icon: note.icon,
+          sortOrder: note.sortOrder,
+          createdAt: now,
+        });
+      }
+    }
+
+    const newTrip = await ctx.db.get(newTripId);
+    return newTrip ? formatTrip(newTrip) : null;
+  },
+});
+
 export const addTripMember = mutation({
   args: {
     tripId: v.id('plannerTrips'),

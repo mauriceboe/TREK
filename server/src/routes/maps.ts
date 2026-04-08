@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { checkSsrf } from '../utils/ssrfGuard';
 
 interface NominatimResult {
   osm_type: string;
@@ -195,6 +196,16 @@ interface GooglePlaceDetails extends GooglePlaceResult {
 }
 
 const router = express.Router();
+
+router.post('/resolve-url', authenticate, async (req: Request, res: Response) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL is required' });
+
+  const ssrf = await checkSsrf(String(url));
+  if (!ssrf.allowed) return res.status(400).json({ error: ssrf.error || 'URL is not allowed' });
+
+  res.json({ url: String(url), resolved_ip: ssrf.resolvedIp || null });
+});
 
 function getMapsKey(userId: number): string | null {
   const user = db.prepare('SELECT maps_api_key FROM users WHERE id = ?').get(userId) as { maps_api_key: string | null } | undefined;

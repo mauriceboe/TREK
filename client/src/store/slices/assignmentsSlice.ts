@@ -1,4 +1,3 @@
-import { assignmentsApi } from '../../api/client'
 import {
   convexAssignPlace,
   convexRemoveAssignment,
@@ -8,7 +7,6 @@ import {
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { Assignment, AssignmentsMap } from '../../types'
-import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
@@ -22,147 +20,74 @@ export interface AssignmentsSlice {
 }
 
 export const createAssignmentsSlice = (set: SetState, get: GetState): AssignmentsSlice => ({
-  assignPlaceToDay: async (tripId, dayId, placeId, position) => {
-    if (get().tripBackend === 'convex') {
-      const state = get()
-      const place = state.places.find(p => String(p.id) === String(placeId))
-      if (!place) return
-
-      // Optimistic: add temp assignment
-      const tempId = `temp_${Date.now()}`
-      const current = [...(state.assignments[String(dayId)] || [])]
-      const insertIdx = position != null ? position : current.length
-      const tempAssignment: Assignment = {
-        id: tempId,
-        day_id: dayId,
-        order_index: insertIdx,
-        notes: null,
-        place,
-      }
-      current.splice(insertIdx, 0, tempAssignment)
-      set(state => ({
-        assignments: { ...state.assignments, [String(dayId)]: current }
-      }))
-
-      try {
-        const result = await convexAssignPlace(tripId as any, dayId as any, placeId as any)
-        // Convex reactivity will replace the temp assignment via the bridge hook
-        if (position != null) {
-          // Get updated assignments from the reactive query after the mutation settles
-          const updated = get().assignments[String(dayId)] || []
-          const ids = updated.map(a => a.id).filter(id => !String(id).startsWith('temp_'))
-          if (ids.length > 0) {
-            await convexReorderAssignments(tripId as any, dayId as any, ids as any)
-          }
-        }
-        return result as any
-      } catch (err: unknown) {
-        set(state => ({
-          assignments: {
-            ...state.assignments,
-            [String(dayId)]: (state.assignments[String(dayId)] || []).filter(a => a.id !== tempId),
-          }
-        }))
-        throw new Error(String(err))
-      }
-    }
-
-    // Legacy Express path
+  assignPlaceToDay: async (_tripId, dayId, placeId, position) => {
     const state = get()
-    const place = state.places.find(p => p.id === parseInt(String(placeId)))
+    const convexTripId = (state.trip as any)?._id
+    if (!convexTripId) return
+    const place = state.places.find(p => String(p.id) === String(placeId))
     if (!place) return
 
-    const tempId = Date.now() * -1
+    // Optimistic: add temp assignment
+    const tempId = `temp_${Date.now()}`
     const current = [...(state.assignments[String(dayId)] || [])]
     const insertIdx = position != null ? position : current.length
     const tempAssignment: Assignment = {
       id: tempId,
-      day_id: parseInt(String(dayId)),
+      day_id: dayId,
       order_index: insertIdx,
       notes: null,
       place,
     }
-
     current.splice(insertIdx, 0, tempAssignment)
     set(state => ({
-      assignments: {
-        ...state.assignments,
-        [String(dayId)]: current,
-      }
+      assignments: { ...state.assignments, [String(dayId)]: current }
     }))
 
     try {
-      const data = await assignmentsApi.create(tripId, dayId, { place_id: placeId })
-      const newAssignment: Assignment = {
-        ...data.assignment,
-        place: data.assignment.place || place,
-        order_index: position != null ? insertIdx : data.assignment.order_index,
-      }
-      set(state => ({
-        assignments: {
-          ...state.assignments,
-          [String(dayId)]: state.assignments[String(dayId)].map(
-            a => a.id === tempId ? newAssignment : a
-          ),
-        }
-      }))
+      const result = await convexAssignPlace(convexTripId as any, dayId as any, placeId as any)
+      // Convex reactivity will replace the temp assignment via the bridge hook
       if (position != null) {
         const updated = get().assignments[String(dayId)] || []
-        const orderedIds = updated.map(a => a.id).filter(id => (id as number) > 0)
-        if (orderedIds.length > 0) {
-          try {
-            await assignmentsApi.reorder(tripId, dayId, orderedIds as number[])
-            set(state => {
-              const items = state.assignments[String(dayId)] || []
-              const reordered = orderedIds.map((id, idx) => {
-                const item = items.find(a => a.id === id)
-                return item ? { ...item, order_index: idx } : null
-              }).filter((item): item is Assignment => item !== null)
-              return {
-                assignments: {
-                  ...state.assignments,
-                  [String(dayId)]: reordered,
-                }
-              }
-            })
-          } catch {}
+        const ids = updated.map(a => a.id).filter(id => !String(id).startsWith('temp_'))
+        if (ids.length > 0) {
+          await convexReorderAssignments(convexTripId as any, dayId as any, ids as any)
         }
       }
-      return data.assignment
+      return result as any
     } catch (err: unknown) {
       set(state => ({
         assignments: {
           ...state.assignments,
-          [String(dayId)]: state.assignments[String(dayId)].filter(a => a.id !== tempId),
+          [String(dayId)]: (state.assignments[String(dayId)] || []).filter(a => a.id !== tempId),
         }
       }))
-      throw new Error(getApiErrorMessage(err, 'Error assigning place'))
+      throw new Error(String(err))
     }
   },
 
-  removeAssignment: async (tripId, dayId, assignmentId) => {
+  removeAssignment: async (_tripId, _dayId, assignmentId) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) return
     const prevAssignments = get().assignments
 
     set(state => ({
       assignments: {
         ...state.assignments,
-        [String(dayId)]: (state.assignments[String(dayId)] || []).filter(a => a.id !== assignmentId),
+        [String(_dayId)]: (state.assignments[String(_dayId)] || []).filter(a => a.id !== assignmentId),
       }
     }))
 
     try {
-      if (get().tripBackend === 'convex') {
-        await convexRemoveAssignment(tripId as any, assignmentId as any)
-      } else {
-        await assignmentsApi.delete(tripId, dayId, assignmentId as number)
-      }
+      await convexRemoveAssignment(convexTripId as any, assignmentId as any)
     } catch (err: unknown) {
       set({ assignments: prevAssignments })
-      throw new Error(getApiErrorMessage(err, 'Error removing assignment'))
+      throw new Error(String(err))
     }
   },
 
-  reorderAssignments: async (tripId, dayId, orderedIds) => {
+  reorderAssignments: async (_tripId, dayId, orderedIds) => {
+    const convexTripId = (get().trip as any)?._id
+    if (!convexTripId) return
     const prevAssignments = get().assignments
     const dayItems = get().assignments[String(dayId)] || []
     const reordered = orderedIds.map((id, idx) => {
@@ -178,19 +103,17 @@ export const createAssignmentsSlice = (set: SetState, get: GetState): Assignment
     }))
 
     try {
-      if (get().tripBackend === 'convex') {
-        await convexReorderAssignments(tripId as any, dayId as any, orderedIds as any)
-      } else {
-        await assignmentsApi.reorder(tripId, dayId, orderedIds as number[])
-      }
+      await convexReorderAssignments(convexTripId as any, dayId as any, orderedIds as any)
     } catch (err: unknown) {
       set({ assignments: prevAssignments })
-      throw new Error(getApiErrorMessage(err, 'Error reordering'))
+      throw new Error(String(err))
     }
   },
 
-  moveAssignment: async (tripId, assignmentId, fromDayId, toDayId, toOrderIndex = null) => {
+  moveAssignment: async (_tripId, assignmentId, fromDayId, toDayId, toOrderIndex = null) => {
     const state = get()
+    const convexTripId = (state.trip as any)?._id
+    if (!convexTripId) return
     const prevAssignments = state.assignments
     const assignment = (state.assignments[String(fromDayId)] || []).find(a => a.id === assignmentId)
     if (!assignment) return
@@ -211,20 +134,13 @@ export const createAssignmentsSlice = (set: SetState, get: GetState): Assignment
     }))
 
     try {
-      if (get().tripBackend === 'convex') {
-        await convexMoveAssignment(tripId as any, assignmentId as any, toDayId as any, insertAt)
-        if (newToItems.length > 1) {
-          await convexReorderAssignments(tripId as any, toDayId as any, newToItems.map(a => a.id) as any)
-        }
-      } else {
-        await assignmentsApi.move(tripId, assignmentId as number, toDayId, insertAt)
-        if (newToItems.length > 1) {
-          await assignmentsApi.reorder(tripId, toDayId, newToItems.map(a => a.id) as number[])
-        }
+      await convexMoveAssignment(convexTripId as any, assignmentId as any, toDayId as any, insertAt)
+      if (newToItems.length > 1) {
+        await convexReorderAssignments(convexTripId as any, toDayId as any, newToItems.map(a => a.id) as any)
       }
     } catch (err: unknown) {
       set({ assignments: prevAssignments })
-      throw new Error(getApiErrorMessage(err, 'Error moving assignment'))
+      throw new Error(String(err))
     }
   },
 

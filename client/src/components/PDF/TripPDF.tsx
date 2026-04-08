@@ -2,7 +2,7 @@
 import { createElement } from 'react'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark } from 'lucide-react'
-import { mapsApi } from '../../api/client'
+import { convexMapsApi as mapsApi } from '../../convex/mapsClient'
 import type { Trip, Day, Place, Assignment, Category, AssignmentsMap, DayNotesMap } from '../../types'
 
 const NOTE_ICON_MAP = { FileText, Info, Clock, MapPin, Navigation, Train, Plane, Bus, Car, Ship, Coffee, Ticket, Star, Heart, Camera, Flag, Lightbulb, AlertTriangle, ShoppingBag, Bookmark }

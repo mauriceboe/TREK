@@ -8,18 +8,34 @@
  * @module
  */
 
+import type * as accommodations from "../accommodations.js";
+import type * as addons from "../addons.js";
+import type * as admin from "../admin.js";
 import type * as assignments from "../assignments.js";
 import type * as auth from "../auth.js";
+import type * as backups from "../backups.js";
+import type * as budget from "../budget.js";
 import type * as categories from "../categories.js";
 import type * as chat from "../chat.js";
+import type * as collab from "../collab.js";
 import type * as days from "../days.js";
+import type * as files from "../files.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as legs from "../legs.js";
+import type * as maps from "../maps.js";
+import type * as notifications from "../notifications.js";
+import type * as packing from "../packing.js";
+import type * as photos from "../photos.js";
 import type * as places from "../places.js";
 import type * as planner from "../planner.js";
+import type * as reservations from "../reservations.js";
+import type * as settings from "../settings.js";
+import type * as sharing from "../sharing.js";
 import type * as tags from "../tags.js";
 import type * as trips from "../trips.js";
+import type * as users from "../users.js";
+import type * as weather from "../weather.js";
 
 import type {
   ApiFromModules,
@@ -28,18 +44,34 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accommodations: typeof accommodations;
+  addons: typeof addons;
+  admin: typeof admin;
   assignments: typeof assignments;
   auth: typeof auth;
+  backups: typeof backups;
+  budget: typeof budget;
   categories: typeof categories;
   chat: typeof chat;
+  collab: typeof collab;
   days: typeof days;
+  files: typeof files;
   helpers: typeof helpers;
   http: typeof http;
   legs: typeof legs;
+  maps: typeof maps;
+  notifications: typeof notifications;
+  packing: typeof packing;
+  photos: typeof photos;
   places: typeof places;
   planner: typeof planner;
+  reservations: typeof reservations;
+  settings: typeof settings;
+  sharing: typeof sharing;
   tags: typeof tags;
   trips: typeof trips;
+  users: typeof users;
+  weather: typeof weather;
 }>;
 
 /**

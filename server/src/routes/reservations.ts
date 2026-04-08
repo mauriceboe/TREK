@@ -132,7 +132,10 @@ router.put('/positions', authenticate, (req: Request, res: Response) => {
 
   if (!Array.isArray(positions)) return res.status(400).json({ error: 'positions must be an array' });
 
-  updatePositions(tripId, positions);
+  updatePositions(tripId, positions.map((position: any) => ({
+    id: position.id,
+    day_plan_position: position.day_plan_position ?? position.position,
+  })));
 
   res.json({ success: true });
   broadcast(tripId, 'reservation:positions', { positions }, req.headers['x-socket-id'] as string);

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { settingsApi } from '../api/client'
+import { convexClient } from '../convex/provider'
+import { api } from '../../convex/_generated/api'
 import type { Settings } from '../types'
-import { getApiErrorMessage } from '../types'
 
 interface SettingsState {
   settings: Settings
@@ -30,14 +30,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const data = await settingsApi.get()
+      if (!convexClient) { set({ isLoaded: true }); return; }
+      const data = await convexClient.query(api.settings.getSettings, {})
       set((state) => ({
         settings: { ...state.settings, ...data.settings },
         isLoaded: true,
       }))
-    } catch (err: unknown) {
+    } catch {
       set({ isLoaded: true })
-      console.error('Failed to load settings:', err)
     }
   },
 
@@ -46,12 +46,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: { ...state.settings, [key]: value },
     }))
     if (key === 'language') localStorage.setItem('app_language', value as string)
-    try {
-      await settingsApi.set(key, value)
-    } catch (err: unknown) {
-      console.error('Failed to save setting:', err)
-      throw new Error(getApiErrorMessage(err, 'Error saving setting'))
-    }
+    if (!convexClient) return
+    await convexClient.mutation(api.settings.setSetting, { key, value })
   },
 
   setLanguageLocal: (lang: string) => {
@@ -63,11 +59,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set((state) => ({
       settings: { ...state.settings, ...settingsObj },
     }))
-    try {
-      await settingsApi.setBulk(settingsObj)
-    } catch (err: unknown) {
-      console.error('Failed to save settings:', err)
-      throw new Error(getApiErrorMessage(err, 'Error saving settings'))
-    }
+    if (!convexClient) return
+    await convexClient.mutation(api.settings.setBulk, { settings: settingsObj })
   },
 }))

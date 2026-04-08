@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
-import { mapsApi } from '../../api/client'
+import { convexMapsApi as mapsApi } from '../../convex/mapsClient'
 import { useAuthStore } from '../../store/authStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 import { useToast } from '../shared/Toast'
-import { Search, Paperclip, X, AlertTriangle } from 'lucide-react'
+import { Loader, MapPin, Search, Paperclip, X, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import type { Place, Category, Assignment } from '../../types'
@@ -62,13 +62,16 @@ export default function PlaceFormModal({
 }: PlaceFormModalProps) {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [mapsSearch, setMapsSearch] = useState('')
-  const [mapsResults, setMapsResults] = useState([])
+  const [mapsResults, setMapsResults] = useState<any[]>([])
   const [isSearchingMaps, setIsSearchingMaps] = useState(false)
+  const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [pendingFiles, setPendingFiles] = useState([])
   const fileRef = useRef(null)
+  const sessionTokenRef = useRef(crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const autocompleteRequestRef = useRef(0)
   const toast = useToast()
   const { t, language } = useTranslation()
   const { hasMapsKey } = useAuthStore()
@@ -109,6 +112,48 @@ export default function PlaceFormModal({
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
+  // Debounced autocomplete as user types
+  useEffect(() => {
+    const trimmed = mapsSearch.trim()
+    if (trimmed.length < 2) {
+      setMapsResults([])
+      setIsSearchingMaps(false)
+      return
+    }
+
+    // Don't autocomplete URLs
+    if (trimmed.match(/^https?:\/\//i)) return
+
+    const reqId = ++autocompleteRequestRef.current
+    const timer = setTimeout(async () => {
+      setIsSearchingMaps(true)
+      try {
+        const data = await mapsApi.autocomplete(trimmed, language, sessionTokenRef.current, { mode: 'places' })
+        if (autocompleteRequestRef.current !== reqId) return
+        const suggestions = (data.suggestions || []).map((s: any) => ({
+          _type: 'prediction' as const,
+          place_id: s.place_id,
+          name: s.primary_text || s.text || '',
+          address: s.secondary_text || '',
+        }))
+        if (suggestions.length > 0) {
+          setMapsResults(suggestions)
+        } else {
+          // Fallback to text search if autocomplete returns nothing
+          const searchData = await mapsApi.search(trimmed, language)
+          if (autocompleteRequestRef.current !== reqId) return
+          setMapsResults((searchData.places || []).map((p: any) => ({ ...p, _type: 'result' as const })))
+        }
+      } catch {
+        if (autocompleteRequestRef.current === reqId) setMapsResults([])
+      } finally {
+        if (autocompleteRequestRef.current === reqId) setIsSearchingMaps(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [mapsSearch, language])
+
   const handleMapsSearch = async () => {
     if (!mapsSearch.trim()) return
     setIsSearchingMaps(true)
@@ -132,7 +177,7 @@ export default function PlaceFormModal({
         }
       }
       const result = await mapsApi.search(mapsSearch, language)
-      setMapsResults(result.places || [])
+      setMapsResults((result.places || []).map((p: any) => ({ ...p, _type: 'result' as const })))
     } catch (err: unknown) {
       toast.error(t('places.mapsSearchError'))
     } finally {
@@ -140,18 +185,52 @@ export default function PlaceFormModal({
     }
   }
 
-  const handleSelectMapsResult = (result) => {
-    setForm(prev => ({
-      ...prev,
-      name: result.name || prev.name,
-      address: result.address || prev.address,
-      lat: result.lat || prev.lat,
-      lng: result.lng || prev.lng,
-      google_place_id: result.google_place_id || prev.google_place_id,
-      osm_id: result.osm_id || prev.osm_id,
-      website: result.website || prev.website,
-      phone: result.phone || prev.phone,
-    }))
+  const handleSelectMapsResult = async (result: any) => {
+    if (isResolvingPlace) return
+
+    // If it's a prediction from autocomplete, fetch full details
+    if (result._type === 'prediction' && result.place_id) {
+      setIsResolvingPlace(true)
+      try {
+        const data = await mapsApi.details(result.place_id, language, sessionTokenRef.current)
+        const place = (data.place || {}) as Record<string, any>
+        setForm(prev => ({
+          ...prev,
+          name: place.name || result.name || prev.name,
+          address: place.address || result.address || prev.address,
+          lat: place.lat != null ? String(place.lat) : prev.lat,
+          lng: place.lng != null ? String(place.lng) : prev.lng,
+          google_place_id: place.google_place_id || result.place_id || prev.google_place_id,
+          website: place.website || prev.website,
+          phone: place.phone || prev.phone,
+        }))
+        // Reset session token after details fetch (per Google billing best practice)
+        sessionTokenRef.current = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      } catch {
+        // Fall back to just using prediction text
+        setForm(prev => ({
+          ...prev,
+          name: result.name || prev.name,
+          address: result.address || prev.address,
+          google_place_id: result.place_id || prev.google_place_id,
+        }))
+      } finally {
+        setIsResolvingPlace(false)
+      }
+    } else {
+      // Direct search result — already has full data
+      setForm(prev => ({
+        ...prev,
+        name: result.name || prev.name,
+        address: result.address || prev.address,
+        lat: result.lat != null ? String(result.lat) : prev.lat,
+        lng: result.lng != null ? String(result.lng) : prev.lng,
+        google_place_id: result.google_place_id || prev.google_place_id,
+        osm_id: result.osm_id || prev.osm_id,
+        website: result.website || prev.website,
+        phone: result.phone || prev.phone,
+      }))
+    }
     setMapsResults([])
     setMapsSearch('')
   }
@@ -226,42 +305,55 @@ export default function PlaceFormModal({
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4" onPaste={handlePaste}>
-        {/* Place Search */}
+        {/* Place Search with Autocomplete */}
         <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-          {!hasMapsKey && (
-            <p className="mb-2 text-xs" style={{ color: 'var(--text-faint)' }}>
-              {t('places.osmActive')}
-            </p>
-          )}
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={mapsSearch}
-              onChange={e => setMapsSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleMapsSearch())}
-              placeholder={t('places.mapsSearchPlaceholder')}
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
-            />
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={mapsSearch}
+                onChange={e => setMapsSearch(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (mapsResults.length > 0) {
+                      handleSelectMapsResult(mapsResults[0])
+                    } else {
+                      handleMapsSearch()
+                    }
+                  }
+                  if (e.key === 'Escape') setMapsResults([])
+                }}
+                placeholder={t('places.mapsSearchPlaceholder')}
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
+              />
+            </div>
             <button
               type="button"
               onClick={handleMapsSearch}
-              disabled={isSearchingMaps}
+              disabled={isSearchingMaps || isResolvingPlace}
               className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-slate-700 disabled:opacity-60"
             >
-              {isSearchingMaps ? '...' : <Search className="w-4 h-4" />}
+              {isSearchingMaps || isResolvingPlace ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             </button>
           </div>
           {mapsResults.length > 0 && (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden max-h-40 overflow-y-auto mt-2">
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden max-h-48 overflow-y-auto mt-2">
               {mapsResults.map((result, idx) => (
                 <button
-                  key={idx}
+                  key={result.place_id || result.google_place_id || idx}
                   type="button"
                   onClick={() => handleSelectMapsResult(result)}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                  className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors"
                 >
                   <div className="font-medium text-sm">{result.name}</div>
-                  <div className="text-xs text-slate-500 truncate">{result.address}</div>
+                  {result.address && (
+                    <div className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      {result.address}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>

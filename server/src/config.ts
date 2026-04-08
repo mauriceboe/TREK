@@ -23,4 +23,6 @@ if (!JWT_SECRET) {
   }
 }
 
-export { JWT_SECRET };
+const ENCRYPTION_KEY: string = process.env.ENCRYPTION_KEY || JWT_SECRET;
+
+export { JWT_SECRET, ENCRYPTION_KEY };

@@ -41,3 +41,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       convex({ authConfig }),
     ],
   });
+
+// Export getAuthUser for use with ConvexBetterAuthProvider / AuthBoundary
+export const { getAuthUser } = authComponent.clientApi();

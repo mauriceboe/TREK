@@ -4,7 +4,10 @@ import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind
 
 const RES_TYPE_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 const RES_TYPE_COLORS = { flight: '#3b82f6', hotel: '#8b5cf6', restaurant: '#ef4444', train: '#06b6d4', car: '#6b7280', cruise: '#0ea5e9', event: '#f59e0b', tour: '#10b981', other: '#6b7280' }
-import { weatherApi, accommodationsApi } from '../../api/client'
+import { convexWeatherApi as weatherApi } from '../../convex/mapsClient'
+import { convexClient } from '../../convex/provider'
+import { api as convexApi } from '../../../convex/_generated/api'
+import { useTripStore } from '../../store/tripStore'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -79,16 +82,18 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
 
   useEffect(() => {
     if (!tripId) return
-    accommodationsApi.list(tripId)
-      .then(data => {
+    const tripDoc = useTripStore.getState().trip as any
+    const convexId = tripDoc?._id
+    if (convexId && convexClient) {
+      convexClient.query(convexApi.accommodations.list, { tripId: convexId }).then((data: any) => {
         setAccommodations(data.accommodations || [])
-        const allForDay = (data.accommodations || []).filter(a =>
+        const allForDay = (data.accommodations || []).filter((a: any) =>
           days.some(d => d.id >= a.start_day_id && d.id <= a.end_day_id && d.id === day?.id)
         )
         setDayAccommodations(allForDay)
         setAccommodation(allForDay[0] || null)
-      })
-      .catch(() => {})
+      }).catch(() => {})
+    }
   }, [tripId, day?.id])
 
   useEffect(() => { if (day) setHotelDayRange({ start: String(day.id), end: String(day.id) }) }, [day?.id])
@@ -100,14 +105,17 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const handleSaveAccommodation = async () => {
     if (!hotelForm.place_id) return
     try {
-      const data = await accommodationsApi.create(tripId, {
+      const tripDoc = useTripStore.getState().trip as any
+      const convexId = tripDoc?._id
+      if (!convexClient || !convexId) return
+      const data = await convexClient.mutation(convexApi.accommodations.create, { tripId: convexId, data: {
         place_id: hotelForm.place_id,
         start_day_id: hotelDayRange.start,
         end_day_id: hotelDayRange.end,
         check_in: hotelForm.check_in || null,
         check_out: hotelForm.check_out || null,
         confirmation: hotelForm.confirmation || null,
-      })
+      }})
       setAccommodation(data.accommodation)
       setAccommodations(prev => [...prev, data.accommodation])
       setShowHotelPicker(false)
@@ -119,7 +127,10 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const updateAccommodationField = async (field, value) => {
     if (!accommodation) return
     try {
-      const data = await accommodationsApi.update(tripId, accommodation.id, { [field]: value || null })
+      const tripDoc = useTripStore.getState().trip as any
+      const convexId = tripDoc?._id
+      if (!convexClient || !convexId) return
+      const data = await convexClient.mutation(convexApi.accommodations.update, { tripId: convexId, itemId: String(accommodation.id), data: { [field]: value || null } })
       setAccommodation(data.accommodation)
       onAccommodationChange?.()
     } catch {}
@@ -128,7 +139,10 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const handleRemoveAccommodation = async () => {
     if (!accommodation) return
     try {
-      await accommodationsApi.delete(tripId, accommodation.id)
+      const tripDoc2 = useTripStore.getState().trip as any
+      const convexId2 = tripDoc2?._id
+      if (!convexClient || !convexId2) return
+      await convexClient.mutation(convexApi.accommodations.remove, { tripId: convexId2, itemId: String(accommodation.id) })
       setAccommodations(prev => prev.filter(a => a.id !== accommodation.id))
       setAccommodation(null)
       onAccommodationChange?.()
@@ -529,23 +543,27 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                   <button onClick={async () => {
                     if (showHotelPicker === 'edit' && accommodation) {
                       // Update existing
-                      await accommodationsApi.update(tripId, accommodation.id, {
-                        place_id: hotelForm.place_id,
-                        start_day_id: hotelDayRange.start,
-                        end_day_id: hotelDayRange.end,
-                        check_in: hotelForm.check_in || null,
-                        check_out: hotelForm.check_out || null,
-                        confirmation: hotelForm.confirmation || null,
-                      })
-                      setShowHotelPicker(false)
-                      setHotelForm({ check_in: '', check_out: '', confirmation: '', place_id: null })
-                      // Reload
-                      accommodationsApi.list(tripId).then(d => {
-                        setAccommodations(d.accommodations || [])
-                        const acc = (d.accommodations || []).find(a => days.some(dd => dd.id >= a.start_day_id && dd.id <= a.end_day_id && dd.id === day?.id))
-                        setAccommodation(acc || null)
-                      })
-                      onAccommodationChange?.()
+                      const tripDoc3 = useTripStore.getState().trip as any
+                      const convexId3 = tripDoc3?._id
+                      if (convexClient && convexId3) {
+                        await convexClient.mutation(convexApi.accommodations.update, { tripId: convexId3, itemId: String(accommodation.id), data: {
+                          place_id: hotelForm.place_id,
+                          start_day_id: hotelDayRange.start,
+                          end_day_id: hotelDayRange.end,
+                          check_in: hotelForm.check_in || null,
+                          check_out: hotelForm.check_out || null,
+                          confirmation: hotelForm.confirmation || null,
+                        }})
+                        setShowHotelPicker(false)
+                        setHotelForm({ check_in: '', check_out: '', confirmation: '', place_id: null })
+                        // Reload
+                        convexClient.query(convexApi.accommodations.list, { tripId: convexId3 }).then((d: any) => {
+                          setAccommodations(d.accommodations || [])
+                          const acc = (d.accommodations || []).find((a: any) => days.some(dd => dd.id >= a.start_day_id && dd.id <= a.end_day_id && dd.id === day?.id))
+                          setAccommodation(acc || null)
+                        })
+                        onAccommodationChange?.()
+                      }
                     } else {
                       await handleSaveAccommodation()
                     }

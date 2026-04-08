@@ -23,15 +23,17 @@ import Navbar from '../components/Layout/Navbar'
 import { useToast } from '../components/shared/Toast'
 import { Map, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useTranslation } from '../i18n'
-import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi } from '../api/client'
+import { convexClient } from '../convex/provider'
+import { api as convexApi } from '../../convex/_generated/api'
+import { convexGetTripMembers, convexUpdateAssignmentTime, convexSetAssignmentParticipants } from '../convex/mutationClient'
+import { fetchAppConfig } from '../hooks/useAppConfig'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { useResizablePanels } from '../hooks/useResizablePanels'
-import { useTripWebSocket } from '../hooks/useTripWebSocket'
+// WebSocket no longer needed — Convex provides real-time reactivity
 import { useRouteCalculation } from '../hooks/useRouteCalculation'
 import { usePlaceSelection } from '../hooks/usePlaceSelection'
 import TripLegsModal from '../components/Planner/TripLegsModal'
 import { useConvexTripData } from '../hooks/useConvexTripData'
-import { isConvexConfigured } from '../convex/config'
 import type { Accommodation, TripMember, Day, Place, Reservation, TripLeg, RecommendedPlace } from '../types'
 
 function normalizeRecommendationText(value: string | null | undefined): string {
@@ -48,8 +50,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const tripStore = useTripStore()
   const { trip, days, places, assignments, packingItems, categories, reservations, budgetItems, files, legs, tripBackend, selectedDayId, isLoading, error } = tripStore
 
-  const convexEnabled = isConvexConfigured()
-  const convexBridge = useConvexTripData(convexEnabled ? tripId : undefined)
+  const convexBridge = useConvexTripData(tripId)
 
   const { pushUndo, undo, canUndo, lastActionLabel } = usePlannerHistory()
   const [enabledAddons, setEnabledAddons] = useState<Record<string, boolean>>({ packing: true, budget: true, documents: true, collab: true, memories: true })
@@ -58,19 +59,25 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const [tripMembers, setTripMembers] = useState<TripMember[]>([])
 
   const loadAccommodations = useCallback(() => {
-    if (tripId) {
-      accommodationsApi.list(tripId).then(d => setTripAccommodations(d.accommodations || [])).catch(() => {})
+    if (tripId && convexClient) {
+      const tripDoc = tripStore.trip as any
+      const convexId = tripDoc?._id
+      if (convexId) {
+        convexClient.query(convexApi.accommodations.list, { tripId: convexId }).then((d: any) => setTripAccommodations(d.accommodations || [])).catch(() => {})
+      }
       tripStore.loadReservations(tripId)
     }
-  }, [tripId])
+  }, [tripId, trip])
 
   useEffect(() => {
-    addonsApi.enabled().then(data => {
-      const map: Record<string, boolean> = {}
-      data.addons.forEach((a: any) => { map[a.id] = true })
-      setEnabledAddons({ packing: !!map.packing, budget: !!map.budget, documents: !!map.documents, collab: !!map.collab, memories: !!map.memories })
-    }).catch(() => {})
-    authApi.getAppConfig().then(config => {
+    if (convexClient) {
+      convexClient.query(convexApi.addons.enabled, {}).then((data: any) => {
+        const map: Record<string, boolean> = {}
+        data.addons.forEach((a: any) => { map[a.id] = true })
+        setEnabledAddons({ packing: !!map.packing, budget: !!map.budget, documents: !!map.documents, collab: !!map.collab, memories: !!map.memories })
+      }).catch(() => {})
+    }
+    fetchAppConfig().then((config: any) => {
       if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
     }).catch(() => {})
   }, [])
@@ -129,30 +136,26 @@ export default function TripPlannerPage(): React.ReactElement | null {
     return legs.find(l => dayNum >= l.start_day_number && dayNum <= l.end_day_number) || legs[0] || null
   }, [selectedDayId, legs, days])
 
-  // Load trip + files (needed for place inspector file section)
+  // Load files, accommodations, members once Convex bridge resolves
+  // Note: trip/days/places/legs/tags/categories are loaded by useConvexTripData hook
   useEffect(() => {
     if (!tripId) return
-    if (convexEnabled && convexBridge.status === 'resolving') return
+    if (convexBridge.status === 'resolving') return
 
-    const forceLegacy = !convexEnabled || convexBridge.status === 'missing'
-    tripStore.loadTrip(tripId, forceLegacy ? { forceLegacy: true } : undefined).catch(() => {
-      toast.error(t('trip.toast.loadError'))
-      navigate('/dashboard')
-    })
     tripStore.loadFiles(tripId)
     loadAccommodations()
-    tripsApi.getMembers(tripId).then(d => {
-      // Combine owner + members into one list
-      const all = [d.owner, ...(d.members || [])].filter(Boolean)
-      setTripMembers(all)
-    }).catch(() => {})
-  }, [tripId, convexEnabled, convexBridge.status, loadAccommodations])
+    if (convexBridge.convexTripId) {
+      convexGetTripMembers(convexBridge.convexTripId).then(members => {
+        setTripMembers(members as any[])
+      }).catch(() => {})
+    }
+  }, [tripId, convexBridge.status, convexBridge.convexTripId, loadAccommodations])
 
   useEffect(() => {
     if (tripId) tripStore.loadReservations(tripId)
   }, [tripId])
 
-  useTripWebSocket(tripId)
+  // Real-time sync handled by Convex reactive queries in useConvexTripData
 
   const [mapCategoryFilter, setMapCategoryFilter] = useState<string>('')
 
@@ -201,8 +204,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
     setEditingAssignmentId(null)
     setShowPlaceForm(true)
     try {
-      const { mapsApi } = await import('../api/client')
-      const data = await mapsApi.reverse(lat, lng, language)
+      const { convexMapsApi } = await import('../convex/mapsClient')
+      const data = await convexMapsApi.reverse(lat, lng, language)
       if (data.name || data.address) {
         setPrefillCoords(prev => prev ? { ...prev, name: data.name || '', address: data.address || '' } : prev)
       }
@@ -218,7 +221,9 @@ export default function TripPlannerPage(): React.ReactElement | null {
       await tripStore.updatePlace(tripId, editingPlace.id, placeData)
       // If editing from assignment context, save time per-assignment
       if (editingAssignmentId) {
-        await assignmentsApi.updateTime(tripId!, Number(editingAssignmentId), { place_time: place_time || null, end_time: end_time || null })
+        const tripDoc = trip as any
+        const convexTripId = tripDoc?._id || tripId
+        await convexUpdateAssignmentTime(convexTripId as any, editingAssignmentId as any, { place_time: place_time || null, end_time: end_time || null })
         await tripStore.refreshDays(tripId)
       }
       // Upload pending files with place_id
@@ -241,9 +246,10 @@ export default function TripPlannerPage(): React.ReactElement | null {
           try { await tripStore.addFile(tripId, fd) } catch {}
         }
       }
+      if (place?.id) setSelectedPlaceId((place as any)._id ?? place.id)
       toast.success(t('trip.toast.placeAdded'))
     }
-  }, [editingPlace, editingAssignmentId, tripId, tripStore, toast])
+  }, [editingPlace, editingAssignmentId, tripId, tripStore, toast, setSelectedPlaceId])
 
   const handleAddRecommendation = useCallback(async (recommendation: RecommendedPlace, assignToDay: boolean): Promise<Place | null> => {
     try {
@@ -365,7 +371,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
         toast.success(t('trip.toast.reservationUpdated'))
         setShowReservationModal(false)
         if (data.type === 'hotel') {
-          accommodationsApi.list(tripId).then(d => setTripAccommodations(d.accommodations || [])).catch(() => {})
+          loadAccommodations()
         }
         return r
       } else {
@@ -374,7 +380,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
         setShowReservationModal(false)
         // Refresh accommodations if hotel was created
         if (data.type === 'hotel') {
-          accommodationsApi.list(tripId).then(d => setTripAccommodations(d.accommodations || [])).catch(() => {})
+          loadAccommodations()
         }
         return r
       }
@@ -386,7 +392,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
       await tripStore.deleteReservation(tripId, id)
       toast.success(t('trip.toast.deleted'))
       // Refresh accommodations in case a hotel booking was deleted
-      accommodationsApi.list(tripId).then(d => setTripAccommodations(d.accommodations || [])).catch(() => {})
+      loadAccommodations()
     }
     catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error') }
   }
@@ -422,9 +428,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
 
   const showTripLoader =
     isLoading
-    || (convexEnabled && convexBridge.status === 'resolving')
-    || (convexEnabled && convexBridge.status === 'missing' && tripBackend !== 'legacy')
-    || (convexEnabled && convexBridge.status === 'convex' && tripBackend !== 'convex')
+    || convexBridge.status === 'resolving'
 
   if (showTripLoader) {
     return (
@@ -737,15 +741,15 @@ export default function TripPlannerPage(): React.ReactElement | null {
                 tripMembers={tripMembers}
                 onSetParticipants={async (assignmentId, dayId, userIds) => {
                   try {
-                    const data = await assignmentsApi.setParticipants(tripId!, Number(assignmentId), userIds)
-                    useTripStore.setState(state => ({
-                      assignments: {
-                        ...state.assignments,
-                        [String(dayId)]: (state.assignments[String(dayId)] || []).map(a =>
-                          a.id === assignmentId ? { ...a, participants: data.participants } : a
-                        ),
-                      }
-                    }))
+                    const tripDoc = trip as any
+                    const convexTripId = tripDoc?._id || tripId
+                    // Convert numeric user IDs to auth keys for Convex
+                    const userAuthKeys = userIds.map(id => {
+                      const member = tripMembers.find((m: any) => String(m.id) === String(id) || String(m._id) === String(id))
+                      return (member as any)?.auth_user_key || String(id)
+                    })
+                    await convexSetAssignmentParticipants(convexTripId as any, assignmentId as any, userAuthKeys)
+                    // Convex reactivity will update the store
                   } catch {}
                 }}
                 onUpdatePlace={async (placeId, data) => { try { await tripStore.updatePlace(tripId, placeId, data) } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error') } }}
@@ -827,7 +831,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
 
         {activeTab === 'collab' && (
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-            <CollabPanel tripId={tripId} tripMembers={tripMembers} useConvex={tripBackend === 'convex'} />
+            <CollabPanel tripId={tripId} tripMembers={tripMembers} useConvex={true} />
           </div>
         )}
       </div>

@@ -76,20 +76,7 @@ export default defineConfig(({ mode }) => {
     plugins,
     server: {
       port: 5173,
-      proxy: {
-        '/api': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-        },
-        '/uploads': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-        },
-        '/ws': {
-          target: 'http://localhost:3001',
-          ws: true,
-        }
-      }
+      // Express proxy removed — all APIs now go through Convex
     }
   }
 })

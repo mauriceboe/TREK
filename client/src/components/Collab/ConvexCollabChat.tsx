@@ -1,10 +1,29 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUp, MessageCircle, Reply, Smile, Trash2, X } from 'lucide-react'
 import { useMutation, useQuery } from 'convex/react'
-import { collabApi } from '../../api/client'
+import { stubbedCollabApi as collabApi } from '../../api/convexApiStub'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
 import type { User } from '../../types'
+
+class ChatErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 24, color: 'var(--text-muted)', fontSize: 14, gap: 12, textAlign: 'center' }}>
+          <MessageCircle size={32} style={{ opacity: 0.4 }} />
+          <p>Chat could not load. Try refreshing the page.</p>
+          <button onClick={() => this.setState({ hasError: false })} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
+            Retry
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 interface ChatReaction {
   emoji: string
@@ -160,7 +179,7 @@ interface ConvexCollabChatProps {
   currentUser: User
 }
 
-export default function ConvexCollabChat({ tripId, currentUser }: ConvexCollabChatProps) {
+function ConvexCollabChatInner({ tripId, currentUser }: ConvexCollabChatProps) {
   const { t } = useTranslation()
   const is12h = useSettingsStore((state) => state.settings.time_format) === '12h'
   const messagesResult = useQuery('chat:listMessages' as any, { tripId, limit: 200 }) as ChatMessage[] | undefined
@@ -464,5 +483,13 @@ export default function ConvexCollabChat({ tripId, currentUser }: ConvexCollabCh
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ConvexCollabChat(props: ConvexCollabChatProps) {
+  return (
+    <ChatErrorBoundary>
+      <ConvexCollabChatInner {...props} />
+    </ChatErrorBoundary>
   )
 }

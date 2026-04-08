@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { inAppNotificationsApi } from '../api/client'
+import { stubbedNotificationsApi as inAppNotificationsApi } from '../api/convexApiStub'
 
 export interface InAppNotification {
   id: number

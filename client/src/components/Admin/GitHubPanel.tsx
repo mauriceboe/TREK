@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Tag, Calendar, ExternalLink, ChevronDown, ChevronUp, Loader2, Heart, Coffee } from 'lucide-react'
 import { getLocaleForLanguage, useTranslation } from '../../i18n'
-import apiClient from '../../api/client'
+// GitHub releases — fetch directly from GitHub API
+const apiClient = { get: async (url: string, opts?: any) => {
+  const page = opts?.params?.page || 1
+  const perPage = opts?.params?.per_page || 10
+  const res = await fetch(`https://api.github.com/repos/mauriceboe/NOMAD/releases?per_page=${perPage}&page=${page}`, {
+    headers: { Accept: 'application/vnd.github.v3+json' },
+  })
+  return { data: res.ok ? await res.json() : [] }
+}}
 
 const REPO = 'mauriceboe/NOMAD'
 const PER_PAGE = 10

@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import { authApi, clearSessionCaches } from '../api/client'
-import { connect, disconnect } from '../api/websocket'
 import type { User } from '../types'
 import { getApiErrorMessage } from '../types'
 import { authClient, waitForBetterAuthCookie } from '../auth/client'
+import { convexClient } from '../convex/provider'
+import { api } from '../../convex/_generated/api'
 
 interface AuthResponse {
   user: User
@@ -40,13 +40,30 @@ interface AuthState {
   demoLogin: () => Promise<AuthResponse>
 }
 
+function getConvexClient() {
+  if (!convexClient) throw new Error('Convex is not configured')
+  return convexClient
+}
+
+async function ensureConvexUser(): Promise<User> {
+  const client = getConvexClient()
+  const user = await client.mutation(api.users.ensureUser, {})
+  return user as unknown as User
+}
+
+async function fetchConvexUser(): Promise<User | null> {
+  const client = getConvexClient()
+  const user = await client.query(api.users.me, {})
+  return user as unknown as User | null
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: localStorage.getItem('auth_token') || null,
+  token: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
-  demoMode: localStorage.getItem('demo_mode') === 'true',
+  demoMode: false,
   hasMapsKey: false,
   tripRemindersEnabled: false,
   setTripRemindersEnabled: (val: boolean) => set({ tripRemindersEnabled: val }),
@@ -54,38 +71,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      localStorage.removeItem('auth_token')
-      const signIn = await authClient.signIn.email({
-        email,
-        password,
-      })
+      const signIn = await authClient.signIn.email({ email, password })
       if (signIn.error) {
-        const bridge = await authApi.bridgeLegacyLogin({ email, password }).catch(() => null)
-        if (!bridge?.migrated) {
-          throw new Error(signIn.error.message || 'Login failed')
-        }
-        const retry = await authClient.signIn.email({
-          email,
-          password,
-        })
-        if (retry.error) {
-          throw new Error(retry.error.message || 'Login failed')
-        }
+        throw new Error(signIn.error.message || 'Login failed')
       }
       if (!(await waitForBetterAuthCookie())) {
         throw new Error('Login session was not established. Please try again.')
       }
-      const data = await authApi.me()
-      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
+      // Wait a moment for Convex auth to sync
+      await new Promise((r) => setTimeout(r, 500))
+      const user = await ensureConvexUser()
       set({
-        user: data.user,
-        token,
+        user,
+        token: 'convex-auth',
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(token)
-      return { user: data.user, token }
+      return { user, token: null }
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Login failed')
       set({ isLoading: false, error })
@@ -96,7 +99,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (username: string, email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      localStorage.removeItem('auth_token')
       const signUp = await authClient.signUp.email({
         email,
         password,
@@ -110,32 +112,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (!(await waitForBetterAuthCookie())) {
         throw new Error('Registration session was not established. Please try again.')
       }
-      let data: { user: User }
-      try {
-        data = await authApi.me()
-      } catch {
-        const signIn = await authClient.signIn.email({
-          email,
-          password,
-        })
-        if (signIn.error) {
-          throw new Error(signIn.error.message || 'Registration failed')
-        }
-        if (!(await waitForBetterAuthCookie())) {
-          throw new Error('Registration session was not established. Please try again.')
-        }
-        data = await authApi.me()
-      }
-      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
+      // Wait a moment for Convex auth to sync
+      await new Promise((r) => setTimeout(r, 500))
+      const user = await ensureConvexUser()
       set({
-        user: data.user,
-        token,
+        user,
+        token: 'convex-auth',
         isAuthenticated: true,
         isLoading: false,
         error: null,
       })
-      connect(token)
-      return { user: data.user, token }
+      return { user, token: null }
     } catch (err: unknown) {
       const error = getApiErrorMessage(err, 'Registration failed')
       set({ isLoading: false, error })
@@ -145,10 +132,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     void authClient.signOut().catch(() => {})
-    void authApi.logout().catch(() => {})
-    disconnect()
-    localStorage.removeItem('auth_token')
-    void clearSessionCaches().catch(() => {})
     set({
       user: null,
       token: null,
@@ -161,21 +144,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loadUser: async (_options?: { silent?: boolean }) => {
     set({ isLoading: true })
     try {
-      if (!localStorage.getItem('auth_token')) {
-        await waitForBetterAuthCookie(500)
-      }
-      const data = await authApi.me()
-      const token = await authApi.getConvexToken().then((result: { token?: string | null }) => result.token || null).catch(() => localStorage.getItem('auth_token'))
+      await waitForBetterAuthCookie(500)
+      // Wait a moment for Convex auth to sync
+      await new Promise((r) => setTimeout(r, 300))
+      const user = await ensureConvexUser()
       set({
-        user: data.user,
-        token,
+        user,
+        token: 'convex-auth',
         isAuthenticated: true,
         isLoading: false,
       })
-      connect(token)
-    } catch (err: unknown) {
-      localStorage.removeItem('auth_token')
-      void clearSessionCaches().catch(() => {})
+    } catch {
       set({
         user: null,
         token: null,
@@ -187,9 +166,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateMapsKey: async (key: string | null) => {
     try {
-      await authApi.updateMapsKey(key)
+      const client = getConvexClient()
+      const updated = await client.mutation(api.users.updateApiKeys, {
+        mapsApiKey: key,
+      })
       set((state) => ({
-        user: state.user ? { ...state.user, maps_api_key: key || null } : null,
+        user: state.user
+          ? { ...state.user, maps_api_key: (updated as any).maps_api_key }
+          : null,
       }))
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error saving API key'))
@@ -198,8 +182,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateApiKeys: async (keys: Record<string, string | null>) => {
     try {
-      const data = await authApi.updateApiKeys(keys)
-      set({ user: data.user })
+      const client = getConvexClient()
+      const updated = await client.mutation(api.users.updateApiKeys, {
+        mapsApiKey: keys.maps_api_key,
+        openweatherApiKey: keys.openweather_api_key,
+      })
+      set({ user: updated as unknown as User })
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error saving API keys'))
     }
@@ -207,24 +195,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateProfile: async (profileData: Partial<User>) => {
     try {
-      const data = await authApi.updateSettings(profileData)
-      set({ user: data.user })
+      const client = getConvexClient()
+      const updated = await client.mutation(api.users.updateProfile, {
+        username: profileData.username,
+        email: profileData.email,
+      })
+      set({ user: updated as unknown as User })
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, 'Error updating profile'))
     }
   },
 
-  uploadAvatar: async (file: File) => {
-    const formData = new FormData()
-    formData.append('avatar', file)
-    const data = await authApi.uploadAvatar(formData)
-    set((state) => ({ user: state.user ? { ...state.user, avatar_url: data.avatar_url } : null }))
-    return data
+  uploadAvatar: async (_file: File) => {
+    // TODO: Implement with Convex file storage
+    throw new Error('Avatar upload not yet implemented with Convex')
   },
 
   deleteAvatar: async () => {
-    await authApi.deleteAvatar()
-    set((state) => ({ user: state.user ? { ...state.user, avatar_url: null } : null }))
+    // TODO: Implement with Convex file storage
+    throw new Error('Avatar deletion not yet implemented with Convex')
   },
 
   setDemoMode: (val: boolean) => {
@@ -236,24 +225,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setHasMapsKey: (val: boolean) => set({ hasMapsKey: val }),
 
   demoLogin: async () => {
-    set({ isLoading: true, error: null })
-    try {
-      const data = await authApi.demoLogin()
-      localStorage.setItem('auth_token', data.token)
-      set({
-        user: data.user,
-        token: data.token,
-        isAuthenticated: true,
-        isLoading: false,
-        demoMode: true,
-        error: null,
-      })
-      connect(data.token)
-      return data
-    } catch (err: unknown) {
-      const error = getApiErrorMessage(err, 'Demo login failed')
-      set({ isLoading: false, error })
-      throw new Error(error)
-    }
+    throw new Error('Demo mode not available')
   },
 }))

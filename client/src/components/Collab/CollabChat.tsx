@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { ArrowUp, Trash2, Reply, ChevronUp, MessageCircle, Smile, X } from 'lucide-react'
-import { collabApi } from '../../api/client'
+import { stubbedCollabApi as collabApi } from '../../api/convexApiStub'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'

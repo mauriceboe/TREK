@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader, MapPin, Search } from 'lucide-react'
-import { mapsApi } from '../../api/client'
+import { convexMapsApi as mapsApi } from '../../convex/mapsClient'
 import type { AutocompleteSuggestion } from '../../types'
 
 const MIN_AUTOCOMPLETE_CHARS = 2
@@ -25,7 +25,7 @@ interface NormalizedSearchResult {
 type NormalizedItem = NormalizedPrediction | NormalizedSearchResult
 
 interface PlaceSearchBoxProps {
-  hasMapsKey: boolean
+  hasMapsKey?: boolean
   language: string
   t: (key: string) => string
   onPlaceSelected: (place: Record<string, unknown>) => void
@@ -96,12 +96,6 @@ export default function PlaceSearchBox({
   }
 
   useEffect(() => {
-    if (!hasMapsKey) {
-      clearResults()
-      setIsSearching(false)
-      return
-    }
-
     const trimmedQuery = query.trim()
     if (trimmedQuery.length < MIN_AUTOCOMPLETE_CHARS) {
       clearResults()
@@ -117,7 +111,15 @@ export default function PlaceSearchBox({
           mode: searchMode,
         })
         if (requestIdRef.current !== currentRequestId) return
-        setResults((data.suggestions || []).map(normalizePrediction))
+        const suggestions = (data.suggestions || []).map(normalizePrediction)
+        if (suggestions.length > 0) {
+          setResults(suggestions)
+        } else {
+          // Autocomplete returned nothing (no API key or no matches) — fall back to text search
+          const searchData = await mapsApi.search(trimmedQuery, language)
+          if (requestIdRef.current !== currentRequestId) return
+          setResults((searchData.places || []).map(normalizeSearchResult))
+        }
         setActiveIndex(-1)
       } catch (err) {
         if (requestIdRef.current !== currentRequestId) return
@@ -130,7 +132,7 @@ export default function PlaceSearchBox({
     }, AUTOCOMPLETE_DEBOUNCE_MS)
 
     return () => clearTimeout(timer)
-  }, [query, hasMapsKey, language, searchMode])
+  }, [query, language, searchMode])
 
   const runManualSearch = async (): Promise<void> => {
     const trimmedQuery = query.trim()
@@ -139,7 +141,7 @@ export default function PlaceSearchBox({
     const currentRequestId = ++requestIdRef.current
     setIsSearching(true)
     try {
-      if (hasMapsKey && searchMode === 'destination') {
+      if (searchMode === 'destination') {
         const data = await mapsApi.autocomplete(trimmedQuery, language, sessionTokenRef.current, {
           mode: searchMode,
         })
@@ -217,11 +219,6 @@ export default function PlaceSearchBox({
 
   return (
     <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-      {!hasMapsKey && (
-        <p className="mb-2 text-xs" style={{ color: 'var(--text-faint)' }}>
-          {t('places.osmActive')}
-        </p>
-      )}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

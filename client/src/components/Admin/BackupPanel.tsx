@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { backupApi } from '../../api/client'
+import { stubbedBackupApi as backupApi } from '../../api/convexApiStub'
 import { useToast } from '../shared/Toast'
 import { Download, Trash2, Plus, RefreshCw, RotateCcw, Upload, Clock, Check, HardDrive, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -127,8 +127,7 @@ export default function BackupPanel() {
   const handleSaveAutoSettings = async () => {
     setAutoSettingsSaving(true)
     try {
-      const data = await backupApi.setAutoSettings(autoSettings)
-      setAutoSettings(data.settings)
+      await backupApi.setAutoSettings(autoSettings)
       setAutoSettingsDirty(false)
       toast.success(t('backup.toast.settingsSaved'))
     } catch {

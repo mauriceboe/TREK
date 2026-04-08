@@ -118,6 +118,11 @@ export function createReservation(tripId: string | number, data: CreateReservati
 }
 
 export function updatePositions(tripId: string | number, positions: { id: number; day_plan_position: number }[]) {
+  const columns = db.prepare('PRAGMA table_info(reservations)').all() as { name: string }[];
+  const hasDayPlanPosition = columns.some((column) => column.name === 'day_plan_position');
+  if (!hasDayPlanPosition) {
+    db.prepare('ALTER TABLE reservations ADD COLUMN day_plan_position REAL').run();
+  }
   const stmt = db.prepare('UPDATE reservations SET day_plan_position = ? WHERE id = ? AND trip_id = ?');
   const updateMany = db.transaction((items: { id: number; day_plan_position: number }[]) => {
     for (const item of items) {

@@ -1,11 +1,21 @@
-import { budgetApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { BudgetItem, BudgetMember } from '../../types'
-import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
+
+function getClient() {
+  if (!convexClient) throw new Error('Convex not configured')
+  return convexClient
+}
+
+function getTripId(get: GetState): any {
+  const trip = get().trip as any
+  return trip?._id || trip?.id
+}
 
 export interface BudgetSlice {
   loadBudgetItems: (tripId: number | string) => Promise<void>
@@ -17,66 +27,67 @@ export interface BudgetSlice {
 }
 
 export const createBudgetSlice = (set: SetState, get: GetState): BudgetSlice => ({
-  loadBudgetItems: async (tripId) => {
+  loadBudgetItems: async (_tripId) => {
     try {
-      const data = await budgetApi.list(tripId)
-      set({ budgetItems: data.items })
-    } catch (err: unknown) {
+      const convexTripId = getTripId(get)
+      if (!convexTripId) return
+      const data = await getClient().query(api.budget.list, { tripId: convexTripId })
+      set({ budgetItems: data.items as any[] })
+    } catch (err) {
       console.error('Failed to load budget items:', err)
     }
   },
 
-  addBudgetItem: async (tripId, data) => {
-    try {
-      const result = await budgetApi.create(tripId, data)
-      set(state => ({ budgetItems: [...state.budgetItems, result.item] }))
-      return result.item
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error adding budget item'))
-    }
+  addBudgetItem: async (_tripId, data) => {
+    const convexTripId = getTripId(get)
+    const result = await getClient().mutation(api.budget.create, { tripId: convexTripId, data })
+    set(state => ({ budgetItems: [...state.budgetItems, result.item as any] }))
+    return result.item as any
   },
 
-  updateBudgetItem: async (tripId, id, data) => {
-    try {
-      const result = await budgetApi.update(tripId, id, data)
-      set(state => ({
-        budgetItems: state.budgetItems.map(item => item.id === id ? result.item : item)
-      }))
-      return result.item
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error updating budget item'))
-    }
+  updateBudgetItem: async (_tripId, id, data) => {
+    const convexTripId = getTripId(get)
+    const result = await getClient().mutation(api.budget.update, { tripId: convexTripId, itemId: id as any, data })
+    set(state => ({ budgetItems: state.budgetItems.map(item => String(item.id) === String(id) ? result.item as any : item) }))
+    return result.item as any
   },
 
-  deleteBudgetItem: async (tripId, id) => {
+  deleteBudgetItem: async (_tripId, id) => {
+    const convexTripId = getTripId(get)
     const prev = get().budgetItems
-    set(state => ({ budgetItems: state.budgetItems.filter(item => item.id !== id) }))
+    set(state => ({ budgetItems: state.budgetItems.filter(item => String(item.id) !== String(id)) }))
     try {
-      await budgetApi.delete(tripId, id)
-    } catch (err: unknown) {
+      await getClient().mutation(api.budget.remove, { tripId: convexTripId, itemId: id as any })
+    } catch {
       set({ budgetItems: prev })
-      throw new Error(getApiErrorMessage(err, 'Error deleting budget item'))
     }
   },
 
-  setBudgetItemMembers: async (tripId, itemId, userIds) => {
-    const result = await budgetApi.setMembers(tripId, itemId, userIds);
+  setBudgetItemMembers: async (_tripId, itemId, userIds) => {
+    const convexTripId = getTripId(get)
+    // userIds are auth keys in the Convex world
+    const result = await getClient().mutation(api.budget.setMembers, {
+      tripId: convexTripId, itemId: itemId as any, userAuthKeys: userIds.map(String),
+    })
     set(state => ({
       budgetItems: state.budgetItems.map(item =>
-        item.id === itemId ? { ...item, members: result.members, persons: result.item.persons } : item
+        String(item.id) === String(itemId) ? { ...item, members: result.members as any[], persons: (result.item as any).persons } : item
       )
-    }));
-    return result;
+    }))
+    return result as any
   },
 
-  toggleBudgetMemberPaid: async (tripId, itemId, userId, paid) => {
-    await budgetApi.togglePaid(tripId, itemId, userId, paid);
+  toggleBudgetMemberPaid: async (_tripId, itemId, userId, paid) => {
+    const convexTripId = getTripId(get)
+    await getClient().mutation(api.budget.togglePaid, {
+      tripId: convexTripId, itemId: itemId as any, userAuthKey: String(userId), paid,
+    })
     set(state => ({
       budgetItems: state.budgetItems.map(item =>
-        item.id === itemId
-          ? { ...item, members: (item.members || []).map(m => m.user_id === userId ? { ...m, paid } : m) }
+        String(item.id) === String(itemId)
+          ? { ...item, members: (item.members || []).map((m: any) => String(m.user_id) === String(userId) ? { ...m, paid } : m) }
           : item
       )
-    }));
+    }))
   },
 })

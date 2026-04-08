@@ -6,7 +6,8 @@ import { useCanDo } from '../../store/permissionsStore'
 import { useTranslation } from '../../i18n'
 import { Plus, Trash2, Calculator, Wallet, Pencil, Users, Check, Info, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import CustomSelect from '../shared/CustomSelect'
-import { budgetApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api as convexApi } from '../../../convex/_generated/api'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
 import type { BudgetItem, BudgetMember } from '../../types'
 import { currencyDecimals } from '../../utils/formatters'
@@ -345,7 +346,9 @@ function PerPersonInline({ tripId, budgetItems, currency, locale }: PerPersonInl
   const fmt = (v) => fmtNum(v, locale, currency)
 
   useEffect(() => {
-    budgetApi.perPersonSummary(tripId).then(d => setData(d.summary)).catch(() => {})
+    const tripDoc = useTripStore.getState().trip as any
+    const convexId = tripDoc?._id
+    if (convexClient && convexId) convexClient.query(convexApi.budget.perPersonSummary, { tripId: convexId }).then((d: any) => setData(d.summary)).catch(() => {})
   }, [tripId, budgetItems])
 
   if (!data || data.length === 0) return null
@@ -438,7 +441,9 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
   // Load settlement data whenever budget items change
   useEffect(() => {
     if (!hasMultipleMembers) return
-    budgetApi.settlement(tripId).then(setSettlement).catch(() => {})
+    const tripDoc = useTripStore.getState().trip as any
+    const convexId = tripDoc?._id
+    if (convexClient && convexId) convexClient.query(convexApi.budget.settlement, { tripId: convexId }).then((d: any) => setSettlement(d)).catch(() => {})
   }, [tripId, budgetItems, hasMultipleMembers])
 
   const setCurrency = (cur) => {

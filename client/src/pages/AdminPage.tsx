@@ -1,6 +1,31 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminApi, authApi } from '../api/client'
+import { stubbedAdminApi as adminApi } from '../api/convexApiStub'
+import { convexClient } from '../convex/provider'
+import { api as convexApi } from '../../convex/_generated/api'
+
+// Stub for remaining authApi admin calls
+const authApi: any = {
+  getSettings: async () => {
+    if (!convexClient) return { settings: {} }
+    const me = await convexClient.query(convexApi.users.me, {})
+    return { settings: me || {} }
+  },
+  getAppConfig: async () => ({}),
+  updateAppSettings: async (data: any) => {
+    if (convexClient && data.allow_registration !== undefined) {
+      await convexClient.mutation(convexApi.users.updateAppSettings, { allowRegistration: data.allow_registration })
+    }
+    if (convexClient && data.allowed_file_types !== undefined) {
+      await convexClient.mutation(convexApi.users.updateAppSettings, { allowedFileTypes: data.allowed_file_types })
+    }
+  },
+  validateKeys: async () => {
+    if (!convexClient) return { maps: false, weather: false }
+    return await convexClient.action(convexApi.users.validateKeys, {})
+  },
+}
+import { fetchAppConfig } from '../hooks/useAppConfig'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTranslation } from '../i18n'
@@ -160,8 +185,8 @@ export default function AdminPage(): React.ReactElement {
     loadAppConfig()
     loadApiKeys()
     adminApi.getOidc().then(setOidcConfig).catch(() => {})
-    adminApi.checkVersion().then(data => {
-      if (data.update_available) setUpdateInfo(data)
+    adminApi.checkVersion().then((data: any) => {
+      if (data.update_available || data.updateAvailable) setUpdateInfo(data)
     }).catch(() => {})
   }, [])
 
@@ -185,9 +210,11 @@ export default function AdminPage(): React.ReactElement {
 
   const loadAppConfig = async () => {
     try {
-      const config = await authApi.getAppConfig()
-      setAllowRegistration(config.allow_registration)
-      if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
+      const config = await fetchAppConfig() as any
+      if (config) {
+        setAllowRegistration(config.allow_registration)
+        if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
+      }
     } catch (err: unknown) {
       // ignore
     }

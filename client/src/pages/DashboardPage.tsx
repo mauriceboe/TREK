@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { tripsApi } from '../api/client'
+import {
+  convexListTrips,
+  convexCreateTrip,
+  convexUpdateTrip,
+  convexCopyTrip,
+  convexDeleteTrip,
+  convexArchiveTrip,
+  convexUnarchiveTrip,
+} from '../convex/mutationClient'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { useTranslation } from '../i18n'
@@ -565,12 +573,11 @@ export default function DashboardPage(): React.ReactElement {
   const loadTrips = async () => {
     setIsLoading(true)
     try {
-      const [active, archived] = await Promise.all([
-        tripsApi.list(),
-        tripsApi.list({ archived: 1 }),
-      ])
-      setTrips(sortTrips(active.trips))
-      setArchivedTrips(sortTrips(archived.trips))
+      const allTrips = await convexListTrips()
+      const active = (allTrips as any[]).filter((t: any) => !t.is_archived)
+      const archived = (allTrips as any[]).filter((t: any) => t.is_archived)
+      setTrips(sortTrips(active))
+      setArchivedTrips(sortTrips(archived))
     } catch {
       toast.error(t('dashboard.toast.loadError'))
     } finally {
@@ -580,10 +587,12 @@ export default function DashboardPage(): React.ReactElement {
 
   const handleCreate = async (tripData) => {
     try {
-      const data = await tripsApi.create(tripData)
-      setTrips(prev => sortTrips([data.trip, ...prev]))
-      toast.success(t('dashboard.toast.created'))
-      return data
+      const trip = await convexCreateTrip(tripData)
+      if (trip) {
+        setTrips(prev => sortTrips([trip as any, ...prev]))
+        toast.success(t('dashboard.toast.created'))
+        return { trip }
+      }
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, t('dashboard.toast.createError')))
     }
@@ -591,9 +600,11 @@ export default function DashboardPage(): React.ReactElement {
 
   const handleUpdate = async (tripData) => {
     try {
-      const data = await tripsApi.update(editingTrip.id, tripData)
-      setTrips(prev => sortTrips(prev.map(t => t.id === editingTrip.id ? data.trip : t)))
-      toast.success(t('dashboard.toast.updated'))
+      const trip = await convexUpdateTrip(editingTrip.id as any, tripData)
+      if (trip) {
+        setTrips(prev => sortTrips(prev.map(t => String(t.id) === String(editingTrip.id) ? trip as any : t)))
+        toast.success(t('dashboard.toast.updated'))
+      }
     } catch (err: unknown) {
       throw new Error(getApiErrorMessage(err, t('dashboard.toast.updateError')))
     }
@@ -601,9 +612,11 @@ export default function DashboardPage(): React.ReactElement {
 
   const handleCopy = async (trip: DashboardTrip) => {
     try {
-      const data = await tripsApi.copy(trip.id, `${trip.title} (Copy)`)
-      setTrips(prev => sortTrips([data.trip, ...prev]))
-      toast.success(t('dashboard.toast.copied'))
+      const copied = await convexCopyTrip(trip.id as any, `${trip.title} (Copy)`)
+      if (copied) {
+        setTrips(prev => sortTrips([copied as any, ...prev]))
+        toast.success(t('dashboard.toast.copied'))
+      }
     } catch {
       toast.error(t('dashboard.toast.copyError'))
     }
@@ -612,7 +625,7 @@ export default function DashboardPage(): React.ReactElement {
   const handleDelete = async (trip) => {
     if (!confirm(t('dashboard.confirm.delete', { title: trip.title }))) return
     try {
-      await tripsApi.delete(trip.id)
+      await convexDeleteTrip(trip.id as any)
       setTrips(prev => prev.filter(t => t.id !== trip.id))
       setArchivedTrips(prev => prev.filter(t => t.id !== trip.id))
       toast.success(t('dashboard.toast.deleted'))
@@ -623,9 +636,9 @@ export default function DashboardPage(): React.ReactElement {
 
   const handleArchive = async (id) => {
     try {
-      const data = await tripsApi.archive(id)
+      const trip = await convexArchiveTrip(id as any)
       setTrips(prev => prev.filter(t => t.id !== id))
-      setArchivedTrips(prev => sortTrips([data.trip, ...prev]))
+      if (trip) setArchivedTrips(prev => sortTrips([trip as any, ...prev]))
       toast.success(t('dashboard.toast.archived'))
     } catch {
       toast.error(t('dashboard.toast.archiveError'))
@@ -634,9 +647,9 @@ export default function DashboardPage(): React.ReactElement {
 
   const handleUnarchive = async (id) => {
     try {
-      const data = await tripsApi.unarchive(id)
+      const trip = await convexUnarchiveTrip(id as any)
       setArchivedTrips(prev => prev.filter(t => t.id !== id))
-      setTrips(prev => sortTrips([data.trip, ...prev]))
+      if (trip) setTrips(prev => sortTrips([trip as any, ...prev]))
       toast.success(t('dashboard.toast.restored'))
     } catch {
       toast.error(t('dashboard.toast.restoreError'))

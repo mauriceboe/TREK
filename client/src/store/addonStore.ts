@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { addonsApi } from '../api/client'
+import { convexClient } from '../convex/provider'
+import { api } from '../../convex/_generated/api'
 
 interface Addon {
   id: string
@@ -22,8 +23,9 @@ export const useAddonStore = create<AddonState>((set, get) => ({
 
   loadAddons: async () => {
     try {
-      const data = await addonsApi.enabled()
-      set({ addons: data.addons || [], loaded: true })
+      if (!convexClient) { set({ loaded: true }); return; }
+      const data = await convexClient.query(api.addons.enabled, {})
+      set({ addons: data.addons as Addon[] || [], loaded: true })
     } catch {
       set({ loaded: true })
     }

@@ -1,11 +1,21 @@
-import { reservationsApi } from '../../api/client'
+import { convexClient } from '../../convex/provider'
+import { api } from '../../../convex/_generated/api'
 import type { StoreApi } from 'zustand'
 import type { TripStoreState } from '../tripStore'
 import type { Reservation } from '../../types'
-import { getApiErrorMessage } from '../../types'
 
 type SetState = StoreApi<TripStoreState>['setState']
 type GetState = StoreApi<TripStoreState>['getState']
+
+function getClient() {
+  if (!convexClient) throw new Error('Convex not configured')
+  return convexClient
+}
+
+function getTripId(get: GetState): any {
+  const trip = get().trip as any
+  return trip?._id || trip?.id
+}
 
 export interface ReservationsSlice {
   loadReservations: (tripId: number | string) => Promise<void>
@@ -16,58 +26,52 @@ export interface ReservationsSlice {
 }
 
 export const createReservationsSlice = (set: SetState, get: GetState): ReservationsSlice => ({
-  loadReservations: async (tripId) => {
+  loadReservations: async (_tripId) => {
     try {
-      const data = await reservationsApi.list(tripId)
-      set({ reservations: data.reservations })
-    } catch (err: unknown) {
+      const convexTripId = getTripId(get)
+      if (!convexTripId) return
+      const data = await getClient().query(api.reservations.list, { tripId: convexTripId })
+      set({ reservations: data.reservations as any[] })
+    } catch (err) {
       console.error('Failed to load reservations:', err)
     }
   },
 
-  addReservation: async (tripId, data) => {
-    try {
-      const result = await reservationsApi.create(tripId, data)
-      set(state => ({ reservations: [result.reservation, ...state.reservations] }))
-      return result.reservation
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error creating reservation'))
-    }
+  addReservation: async (_tripId, data) => {
+    const convexTripId = getTripId(get)
+    const result = await getClient().mutation(api.reservations.create, { tripId: convexTripId, data })
+    set(state => ({ reservations: [result.reservation as any, ...state.reservations] }))
+    return result.reservation as any
   },
 
-  updateReservation: async (tripId, id, data) => {
-    try {
-      const result = await reservationsApi.update(tripId, id, data)
-      set(state => ({
-        reservations: state.reservations.map(r => r.id === id ? result.reservation : r)
-      }))
-      return result.reservation
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error updating reservation'))
-    }
-  },
-
-  toggleReservationStatus: async (tripId, id) => {
-    const prev = get().reservations
-    const current = prev.find(r => r.id === id)
-    if (!current) return
-    const newStatus: 'pending' | 'confirmed' = current.status === 'confirmed' ? 'pending' : 'confirmed'
+  updateReservation: async (_tripId, id, data) => {
+    const convexTripId = getTripId(get)
+    const result = await getClient().mutation(api.reservations.update, { tripId: convexTripId, itemId: String(id), data })
     set(state => ({
-      reservations: state.reservations.map(r => r.id === id ? { ...r, status: newStatus } : r)
+      reservations: state.reservations.map(r => String(r.id) === String(id) ? result.reservation as any : r)
+    }))
+    return result.reservation as any
+  },
+
+  toggleReservationStatus: async (_tripId, id) => {
+    const convexTripId = getTripId(get)
+    const prev = get().reservations
+    const current = prev.find(r => String(r.id) === String(id))
+    if (!current) return
+    const newStatus = current.status === 'confirmed' ? 'pending' : 'confirmed'
+    set(state => ({
+      reservations: state.reservations.map(r => String(r.id) === String(id) ? { ...r, status: newStatus } as any : r)
     }))
     try {
-      await reservationsApi.update(tripId, id, { status: newStatus })
+      await getClient().mutation(api.reservations.update, { tripId: convexTripId, itemId: String(id), data: { status: newStatus } })
     } catch {
       set({ reservations: prev })
     }
   },
 
-  deleteReservation: async (tripId, id) => {
-    try {
-      await reservationsApi.delete(tripId, id)
-      set(state => ({ reservations: state.reservations.filter(r => r.id !== id) }))
-    } catch (err: unknown) {
-      throw new Error(getApiErrorMessage(err, 'Error deleting reservation'))
-    }
+  deleteReservation: async (_tripId, id) => {
+    const convexTripId = getTripId(get)
+    set(state => ({ reservations: state.reservations.filter(r => String(r.id) !== String(id)) }))
+    await getClient().mutation(api.reservations.remove, { tripId: convexTripId, itemId: String(id) })
   },
 })

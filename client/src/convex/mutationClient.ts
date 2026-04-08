@@ -19,6 +19,80 @@ function getClient() {
 
 // ── Trips ────────────────────────────────────────────────
 
+export async function convexListTrips() {
+  const client = getClient()
+  return client.query(api.trips.listTrips, {})
+}
+
+export async function convexResolveTripId(tripParam: string) {
+  const client = getClient()
+  return client.query(api.trips.resolveTripId, { tripParam })
+}
+
+export async function convexGetTrip(tripId: Id<'plannerTrips'>) {
+  const client = getClient()
+  return client.query(api.trips.getTrip, { tripId })
+}
+
+export async function convexCreateTrip(data: Record<string, any>) {
+  const client = getClient()
+  return client.mutation(api.trips.createTrip, {
+    title: data.name ?? data.title,
+    description: data.description,
+    startDate: data.start_date ?? data.startDate,
+    endDate: data.end_date ?? data.endDate,
+    currency: data.currency,
+    destinationName: data.destination_name ?? data.destinationName,
+    destinationAddress: data.destination_address ?? data.destinationAddress,
+    destinationLat: toOptionalNumber(data.destination_lat ?? data.destinationLat),
+    destinationLng: toOptionalNumber(data.destination_lng ?? data.destinationLng),
+    destinationViewportSouth: toOptionalNumber(data.destination_viewport_south ?? data.destinationViewportSouth),
+    destinationViewportWest: toOptionalNumber(data.destination_viewport_west ?? data.destinationViewportWest),
+    destinationViewportNorth: toOptionalNumber(data.destination_viewport_north ?? data.destinationViewportNorth),
+    destinationViewportEast: toOptionalNumber(data.destination_viewport_east ?? data.destinationViewportEast),
+  } as any)
+}
+
+export async function convexDeleteTrip(tripId: Id<'plannerTrips'>) {
+  const client = getClient()
+  return client.mutation(api.trips.deleteTrip, { tripId })
+}
+
+export async function convexArchiveTrip(tripId: Id<'plannerTrips'>) {
+  const client = getClient()
+  return client.mutation(api.trips.archiveTrip, { tripId })
+}
+
+export async function convexUnarchiveTrip(tripId: Id<'plannerTrips'>) {
+  const client = getClient()
+  return client.mutation(api.trips.unarchiveTrip, { tripId })
+}
+
+export async function convexCopyTrip(tripId: Id<'plannerTrips'>, title?: string) {
+  const client = getClient()
+  return client.mutation(api.trips.copyTrip, { tripId, title })
+}
+
+export async function convexGetTripMembers(tripId: Id<'plannerTrips'>) {
+  const client = getClient()
+  return client.query(api.trips.getTripMembers, { tripId })
+}
+
+export async function convexAddTripMember(tripId: Id<'plannerTrips'>, identifier: string) {
+  const client = getClient()
+  // Try email first, then username
+  const isEmail = identifier.includes('@')
+  return client.mutation(api.trips.addTripMember, {
+    tripId,
+    ...(isEmail ? { email: identifier } : { username: identifier }),
+  } as any)
+}
+
+export async function convexRemoveTripMember(tripId: Id<'plannerTrips'>, memberAuthUserKey: string) {
+  const client = getClient()
+  return client.mutation(api.trips.removeTripMember, { tripId, memberAuthUserKey })
+}
+
 export async function convexUpdateTrip(
   tripId: Id<'plannerTrips'>,
   data: Record<string, any>,
@@ -33,16 +107,22 @@ export async function convexUpdateTrip(
     currency: data.currency,
     destinationName: data.destination_name ?? data.destinationName,
     destinationAddress: data.destination_address ?? data.destinationAddress,
-    destinationLat: data.destination_lat ?? data.destinationLat,
-    destinationLng: data.destination_lng ?? data.destinationLng,
-    destinationViewportSouth: data.destination_viewport_south ?? data.destinationViewportSouth,
-    destinationViewportWest: data.destination_viewport_west ?? data.destinationViewportWest,
-    destinationViewportNorth: data.destination_viewport_north ?? data.destinationViewportNorth,
-    destinationViewportEast: data.destination_viewport_east ?? data.destinationViewportEast,
+    destinationLat: toOptionalNumber(data.destination_lat ?? data.destinationLat),
+    destinationLng: toOptionalNumber(data.destination_lng ?? data.destinationLng),
+    destinationViewportSouth: toOptionalNumber(data.destination_viewport_south ?? data.destinationViewportSouth),
+    destinationViewportWest: toOptionalNumber(data.destination_viewport_west ?? data.destinationViewportWest),
+    destinationViewportNorth: toOptionalNumber(data.destination_viewport_north ?? data.destinationViewportNorth),
+    destinationViewportEast: toOptionalNumber(data.destination_viewport_east ?? data.destinationViewportEast),
   } as any)
 }
 
 // ── Places ───────────────────────────────────────────────
+
+function toOptionalNumber(value: unknown): number | null | undefined {
+  if (value == null || value === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 export async function convexCreatePlace(
   tripId: Id<'plannerTrips'>,
@@ -53,10 +133,10 @@ export async function convexCreatePlace(
     tripId,
     name: data.name,
     description: data.description,
-    lat: data.lat,
-    lng: data.lng,
+    lat: toOptionalNumber(data.lat),
+    lng: toOptionalNumber(data.lng),
     address: data.address,
-    categoryId: data.category_id ?? data.categoryId,
+    categoryId: (data.category_id ?? data.categoryId) || null,
     price: data.price != null ? Number(data.price) : undefined,
     notes: data.notes,
     imageUrl: data.image_url ?? data.imageUrl,
@@ -81,10 +161,10 @@ export async function convexUpdatePlace(
     placeId,
     name: data.name,
     description: data.description,
-    lat: data.lat,
-    lng: data.lng,
+    lat: toOptionalNumber(data.lat),
+    lng: toOptionalNumber(data.lng),
     address: data.address,
-    categoryId: data.category_id ?? data.categoryId,
+    categoryId: (data.category_id ?? data.categoryId) || null,
     price: data.price != null ? Number(data.price) : undefined,
     notes: data.notes,
     imageUrl: data.image_url ?? data.imageUrl,
@@ -144,6 +224,33 @@ export async function convexMoveAssignment(
   return client.mutation(api.assignments.moveAssignment, { tripId, assignmentId, newDayId, orderIndex })
 }
 
+export async function convexUpdateAssignmentTime(
+  tripId: Id<'plannerTrips'>,
+  assignmentId: Id<'plannerDayAssignments'>,
+  times: { place_time?: string | null; end_time?: string | null },
+) {
+  const client = getClient()
+  return client.mutation(api.assignments.updateAssignmentTime, {
+    tripId,
+    assignmentId,
+    assignmentTime: times.place_time ?? null,
+    assignmentEndTime: times.end_time ?? null,
+  })
+}
+
+export async function convexSetAssignmentParticipants(
+  tripId: Id<'plannerTrips'>,
+  assignmentId: Id<'plannerDayAssignments'>,
+  userAuthKeys: string[],
+) {
+  const client = getClient()
+  return client.mutation(api.assignments.setParticipants, {
+    tripId,
+    assignmentId,
+    userAuthKeys,
+  })
+}
+
 // ── Day Notes ────────────────────────────────────────────
 
 export async function convexUpdateDay(
@@ -201,12 +308,12 @@ export async function convexCreateLeg(
     tripId,
     destinationName: data.destination_name ?? data.destinationName,
     destinationAddress: data.destination_address ?? data.destinationAddress,
-    destinationLat: data.destination_lat ?? data.destinationLat,
-    destinationLng: data.destination_lng ?? data.destinationLng,
-    destinationViewportSouth: data.destination_viewport_south ?? data.destinationViewportSouth,
-    destinationViewportWest: data.destination_viewport_west ?? data.destinationViewportWest,
-    destinationViewportNorth: data.destination_viewport_north ?? data.destinationViewportNorth,
-    destinationViewportEast: data.destination_viewport_east ?? data.destinationViewportEast,
+    destinationLat: toOptionalNumber(data.destination_lat ?? data.destinationLat),
+    destinationLng: toOptionalNumber(data.destination_lng ?? data.destinationLng),
+    destinationViewportSouth: toOptionalNumber(data.destination_viewport_south ?? data.destinationViewportSouth),
+    destinationViewportWest: toOptionalNumber(data.destination_viewport_west ?? data.destinationViewportWest),
+    destinationViewportNorth: toOptionalNumber(data.destination_viewport_north ?? data.destinationViewportNorth),
+    destinationViewportEast: toOptionalNumber(data.destination_viewport_east ?? data.destinationViewportEast),
     startDayNumber: data.start_day_number ?? data.startDayNumber,
     endDayNumber: data.end_day_number ?? data.endDayNumber,
     color: data.color,
@@ -224,12 +331,12 @@ export async function convexUpdateLeg(
     legId,
     destinationName: data.destination_name ?? data.destinationName,
     destinationAddress: data.destination_address ?? data.destinationAddress,
-    destinationLat: data.destination_lat ?? data.destinationLat,
-    destinationLng: data.destination_lng ?? data.destinationLng,
-    destinationViewportSouth: data.destination_viewport_south ?? data.destinationViewportSouth,
-    destinationViewportWest: data.destination_viewport_west ?? data.destinationViewportWest,
-    destinationViewportNorth: data.destination_viewport_north ?? data.destinationViewportNorth,
-    destinationViewportEast: data.destination_viewport_east ?? data.destinationViewportEast,
+    destinationLat: toOptionalNumber(data.destination_lat ?? data.destinationLat),
+    destinationLng: toOptionalNumber(data.destination_lng ?? data.destinationLng),
+    destinationViewportSouth: toOptionalNumber(data.destination_viewport_south ?? data.destinationViewportSouth),
+    destinationViewportWest: toOptionalNumber(data.destination_viewport_west ?? data.destinationViewportWest),
+    destinationViewportNorth: toOptionalNumber(data.destination_viewport_north ?? data.destinationViewportNorth),
+    destinationViewportEast: toOptionalNumber(data.destination_viewport_east ?? data.destinationViewportEast),
     startDayNumber: data.start_day_number ?? data.startDayNumber,
     endDayNumber: data.end_day_number ?? data.endDayNumber,
     color: data.color,

@@ -1,6 +1,12 @@
 import { create } from 'zustand'
-import apiClient from '../api/client'
-import type { AxiosResponse } from 'axios'
+// Vacay store stubbed until migrated to Convex
+const apiClient = {
+  get: async (_url: string) => ({ data: { plans: [], entries: [], stats: [], holidays: {} } }),
+  post: async (_url: string, _data?: any) => ({ data: { plan: {}, entry: {} } }),
+  put: async (_url: string, _data?: any) => ({ data: {} }),
+  delete: async (_url: string) => ({ data: {} }),
+}
+type AxiosResponse = { data: any }
 import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo, VacayHolidayCalendar } from '../types'
 
 const ax = apiClient

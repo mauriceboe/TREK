@@ -3,6 +3,7 @@ import { db } from '../db/database';
 import { authenticate } from '../middleware/auth';
 import { broadcast } from '../websocket';
 import { AuthRequest } from '../types';
+import { checkSsrf } from '../utils/ssrfGuard';
 
 const router = express.Router();
 
@@ -17,9 +18,17 @@ router.get('/settings', authenticate, (req: Request, res: Response) => {
   });
 });
 
-router.put('/settings', authenticate, (req: Request, res: Response) => {
+router.put('/settings', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { immich_url, immich_api_key } = req.body;
+
+  if (immich_url?.trim()) {
+    const ssrf = await checkSsrf(immich_url.trim());
+    if (!ssrf.allowed) {
+      return res.status(400).json({ error: ssrf.error || 'Invalid Immich URL' });
+    }
+  }
+
   db.prepare('UPDATE users SET immich_url = ?, immich_api_key = ? WHERE id = ?').run(
     immich_url?.trim() || null,
     immich_api_key?.trim() || null,

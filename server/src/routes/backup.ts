@@ -223,6 +223,9 @@ function parseAutoBackupBody(body: Record<string, unknown>): {
   enabled: boolean;
   interval: string;
   keep_days: number;
+  hour: number;
+  day_of_week: number;
+  day_of_month: number;
 } {
   const enabled = body.enabled === true || body.enabled === 'true' || body.enabled === 1;
   const rawInterval = body.interval;
@@ -240,7 +243,7 @@ function parseAutoBackupBody(body: Record<string, unknown>): {
     keepNum = NaN;
   }
   const keep_days = Number.isFinite(keepNum) && keepNum >= 0 ? keepNum : 7;
-  return { enabled, interval, keep_days };
+  return { enabled, interval, keep_days, hour: 2, day_of_week: 0, day_of_month: 1 };
 }
 
 router.put('/auto-settings', (req: Request, res: Response) => {

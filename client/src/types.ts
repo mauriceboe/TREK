@@ -15,7 +15,7 @@ export interface User {
 export interface Trip {
   id: number | string
   name: string
-  title: string | null
+  title?: string | null
   description: string | null
   currency: string | null
   start_date: string

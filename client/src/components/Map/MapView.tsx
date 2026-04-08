@@ -8,7 +8,7 @@ import L from 'leaflet'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 // @ts-ignore
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
-import { mapsApi } from '../../api/client'
+import { convexMapsApi as mapsApi } from '../../convex/mapsClient'
 import { getCategoryIcon, CATEGORY_ICON_MAP } from '../shared/categoryIcons'
 
 function categoryIconSvg(iconName: string | null | undefined, size: number): string {

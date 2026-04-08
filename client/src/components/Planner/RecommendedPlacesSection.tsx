@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Loader2, MapPin, Sparkles, Star } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
-import { tripsApi } from '../../api/client'
+// Recommendations feature stubbed — will be re-implemented with Convex
+const tripsApi: any = { recommendations: async (_id: any, _params?: any) => ({ places: [] }) }
 import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
 import type { RecommendedPlace, Trip, TripLeg, Place, AssignmentsMap } from '../../types'
