@@ -184,6 +184,39 @@ describe('MCP API token auth', () => {
       .send({ jsonrpc: '2.0', method: 'initialize', id: 1 });
     expect(res.status).toBe(401);
   });
+
+  it('MCP — POST /mcp with valid trek_ token as ?token= query param authenticates successfully', async () => {
+    const { user } = createUser(testDb);
+    const { rawToken } = createMcpToken(testDb, user.id);
+    testDb.prepare("UPDATE addons SET enabled = 1 WHERE id = 'mcp'").run();
+
+    const res = await request(app)
+      .post(`/mcp?token=${rawToken}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .send({ jsonrpc: '2.0', method: 'initialize', id: 1, params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1' } } });
+    expect(res.status).toBe(200);
+  });
+
+  it('MCP — GET /mcp with valid JWT as ?token= query param passes auth', async () => {
+    const { user } = createUser(testDb);
+    const token = generateToken(user.id);
+    testDb.prepare("UPDATE addons SET enabled = 1 WHERE id = 'mcp'").run();
+
+    // Auth passes: valid token in query param → 404 (unknown session), not 401
+    const res = await request(app)
+      .get(`/mcp?token=${token}`)
+      .set('Mcp-Session-Id', 'nonexistent-session-id');
+    expect(res.status).toBe(404);
+  });
+
+  it('MCP — POST /mcp with invalid token as ?token= query param returns 401', async () => {
+    testDb.prepare("UPDATE addons SET enabled = 1 WHERE id = 'mcp'").run();
+
+    const res = await request(app)
+      .post('/mcp?token=trek_totally_fake_token_not_in_db')
+      .send({ jsonrpc: '2.0', method: 'initialize', id: 1 });
+    expect(res.status).toBe(401);
+  });
 });
 
 describe('MCP session management', () => {

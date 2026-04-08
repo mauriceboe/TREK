@@ -56,6 +56,14 @@ The Settings page shows a ready-to-copy client configuration snippet. For **Clau
 
 > The path to `npx` may need to be adjusted for your system (e.g. `C:\PROGRA~1\nodejs\npx.cmd` on Windows).
 
+If your MCP client cannot set custom headers, you can pass the token as a URL query parameter instead:
+
+```
+https://your-trek-instance.com/mcp?token=trek_your_token_here
+```
+
+> **Security note:** Query parameters may appear in server logs. Prefer the `Authorization` header when your client supports it.
+
 ---
 
 ## Limitations & Important Notes
