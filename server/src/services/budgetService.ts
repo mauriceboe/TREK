@@ -14,12 +14,13 @@ export function verifyTripAccess(tripId: string | number, userId: number) {
 }
 
 function loadItemMembers(itemId: number | string) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT bm.user_id, bm.paid, u.username, u.avatar
     FROM budget_item_members bm
     JOIN users u ON bm.user_id = u.id
     WHERE bm.budget_item_id = ?
   `).all(itemId) as BudgetItemMember[];
+  return rows.map(m => ({ ...m, avatar_url: avatarUrl(m) }));
 }
 
 // ---------------------------------------------------------------------------
