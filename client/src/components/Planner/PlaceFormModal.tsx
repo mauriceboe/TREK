@@ -236,6 +236,7 @@ export default function PlaceFormModal({
               onChange={e => setMapsSearch(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleMapsSearch())}
               placeholder={t('places.mapsSearchPlaceholder')}
+              autoFocus
               className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 bg-white"
             />
             <button
