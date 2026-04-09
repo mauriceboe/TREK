@@ -864,6 +864,10 @@ function runMigrations(db: Database.Database): void {
         for (const d of matchingDays) ins.run(r.id, d.id, r.day_plan_position);
       }
     },
+    // Migration: Add sections to places for rich text description blocks
+    () => {
+      try { db.exec('ALTER TABLE places ADD COLUMN sections TEXT DEFAULT NULL'); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+    },
   ];
 
   if (currentVersion < migrations.length) {

@@ -758,6 +758,16 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'trip.toast.reservationAdded': 'Reserva adicionada',
   'trip.toast.deleted': 'Excluído',
   'trip.confirm.deletePlace': 'Tem certeza de que deseja excluir este lugar?',
+
+  // Places
+  'places.tabs.general': 'Geral',
+  'places.tabs.sections': 'Seções de Descrição',
+  'places.sections.add': 'Adicionar Seção',
+  'places.sections.title': 'Título da Seção',
+  'places.sections.content': 'Conteúdo (Markdown)',
+  'places.sections.preview': 'Visualização',
+  'places.sections.noSections': 'Nenhuma seção de descrição ainda.',
+  'places.untitledSection': 'Seção sem Título',
   'trip.loadingPhotos': 'Carregando fotos dos lugares...',
 
   // Day Plan Sidebar

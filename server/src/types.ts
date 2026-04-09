@@ -69,6 +69,7 @@ export interface Place {
   website?: string | null;
   phone?: string | null;
   transport_mode?: string;
+  sections?: string | null;
   created_at?: string;
   updated_at?: string;
 }

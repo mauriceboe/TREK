@@ -102,6 +102,7 @@ function createTables(db: Database.Database): void {
       website TEXT,
       phone TEXT,
       transport_mode TEXT DEFAULT 'walking',
+      sections TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

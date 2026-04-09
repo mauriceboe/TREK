@@ -77,26 +77,26 @@ export function createPlace(
     place_time?: string; end_time?: string;
     duration_minutes?: number; notes?: string; image_url?: string;
     google_place_id?: string; osm_id?: string; website?: string; phone?: string;
-    transport_mode?: string; tags?: number[];
+    transport_mode?: string; sections?: string; tags?: number[];
   },
 ) {
   const {
     name, description, lat, lng, address, category_id, price, currency,
     place_time, end_time,
     duration_minutes, notes, image_url, google_place_id, osm_id, website, phone,
-    transport_mode, tags = [],
+    transport_mode, sections, tags = [],
   } = body;
 
   const result = db.prepare(`
     INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, price, currency,
       place_time, end_time,
-      duration_minutes, notes, image_url, google_place_id, osm_id, website, phone, transport_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      duration_minutes, notes, image_url, google_place_id, osm_id, website, phone, transport_mode, sections)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     tripId, name, description || null, lat || null, lng || null, address || null,
     category_id || null, price || null, currency || null,
     place_time || null, end_time || null, duration_minutes || 60, notes || null, image_url || null,
-    google_place_id || null, osm_id || null, website || null, phone || null, transport_mode || 'walking',
+    google_place_id || null, osm_id || null, website || null, phone || null, transport_mode || 'walking', sections || null,
   );
 
   const placeId = result.lastInsertRowid;
@@ -134,7 +134,7 @@ export function updatePlace(
     place_time?: string; end_time?: string;
     duration_minutes?: number; notes?: string; image_url?: string;
     google_place_id?: string; website?: string; phone?: string;
-    transport_mode?: string; tags?: number[];
+    transport_mode?: string; sections?: string; tags?: number[];
   },
 ) {
   const existingPlace = db.prepare('SELECT * FROM places WHERE id = ? AND trip_id = ?').get(placeId, tripId) as Place | undefined;
@@ -144,7 +144,7 @@ export function updatePlace(
     name, description, lat, lng, address, category_id, price, currency,
     place_time, end_time,
     duration_minutes, notes, image_url, google_place_id, website, phone,
-    transport_mode, tags,
+    transport_mode, sections, tags,
   } = body;
 
   db.prepare(`
@@ -166,6 +166,7 @@ export function updatePlace(
       website = ?,
       phone = ?,
       transport_mode = COALESCE(?, transport_mode),
+      sections = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
@@ -186,6 +187,7 @@ export function updatePlace(
     website !== undefined ? website : existingPlace.website,
     phone !== undefined ? phone : existingPlace.phone,
     transport_mode || null,
+    sections !== undefined ? sections : existingPlace.sections,
     placeId,
   );
 

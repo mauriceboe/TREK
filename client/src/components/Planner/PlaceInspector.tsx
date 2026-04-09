@@ -8,7 +8,7 @@ import { mapsApi } from '../../api/client'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getCategoryIcon } from '../shared/categoryIcons'
 import { useTranslation } from '../../i18n'
-import type { Place, Category, Day, Assignment, Reservation, TripFile, AssignmentsMap } from '../../types'
+import type { Place, Category, Day, Assignment, Reservation, TripFile, AssignmentsMap, TripMember } from '../../types'
 
 const detailsCache = new Map()
 
@@ -99,11 +99,7 @@ function formatFileSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-interface TripMember {
-  id: number
-  username: string
-  avatar_url?: string | null
-}
+
 
 interface PlaceInspectorProps {
   place: Place | null
@@ -185,7 +181,7 @@ export default function PlaceInspector({
       for (const file of selectedFiles) {
         const fd = new FormData()
         fd.append('file', file)
-        fd.append('place_id', place.id)
+        fd.append('place_id', String(place.id))
         await onFileUpload(fd)
       }
       setFilesExpanded(true)
@@ -325,7 +321,7 @@ export default function PlaceInspector({
                 />
               )
             })()}
-            {place.price > 0 && (
+            {Number(place.price) > 0 && (
               <Chip icon={<Euro size={12} />} text={`${place.price} ${place.currency || '€'}`} color="#059669" bg="#ecfdf5" />
             )}
           </div>
@@ -346,6 +342,29 @@ export default function PlaceInspector({
               <Markdown remarkPlugins={[remarkGfm]}>{place.description || place.notes || googleDetails?.summary || ''}</Markdown>
             </div>
           )}
+
+          {/* Description Sections */}
+          {(() => {
+            try {
+              const sections = JSON.parse(place.sections || '[]')
+              if (!sections || !Array.isArray(sections) || sections.length === 0) return null
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {sections.map((section: any, idx) => (
+                    <div key={section.id || idx} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-faint)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                      <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-faint)', background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 4, height: 14, borderRadius: 2, background: 'var(--accent, #000)' }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.1px' }}>{section.title || t('places.untitledSection')}</span>
+                      </div>
+                      <div className="collab-note-md" style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', lineHeight: '1.6' }}>
+                        <Markdown remarkPlugins={[remarkGfm]}>{section.content || ''}</Markdown>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            } catch { return null }
+          })()}
 
           {/* Reservation + Participants — side by side */}
           {(() => {
@@ -603,7 +622,7 @@ export default function PlaceInspector({
               <ActionButton onClick={() => onRemoveAssignment(selectedDayId, assignmentInDay.id)} variant="ghost" icon={<Minus size={13} />}
                 label={<><span className="hidden sm:inline">{t('inspector.removeFromDay')}</span><span className="sm:hidden">Remove</span></>} />
             ) : (
-              <ActionButton onClick={() => onAssignToDay(place.id)} variant="primary" icon={<Plus size={13} />} label={t('inspector.addToDay')} />
+              <ActionButton onClick={() => onAssignToDay(place.id, selectedDayId)} variant="primary" icon={<Plus size={13} />} label={t('inspector.addToDay')} />
             )
           )}
           {googleDetails?.google_maps_url && (

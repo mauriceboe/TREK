@@ -798,6 +798,17 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   // Day Plan Sidebar
   'dayplan.emptyDay': 'No places planned for this day',
   'dayplan.cannotReorderTransport': 'Bookings with a fixed time cannot be reordered',
+  'dayplan.tripNote': 'Trip Note',
+
+  // Places
+  'places.tabs.general': 'General',
+  'places.tabs.sections': 'Description Sections',
+  'places.sections.add': 'Add Section',
+  'places.sections.title': 'Section Title',
+  'places.sections.content': 'Content (Markdown)',
+  'places.sections.preview': 'Preview',
+  'places.sections.noSections': 'No description sections yet.',
+  'places.untitledSection': 'Untitled Section',
   'dayplan.confirmRemoveTimeTitle': 'Remove time?',
   'dayplan.confirmRemoveTimeBody': 'This place has a fixed time ({time}). Moving it will remove the time and allow free sorting.',
   'dayplan.confirmRemoveTimeAction': 'Remove time & move',
@@ -1128,7 +1139,6 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'packing.saveAsTemplate': 'Save as template',
   'packing.templateName': 'Template name',
   'packing.templateSaved': 'Packing list saved as template',
-  'packing.assignUser': 'Assign user',
   'packing.bags': 'Bags',
   'packing.noBag': 'Unassigned',
   'packing.totalWeight': 'Total weight',

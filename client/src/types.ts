@@ -55,6 +55,13 @@ export interface Place {
   route_geometry: string | null
   place_time: string | null
   end_time: string | null
+  sections?: string | null
+  notes?: string | null
+  transport_mode?: string
+  website?: string | null
+  phone?: string | null
+  currency?: string | null
+  duration_minutes?: number
   created_at: string
 }
 
@@ -65,6 +72,7 @@ export interface Assignment {
   order_index: number
   notes: string | null
   place: Place
+  participants?: { user_id: number; username: string; avatar_url?: string | null }[]
 }
 
 export interface DayNote {
@@ -110,6 +118,7 @@ export interface Category {
   id: number
   name: string
   icon: string | null
+  color?: string
   user_id: number
 }
 
@@ -174,6 +183,7 @@ export interface TripFile {
   created_at: string
   reservation_title?: string
   linked_reservation_ids?: number[]
+  linked_place_ids?: number[]
   url?: string
 }
 
@@ -248,6 +258,7 @@ export interface TripMember {
   username: string
   email?: string
   avatar_url?: string | null
+  avatar?: string | null
   role?: string
 }
 

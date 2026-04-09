@@ -6,7 +6,9 @@ import { useAuthStore } from '../../store/authStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 import { useToast } from '../shared/Toast'
-import { Search, Paperclip, X, AlertTriangle } from 'lucide-react'
+import { Search, Paperclip, X, AlertTriangle, Plus, Pencil, Eye, Layout, ChevronDown, ChevronUp } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useTranslation } from '../../i18n'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import type { Place, Category, Assignment } from '../../types'
@@ -23,6 +25,11 @@ interface PlaceFormData {
   notes: string
   transport_mode: string
   website: string
+  sections: string
+  google_place_id?: string | null
+  osm_id?: string | null
+  phone?: string | null
+  _pendingFiles?: File[]
 }
 
 const DEFAULT_FORM: PlaceFormData = {
@@ -37,6 +44,7 @@ const DEFAULT_FORM: PlaceFormData = {
   notes: '',
   transport_mode: 'walking',
   website: '',
+  sections: '[]',
 }
 
 interface PlaceFormModalProps {
@@ -47,7 +55,7 @@ interface PlaceFormModalProps {
   prefillCoords?: { lat: number; lng: number; name?: string; address?: string } | null
   tripId: number
   categories: Category[]
-  onCategoryCreated: (category: Category) => void
+  onCategoryCreated: (category: any) => Promise<any>
   assignmentId: number | null
   dayAssignments?: Assignment[]
 }
@@ -64,6 +72,7 @@ export default function PlaceFormModal({
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [pendingFiles, setPendingFiles] = useState([])
+  const [activeTab, setActiveTab] = useState<'general' | 'sections'>('general')
   const fileRef = useRef(null)
   const toast = useToast()
   const { t, language } = useTranslation()
@@ -78,14 +87,15 @@ export default function PlaceFormModal({
         name: place.name || '',
         description: place.description || '',
         address: place.address || '',
-        lat: place.lat || '',
-        lng: place.lng || '',
-        category_id: place.category_id || '',
+        lat: place.lat !== null && place.lat !== undefined ? String(place.lat) : '',
+        lng: place.lng !== null && place.lng !== undefined ? String(place.lng) : '',
+        category_id: place.category_id !== null && place.category_id !== undefined ? String(place.category_id) : '',
         place_time: place.place_time || '',
         end_time: place.end_time || '',
         notes: place.notes || '',
         transport_mode: place.transport_mode || 'walking',
         website: place.website || '',
+        sections: place.sections || '[]',
       })
     } else if (prefillCoords) {
       setForm({
@@ -101,7 +111,7 @@ export default function PlaceFormModal({
     setPendingFiles([])
   }, [place, prefillCoords, isOpen])
 
-  const handleChange = (field, value) => {
+  const handleChange = (field: keyof PlaceFormData, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
@@ -155,8 +165,10 @@ export default function PlaceFormModal({
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return
     try {
-      const cat = await onCategoryCreated?.({ name: newCategoryName, color: '#6366f1', icon: 'MapPin' })
-      if (cat) setForm(prev => ({ ...prev, category_id: cat.id }))
+      const cat = await onCategoryCreated({ name: newCategoryName, color: '#6366f1', icon: 'MapPin' })
+      if (cat && typeof cat === 'object' && 'id' in cat) {
+        handleChange('category_id', String(cat.id))
+      }
       setNewCategoryName('')
       setShowNewCategory(false)
     } catch (err: unknown) {
@@ -179,11 +191,11 @@ export default function PlaceFormModal({
     if (!canUploadFiles) return
     const items = e.clipboardData?.items
     if (!items) return
-    for (const item of Array.from(items)) {
+    for (const item of Array.from(items) as any[]) {
       if (item.type.startsWith('image/') || item.type === 'application/pdf') {
         e.preventDefault()
         const file = item.getAsFile()
-        if (file) setPendingFiles(prev => [...prev, file])
+        if (file) setPendingFiles((prev: any[]) => [...prev, file])
         return
       }
     }
@@ -201,9 +213,9 @@ export default function PlaceFormModal({
     try {
       await onSave({
         ...form,
-        lat: form.lat ? parseFloat(form.lat) : null,
-        lng: form.lng ? parseFloat(form.lng) : null,
-        category_id: form.category_id || null,
+        lat: form.lat ? String(parseFloat(form.lat)) : '',
+        lng: form.lng ? String(parseFloat(form.lng)) : '',
+        category_id: form.category_id ? String(form.category_id) : '',
         _pendingFiles: pendingFiles.length > 0 ? pendingFiles : undefined,
       })
       onClose()
@@ -221,9 +233,28 @@ export default function PlaceFormModal({
       title={place ? t('places.editPlace') : t('places.addPlace')}
       size="lg"
     >
+      <div className="flex border-b border-gray-100 mb-4">
+        <button
+          type="button"
+          onClick={() => setActiveTab('general')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'general' ? 'border-slate-900 text-slate-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          {t('places.tabs.general')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('sections')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'sections' ? 'border-slate-900 text-slate-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          {t('places.tabs.sections')}
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-4" onPaste={handlePaste}>
-        {/* Place Search */}
-        <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+        {activeTab === 'general' ? (
+          <>
+            {/* Place Search */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
           {!hasMapsKey && (
             <p className="mb-2 text-xs" style={{ color: 'var(--text-faint)' }}>
               {t('places.osmActive')}
@@ -340,7 +371,7 @@ export default function PlaceFormModal({
                 options={[
                   { value: '', label: t('places.noCategory') },
                   ...(categories || []).map(c => ({
-                    value: c.id,
+                    value: String(c.id),
                     label: c.name,
                   })),
                 ]}
@@ -391,34 +422,42 @@ export default function PlaceFormModal({
           />
         </div>
 
-        {/* File Attachments */}
-        {canUploadFiles && (
-          <div className="border border-gray-200 rounded-xl p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-gray-700">{t('files.title')}</label>
-              <button type="button" onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
-                <Paperclip size={12} /> {t('files.attach')}
-              </button>
-            </div>
-            <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileAdd} />
-            {pendingFiles.length > 0 && (
-              <div className="space-y-1">
-                {pendingFiles.map((file, idx) => (
-                  <div key={idx} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 text-xs">
-                    <Paperclip size={10} className="text-slate-400 shrink-0" />
-                    <span className="truncate flex-1 text-slate-600">{file.name}</span>
-                    <button type="button" onClick={() => handleRemoveFile(idx)} className="text-slate-400 hover:text-red-500 shrink-0">
-                      <X size={12} />
-                    </button>
+            {/* File Attachments */}
+            {canUploadFiles && (
+              <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">{t('files.title')}</label>
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+                    <Paperclip size={12} /> {t('files.attach')}
+                  </button>
+                </div>
+                <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileAdd} />
+                {pendingFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 text-xs">
+                        <Paperclip size={10} className="text-slate-400 shrink-0" />
+                        <span className="truncate flex-1 text-slate-600">{file.name}</span>
+                        <button type="button" onClick={() => handleRemoveFile(idx)} className="text-slate-400 hover:text-red-500 shrink-0">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {pendingFiles.length === 0 && (
+                  <p className="text-xs text-slate-400">{t('files.pasteHint')}</p>
+                )}
               </div>
             )}
-            {pendingFiles.length === 0 && (
-              <p className="text-xs text-slate-400">{t('files.pasteHint')}</p>
-            )}
-          </div>
+          </>
+        ) : (
+          <SectionsEditor
+            sections={JSON.parse(form.sections || '[]')}
+            onChange={newSections => handleChange('sections', JSON.stringify(newSections))}
+            t={t}
+          />
         )}
 
         {/* Actions */}
@@ -445,7 +484,7 @@ export default function PlaceFormModal({
 
 interface TimeSectionProps {
   form: PlaceFormData
-  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void
+  handleChange: (field: keyof PlaceFormData, value: any) => void
   assignmentId: number | null
   dayAssignments: Assignment[]
   hasTimeError: boolean
@@ -507,6 +546,174 @@ function TimeSection({ form, handleChange, assignmentId, dayAssignments, hasTime
           </span>
         </div>
       )}
+    </div>
+  )
+}
+
+interface PlaceSection {
+  id: string
+  title: string
+  content: string
+}
+
+interface SectionsEditorProps {
+  sections: PlaceSection[]
+  onChange: (sections: PlaceSection[]) => void
+  t: (key: string) => string
+}
+
+function SectionsEditor({ sections, onChange, t }: SectionsEditorProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ title: '', content: '' })
+  const [showPreview, setShowPreview] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const handleAdd = () => {
+    const id = Date.now().toString()
+    const newSection = { id, title: '', content: '' }
+    onChange([...sections, newSection])
+    setEditingId(id)
+    setExpandedId(id)
+    setEditForm({ title: '', content: '' })
+    setShowPreview(false)
+  }
+
+  const handleRemove = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    onChange(sections.filter(s => s.id !== id))
+    if (editingId === id) setEditingId(null)
+    if (expandedId === id) setExpandedId(null)
+  }
+
+  const handleEdit = (section: PlaceSection, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingId(section.id)
+    setExpandedId(section.id)
+    setEditForm({ title: section.title, content: section.content })
+    setShowPreview(false)
+  }
+
+  const saveEdit = () => {
+    onChange(sections.map(s => s.id === editingId ? { ...s, ...editForm } : s))
+    setEditingId(null)
+  }
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {sections.length === 0 && (
+          <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <Layout className="mx-auto text-slate-300 mb-2" size={24} />
+            <p className="text-sm text-slate-500 font-medium">{t('places.sections.noSections')}</p>
+          </div>
+        )}
+        {sections.map(section => (
+          <div key={section.id} className={`border rounded-xl overflow-hidden transition-all ${expandedId === section.id ? 'border-slate-300 shadow-sm' : 'border-gray-200 hover:border-slate-300 bg-white'}`}>
+            {editingId === section.id ? (
+              <div className="p-4 space-y-4 bg-white">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">{t('places.sections.title')}</label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder={t('places.sections.title')}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400 transition-colors"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('places.sectionContent') || 'Content'}</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPreview(!showPreview)}
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${showPreview ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      {showPreview ? t('common.edit') : t('places.sections.preview')}
+                    </button>
+                  </div>
+                  
+                  {showPreview ? (
+                    <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm min-h-[160px] max-h-[300px] overflow-auto prose prose-slate prose-sm max-w-none">
+                      <Markdown remarkPlugins={[remarkGfm]}>{editForm.content || '*' + (t('places.emptyPreview') || 'No content to preview') + '*'}</Markdown>
+                    </div>
+                  ) : (
+                    <textarea
+                      value={editForm.content}
+                      onChange={e => setEditForm(prev => ({ ...prev, content: e.target.value }))}
+                      placeholder={t('places.sections.content')}
+                      rows={6}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400 transition-colors resize-none font-mono"
+                    />
+                  )}
+                  <p className="text-[10px] text-slate-400 ml-1 italic">{t('places.markdownHint') || 'Supports Markdown (**bold**, *italic*, lists)'}</p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setEditingId(null)} className="px-4 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+                    {t('common.cancel')}
+                  </button>
+                  <button type="button" onClick={saveEdit} className="bg-slate-900 text-white px-5 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-all">
+                    {t('common.save')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div 
+                  className="flex items-center justify-between p-3.5 cursor-pointer bg-white"
+                  onClick={() => toggleExpand(section.id)}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-width-0">
+                    <div className={`p-2 rounded-lg transition-colors ${expandedId === section.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      <Layout size={14} />
+                    </div>
+                    <div className="flex-1 min-width-0">
+                      <div className="font-bold text-sm text-slate-800 truncate">{section.title || t('places.untitledSection') || 'Untitled Section'}</div>
+                      {!expandedId && (
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">{section.content || '...'}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 ml-2">
+                    <button type="button" onClick={(e) => handleEdit(section, e)} className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-all">
+                      <Pencil size={14} />
+                    </button>
+                    <button type="button" onClick={(e) => handleRemove(section.id, e)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                      <X size={14} />
+                    </button>
+                    <div className="ml-1 text-slate-300">
+                      {expandedId === section.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  </div>
+                </div>
+                
+                {expandedId === section.id && section.content && (
+                  <div className="px-4 pb-4 pt-1 ml-[42px] mr-4 border-t border-slate-50">
+                    <div className="prose prose-slate prose-sm max-w-none text-slate-600 leading-relaxed">
+                      <Markdown remarkPlugins={[remarkGfm]}>{section.content}</Markdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleAdd}
+        className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all text-sm font-bold flex items-center justify-center gap-2 group"
+      >
+        <Plus size={18} className="group-hover:scale-110 transition-transform" /> 
+        {t('places.sections.add')}
+      </button>
     </div>
   )
 }
