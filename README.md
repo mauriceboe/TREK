@@ -32,7 +32,7 @@
 |---|---|
 | ![Plan Detail](docs/screenshot-plan-detail.png) | ![Bookings](docs/screenshot-bookings.png) |
 | ![Budget](docs/screenshot-budget.png) | ![Packing List](docs/screenshot-packing.png) |
-| ![Files](docs/screenshot-files.png) | |
+| ![Collab](docs/screenshot-collab.png) | |
 
 </details>
 

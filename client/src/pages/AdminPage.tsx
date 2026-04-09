@@ -30,6 +30,7 @@ interface AdminUser {
   last_login?: string | null
   online?: boolean
   oidc_issuer?: string | null
+  avatar_url?: string | null
 }
 
 interface AdminStats {
@@ -605,9 +606,13 @@ export default function AdminPage(): React.ReactElement {
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <div className="relative">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-700">
-                                  {u.username.charAt(0).toUpperCase()}
-                                </div>
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} alt={u.username} className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-700">
+                                    {u.username.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
                                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2" style={{ borderColor: 'var(--bg-card)', background: u.online ? '#22c55e' : '#94a3b8' }} />
                               </div>
                               <div>

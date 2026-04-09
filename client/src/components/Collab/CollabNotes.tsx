@@ -313,7 +313,6 @@ function NoteFormModal({ onClose, onSubmit, onDeleteFile, existingCategories, ca
         padding: 16,
         fontFamily: FONT,
       }}
-      onClick={onClose}
     >
       <form
         style={{

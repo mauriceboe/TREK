@@ -40,8 +40,8 @@ export const isDocker = (() => {
 
 export function listUsers() {
   const users = db.prepare(
-    'SELECT id, username, email, role, created_at, updated_at, last_login FROM users ORDER BY created_at DESC'
-  ).all() as Pick<User, 'id' | 'username' | 'email' | 'role' | 'created_at' | 'updated_at' | 'last_login'>[];
+    'SELECT id, username, email, role, avatar, created_at, updated_at, last_login FROM users ORDER BY created_at DESC'
+  ).all() as (Pick<User, 'id' | 'username' | 'email' | 'role' | 'created_at' | 'updated_at' | 'last_login'> & { avatar?: string | null })[];
   let onlineUserIds = new Set<number>();
   try {
     const { getOnlineUserIds } = require('../websocket');
@@ -49,6 +49,7 @@ export function listUsers() {
   } catch { /* */ }
   return users.map(u => ({
     ...u,
+    avatar_url: u.avatar ? `/uploads/avatars/${u.avatar}` : null,
     created_at: utcSuffix(u.created_at),
     updated_at: utcSuffix(u.updated_at as string),
     last_login: utcSuffix(u.last_login),

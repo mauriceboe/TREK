@@ -159,7 +159,7 @@ function createNotification(input: NotificationInput): number[] {
       notification: {
         ...row,
         sender_username: sender?.username ?? null,
-        sender_avatar: sender?.avatar ?? null,
+        sender_avatar: sender?.avatar ? `/uploads/avatars/${sender.avatar}` : null,
       },
     });
   }
@@ -219,7 +219,7 @@ export function createNotificationForRecipient(
     notification: {
       ...row,
       sender_username: sender?.username ?? null,
-      sender_avatar: sender?.avatar ?? null,
+      sender_avatar: sender?.avatar ? `/uploads/avatars/${sender.avatar}` : null,
     },
   });
 
@@ -249,7 +249,12 @@ function getNotifications(
   const { total } = db.prepare(`SELECT COUNT(*) as total FROM notifications ${wherePlain}`).get(userId) as { total: number };
   const { unread_count } = db.prepare('SELECT COUNT(*) as unread_count FROM notifications WHERE recipient_id = ? AND is_read = 0').get(userId) as { unread_count: number };
 
-  return { notifications: rows, total, unread_count };
+  const mapped = rows.map(r => ({
+    ...r,
+    sender_avatar: r.sender_avatar ? `/uploads/avatars/${r.sender_avatar}` : null,
+  }));
+
+  return { notifications: mapped, total, unread_count };
 }
 
 function getUnreadCount(userId: number): number {
@@ -326,9 +331,14 @@ async function respondToBoolean(
     WHERE n.id = ?
   `).get(notificationId) as NotificationRow;
 
-  broadcastToUser(userId, { type: 'notification:updated', notification: updated });
+  const mappedUpdated = {
+    ...updated,
+    sender_avatar: updated.sender_avatar ? `/uploads/avatars/${updated.sender_avatar}` : null,
+  };
 
-  return { success: true, notification: updated };
+  broadcastToUser(userId, { type: 'notification:updated', notification: mappedUpdated });
+
+  return { success: true, notification: mappedUpdated };
 }
 
 export {

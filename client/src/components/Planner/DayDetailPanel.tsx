@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind, Droplets, Sunrise, Sunset, Hotel, Calendar, MapPin, LogIn, LogOut, Hash, Pencil, Plane, Utensils, Train, Car, Ship, Ticket, FileText, Users } from 'lucide-react'
+import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind, Droplets, Sunrise, Sunset, Hotel, Calendar, MapPin, LogIn, LogOut, Hash, Pencil, Plane, Utensils, Train, Car, Ship, Ticket, FileText, Users, ChevronsDown, ChevronsUp } from 'lucide-react'
 
 const RES_TYPE_ICONS = { flight: Plane, hotel: Hotel, restaurant: Utensils, train: Train, car: Car, cruise: Ship, event: Ticket, tour: Users, other: FileText }
 const RES_TYPE_COLORS = { flight: '#3b82f6', hotel: '#8b5cf6', restaurant: '#ef4444', train: '#06b6d4', car: '#6b7280', cruise: '#0ea5e9', event: '#f59e0b', tour: '#10b981', other: '#6b7280' }
@@ -54,9 +54,11 @@ interface DayDetailPanelProps {
   onAccommodationChange: () => void
   leftWidth?: number
   rightWidth?: number
+  collapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
-export default function DayDetailPanel({ day, days, places, categories = [], tripId, assignments, reservations = [], lat, lng, onClose, onAccommodationChange, leftWidth = 0, rightWidth = 0 }: DayDetailPanelProps) {
+export default function DayDetailPanel({ day, days, places, categories = [], tripId, assignments, reservations = [], lat, lng, onClose, onAccommodationChange, leftWidth = 0, rightWidth = 0, collapsed: collapsedProp = false, onToggleCollapse }: DayDetailPanelProps) {
   const { t, language, locale } = useTranslation()
   const can = useCanDo()
   const tripObj = useTripStore((s) => s.trip)
@@ -66,6 +68,8 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const blurCodes = useSettingsStore(s => s.settings.blur_booking_codes)
   const fmtTime = (v) => formatTime12(v, is12h)
   const unit = isFahrenheit ? '°F' : '°C'
+  const collapsed = collapsedProp
+  const toggleCollapse = () => onToggleCollapse?.()
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
   const [accommodation, setAccommodation] = useState(null)
@@ -170,26 +174,36 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
         WebkitBackdropFilter: 'blur(40px) saturate(180%)',
         borderRadius: 20,
         boxShadow: '0 8px 40px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)',
-        overflow: 'hidden', maxHeight: '60vh', display: 'flex', flexDirection: 'column',
+        overflow: 'hidden', maxHeight: collapsed ? 'none' : '60vh', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 16px 14px 20px', borderBottom: '1px solid var(--border-faint)' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Calendar size={20} style={{ color: 'var(--text-primary)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: collapsed ? '12px 16px 12px 20px' : '18px 16px 14px 20px', borderBottom: collapsed ? 'none' : '1px solid var(--border-faint)', cursor: 'pointer' }}
+          onClick={() => toggleCollapse()}>
+          <div style={{ width: collapsed ? 36 : 44, height: collapsed ? 36 : 44, borderRadius: 12, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s ease' }}>
+            <Calendar size={collapsed ? 16 : 20} style={{ color: 'var(--text-primary)' }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <div style={{ fontSize: collapsed ? 13 : 15, fontWeight: 700, color: 'var(--text-primary)', transition: 'font-size 0.15s ease' }}>
               {day.title || t('planner.dayN', { n: (days.indexOf(day) + 1) || '?' })}
+              {collapsed && formattedDate && <span style={{ fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{formattedDate}</span>}
             </div>
-            {formattedDate && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{formattedDate}</div>}
+            {!collapsed && formattedDate && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{formattedDate}</div>}
           </div>
-          <button onClick={onClose} style={{ background: 'var(--bg-secondary)', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <button onClick={(e) => { e.stopPropagation(); toggleCollapse() }} title={collapsed ? 'Expand' : 'Collapse'}
+            style={{ background: 'var(--bg-secondary)', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s ease' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-secondary)'}>
+            {collapsed ? <ChevronsUp size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronsDown size={14} style={{ color: 'var(--text-muted)' }} />}
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onClose() }} style={{ background: 'var(--bg-secondary)', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-secondary)'}>
             <X size={14} style={{ color: 'var(--text-muted)' }} />
           </button>
         </div>
 
         {/* Scrollable content */}
-        <div style={{ overflowY: 'auto', padding: '14px 20px 18px' }}>
+        <div style={{ overflowY: 'auto', padding: '14px 20px 18px', display: collapsed ? 'none' : 'block' }}>
 
           {/* ── Weather ── */}
           {day.date && lat && lng && (

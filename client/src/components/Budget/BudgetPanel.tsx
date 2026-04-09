@@ -75,9 +75,29 @@ function InlineEditCell({ value, onSave, type = 'text', style = {}, placeholder 
     if (v !== value) onSave(v)
   }
 
+  const handlePaste = (e) => {
+    if (type !== 'number') return
+    e.preventDefault()
+    let text = e.clipboardData.getData('text').trim()
+    // Strip everything except digits, dots, commas, minus
+    text = text.replace(/[^\d.,-]/g, '')
+    // Remove all thousand separators (dots or commas before 3-digit groups), keep last separator as decimal
+    const lastComma = text.lastIndexOf(',')
+    const lastDot = text.lastIndexOf('.')
+    const decimalPos = Math.max(lastComma, lastDot)
+    if (decimalPos > -1) {
+      const intPart = text.substring(0, decimalPos).replace(/[.,]/g, '')
+      const decPart = text.substring(decimalPos + 1)
+      text = intPart + '.' + decPart
+    } else {
+      text = text.replace(/[.,]/g, '')
+    }
+    setEditValue(text)
+  }
+
   if (editing) {
     return <input ref={inputRef} type="text" inputMode={type === 'number' ? 'decimal' : 'text'} value={editValue}
-      onChange={e => setEditValue(e.target.value)} onBlur={save}
+      onChange={e => setEditValue(e.target.value)} onBlur={save} onPaste={handlePaste}
       onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditValue(value ?? ''); setEditing(false) } }}
       style={{ width: '100%', border: '1px solid var(--accent)', borderRadius: 4, padding: '4px 6px', fontSize: 13, outline: 'none', background: 'var(--bg-input)', color: 'var(--text-primary)', fontFamily: 'inherit', ...style }}
       placeholder={placeholder} />
@@ -131,6 +151,7 @@ function AddItemRow({ onAdd, t }: AddItemRowProps) {
       </td>
       <td style={{ padding: '4px 6px' }}>
         <input value={price} onChange={e => setPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          onPaste={e => { e.preventDefault(); let t = e.clipboardData.getData('text').trim().replace(/[^\d.,-]/g, ''); const lc = t.lastIndexOf(','), ld = t.lastIndexOf('.'), dp = Math.max(lc, ld); if (dp > -1) { t = t.substring(0, dp).replace(/[.,]/g, '') + '.' + t.substring(dp + 1) } else { t = t.replace(/[.,]/g, '') } setPrice(t) }}
           placeholder="0,00" inputMode="decimal" style={{ ...inp, textAlign: 'center' }} />
       </td>
       <td className="hidden sm:table-cell" style={{ padding: '4px 6px', textAlign: 'center' }}>
