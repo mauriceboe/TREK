@@ -322,6 +322,32 @@ export function createCollabNote(
 }
 
 // ---------------------------------------------------------------------------
+// Todo Items
+// ---------------------------------------------------------------------------
+
+export interface TestTodoItem {
+  id: number;
+  trip_id: number;
+  name: string;
+  checked: number;
+  category: string | null;
+  sort_order: number;
+}
+
+export function createTodoItem(
+  db: Database.Database,
+  tripId: number,
+  overrides: Partial<{ name: string; category: string; checked: number }> = {}
+): TestTodoItem {
+  const maxOrder = db.prepare('SELECT MAX(sort_order) as max FROM todo_items WHERE trip_id = ?').get(tripId) as { max: number | null };
+  const sortOrder = (maxOrder.max !== null ? maxOrder.max : -1) + 1;
+  const result = db.prepare(
+    'INSERT INTO todo_items (trip_id, name, checked, category, sort_order) VALUES (?, ?, ?, ?, ?)'
+  ).run(tripId, overrides.name ?? 'Test Todo', overrides.checked ?? 0, overrides.category ?? null, sortOrder);
+  return db.prepare('SELECT * FROM todo_items WHERE id = ?').get(result.lastInsertRowid) as TestTodoItem;
+}
+
+// ---------------------------------------------------------------------------
 // Day Assignments
 // ---------------------------------------------------------------------------
 

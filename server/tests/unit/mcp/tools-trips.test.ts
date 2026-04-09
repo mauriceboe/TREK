@@ -337,4 +337,18 @@ describe('Tool: get_trip_summary', () => {
       expect(data.trip.title).toBe('Demo Trip');
     });
   });
+
+  it('includes todos, files, pollCount, messageCount in response', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Summary Test' });
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'get_trip_summary', arguments: { tripId: trip.id } });
+      const data = parseToolResult(result) as any;
+      expect(Array.isArray(data.todos)).toBe(true);
+      expect(Array.isArray(data.files)).toBe(true);
+      expect(typeof data.pollCount).toBe('number');
+      expect(typeof data.messageCount).toBe('number');
+    });
+  });
 });

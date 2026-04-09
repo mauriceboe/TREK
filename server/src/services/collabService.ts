@@ -318,6 +318,11 @@ export function formatMessage(msg: CollabMessage, reactions?: GroupedReaction[])
   return { ...msg, user_avatar: avatarUrl(msg), avatar_url: avatarUrl(msg), reactions: reactions || [] };
 }
 
+export function countMessages(tripId: string | number): number {
+  const row = db.prepare('SELECT COUNT(*) as cnt FROM collab_messages WHERE trip_id = ?').get(tripId) as { cnt: number };
+  return row.cnt;
+}
+
 export function listMessages(tripId: string | number, before?: string | number) {
   const query = `
     SELECT m.*, u.username, u.avatar,
