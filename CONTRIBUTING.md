@@ -9,6 +9,8 @@ Thanks for your interest in contributing! Please read these guidelines before op
 3. **No breaking changes** — Backwards compatibility is non-negotiable
 4. **Target the `dev` branch** — All PRs must be opened against `dev`, not `main`
 5. **Match the existing style** — No reformatting, no linter config changes, no "while I'm here" cleanups
+6. **Tests** — Your changes must include tests. The project maintains 80%+ coverage; PRs that drop it will be closed
+7. **Branch up to date** — Your branch must be [up to date with `dev`](https://github.com/mauriceboe/TREK/wiki/Development-environment#3-keep-your-fork-up-to-date) before submitting a PR
 
 ## Pull Requests
 
@@ -35,22 +37,9 @@ fix(maps): correct zoom level on Safari
 feat(budget): add CSV export for expenses
 ```
 
-## Development Setup
+## Development Environment
 
-```bash
-git clone https://github.com/mauriceboe/TREK.git
-cd TREK
-
-# Server
-cd server && npm install && npm run dev
-
-# Client (separate terminal)
-cd client && npm install && npm run dev
-```
-
-Server: `http://localhost:3001` | Client: `http://localhost:5173`
-
-On first run, check the server logs for the auto-generated admin credentials.
+See the [Developer Environment page](https://github.com/mauriceboe/TREK/wiki/Development-environment) for more information on setting up your development environment.
 
 ## More Details
 

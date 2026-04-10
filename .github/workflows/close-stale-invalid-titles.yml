@@ -1,0 +1,71 @@
+name: Close issues with unchanged bad titles
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+
+permissions:
+  issues: write
+
+jobs:
+  close-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close stale invalid-title issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const badTitles = [
+              "[bug]", "bug report", "bug", "issue",
+              "help", "question", "test", "...", "untitled"
+            ];
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'invalid-title',
+              state: 'open',
+              per_page: 100,
+            });
+
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+            for (const issue of issues) {
+              const createdAt = new Date(issue.created_at);
+              if (createdAt > twentyFourHoursAgo) continue; // grace period not over yet
+
+              const titleLower = issue.title.trim().toLowerCase();
+
+              if (!badTitles.includes(titleLower)) {
+                // Title was fixed — remove the label and move on
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'invalid-title',
+                });
+                continue;
+              }
+
+              // Still a bad title after 24h — close it
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: [
+                  '## Issue closed',
+                  '',
+                  'This issue has been automatically closed because the title was not updated within 24 hours.',
+                  '',
+                  'Feel free to open a new issue with a descriptive title that summarizes the problem.',
+                ].join('\n'),
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              });
+            }

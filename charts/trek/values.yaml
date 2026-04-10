@@ -1,7 +1,7 @@
 
 image:
   repository: mauriceboe/trek
-  tag: latest
+  # tag: latest
   pullPolicy: IfNotPresent
 
 # Optional image pull secrets for private registries

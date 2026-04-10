@@ -1,0 +1,66 @@
+name: Close PRs with unchanged wrong base branch
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  close-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close stale wrong-base-branch PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pulls } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+            for (const pull of pulls) {
+              const hasLabel = pull.labels.some(l => l.name === 'wrong-base-branch');
+              if (!hasLabel) continue;
+
+              const createdAt = new Date(pull.created_at);
+              if (createdAt > twentyFourHoursAgo) continue; // grace period not over yet
+
+              // Base was fixed — remove label and move on
+              if (pull.base.ref !== 'main') {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pull.number,
+                  name: 'wrong-base-branch',
+                });
+                continue;
+              }
+
+              // Still targeting main after 24h — close it
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pull.number,
+                body: [
+                  '## PR closed',
+                  '',
+                  'This PR has been automatically closed because the base branch was not updated to `dev` within 24 hours.',
+                  '',
+                  'Feel free to open a new PR targeting `dev`.',
+                ].join('\n'),
+              });
+
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pull.number,
+                state: 'closed',
+              });
+            }

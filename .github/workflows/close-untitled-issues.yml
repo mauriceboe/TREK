@@ -1,4 +1,4 @@
-name: Close untitled issues
+name: Flag issues with bad titles
 
 on:
   issues:
@@ -10,58 +10,83 @@ permissions:
 jobs:
   check-title:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
     steps:
-      - name: Close if title is empty or generic
+      - name: Flag or redirect issue
         uses: actions/github-script@v7
         with:
           script: |
             const title = context.payload.issue.title.trim();
-            const badTitles = [
-              "[bug]",
-              "bug report",
-              "bug",
-              "issue",
-            ];
-            
-            const featureRequestTitles = [
-              "feature request",
-              "[feature]",
-              "[feature request]",
-              "[enhancement]"
-            ]
-
             const titleLower = title.toLowerCase();
 
+            const badTitles = [
+              "[bug]", "bug report", "bug", "issue",
+              "help", "question", "test", "...", "untitled"
+            ];
+
+            const featureRequestTitles = [
+              "feature request", "[feature]", "[feature request]", "[enhancement]"
+            ];
+
             if (badTitles.includes(titleLower)) {
+              // Ensure the label exists
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'invalid-title',
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'invalid-title',
+                  color: 'e4e669',
+                  description: 'Issue title does not meet quality standards',
+                });
+              }
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                labels: ['invalid-title'],
+              });
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.issue.number,
-                body: "This issue was closed because no title was provided. Please re-open with a descriptive title that summarizes the problem."
+                body: [
+                  '## Invalid title',
+                  '',
+                  `Your issue title \`${title}\` is too generic to be actionable.`,
+                  '',
+                  'Please edit the title to something descriptive that summarizes the problem — for example:',
+                  '> _Map view crashes when zooming in on Safari 17_',
+                  '',
+                  '**This issue will be automatically closed in 24 hours if the title has not been updated.**',
+                ].join('\n'),
               });
 
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.issue.number,
-                state: "closed",
-                state_reason: "not_planned"
-              });
             } else if (featureRequestTitles.some(t => titleLower.startsWith(t))) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.issue.number,
-                body: "Feature requests should be made in the [Discussions](https://github.com/mauriceboe/TREK/discussions/new?category=feature-requests) — not as issues. This issue has been closed."
+                body: [
+                  '## Wrong place for feature requests',
+                  '',
+                  'Feature requests should be submitted in [Discussions](https://github.com/mauriceboe/TREK/discussions/new?category=feature-requests), not as issues.',
+                  '',
+                  'This issue has been closed. Feel free to re-submit your idea in the right place!',
+                ].join('\n'),
               });
 
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.issue.number,
-                state: "closed",
-                state_reason: "not_planned"
+                state: 'closed',
+                state_reason: 'not_planned',
               });
             }

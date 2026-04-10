@@ -1,0 +1,100 @@
+name: Enforce PR Target Branch
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  check-target:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Flag or clear wrong base branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const base = context.payload.pull_request.base.ref;
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const prNumber = context.payload.pull_request.number;
+
+            // If the base was fixed, remove the label and let it through
+            if (base !== 'main') {
+              if (labels.includes('wrong-base-branch')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'wrong-base-branch',
+                });
+              }
+              return;
+            }
+
+            // Base is main — check if this user is a maintainer
+            let permission = 'none';
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.payload.pull_request.user.login,
+              });
+              permission = data.permission;
+            } catch (_) {
+              // User is not a collaborator — treat as 'none'
+            }
+
+            if (['admin', 'write'].includes(permission)) {
+              console.log(`User has '${permission}' permission, skipping.`);
+              return;
+            }
+
+            // Already labeled — avoid spamming on every push
+            if (labels.includes('wrong-base-branch')) {
+              core.setFailed("PR must target `dev`, not `main`.");
+              return;
+            }
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'wrong-base-branch',
+              });
+            } catch {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'wrong-base-branch',
+                color: 'd73a4a',
+                description: 'PR is targeting the wrong base branch',
+              });
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['wrong-base-branch'],
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: [
+                '## Wrong target branch',
+                '',
+                'This PR targets `main`, but contributions must go through `dev` first.',
+                '',
+                'To fix this, click **Edit** next to the PR title and change the base branch to `dev`.',
+                '',
+                '**This PR will be automatically closed in 24 hours if the base branch has not been updated.**',
+                '',
+                '> _If you need to merge directly to `main`, contact a maintainer._',
+              ].join('\n'),
+            });
+
+            core.setFailed("PR must target `dev`, not `main`.");
