@@ -25,11 +25,11 @@ env:
   # Public base URL of this instance. Required when OIDC is enabled — must match the redirect URI registered with your IdP.
   # Also used as the base URL for links in email notifications and other external links.
   # FORCE_HTTPS: "false"
-  # Set to "true" to redirect HTTP to HTTPS behind a TLS-terminating proxy.
+  # Optional: set to "true" to let TREK send HTTP->HTTPS redirects and HSTS behind a TLS-terminating proxy.
   # COOKIE_SECURE: "true"
   # Set to "false" to allow session cookies over plain HTTP (e.g. no ingress TLS). Not recommended for production.
   # TRUST_PROXY: "1"
-  # Number of trusted reverse proxies for X-Forwarded-For header parsing.
+  # Number of trusted reverse proxies so Express trusts X-Forwarded-* headers.
   # ALLOW_INTERNAL_NETWORK: "false"
   # Set to "true" if Immich or other integrated services are hosted on a private/RFC-1918 network address.
   # Loopback (127.x) and link-local/metadata addresses (169.254.x) are always blocked.
