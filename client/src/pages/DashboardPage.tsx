@@ -815,6 +815,9 @@ export default function DashboardPage(): React.ReactElement {
     || trips[0]
     || null
   const rest = spotlight ? trips.filter(t => t.id !== spotlight.id) : trips
+  // Mobile Live Hero only shows ongoing trips, so mobile cards must only exclude the ongoing trip
+  const mobileLiveTrip = trips.find(t => getTripStatus(t) === 'ongoing') ?? null
+  const mobileRest = mobileLiveTrip ? trips.filter(t => t.id !== mobileLiveTrip.id) : trips
 
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', ...font }}>
@@ -852,7 +855,7 @@ export default function DashboardPage(): React.ReactElement {
 
           {/* Mobile: Live Trip Hero */}
           {(() => {
-            const liveTrip = trips.find(t => getTripStatus(t) === 'ongoing')
+            const liveTrip = mobileLiveTrip
             if (!liveTrip) return null
             const today = new Date().toISOString().split('T')[0]
             const startDate = liveTrip.start_date || today
@@ -1128,15 +1131,15 @@ export default function DashboardPage(): React.ReactElement {
           )}
 
           {/* Trips — mobile cards */}
-          {!isLoading && rest.length > 0 && (
+          {!isLoading && mobileRest.length > 0 && (
             <div className="md:hidden flex flex-col gap-3 mb-10">
               <div className="flex items-baseline justify-between px-1 pb-1">
                 <span className="text-[11px] font-bold tracking-[0.12em] uppercase" style={{ color: 'var(--text-faint)' }}>
-                  {rest.some(t => getTripStatus(t) === 'future' || getTripStatus(t) === 'tomorrow') ? t('dashboard.mobile.upcomingTrips') : t('dashboard.mobile.yourTrips')}
+                  {mobileRest.some(t => getTripStatus(t) === 'future' || getTripStatus(t) === 'tomorrow') ? t('dashboard.mobile.upcomingTrips') : t('dashboard.mobile.yourTrips')}
                 </span>
-                <span className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>{rest.length} {t('dashboard.mobile.trips')}</span>
+                <span className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>{mobileRest.length} {t('dashboard.mobile.trips')}</span>
               </div>
-              {rest.map(trip => (
+              {mobileRest.map(trip => (
                 <MobileTripCard
                   key={trip.id}
                   trip={trip}
