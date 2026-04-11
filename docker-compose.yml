@@ -22,9 +22,9 @@ services:
       - TZ=${TZ:-UTC} # Timezone for logs, reminders and scheduled tasks (e.g. Europe/Berlin)
       - LOG_LEVEL=${LOG_LEVEL:-info} # info = concise user actions; debug = verbose admin-level details
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-} # Comma-separated origins for CORS and email notification links
-      - FORCE_HTTPS=true # Redirect HTTP to HTTPS when behind a TLS-terminating proxy
+      # - FORCE_HTTPS=true # Optional: let TREK send HTTP->HTTPS redirects and HSTS behind a TLS-terminating proxy
 #     - COOKIE_SECURE=false # Uncomment if accessing over plain HTTP (no HTTPS). Not recommended for production.
-      - TRUST_PROXY=1 # Number of trusted proxies (for X-Forwarded-For / real client IP)
+      - TRUST_PROXY=1 # Trust X-Forwarded-* headers from your reverse proxy (client IP / forwarded protocol)
       - ALLOW_INTERNAL_NETWORK=false # Set to true if Immich or other services are hosted on your local network (RFC-1918 IPs). Loopback and link-local addresses remain blocked regardless.
 #      - APP_URL=https://trek.example.com # Public base URL — required when OIDC is enabled (must match the redirect URI registered with your IdP); also used as base URL for links in email notifications
 #      - OIDC_ISSUER=https://auth.example.com # OpenID Connect provider URL
