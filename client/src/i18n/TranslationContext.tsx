@@ -14,14 +14,22 @@ import ar from './translations/ar'
 import br from './translations/br'
 import cs from './translations/cs'
 import pl from './translations/pl'
-import { SUPPORTED_LANGUAGES } from './supportedLanguages'
+import { SUPPORTED_LANGUAGES, SupportedLanguageCode } from './supportedLanguages'
 
 export { SUPPORTED_LANGUAGES }
 
 type TranslationStrings = Record<string, string | { name: string; category: string }[]>
 
-const translations: Record<string, TranslationStrings> = { de, en, es, fr, hu, it, ru, zh, 'zh-TW': zhTw, nl, ar, br, cs, pl }
-const LOCALES: Record<string, string> = { de: 'de-DE', en: 'en-US', es: 'es-ES', fr: 'fr-FR', hu: 'hu-HU', it: 'it-IT', ru: 'ru-RU', zh: 'zh-CN', 'zh-TW': 'zh-TW', nl: 'nl-NL', ar: 'ar-SA', br: 'pt-BR', cs: 'cs-CZ', pl: 'pl-PL' }
+// Keyed by SupportedLanguageCode so TypeScript enforces all languages have a translation.
+const translations: Record<SupportedLanguageCode, TranslationStrings> = {
+  de, en, es, fr, hu, it, ru, zh, 'zh-TW': zhTw, nl, ar, br, cs, pl,
+}
+
+// Derived from SUPPORTED_LANGUAGES — add new languages there, not here.
+const LOCALES: Record<string, string> = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map(l => [l.value, l.locale])
+)
+
 const RTL_LANGUAGES = new Set(['ar'])
 
 export function getLocaleForLanguage(language: string): string {
