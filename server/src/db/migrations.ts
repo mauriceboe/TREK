@@ -1435,6 +1435,73 @@ function runMigrations(db: Database.Database): void {
     () => {
       try { db.exec("ALTER TABLE vacay_plans ADD COLUMN week_start INTEGER NOT NULL DEFAULT 1"); } catch {}
     },
+    // Migration 83: Refactor vacay fusion model to per-user plans with read-access
+    () => {
+      // Create the new read-access table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS vacay_read_access (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          granter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          viewer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          status     TEXT NOT NULL DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(granter_id, viewer_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_vacay_read_access_viewer  ON vacay_read_access(viewer_id);
+        CREATE INDEX IF NOT EXISTS idx_vacay_read_access_granter ON vacay_read_access(granter_id);
+      `);
+
+      // Migrate accepted fusions → bidirectional read_access (both can see each other)
+      db.exec(`
+        INSERT OR IGNORE INTO vacay_read_access (granter_id, viewer_id, status)
+        SELECT p.owner_id, m.user_id, 'accepted'
+        FROM vacay_plan_members m JOIN vacay_plans p ON m.plan_id = p.id
+        WHERE m.status = 'accepted';
+
+        INSERT OR IGNORE INTO vacay_read_access (granter_id, viewer_id, status)
+        SELECT m.user_id, p.owner_id, 'accepted'
+        FROM vacay_plan_members m JOIN vacay_plans p ON m.plan_id = p.id
+        WHERE m.status = 'accepted';
+
+        INSERT OR IGNORE INTO vacay_read_access (granter_id, viewer_id, status)
+        SELECT p.owner_id, m.user_id, 'pending'
+        FROM vacay_plan_members m JOIN vacay_plans p ON m.plan_id = p.id
+        WHERE m.status = 'pending';
+      `);
+
+      // Move entries/years/colors back to each member's own plan
+      const members = db.prepare(`
+        SELECT m.user_id, p.id as shared_plan_id
+        FROM vacay_plan_members m JOIN vacay_plans p ON m.plan_id = p.id
+        WHERE m.status = 'accepted'
+      `).all() as { user_id: number; shared_plan_id: number }[];
+
+      for (const m of members) {
+        const ownPlan = db.prepare('SELECT id FROM vacay_plans WHERE owner_id = ?').get(m.user_id) as { id: number } | undefined;
+        if (!ownPlan) continue;
+
+        // Ensure own plan has all years from the shared plan
+        const sharedYears = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ?').all(m.shared_plan_id) as { year: number }[];
+        for (const { year } of sharedYears) {
+          db.prepare('INSERT OR IGNORE INTO vacay_years (plan_id, year) VALUES (?, ?)').run(ownPlan.id, year);
+        }
+
+        // Move vacation entries back to own plan
+        db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(ownPlan.id, m.shared_plan_id, m.user_id);
+
+        // Copy user_years from shared plan to own plan
+        const userYears = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ?').all(m.user_id, m.shared_plan_id) as { year: number; vacation_days: number; carried_over: number }[];
+        for (const uy of userYears) {
+          db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, ?, ?)').run(m.user_id, ownPlan.id, uy.year, uy.vacation_days, uy.carried_over);
+        }
+
+        // Copy user color from shared plan to own plan
+        const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(m.user_id, m.shared_plan_id) as { color: string } | undefined;
+        if (colorRow) {
+          db.prepare('INSERT OR IGNORE INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)').run(m.user_id, ownPlan.id, colorRow.color);
+        }
+      }
+    },
   ];
 
   if (currentVersion < migrations.length) {

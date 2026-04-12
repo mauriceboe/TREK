@@ -5,16 +5,9 @@ import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
 import type { VacayStat } from '../../types'
 
-interface VacayStatExtended extends VacayStat {
-  username: string
-  avatar_url: string | null
-  color: string | null
-  total_available: number
-}
-
 export default function VacayStats() {
   const { t } = useTranslation()
-  const { stats, selectedYear, loadStats, updateVacationDays, isFused } = useVacayStore()
+  const { stats, selectedYear, loadStats, updateVacationDays } = useVacayStore()
   const { user: currentUser } = useAuthStore()
 
   useEffect(() => { loadStats(selectedYear) }, [selectedYear])
@@ -37,7 +30,7 @@ export default function VacayStats() {
               key={s.user_id}
               stat={s}
               isMe={s.user_id === currentUser?.id}
-              canEdit={s.user_id === currentUser?.id || isFused}
+              canEdit={!!s.canEdit}
               selectedYear={selectedYear}
               onSave={updateVacationDays}
               t={t}
@@ -50,11 +43,11 @@ export default function VacayStats() {
 }
 
 interface StatCardProps {
-  stat: VacayStatExtended
+  stat: VacayStat
   isMe: boolean
   canEdit: boolean
   selectedYear: number
-  onSave: (userId: number, year: number, days: number) => Promise<void>
+  onSave: (year: number, days: number) => Promise<void>
   t: (key: string) => string
 }
 
@@ -70,9 +63,8 @@ function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardP
 
   const handleSave = () => {
     setEditing(false)
-    const days = parseInt(localDays)
-    if (!isNaN(days) && days >= 0 && days <= 365 && days !== s.vacation_days) {
-      onSave(selectedYear, days, s.user_id)
+    if (!isNaN(localDays) && localDays >= 0 && localDays <= 365 && localDays !== s.vacation_days) {
+      onSave(selectedYear, localDays)
     }
   }
 
@@ -107,7 +99,7 @@ function StatCard({ stat: s, isMe, canEdit, selectedYear, onSave, t }: StatCardP
             <input
               type="number"
               value={localDays}
-              onChange={e => setLocalDays(e.target.value)}
+              onChange={e => setLocalDays(parseInt(e.target.value))}
               onBlur={handleSave}
               onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setEditing(false); setLocalDays(s.vacation_days) } }}
               autoFocus

@@ -28,14 +28,6 @@ export interface VacayUser {
   email: string;
 }
 
-export interface VacayPlanMember {
-  id: number;
-  plan_id: number;
-  user_id: number;
-  status: string;
-  created_at?: string;
-}
-
 export interface Holiday {
   date: string;
   localName?: string;
@@ -70,6 +62,35 @@ const COLORS = [
   '#10b981', '#0ea5e9', '#64748b', '#be185d', '#0d9488',
 ];
 
+function getConnectedUserIds(userId: number): number[] {
+  const rows = db.prepare(`
+    SELECT viewer_id as other_id FROM vacay_read_access WHERE granter_id = ? AND status = 'accepted'
+    UNION
+    SELECT granter_id as other_id FROM vacay_read_access WHERE viewer_id = ? AND status = 'accepted'
+  `).all(userId, userId) as { other_id: number }[];
+  return rows.map(r => r.other_id);
+}
+
+// Only auto-assigns if the user still has the default color — never overwrites a user's custom choice.
+// avoidUserIds: whose colors to avoid (include the other party so they always get distinct colors).
+function assignUniqueColorIfDefault(userId: number, planId: number, avoidUserIds: number[]): void {
+  const current = (db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(userId, planId) as { color: string } | undefined)?.color;
+  if (current && current !== COLORS[0]) return;
+  const usedColors = new Set<string>();
+  for (const uid of avoidUserIds) {
+    const p = db.prepare('SELECT id FROM vacay_plans WHERE owner_id = ?').get(uid) as { id: number } | undefined;
+    if (p) {
+      const c = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(uid, p.id) as { color: string } | undefined;
+      if (c) usedColors.add(c.color);
+    }
+  }
+  const pick = COLORS.find(c => !usedColors.has(c)) ?? COLORS[1];
+  db.prepare(`
+    INSERT INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, plan_id) DO UPDATE SET color = excluded.color
+  `).run(userId, planId, pick);
+}
+
 // ---------------------------------------------------------------------------
 // Plan management
 // ---------------------------------------------------------------------------
@@ -87,45 +108,21 @@ export function getOwnPlan(userId: number): VacayPlan {
   return plan;
 }
 
-export function getActivePlan(userId: number): VacayPlan {
-  const membership = db.prepare(`
-    SELECT plan_id FROM vacay_plan_members WHERE user_id = ? AND status = 'accepted'
-  `).get(userId) as { plan_id: number } | undefined;
-  if (membership) {
-    return db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(membership.plan_id) as VacayPlan;
-  }
-  return getOwnPlan(userId);
-}
-
-export function getActivePlanId(userId: number): number {
-  return getActivePlan(userId).id;
-}
-
-export function getPlanUsers(planId: number): VacayUser[] {
-  const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
-  if (!plan) return [];
-  const owner = db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(plan.owner_id) as VacayUser;
-  const members = db.prepare(`
-    SELECT u.id, u.username, u.email FROM vacay_plan_members m
-    JOIN users u ON m.user_id = u.id
-    WHERE m.plan_id = ? AND m.status = 'accepted'
-  `).all(planId) as VacayUser[];
-  return [owner, ...members];
-}
-
 // ---------------------------------------------------------------------------
 // WebSocket notifications
 // ---------------------------------------------------------------------------
 
-export function notifyPlanUsers(planId: number, excludeSid: string | undefined, event = 'vacay:update'): void {
+export function notifyPlanOwnerAndViewers(planId: number, excludeSid: string | undefined, event = 'vacay:update'): void {
   try {
     const { broadcastToUser } = require('../websocket');
     const plan = db.prepare('SELECT owner_id FROM vacay_plans WHERE id = ?').get(planId) as { owner_id: number } | undefined;
     if (!plan) return;
-    const userIds = [plan.owner_id];
-    const members = db.prepare("SELECT user_id FROM vacay_plan_members WHERE plan_id = ? AND status = 'accepted'").all(planId) as { user_id: number }[];
-    members.forEach(m => userIds.push(m.user_id));
-    userIds.forEach(id => broadcastToUser(id, { type: event }, excludeSid));
+    broadcastToUser(plan.owner_id, { type: event }, excludeSid);
+    // Also notify all viewers who have accepted access to this plan
+    const viewers = db.prepare(`
+      SELECT viewer_id FROM vacay_read_access WHERE granter_id = ? AND status = 'accepted'
+    `).all(plan.owner_id) as { viewer_id: number }[];
+    viewers.forEach(v => broadcastToUser(v.viewer_id, { type: event }, excludeSid));
   } catch { /* websocket not available */ }
 }
 
@@ -223,24 +220,22 @@ export async function updatePlan(planId: number, body: UpdatePlanBody, socketId:
 
   if (carry_over_enabled === true) {
     const years = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ? ORDER BY year').all(planId) as { year: number }[];
-    const users = getPlanUsers(planId);
+    const ownerId = (db.prepare('SELECT owner_id FROM vacay_plans WHERE id = ?').get(planId) as { owner_id: number }).owner_id;
     for (let i = 0; i < years.length - 1; i++) {
       const yr = years[i].year;
       const nextYr = years[i + 1].year;
-      for (const u of users) {
-        const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(u.id, planId, `${yr}-%`) as { count: number }).count;
-        const config = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(u.id, planId, yr) as VacayUserYear | undefined;
-        const total = (config ? config.vacation_days : 30) + (config ? config.carried_over : 0);
-        const carry = Math.max(0, total - used);
-        db.prepare(`
-          INSERT INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)
-          ON CONFLICT(user_id, plan_id, year) DO UPDATE SET carried_over = ?
-        `).run(u.id, planId, nextYr, carry, carry);
-      }
+      const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(ownerId, planId, `${yr}-%`) as { count: number }).count;
+      const config = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(ownerId, planId, yr) as VacayUserYear | undefined;
+      const total = (config ? config.vacation_days : 30) + (config ? config.carried_over : 0);
+      const carry = Math.max(0, total - used);
+      db.prepare(`
+        INSERT INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)
+        ON CONFLICT(user_id, plan_id, year) DO UPDATE SET carried_over = ?
+      `).run(ownerId, planId, nextYr, carry, carry);
     }
   }
 
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
 
   const updated = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan;
   const updatedCalendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(planId) as VacayHolidayCalendar[];
@@ -265,7 +260,7 @@ export function addHolidayCalendar(planId: number, region: string, label: string
     'INSERT INTO vacay_holiday_calendars (plan_id, region, label, color, sort_order) VALUES (?, ?, ?, ?, ?)'
   ).run(planId, region, label || null, color || '#fecaca', sortOrder ?? 0);
   const cal = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ?').get(result.lastInsertRowid) as VacayHolidayCalendar;
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
   return cal;
 }
 
@@ -289,7 +284,7 @@ export function updateHolidayCalendar(
     db.prepare(`UPDATE vacay_holiday_calendars SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   }
   const updated = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ?').get(calId) as VacayHolidayCalendar;
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
   return updated;
 }
 
@@ -297,12 +292,12 @@ export function deleteHolidayCalendar(calId: number, planId: number, socketId: s
   const cal = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE id = ? AND plan_id = ?').get(calId, planId);
   if (!cal) return false;
   db.prepare('DELETE FROM vacay_holiday_calendars WHERE id = ?').run(calId);
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// User colors
+// User color
 // ---------------------------------------------------------------------------
 
 export function setUserColor(userId: number, planId: number, color: string | undefined, socketId: string | undefined): void {
@@ -310,156 +305,129 @@ export function setUserColor(userId: number, planId: number, color: string | und
     INSERT INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)
     ON CONFLICT(user_id, plan_id) DO UPDATE SET color = excluded.color
   `).run(userId, planId, color || '#6366f1');
-  notifyPlanUsers(planId, socketId, 'vacay:update');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:update');
 }
 
 // ---------------------------------------------------------------------------
-// Invitations
+// Read-access invitations
 // ---------------------------------------------------------------------------
 
-export function sendInvite(planId: number, inviterId: number, inviterUsername: string, inviterEmail: string, targetUserId: number): { error?: string; status?: number } {
-  if (targetUserId === inviterId) return { error: 'Cannot invite yourself', status: 400 };
+export function grantAccess(
+  granterId: number, granterUsername: string, granterEmail: string, viewerUserId: number,
+): { error?: string; status?: number } {
+  if (viewerUserId === granterId) return { error: 'Cannot share with yourself', status: 400 };
 
-  const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(targetUserId);
-  if (!targetUser) return { error: 'User not found', status: 404 };
+  const viewer = db.prepare('SELECT id FROM users WHERE id = ?').get(viewerUserId);
+  if (!viewer) return { error: 'User not found', status: 404 };
 
-  const existing = db.prepare('SELECT id, status FROM vacay_plan_members WHERE plan_id = ? AND user_id = ?').get(planId, targetUserId) as { id: number; status: string } | undefined;
+  const existing = db.prepare('SELECT id, status FROM vacay_read_access WHERE granter_id = ? AND viewer_id = ?').get(granterId, viewerUserId) as { id: number; status: string } | undefined;
   if (existing) {
-    if (existing.status === 'accepted') return { error: 'Already fused', status: 400 };
+    if (existing.status === 'accepted') return { error: 'Already connected', status: 400 };
     if (existing.status === 'pending') return { error: 'Invite already pending', status: 400 };
   }
 
-  const targetFusion = db.prepare("SELECT id FROM vacay_plan_members WHERE user_id = ? AND status = 'accepted'").get(targetUserId);
-  if (targetFusion) return { error: 'User is already fused with another plan', status: 400 };
-
-  db.prepare('INSERT INTO vacay_plan_members (plan_id, user_id, status) VALUES (?, ?, ?)').run(planId, targetUserId, 'pending');
+  db.prepare('INSERT INTO vacay_read_access (granter_id, viewer_id, status) VALUES (?, ?, ?)').run(granterId, viewerUserId, 'pending');
 
   try {
     const { broadcastToUser } = require('../websocket');
-    broadcastToUser(targetUserId, {
-      type: 'vacay:invite',
-      from: { id: inviterId, username: inviterUsername },
-      planId,
+    broadcastToUser(viewerUserId, {
+      type: 'vacay:access_invite',
+      from: { id: granterId, username: granterUsername },
     });
   } catch { /* websocket not available */ }
 
-  // Notify invited user
   import('../services/notificationService').then(({ send }) => {
-    send({ event: 'vacay_invite', actorId: inviterId, scope: 'user', targetId: targetUserId, params: { actor: inviterEmail, planId: String(planId) } }).catch(() => {});
+    send({ event: 'vacay_invite', actorId: granterId, scope: 'user', targetId: viewerUserId, params: { actor: granterEmail } }).catch(() => {});
   });
 
   return {};
 }
 
-export function acceptInvite(userId: number, planId: number, socketId: string | undefined): { error?: string; status?: number } {
-  const invite = db.prepare("SELECT * FROM vacay_plan_members WHERE plan_id = ? AND user_id = ? AND status = 'pending'").get(planId, userId) as VacayPlanMember | undefined;
+export function acceptAccessInvite(viewerId: number, granterId: number, socketId: string | undefined): { error?: string; status?: number } {
+  const invite = db.prepare("SELECT * FROM vacay_read_access WHERE granter_id = ? AND viewer_id = ? AND status = 'pending'").get(granterId, viewerId);
   if (!invite) return { error: 'No pending invite', status: 404 };
 
-  db.prepare("UPDATE vacay_plan_members SET status = 'accepted' WHERE id = ?").run(invite.id);
+  // Accept the existing invite (granter → viewer)
+  db.prepare("UPDATE vacay_read_access SET status = 'accepted' WHERE granter_id = ? AND viewer_id = ?").run(granterId, viewerId);
+  // Create the reverse connection (viewer → granter) for bidirectionality
+  db.prepare("INSERT OR IGNORE INTO vacay_read_access (granter_id, viewer_id, status) VALUES (?, ?, 'accepted')").run(viewerId, granterId);
 
-  // Migrate data from user's own plan
-  const ownPlan = db.prepare('SELECT id FROM vacay_plans WHERE owner_id = ?').get(userId) as { id: number } | undefined;
-  if (ownPlan && ownPlan.id !== planId) {
-    db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(planId, ownPlan.id, userId);
-    const ownYears = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ?').all(userId, ownPlan.id) as VacayUserYear[];
-    for (const y of ownYears) {
-      db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, ?, ?)').run(userId, planId, y.year, y.vacation_days, y.carried_over);
-    }
-    const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(userId, ownPlan.id) as { color: string } | undefined;
-    if (colorRow) {
-      db.prepare('INSERT OR IGNORE INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)').run(userId, planId, colorRow.color);
-    }
-  }
+  // Auto-assign unique colors if still at the default — include the other party in the
+  // avoid-list so the two users always get distinct colors even on a first connection.
+  const viewerPlan = getOwnPlan(viewerId);
+  const granterPlan = getOwnPlan(granterId);
+  assignUniqueColorIfDefault(viewerId, viewerPlan.id, [...getConnectedUserIds(granterId).filter(id => id !== viewerId), granterId]);
+  assignUniqueColorIfDefault(granterId, granterPlan.id, [...getConnectedUserIds(viewerId).filter(id => id !== granterId), viewerId]);
 
-  // Auto-assign unique color
-  const existingColors = (db.prepare('SELECT color FROM vacay_user_colors WHERE plan_id = ? AND user_id != ?').all(planId, userId) as { color: string }[]).map(r => r.color);
-  const myColor = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(userId, planId) as { color: string } | undefined;
-  const effectiveColor = myColor?.color || '#6366f1';
-  if (existingColors.includes(effectiveColor)) {
-    const available = COLORS.find(c => !existingColors.includes(c));
-    if (available) {
-      db.prepare(`INSERT INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, plan_id) DO UPDATE SET color = excluded.color`).run(userId, planId, available);
-    }
-  } else if (!myColor) {
-    db.prepare('INSERT OR IGNORE INTO vacay_user_colors (user_id, plan_id, color) VALUES (?, ?, ?)').run(userId, planId, effectiveColor);
-  }
+  try {
+    const { broadcastToUser } = require('../websocket');
+    broadcastToUser(granterId, { type: 'vacay:access_accepted' }, socketId);
+  } catch { /* websocket not available */ }
 
-  // Ensure user has rows for all plan years
-  const targetYears = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ?').all(planId) as { year: number }[];
-  for (const y of targetYears) {
-    db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, 0)').run(userId, planId, y.year);
-  }
-
-  notifyPlanUsers(planId, socketId, 'vacay:accepted');
   return {};
 }
 
-export function declineInvite(userId: number, planId: number, socketId: string | undefined): void {
-  db.prepare("DELETE FROM vacay_plan_members WHERE plan_id = ? AND user_id = ? AND status = 'pending'").run(planId, userId);
-  notifyPlanUsers(planId, socketId, 'vacay:declined');
-}
-
-export function cancelInvite(planId: number, targetUserId: number): void {
-  db.prepare("DELETE FROM vacay_plan_members WHERE plan_id = ? AND user_id = ? AND status = 'pending'").run(planId, targetUserId);
+export function declineAccessInvite(viewerId: number, granterId: number, socketId: string | undefined): void {
+  db.prepare("DELETE FROM vacay_read_access WHERE granter_id = ? AND viewer_id = ? AND status = 'pending'").run(granterId, viewerId);
 
   try {
     const { broadcastToUser } = require('../websocket');
-    broadcastToUser(targetUserId, { type: 'vacay:cancelled' });
-  } catch { /* */ }
+    broadcastToUser(granterId, { type: 'vacay:access_declined' }, socketId);
+  } catch { /* websocket not available */ }
 }
 
-// ---------------------------------------------------------------------------
-// Plan dissolution
-// ---------------------------------------------------------------------------
-
-export function dissolvePlan(userId: number, socketId: string | undefined): void {
-  const plan = getActivePlan(userId);
-  const isOwnerFlag = plan.owner_id === userId;
-
-  const allUserIds = getPlanUsers(plan.id).map(u => u.id);
-  const companyHolidays = db.prepare('SELECT date, note FROM vacay_company_holidays WHERE plan_id = ?').all(plan.id) as { date: string; note: string }[];
-
-  if (isOwnerFlag) {
-    const members = db.prepare("SELECT user_id FROM vacay_plan_members WHERE plan_id = ? AND status = 'accepted'").all(plan.id) as { user_id: number }[];
-    for (const m of members) {
-      const memberPlan = getOwnPlan(m.user_id);
-      db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(memberPlan.id, plan.id, m.user_id);
-      for (const ch of companyHolidays) {
-        db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(memberPlan.id, ch.date, ch.note);
-      }
-    }
-    db.prepare('DELETE FROM vacay_plan_members WHERE plan_id = ?').run(plan.id);
-  } else {
-    const ownPlan = getOwnPlan(userId);
-    db.prepare('UPDATE vacay_entries SET plan_id = ? WHERE plan_id = ? AND user_id = ?').run(ownPlan.id, plan.id, userId);
-    for (const ch of companyHolidays) {
-      db.prepare('INSERT OR IGNORE INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(ownPlan.id, ch.date, ch.note);
-    }
-    db.prepare("DELETE FROM vacay_plan_members WHERE plan_id = ? AND user_id = ?").run(plan.id, userId);
-  }
+export function cancelAccessInvite(granterId: number, viewerUserId: number): void {
+  db.prepare("DELETE FROM vacay_read_access WHERE granter_id = ? AND viewer_id = ? AND status = 'pending'").run(granterId, viewerUserId);
 
   try {
     const { broadcastToUser } = require('../websocket');
-    allUserIds.filter(id => id !== userId).forEach(id => broadcastToUser(id, { type: 'vacay:dissolved' }));
-  } catch { /* */ }
+    broadcastToUser(viewerUserId, { type: 'vacay:access_cancelled' });
+  } catch { /* websocket not available */ }
+}
+
+export function revokeAccess(requesterId: number, otherUserId: number, socketId: string | undefined): void {
+  // Delete both directions (bidirectional connection)
+  db.prepare(`
+    DELETE FROM vacay_read_access
+    WHERE (granter_id = ? AND viewer_id = ?) OR (granter_id = ? AND viewer_id = ?)
+  `).run(requesterId, otherUserId, otherUserId, requesterId);
+
+  try {
+    const { broadcastToUser } = require('../websocket');
+    broadcastToUser(otherUserId, { type: 'vacay:access_revoked' }, socketId);
+    broadcastToUser(requesterId, { type: 'vacay:access_revoked' }, socketId);
+  } catch { /* websocket not available */ }
 }
 
 // ---------------------------------------------------------------------------
-// Available users
+// Read-access user lists
 // ---------------------------------------------------------------------------
 
-export function getAvailableUsers(userId: number, planId: number) {
+export function getAvailableUsersForAccess(granterId: number) {
   return db.prepare(`
     SELECT u.id, u.username, u.email FROM users u
     WHERE u.id != ?
-    AND u.id NOT IN (SELECT user_id FROM vacay_plan_members WHERE plan_id = ?)
-    AND u.id NOT IN (SELECT user_id FROM vacay_plan_members WHERE status = 'accepted')
-    AND u.id NOT IN (SELECT owner_id FROM vacay_plans WHERE id IN (
-      SELECT plan_id FROM vacay_plan_members WHERE status = 'accepted'
-    ))
+    AND u.id NOT IN (
+      SELECT viewer_id FROM vacay_read_access WHERE granter_id = ?
+      UNION
+      SELECT granter_id FROM vacay_read_access WHERE viewer_id = ?
+    )
     ORDER BY u.username
-  `).all(userId, planId);
+  `).all(granterId, granterId, granterId);
+}
+
+export function getConnectedUsers(userId: number): (VacayUser & { color: string })[] {
+  return db.prepare(`
+    SELECT DISTINCT u.id, u.username, u.email, COALESCE(c.color, '#6366f1') as color
+    FROM (
+      SELECT viewer_id as other_id FROM vacay_read_access WHERE granter_id = ? AND status = 'accepted'
+      UNION
+      SELECT granter_id as other_id FROM vacay_read_access WHERE viewer_id = ? AND status = 'accepted'
+    ) connected
+    JOIN users u ON u.id = connected.other_id
+    LEFT JOIN vacay_plans p ON p.owner_id = u.id
+    LEFT JOIN vacay_user_colors c ON c.user_id = u.id AND c.plan_id = p.id
+  `).all(userId, userId) as (VacayUser & { color: string })[];
 }
 
 // ---------------------------------------------------------------------------
@@ -475,22 +443,20 @@ export function addYear(planId: number, year: number, socketId: string | undefin
   try {
     db.prepare('INSERT INTO vacay_years (plan_id, year) VALUES (?, ?)').run(planId, year);
     const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
-    const carryOverEnabled = plan ? !!plan.carry_over_enabled : true;
-    const users = getPlanUsers(planId);
-    for (const u of users) {
-      let carriedOver = 0;
-      if (carryOverEnabled) {
-        const prevConfig = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(u.id, planId, year - 1) as VacayUserYear | undefined;
-        if (prevConfig) {
-          const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(u.id, planId, `${year - 1}-%`) as { count: number }).count;
-          const total = prevConfig.vacation_days + prevConfig.carried_over;
-          carriedOver = Math.max(0, total - used);
-        }
+    if (!plan) return listYears(planId);
+    const carryOverEnabled = !!plan.carry_over_enabled;
+    let carriedOver = 0;
+    if (carryOverEnabled) {
+      const prevConfig = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(plan.owner_id, planId, year - 1) as VacayUserYear | undefined;
+      if (prevConfig) {
+        const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(plan.owner_id, planId, `${year - 1}-%`) as { count: number }).count;
+        const total = prevConfig.vacation_days + prevConfig.carried_over;
+        carriedOver = Math.max(0, total - used);
       }
-      db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)').run(u.id, planId, year, carriedOver);
     }
+    db.prepare('INSERT OR IGNORE INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)').run(plan.owner_id, planId, year, carriedOver);
   } catch { /* year already exists */ }
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
   return listYears(planId);
 }
 
@@ -500,44 +466,45 @@ export function deleteYear(planId: number, year: number, socketId: string | unde
   db.prepare("DELETE FROM vacay_company_holidays WHERE plan_id = ? AND date LIKE ?").run(planId, `${year}-%`);
   db.prepare('DELETE FROM vacay_user_years WHERE plan_id = ? AND year = ?').run(planId, year);
 
-  // Recalculate carry-over for year+1 if it exists, since its previous year has changed
   const nextYearExists = db.prepare('SELECT id FROM vacay_years WHERE plan_id = ? AND year = ?').get(planId, year + 1);
   if (nextYearExists) {
     const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
-    const carryOverEnabled = plan ? !!plan.carry_over_enabled : true;
-    const users = getPlanUsers(planId);
-    const prevYear = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ? AND year < ? ORDER BY year DESC LIMIT 1').get(planId, year + 1) as { year: number } | undefined;
-
-    for (const u of users) {
+    if (plan) {
+      const carryOverEnabled = !!plan.carry_over_enabled;
+      const prevYear = db.prepare('SELECT year FROM vacay_years WHERE plan_id = ? AND year < ? ORDER BY year DESC LIMIT 1').get(planId, year + 1) as { year: number } | undefined;
       let carry = 0;
       if (carryOverEnabled && prevYear) {
-        const prevConfig = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(u.id, planId, prevYear.year) as VacayUserYear | undefined;
+        const prevConfig = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(plan.owner_id, planId, prevYear.year) as VacayUserYear | undefined;
         if (prevConfig) {
-          const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(u.id, planId, `${prevYear.year}-%`) as { count: number }).count;
+          const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(plan.owner_id, planId, `${prevYear.year}-%`) as { count: number }).count;
           const total = prevConfig.vacation_days + prevConfig.carried_over;
           carry = Math.max(0, total - used);
         }
       }
-      db.prepare('UPDATE vacay_user_years SET carried_over = ? WHERE user_id = ? AND plan_id = ? AND year = ?').run(carry, u.id, planId, year + 1);
+      db.prepare('UPDATE vacay_user_years SET carried_over = ? WHERE user_id = ? AND plan_id = ? AND year = ?').run(carry, plan.owner_id, planId, year + 1);
     }
   }
 
-  notifyPlanUsers(planId, socketId, 'vacay:settings');
+  notifyPlanOwnerAndViewers(planId, socketId, 'vacay:settings');
   return listYears(planId);
 }
 
 // ---------------------------------------------------------------------------
-// Entries
+// Entries (own plan only)
 // ---------------------------------------------------------------------------
 
 export function getEntries(planId: number, year: string) {
+  const plan = db.prepare('SELECT owner_id FROM vacay_plans WHERE id = ?').get(planId) as { owner_id: number } | undefined;
+  if (!plan) return { entries: [], companyHolidays: [] };
+
   const entries = db.prepare(`
     SELECT e.*, u.username as person_name, COALESCE(c.color, '#6366f1') as person_color
     FROM vacay_entries e
     JOIN users u ON e.user_id = u.id
     LEFT JOIN vacay_user_colors c ON c.user_id = e.user_id AND c.plan_id = e.plan_id
-    WHERE e.plan_id = ? AND e.date LIKE ?
-  `).all(planId, `${year}-%`);
+    WHERE e.plan_id = ? AND e.user_id = ? AND e.date LIKE ?
+  `).all(planId, plan.owner_id, `${year}-%`);
+
   const companyHolidays = db.prepare("SELECT * FROM vacay_company_holidays WHERE plan_id = ? AND date LIKE ?").all(planId, `${year}-%`);
   return { entries, companyHolidays };
 }
@@ -546,11 +513,11 @@ export function toggleEntry(userId: number, planId: number, date: string, socket
   const existing = db.prepare('SELECT id FROM vacay_entries WHERE user_id = ? AND date = ? AND plan_id = ?').get(userId, date, planId) as { id: number } | undefined;
   if (existing) {
     db.prepare('DELETE FROM vacay_entries WHERE id = ?').run(existing.id);
-    notifyPlanUsers(planId, socketId);
+    notifyPlanOwnerAndViewers(planId, socketId);
     return { action: 'removed' };
   } else {
     db.prepare('INSERT INTO vacay_entries (plan_id, user_id, date, note) VALUES (?, ?, ?, ?)').run(planId, userId, date, '');
-    notifyPlanUsers(planId, socketId);
+    notifyPlanOwnerAndViewers(planId, socketId);
     return { action: 'added' };
   }
 }
@@ -559,49 +526,87 @@ export function toggleCompanyHoliday(planId: number, date: string, note: string 
   const existing = db.prepare('SELECT id FROM vacay_company_holidays WHERE plan_id = ? AND date = ?').get(planId, date) as { id: number } | undefined;
   if (existing) {
     db.prepare('DELETE FROM vacay_company_holidays WHERE id = ?').run(existing.id);
-    notifyPlanUsers(planId, socketId);
+    notifyPlanOwnerAndViewers(planId, socketId);
     return { action: 'removed' };
   } else {
     db.prepare('INSERT INTO vacay_company_holidays (plan_id, date, note) VALUES (?, ?, ?)').run(planId, date, note || '');
     db.prepare('DELETE FROM vacay_entries WHERE plan_id = ? AND date = ?').run(planId, date);
-    notifyPlanUsers(planId, socketId);
+    notifyPlanOwnerAndViewers(planId, socketId);
     return { action: 'added' };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Stats
+// Foreign entries (from all accepted granters)
+// ---------------------------------------------------------------------------
+
+export function getForeignEntries(userId: number, year: string) {
+  const granters = db.prepare(`
+    SELECT ra.granter_id, u.username, COALESCE(c.color, '#6366f1') as color, p.id as plan_id
+    FROM vacay_read_access ra
+    JOIN users u ON ra.granter_id = u.id
+    JOIN vacay_plans p ON p.owner_id = ra.granter_id
+    LEFT JOIN vacay_user_colors c ON c.user_id = ra.granter_id AND c.plan_id = p.id
+    WHERE ra.viewer_id = ? AND ra.status = 'accepted'
+  `).all(userId) as { granter_id: number; username: string; color: string; plan_id: number }[];
+
+  const entries: { date: string; user_id: number; person_name: string; person_color: string }[] = [];
+
+  for (const g of granters) {
+    // Vacation entries
+    const vacationEntries = db.prepare(`
+      SELECT date FROM vacay_entries WHERE plan_id = ? AND user_id = ? AND date LIKE ?
+    `).all(g.plan_id, g.granter_id, `${year}-%`) as { date: string }[];
+    for (const e of vacationEntries) {
+      entries.push({ date: e.date, user_id: g.granter_id, person_name: g.username, person_color: g.color });
+    }
+
+    // Company holidays (Betriebsferien) — deduplicate per granter per date
+    const companyHolidays = db.prepare(`
+      SELECT date FROM vacay_company_holidays WHERE plan_id = ? AND date LIKE ?
+    `).all(g.plan_id, `${year}-%`) as { date: string }[];
+    for (const ch of companyHolidays) {
+      if (!entries.some(e => e.date === ch.date && e.user_id === g.granter_id)) {
+        entries.push({ date: ch.date, user_id: g.granter_id, person_name: g.username, person_color: g.color });
+      }
+    }
+  }
+
+  return entries;
+}
+
+// ---------------------------------------------------------------------------
+// Stats (own plan only)
 // ---------------------------------------------------------------------------
 
 export function getStats(planId: number, year: number) {
   const plan = db.prepare('SELECT * FROM vacay_plans WHERE id = ?').get(planId) as VacayPlan | undefined;
-  const carryOverEnabled = plan ? !!plan.carry_over_enabled : true;
-  const users = getPlanUsers(planId);
+  if (!plan) return [];
+  const carryOverEnabled = !!plan.carry_over_enabled;
 
-  return users.map(u => {
-    const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(u.id, planId, `${year}-%`) as { count: number }).count;
-    const config = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(u.id, planId, year) as VacayUserYear | undefined;
-    const vacationDays = config ? config.vacation_days : 30;
-    const carriedOver = carryOverEnabled ? (config ? config.carried_over : 0) : 0;
-    const total = vacationDays + carriedOver;
-    const remaining = total - used;
-    const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(u.id, planId) as { color: string } | undefined;
+  const used = (db.prepare("SELECT COUNT(*) as count FROM vacay_entries WHERE user_id = ? AND plan_id = ? AND date LIKE ?").get(plan.owner_id, planId, `${year}-%`) as { count: number }).count;
+  const config = db.prepare('SELECT * FROM vacay_user_years WHERE user_id = ? AND plan_id = ? AND year = ?').get(plan.owner_id, planId, year) as VacayUserYear | undefined;
+  const vacationDays = config ? config.vacation_days : 30;
+  const carriedOver = carryOverEnabled ? (config ? config.carried_over : 0) : 0;
+  const total = vacationDays + carriedOver;
+  const remaining = total - used;
+  const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(plan.owner_id, planId) as { color: string } | undefined;
+  const owner = db.prepare('SELECT username FROM users WHERE id = ?').get(plan.owner_id) as { username: string };
 
-    const nextYearExists = db.prepare('SELECT id FROM vacay_years WHERE plan_id = ? AND year = ?').get(planId, year + 1);
-    if (nextYearExists && carryOverEnabled) {
-      const carry = Math.max(0, remaining);
-      db.prepare(`
-        INSERT INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)
-        ON CONFLICT(user_id, plan_id, year) DO UPDATE SET carried_over = ?
-      `).run(u.id, planId, year + 1, carry, carry);
-    }
+  const nextYearExists = db.prepare('SELECT id FROM vacay_years WHERE plan_id = ? AND year = ?').get(planId, year + 1);
+  if (nextYearExists && carryOverEnabled) {
+    const carry = Math.max(0, remaining);
+    db.prepare(`
+      INSERT INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, 30, ?)
+      ON CONFLICT(user_id, plan_id, year) DO UPDATE SET carried_over = ?
+    `).run(plan.owner_id, planId, year + 1, carry, carry);
+  }
 
-    return {
-      user_id: u.id, person_name: u.username, person_color: colorRow?.color || '#6366f1',
-      year, vacation_days: vacationDays, carried_over: carriedOver,
-      total_available: total, used, remaining,
-    };
-  });
+  return [{
+    user_id: plan.owner_id, person_name: owner.username, person_color: colorRow?.color || '#6366f1',
+    year, vacation_days: vacationDays, carried_over: carriedOver,
+    total_available: total, used, remaining,
+  }];
 }
 
 export function updateStats(userId: number, planId: number, year: number, vacationDays: number, socketId: string | undefined): void {
@@ -609,37 +614,54 @@ export function updateStats(userId: number, planId: number, year: number, vacati
     INSERT INTO vacay_user_years (user_id, plan_id, year, vacation_days, carried_over) VALUES (?, ?, ?, ?, 0)
     ON CONFLICT(user_id, plan_id, year) DO UPDATE SET vacation_days = excluded.vacation_days
   `).run(userId, planId, year, vacationDays);
-  notifyPlanUsers(planId, socketId);
+  notifyPlanOwnerAndViewers(planId, socketId);
 }
 
 // ---------------------------------------------------------------------------
 // GET /plan composite
 // ---------------------------------------------------------------------------
 
+export function getAllStats(userId: number, year: number) {
+  const ownPlan = getOwnPlan(userId);
+  const ownStats = getStats(ownPlan.id, year).map(s => ({ ...s, canEdit: true }));
+
+  const granters = db.prepare(`
+    SELECT granter_id FROM vacay_read_access WHERE viewer_id = ? AND status = 'accepted'
+  `).all(userId) as { granter_id: number }[];
+
+  const allStats = [...ownStats];
+  for (const { granter_id } of granters) {
+    const granterPlan = getOwnPlan(granter_id);
+    allStats.push(...getStats(granterPlan.id, year).map(s => ({ ...s, canEdit: false })));
+  }
+
+  return allStats;
+}
+
 export function getPlanData(userId: number) {
-  const plan = getActivePlan(userId);
-  const activePlanId = plan.id;
+  const plan = getOwnPlan(userId);
+  const planId = plan.id;
 
-  const users = getPlanUsers(activePlanId).map(u => {
-    const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(u.id, activePlanId) as { color: string } | undefined;
-    return { ...u, color: colorRow?.color || '#6366f1' };
-  });
+  const colorRow = db.prepare('SELECT color FROM vacay_user_colors WHERE user_id = ? AND plan_id = ?').get(userId, planId) as { color: string } | undefined;
+  const myColor = colorRow?.color || '#6366f1';
 
-  const pendingInvites = db.prepare(`
-    SELECT m.id, m.user_id, u.username, u.email, m.created_at
-    FROM vacay_plan_members m JOIN users u ON m.user_id = u.id
-    WHERE m.plan_id = ? AND m.status = 'pending'
-  `).all(activePlanId);
+  const holidayCalendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(planId) as VacayHolidayCalendar[];
 
-  const incomingInvites = db.prepare(`
-    SELECT m.id, m.plan_id, u.username, u.email, m.created_at
-    FROM vacay_plan_members m
-    JOIN vacay_plans p ON m.plan_id = p.id
-    JOIN users u ON p.owner_id = u.id
-    WHERE m.user_id = ? AND m.status = 'pending'
+  const connectedUsers = getConnectedUsers(userId);
+
+  const pendingIncoming = db.prepare(`
+    SELECT ra.id, ra.granter_id, u.username as granter_username
+    FROM vacay_read_access ra
+    JOIN users u ON ra.granter_id = u.id
+    WHERE ra.viewer_id = ? AND ra.status = 'pending'
   `).all(userId);
 
-  const holidayCalendars = db.prepare('SELECT * FROM vacay_holiday_calendars WHERE plan_id = ? ORDER BY sort_order, id').all(activePlanId) as VacayHolidayCalendar[];
+  const pendingOutgoing = db.prepare(`
+    SELECT ra.id, ra.viewer_id, u.username as viewer_username
+    FROM vacay_read_access ra
+    JOIN users u ON ra.viewer_id = u.id
+    WHERE ra.granter_id = ? AND ra.status = 'pending'
+  `).all(userId);
 
   return {
     plan: {
@@ -650,11 +672,10 @@ export function getPlanData(userId: number) {
       carry_over_enabled: !!plan.carry_over_enabled,
       holiday_calendars: holidayCalendars,
     },
-    users,
-    pendingInvites,
-    incomingInvites,
-    isOwner: plan.owner_id === userId,
-    isFused: users.length > 1,
+    myColor,
+    connectedUsers,
+    pendingIncoming,
+    pendingOutgoing,
   };
 }
 

@@ -86,6 +86,11 @@ export default function VacayMonthCard({
               const isCompany = companyHolidaysEnabled && companyHolidaySet.has(dateStr)
               const dayEntries = entryMap[dateStr] || []
               const isBlocked = !!holiday || (weekend && blockWeekends) || (isCompany && !companyMode)
+              // When company holiday and person entries coexist, treat company holiday as a virtual first entry
+              const COMPANY_COLOR = '#f59e0b'
+              const displayEntries = isCompany && dayEntries.length > 0
+                ? [{ person_color: COMPANY_COLOR, user_id: -1, date: dateStr }, ...dayEntries]
+                : dayEntries
 
               return (
                 <div
@@ -104,30 +109,30 @@ export default function VacayMonthCard({
                   onMouseLeave={e => { e.currentTarget.style.background = weekend ? 'var(--bg-secondary)' : 'transparent' }}
                 >
                   {holiday && <div className="absolute inset-0.5 rounded" style={{ background: hexToRgba(holiday.color, 0.12) }} />}
-                  {isCompany && <div className="absolute inset-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)' }} />}
+                  {isCompany && dayEntries.length === 0 && <div className="absolute inset-0.5 rounded" style={{ background: 'rgba(245,158,11,0.15)' }} />}
 
-                  {dayEntries.length === 1 && (
-                    <div className="absolute inset-0.5 rounded" style={{ backgroundColor: dayEntries[0].person_color, opacity: 0.4 }} />
+                  {displayEntries.length === 1 && (
+                    <div className="absolute inset-0.5 rounded" style={{ backgroundColor: displayEntries[0].person_color, opacity: 0.4 }} />
                   )}
-                  {dayEntries.length === 2 && (
+                  {displayEntries.length === 2 && (
                     <div className="absolute inset-0.5 rounded" style={{
-                      background: `linear-gradient(135deg, ${dayEntries[0].person_color} 50%, ${dayEntries[1].person_color} 50%)`,
+                      background: `linear-gradient(135deg, ${displayEntries[0].person_color} 50%, ${displayEntries[1].person_color} 50%)`,
                       opacity: 0.4,
                     }} />
                   )}
-                  {dayEntries.length === 3 && (
+                  {displayEntries.length === 3 && (
                     <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
+                      <div className="absolute top-0 left-0 w-1/2 h-full" style={{ backgroundColor: displayEntries[0].person_color }} />
+                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[1].person_color }} />
+                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[2].person_color }} />
                     </div>
                   )}
-                  {dayEntries.length >= 4 && (
+                  {displayEntries.length >= 4 && (
                     <div className="absolute inset-0.5 rounded overflow-hidden" style={{ opacity: 0.4 }}>
-                      <div className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[0].person_color }} />
-                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[1].person_color }} />
-                      <div className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[2].person_color }} />
-                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: dayEntries[3].person_color }} />
+                      <div className="absolute top-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[0].person_color }} />
+                      <div className="absolute top-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[1].person_color }} />
+                      <div className="absolute bottom-0 left-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[2].person_color }} />
+                      <div className="absolute bottom-0 right-0 w-1/2 h-1/2" style={{ backgroundColor: displayEntries[3].person_color }} />
                     </div>
                   )}
 
@@ -137,7 +142,7 @@ export default function VacayMonthCard({
 
                   <span className="relative z-[1] text-[11px] font-medium" style={{
                     color: holiday ? holiday.color : weekend ? 'var(--text-faint)' : 'var(--text-primary)',
-                    fontWeight: dayEntries.length > 0 ? 700 : 500,
+                    fontWeight: displayEntries.length > 0 ? 700 : 500,
                   }}>
                     {day}
                   </span>

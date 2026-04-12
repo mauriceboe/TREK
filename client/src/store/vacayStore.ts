@@ -1,27 +1,17 @@
 import { create } from 'zustand'
 import apiClient from '../api/client'
 import type { AxiosResponse } from 'axios'
-import type { VacayPlan, VacayUser, VacayEntry, VacayStat, HolidaysMap, HolidayInfo, VacayHolidayCalendar } from '../types'
+import type { VacayPlan, VacayUser, VacayEntry, VacayStat, VacayCompanyHoliday, HolidaysMap, HolidayInfo, VacayHolidayCalendar, VacayAccessInvite, VacayOutgoingInvite } from '../types'
+
 
 const ax = apiClient
 
-interface PendingInvite {
-  user_id: number
-  username: string
-}
-
-interface IncomingInvite {
-  plan_id: number
-  owner_username: string
-}
-
 interface VacayPlanResponse {
   plan: VacayPlan
-  users: VacayUser[]
-  pendingInvites: PendingInvite[]
-  incomingInvites: IncomingInvite[]
-  isOwner: boolean
-  isFused: boolean
+  myColor: string
+  connectedUsers: VacayUser[]
+  pendingIncoming: VacayAccessInvite[]
+  pendingOutgoing: VacayOutgoingInvite[]
 }
 
 interface VacayYearsResponse {
@@ -30,7 +20,7 @@ interface VacayYearsResponse {
 
 interface VacayEntriesResponse {
   entries: VacayEntry[]
-  companyHolidays: string[]
+  companyHolidays: VacayCompanyHoliday[]
 }
 
 interface VacayStatsResponse {
@@ -48,21 +38,22 @@ interface VacayHolidayRaw {
 interface VacayApi {
   getPlan: () => Promise<VacayPlanResponse>
   updatePlan: (data: Partial<VacayPlan>) => Promise<{ plan: VacayPlan }>
-  updateColor: (color: string, targetUserId?: number) => Promise<unknown>
-  invite: (userId: number) => Promise<unknown>
-  acceptInvite: (planId: number) => Promise<unknown>
-  declineInvite: (planId: number) => Promise<unknown>
-  cancelInvite: (userId: number) => Promise<unknown>
-  dissolve: () => Promise<unknown>
-  availableUsers: () => Promise<{ users: VacayUser[] }>
+  updateColor: (color: string) => Promise<unknown>
+  grantAccess: (viewerId: number) => Promise<unknown>
+  acceptAccess: (granterId: number) => Promise<unknown>
+  declineAccess: (granterId: number) => Promise<unknown>
+  cancelAccess: (viewerId: number) => Promise<unknown>
+  revokeAccess: (userId: number) => Promise<unknown>
+  availableUsersForAccess: () => Promise<{ users: VacayUser[] }>
+  getForeignEntries: (year: number) => Promise<{ entries: VacayEntry[] }>
   getYears: () => Promise<VacayYearsResponse>
   addYear: (year: number) => Promise<VacayYearsResponse>
   removeYear: (year: number) => Promise<VacayYearsResponse>
   getEntries: (year: number) => Promise<VacayEntriesResponse>
-  toggleEntry: (date: string, targetUserId?: number) => Promise<unknown>
+  toggleEntry: (date: string) => Promise<unknown>
   toggleCompanyHoliday: (date: string) => Promise<unknown>
   getStats: (year: number) => Promise<VacayStatsResponse>
-  updateStats: (year: number, days: number, targetUserId?: number) => Promise<unknown>
+  updateStats: (year: number, days: number) => Promise<unknown>
   getCountries: () => Promise<{ countries: string[] }>
   getHolidays: (year: number, country: string) => Promise<VacayHolidayRaw[]>
   addHolidayCalendar: (data: { region: string; color?: string; label?: string | null }) => Promise<{ calendar: VacayHolidayCalendar }>
@@ -73,21 +64,22 @@ interface VacayApi {
 const api: VacayApi = {
   getPlan: () => ax.get('/addons/vacay/plan').then((r: AxiosResponse) => r.data),
   updatePlan: (data) => ax.put('/addons/vacay/plan', data).then((r: AxiosResponse) => r.data),
-  updateColor: (color, targetUserId) => ax.put('/addons/vacay/color', { color, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
-  invite: (userId) => ax.post('/addons/vacay/invite', { user_id: userId }).then((r: AxiosResponse) => r.data),
-  acceptInvite: (planId) => ax.post('/addons/vacay/invite/accept', { plan_id: planId }).then((r: AxiosResponse) => r.data),
-  declineInvite: (planId) => ax.post('/addons/vacay/invite/decline', { plan_id: planId }).then((r: AxiosResponse) => r.data),
-  cancelInvite: (userId) => ax.post('/addons/vacay/invite/cancel', { user_id: userId }).then((r: AxiosResponse) => r.data),
-  dissolve: () => ax.post('/addons/vacay/dissolve').then((r: AxiosResponse) => r.data),
-  availableUsers: () => ax.get('/addons/vacay/available-users').then((r: AxiosResponse) => r.data),
+  updateColor: (color) => ax.put('/addons/vacay/color', { color }).then((r: AxiosResponse) => r.data),
+  grantAccess: (viewerId) => ax.post('/addons/vacay/access/grant', { viewer_id: viewerId }).then((r: AxiosResponse) => r.data),
+  acceptAccess: (granterId) => ax.post('/addons/vacay/access/accept', { granter_id: granterId }).then((r: AxiosResponse) => r.data),
+  declineAccess: (granterId) => ax.post('/addons/vacay/access/decline', { granter_id: granterId }).then((r: AxiosResponse) => r.data),
+  cancelAccess: (viewerId) => ax.post('/addons/vacay/access/cancel', { viewer_id: viewerId }).then((r: AxiosResponse) => r.data),
+  revokeAccess: (userId) => ax.delete(`/addons/vacay/access/${userId}`).then((r: AxiosResponse) => r.data),
+  availableUsersForAccess: () => ax.get('/addons/vacay/access/available-users').then((r: AxiosResponse) => r.data),
+  getForeignEntries: (year) => ax.get(`/addons/vacay/access/foreign-entries/${year}`).then((r: AxiosResponse) => r.data),
   getYears: () => ax.get('/addons/vacay/years').then((r: AxiosResponse) => r.data),
   addYear: (year) => ax.post('/addons/vacay/years', { year }).then((r: AxiosResponse) => r.data),
   removeYear: (year) => ax.delete(`/addons/vacay/years/${year}`).then((r: AxiosResponse) => r.data),
   getEntries: (year) => ax.get(`/addons/vacay/entries/${year}`).then((r: AxiosResponse) => r.data),
-  toggleEntry: (date, targetUserId) => ax.post('/addons/vacay/entries/toggle', { date, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
+  toggleEntry: (date) => ax.post('/addons/vacay/entries/toggle', { date }).then((r: AxiosResponse) => r.data),
   toggleCompanyHoliday: (date) => ax.post('/addons/vacay/entries/company-holiday', { date }).then((r: AxiosResponse) => r.data),
   getStats: (year) => ax.get(`/addons/vacay/stats/${year}`).then((r: AxiosResponse) => r.data),
-  updateStats: (year, days, targetUserId) => ax.put(`/addons/vacay/stats/${year}`, { vacation_days: days, target_user_id: targetUserId }).then((r: AxiosResponse) => r.data),
+  updateStats: (year, days) => ax.put(`/addons/vacay/stats/${year}`, { vacation_days: days }).then((r: AxiosResponse) => r.data),
   getCountries: () => ax.get('/addons/vacay/holidays/countries').then((r: AxiosResponse) => r.data),
   getHolidays: (year, country) => ax.get(`/addons/vacay/holidays/${year}/${country}`).then((r: AxiosResponse) => r.data),
   addHolidayCalendar: (data) => ax.post('/addons/vacay/plan/holiday-calendars', data).then((r: AxiosResponse) => r.data),
@@ -97,38 +89,39 @@ const api: VacayApi = {
 
 interface VacayState {
   plan: VacayPlan | null
-  users: VacayUser[]
-  pendingInvites: PendingInvite[]
-  incomingInvites: IncomingInvite[]
-  isOwner: boolean
-  isFused: boolean
+  myColor: string
+  connectedUsers: VacayUser[]
+  pendingIncoming: VacayAccessInvite[]
+  pendingOutgoing: VacayOutgoingInvite[]
+  visibleGranterIds: number[]
   years: number[]
   entries: VacayEntry[]
-  companyHolidays: string[]
+  companyHolidays: VacayCompanyHoliday[]
+  foreignEntries: VacayEntry[]
   stats: VacayStat[]
   selectedYear: number
-  selectedUserId: number | null
   holidays: HolidaysMap
   loading: boolean
 
   setSelectedYear: (year: number) => void
-  setSelectedUserId: (id: number | null) => void
+  toggleGranterVisibility: (id: number) => void
   loadPlan: () => Promise<void>
   updatePlan: (updates: Partial<VacayPlan>) => Promise<void>
-  updateColor: (color: string, targetUserId?: number) => Promise<void>
-  invite: (userId: number) => Promise<void>
-  acceptInvite: (planId: number) => Promise<void>
-  declineInvite: (planId: number) => Promise<void>
-  cancelInvite: (userId: number) => Promise<void>
-  dissolve: () => Promise<void>
+  updateColor: (color: string) => Promise<void>
+  grantAccess: (userId: number) => Promise<void>
+  acceptAccess: (granterId: number) => Promise<void>
+  declineAccess: (granterId: number) => Promise<void>
+  cancelAccess: (viewerId: number) => Promise<void>
+  revokeAccess: (userId: number) => Promise<void>
   loadYears: () => Promise<void>
   addYear: (year: number) => Promise<void>
   removeYear: (year: number) => Promise<void>
   loadEntries: (year?: number) => Promise<void>
-  toggleEntry: (date: string, targetUserId?: number) => Promise<void>
+  loadForeignEntries: (year?: number) => Promise<void>
+  toggleEntry: (date: string) => Promise<void>
   toggleCompanyHoliday: (date: string) => Promise<void>
   loadStats: (year?: number) => Promise<void>
-  updateVacationDays: (year: number, days: number, targetUserId?: number) => Promise<void>
+  updateVacationDays: (year: number, days: number) => Promise<void>
   loadHolidays: (year?: number) => Promise<void>
   addHolidayCalendar: (data: { region: string; color?: string; label?: string | null }) => Promise<void>
   updateHolidayCalendar: (id: number, data: { region?: string; color?: string; label?: string | null }) => Promise<void>
@@ -138,32 +131,48 @@ interface VacayState {
 
 export const useVacayStore = create<VacayState>((set, get) => ({
   plan: null,
-  users: [],
-  pendingInvites: [],
-  incomingInvites: [],
-  isOwner: true,
-  isFused: false,
+  myColor: '#6366f1',
+  connectedUsers: [],
+  pendingIncoming: [],
+  pendingOutgoing: [],
+  visibleGranterIds: [],
   years: [],
   entries: [],
   companyHolidays: [],
+  foreignEntries: [],
   stats: [],
   selectedYear: new Date().getFullYear(),
-  selectedUserId: null,
   holidays: {},
   loading: false,
 
   setSelectedYear: (year: number) => set({ selectedYear: year }),
-  setSelectedUserId: (id: number | null) => set({ selectedUserId: id }),
+
+  toggleGranterVisibility: (id: number) => {
+    const { visibleGranterIds } = get()
+    if (visibleGranterIds.includes(id)) {
+      set({ visibleGranterIds: visibleGranterIds.filter(gid => gid !== id) })
+    } else {
+      set({ visibleGranterIds: [...visibleGranterIds, id] })
+    }
+  },
 
   loadPlan: async () => {
     const data = await api.getPlan()
+    const prev = get().visibleGranterIds
+    const connectedUsers: VacayUser[] = data.connectedUsers
+    const newConnectedIds = connectedUsers.map((u: VacayUser) => u.id)
+    // Keep existing visibility; auto-show newly connected users
+    const updated = [
+      ...prev.filter(id => newConnectedIds.includes(id)),
+      ...newConnectedIds.filter(id => !prev.includes(id)),
+    ]
     set({
       plan: data.plan,
-      users: data.users,
-      pendingInvites: data.pendingInvites,
-      incomingInvites: data.incomingInvites,
-      isOwner: data.isOwner,
-      isFused: data.isFused,
+      myColor: data.myColor,
+      connectedUsers,
+      pendingIncoming: data.pendingIncoming,
+      pendingOutgoing: data.pendingOutgoing,
+      visibleGranterIds: updated,
     })
   },
 
@@ -175,34 +184,34 @@ export const useVacayStore = create<VacayState>((set, get) => ({
     await get().loadHolidays()
   },
 
-  updateColor: async (color: string, targetUserId?: number) => {
-    await api.updateColor(color, targetUserId)
-    await get().loadPlan()
-    await get().loadEntries()
+  updateColor: async (color: string) => {
+    await api.updateColor(color)
+    const year = get().selectedYear
+    await Promise.all([get().loadPlan(), get().loadEntries(year), get().loadStats(year)])
   },
 
-  invite: async (userId: number) => {
-    await api.invite(userId)
+  grantAccess: async (userId: number) => {
+    await api.grantAccess(userId)
     await get().loadPlan()
   },
 
-  acceptInvite: async (planId: number) => {
-    await api.acceptInvite(planId)
+  acceptAccess: async (granterId: number) => {
+    await api.acceptAccess(granterId)
     await get().loadAll()
   },
 
-  declineInvite: async (planId: number) => {
-    await api.declineInvite(planId)
+  declineAccess: async (granterId: number) => {
+    await api.declineAccess(granterId)
     await get().loadPlan()
   },
 
-  cancelInvite: async (userId: number) => {
-    await api.cancelInvite(userId)
+  cancelAccess: async (viewerId: number) => {
+    await api.cancelAccess(viewerId)
     await get().loadPlan()
   },
 
-  dissolve: async () => {
-    await api.dissolve()
+  revokeAccess: async (userId: number) => {
+    await api.revokeAccess(userId)
     await get().loadAll()
   },
 
@@ -238,8 +247,14 @@ export const useVacayStore = create<VacayState>((set, get) => ({
     set({ entries: data.entries, companyHolidays: data.companyHolidays })
   },
 
-  toggleEntry: async (date: string, targetUserId?: number) => {
-    await api.toggleEntry(date, targetUserId)
+  loadForeignEntries: async (year?: number) => {
+    const y = year || get().selectedYear
+    const data = await api.getForeignEntries(y)
+    set({ foreignEntries: data.entries })
+  },
+
+  toggleEntry: async (date: string) => {
+    await api.toggleEntry(date)
     await get().loadEntries()
     await get().loadStats()
   },
@@ -256,8 +271,8 @@ export const useVacayStore = create<VacayState>((set, get) => ({
     set({ stats: data.stats })
   },
 
-  updateVacationDays: async (year: number, days: number, targetUserId?: number) => {
-    await api.updateStats(year, days, targetUserId)
+  updateVacationDays: async (year: number, days: number) => {
+    await api.updateStats(year, days)
     await get().loadStats(year)
   },
 
@@ -280,7 +295,7 @@ export const useVacayStore = create<VacayState>((set, get) => ({
         data.forEach((h: VacayHolidayRaw) => {
           if (h.global || !h.counties || (region && h.counties.includes(region))) {
             if (!map[h.date]) {
-              map[h.date] = { name: h.name, localName: h.localName, color: cal.color, label: cal.label }
+              map[h.date] = { name: h.name, localName: h.localName, color: cal.color, label: cal.label } as HolidayInfo
             }
           }
         })
@@ -313,9 +328,12 @@ export const useVacayStore = create<VacayState>((set, get) => ({
       await get().loadPlan()
       await get().loadYears()
       const year = get().selectedYear
-      await get().loadEntries(year)
-      await get().loadStats(year)
-      await get().loadHolidays(year)
+      await Promise.all([
+        get().loadEntries(year),
+        get().loadStats(year),
+        get().loadHolidays(year),
+        get().loadForeignEntries(year),
+      ])
     } finally {
       set({ loading: false })
     }

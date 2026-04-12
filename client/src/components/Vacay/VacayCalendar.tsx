@@ -8,7 +8,7 @@ import { Building2, MousePointer2 } from 'lucide-react'
 
 export default function VacayCalendar() {
   const { t } = useTranslation()
-  const { selectedYear, selectedUserId, entries, companyHolidays, toggleEntry, toggleCompanyHoliday, plan, users, holidays } = useVacayStore()
+  const { selectedYear, entries, companyHolidays, foreignEntries, visibleGranterIds, toggleEntry, toggleCompanyHoliday, plan, holidays } = useVacayStore()
   const [companyMode, setCompanyMode] = useState(false)
   const [tripDates, setTripDates] = useState<Set<string>>(new Set())
 
@@ -36,25 +36,33 @@ export default function VacayCalendar() {
   }, [selectedYear])
 
   const companyHolidaySet = useMemo(() => {
-    const s = new Set()
+    const s = new Set<string>()
     companyHolidays.forEach(h => s.add(h.date))
     return s
   }, [companyHolidays])
 
   const entryMap = useMemo(() => {
-    const map = {}
+    const map: Record<string, { date: string; user_id: number; person_color?: string; person_name?: string }[]> = {}
     entries.forEach(e => {
       if (!map[e.date]) map[e.date] = []
       map[e.date].push(e)
     })
+    foreignEntries
+      .filter(e => visibleGranterIds.includes(e.user_id))
+      .forEach(e => {
+        if (!map[e.date]) map[e.date] = []
+        if (!map[e.date].some(x => x.user_id === e.user_id)) {
+          map[e.date].push(e)
+        }
+      })
     return map
-  }, [entries])
+  }, [entries, foreignEntries, visibleGranterIds])
 
   const blockWeekends = plan?.block_weekends !== false
   const weekendDays: number[] = plan?.weekend_days ? String(plan.weekend_days).split(',').map(Number) : [0, 6]
   const companyHolidaysEnabled = plan?.company_holidays_enabled !== false
 
-  const handleCellClick = useCallback(async (dateStr) => {
+  const handleCellClick = useCallback(async (dateStr: string) => {
     if (companyMode) {
       if (!companyHolidaysEnabled) return
       await toggleCompanyHoliday(dateStr)
@@ -63,10 +71,8 @@ export default function VacayCalendar() {
     if (holidays[dateStr]) return
     if (blockWeekends && isWeekend(dateStr, weekendDays)) return
     if (companyHolidaysEnabled && companyHolidaySet.has(dateStr)) return
-    await toggleEntry(dateStr, selectedUserId || undefined)
-  }, [companyMode, toggleEntry, toggleCompanyHoliday, holidays, companyHolidaySet, blockWeekends, companyHolidaysEnabled, selectedUserId])
-
-  const selectedUser = users.find(u => u.id === selectedUserId)
+    await toggleEntry(dateStr)
+  }, [companyMode, toggleEntry, toggleCompanyHoliday, holidays, companyHolidaySet, blockWeekends, companyHolidaysEnabled])
 
   return (
     <div>
@@ -102,8 +108,7 @@ export default function VacayCalendar() {
               border: companyMode ? '1px solid var(--border-primary)' : '1px solid transparent',
             }}>
             <MousePointer2 size={13} />
-            {selectedUser && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: selectedUser.color }} />}
-            {selectedUser ? selectedUser.username : t('vacay.modeVacation')}
+            {t('vacay.modeVacation')}
           </button>
           {companyHolidaysEnabled && (
             <button
