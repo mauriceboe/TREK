@@ -763,6 +763,13 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'vacay.fuseInfo3': 'Beide können Einträge löschen und den Urlaubsanspruch ändern.',
   'vacay.fuseInfo4': 'Einstellungen wie Feiertage und Betriebsferien werden geteilt.',
   'vacay.fuseInfo5': 'Die Fusion kann jederzeit von beiden Seiten aufgelöst werden. Einträge bleiben erhalten.',
+  'vacay.grantAccess': 'Kalender teilen',
+  'vacay.grantAccessHint': 'Lade einen TREK-Benutzer ein, um ihm Leserechte auf deinen Kalender zu geben. Er sieht deine Urlaubstage in seinem eigenen Kalender.',
+  'vacay.accessInviteTitle': 'Kalender-Freigabe',
+  'vacay.inviteWantsToShare': 'möchte dir seinen Kalender freigeben.',
+  'vacay.accessInfo1': 'Du kannst die Urlaubstage dieser Person in deinem Kalender sehen.',
+  'vacay.accessInfo2': 'Der Zugriff kann jederzeit von beiden Seiten widerrufen werden.',
+  'vacay.revoke': 'Widerrufen',
   'nav.myTrips': 'Meine Trips',
 
   // Atlas addon

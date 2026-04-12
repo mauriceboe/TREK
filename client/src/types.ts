@@ -338,17 +338,15 @@ export interface VacayPlan {
   carry_over_enabled: boolean
   company_holidays_enabled: boolean
   week_start?: number
-  name?: string
-  year?: number
+  weekend_days?: string
   owner_id?: number
   created_at?: string
-  updated_at?: string
 }
 
 export interface VacayUser {
   id: number
   username: string
-  color: string | null
+  color: string
 }
 
 export interface VacayEntry {
@@ -359,10 +357,36 @@ export interface VacayEntry {
   person_name?: string
 }
 
+export interface VacayCompanyHoliday {
+  id: number
+  plan_id: number
+  date: string
+  note: string
+}
+
 export interface VacayStat {
   user_id: number
+  person_name: string
+  person_color: string
+  year: number
   vacation_days: number
+  carried_over: number
+  total_available: number
   used: number
+  remaining: number
+  canEdit?: boolean
+}
+
+export interface VacayAccessInvite {
+  id: number
+  granter_id: number
+  granter_username: string
+}
+
+export interface VacayOutgoingInvite {
+  id: number
+  viewer_id: number
+  viewer_username: string
 }
 
 export interface HolidayInfo {

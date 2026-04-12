@@ -785,6 +785,13 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'vacay.fuseInfo3': 'Both parties can delete entries and change vacation entitlements.',
   'vacay.fuseInfo4': 'Settings like public holidays and company holidays are shared.',
   'vacay.fuseInfo5': 'The fusion can be dissolved at any time by either party. Your entries will be preserved.',
+  'vacay.grantAccess': 'Share Calendar',
+  'vacay.grantAccessHint': 'Invite a TREK user to grant them read access to your calendar. They will see your vacation days in their own calendar.',
+  'vacay.accessInviteTitle': 'Calendar Sharing',
+  'vacay.inviteWantsToShare': 'wants to share their calendar with you.',
+  'vacay.accessInfo1': 'You can see this person\'s vacation days in your calendar.',
+  'vacay.accessInfo2': 'Access can be revoked at any time by either party.',
+  'vacay.revoke': 'Revoke',
   'nav.myTrips': 'My Trips',
 
   // Atlas addon

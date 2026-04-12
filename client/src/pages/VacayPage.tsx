@@ -8,12 +8,12 @@ import VacayCalendar from '../components/Vacay/VacayCalendar'
 import VacayPersons from '../components/Vacay/VacayPersons'
 import VacayStats from '../components/Vacay/VacayStats'
 import VacaySettings from '../components/Vacay/VacaySettings'
-import { Plus, Minus, ChevronLeft, ChevronRight, Settings, CalendarDays, AlertTriangle, Users, Eye, Pencil, Trash2, Unlink, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { Plus, Minus, ChevronLeft, ChevronRight, Settings, CalendarDays, AlertTriangle, Eye, SlidersHorizontal, Share2 } from 'lucide-react'
 import Modal from '../components/shared/Modal'
 
 export default function VacayPage(): React.ReactElement {
   const { t } = useTranslation()
-  const { years, selectedYear, setSelectedYear, addYear, removeYear, loadAll, loadPlan, loadEntries, loadStats, loadHolidays, loading, incomingInvites, acceptInvite, declineInvite, plan } = useVacayStore()
+  const { years, selectedYear, setSelectedYear, addYear, removeYear, loadAll, loadPlan, loadEntries, loadStats, loadHolidays, loadForeignEntries, loading, pendingIncoming, acceptAccess, declineAccess, plan } = useVacayStore()
   const [showSettings, setShowSettings] = useState<boolean>(false)
   const [deleteYear, setDeleteYear] = useState<number | null>(null)
   const [showMobileSidebar, setShowMobileSidebar] = useState<boolean>(false)
@@ -22,13 +22,23 @@ export default function VacayPage(): React.ReactElement {
 
   // Live sync via WebSocket
   const handleWsMessage = useCallback((msg: { type: string }) => {
-    if (msg.type === 'vacay:update' || msg.type === 'vacay:settings') {
+    if (msg.type === 'vacay:update') {
       loadPlan()
       loadEntries(selectedYear)
       loadStats(selectedYear)
-      if (msg.type === 'vacay:settings') loadAll()
+      loadForeignEntries(selectedYear)
     }
-    if (msg.type === 'vacay:invite' || msg.type === 'vacay:accepted' || msg.type === 'vacay:declined' || msg.type === 'vacay:cancelled' || msg.type === 'vacay:dissolved') {
+    if (msg.type === 'vacay:settings') {
+      loadAll()
+    }
+    if (msg.type === 'vacay:access_invite' || msg.type === 'vacay:access_cancelled') {
+      loadPlan()
+    }
+    if (
+      msg.type === 'vacay:access_accepted' ||
+      msg.type === 'vacay:access_declined' ||
+      msg.type === 'vacay:access_revoked'
+    ) {
       loadAll()
     }
   }, [selectedYear])
@@ -37,8 +47,14 @@ export default function VacayPage(): React.ReactElement {
     addListener(handleWsMessage)
     return () => removeListener(handleWsMessage)
   }, [handleWsMessage])
+
   useEffect(() => {
-    if (selectedYear) { loadEntries(selectedYear); loadStats(selectedYear); loadHolidays(selectedYear) }
+    if (selectedYear) {
+      loadEntries(selectedYear)
+      loadStats(selectedYear)
+      loadHolidays(selectedYear)
+      loadForeignEntries(selectedYear)
+    }
   }, [selectedYear])
 
   const handleAddNextYear = () => {
@@ -219,49 +235,47 @@ export default function VacayPage(): React.ReactElement {
             <button onClick={() => setDeleteYear(null)} className="px-4 py-2 text-sm rounded-lg transition-colors" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-primary)' }}>
               {t('common.cancel')}
             </button>
-            <button onClick={async () => { await removeYear(deleteYear); setDeleteYear(null) }} className="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
+            <button onClick={async () => { await removeYear(deleteYear!); setDeleteYear(null) }} className="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
               {t('vacay.remove')}
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Incoming invite — forced fullscreen modal */}
-      {incomingInvites.length > 0 && ReactDOM.createPortal(
+      {/* Incoming access invite — fullscreen modal */}
+      {pendingIncoming.length > 0 && ReactDOM.createPortal(
         <div className="fixed inset-0 flex items-center justify-center px-4"
           style={{ zIndex: 99995, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
-          {incomingInvites.map(inv => (
+          {pendingIncoming.map(inv => (
             <div key={inv.id} className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
               style={{ background: 'var(--bg-card)', animation: 'modalIn 0.25s ease-out' }}>
               <div className="px-6 pt-6 pb-4 text-center">
                 <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center text-lg font-bold"
                   style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
-                  {inv.username?.[0]?.toUpperCase()}
+                  {inv.granter_username?.[0]?.toUpperCase()}
                 </div>
                 <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                  {t('vacay.inviteTitle')}
+                  {t('vacay.accessInviteTitle')}
                 </h2>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{inv.username}</span> {t('vacay.inviteWantsToFuse')}
+                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{inv.granter_username}</span>{' '}
+                  {t('vacay.inviteWantsToShare')}
                 </p>
               </div>
               <div className="px-6 pb-4 space-y-2">
-                <InfoItem icon={Eye} text={t('vacay.fuseInfo1')} />
-                <InfoItem icon={Pencil} text={t('vacay.fuseInfo2')} />
-                <InfoItem icon={Trash2} text={t('vacay.fuseInfo3')} />
-                <InfoItem icon={ShieldCheck} text={t('vacay.fuseInfo4')} />
-                <InfoItem icon={Unlink} text={t('vacay.fuseInfo5')} />
+                <InfoItem icon={Eye} text={t('vacay.accessInfo1')} />
+                <InfoItem icon={Share2} text={t('vacay.accessInfo2')} />
               </div>
               <div className="px-6 pb-6 flex gap-3">
-                <button onClick={() => declineInvite(inv.plan_id)}
+                <button onClick={() => declineAccess(inv.granter_id)}
                   className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"
                   style={{ color: 'var(--text-muted)', border: '1px solid var(--border-primary)' }}>
                   {t('vacay.decline')}
                 </button>
-                <button onClick={() => acceptInvite(inv.plan_id)}
+                <button onClick={() => acceptAccess(inv.granter_id)}
                   className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"
                   style={{ background: 'var(--text-primary)', color: 'var(--bg-card)' }}>
-                  {t('vacay.acceptFusion')}
+                  {t('vacay.accept')}
                 </button>
               </div>
             </div>
