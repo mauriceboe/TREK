@@ -439,4 +439,53 @@ describe('authStore', () => {
       uploadSpy.mockRestore();
     });
   });
+
+  describe('FE-STORE-AUTH-PERSIST-001: logout resets persisted snapshot', () => {
+    it('snapshot has isAuthenticated:false after logout (PWA offline will redirect to login)', () => {
+      useAuthStore.setState({ user: buildUser(), isAuthenticated: true });
+
+      useAuthStore.getState().logout();
+
+      const snapshot = JSON.parse(localStorage.getItem('trek_auth_snapshot') ?? '{}');
+      expect(snapshot?.state?.isAuthenticated).toBe(false);
+      expect(snapshot?.state?.user).toBeNull();
+    });
+  });
+
+  describe('FE-STORE-AUTH-PERSIST-002: 401 resets persisted snapshot', () => {
+    it('snapshot has isAuthenticated:false after 401 (expired session clears offline access)', async () => {
+      useAuthStore.setState({ user: buildUser(), isAuthenticated: true });
+
+      server.use(
+        http.get('/api/auth/me', () =>
+          HttpResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        )
+      );
+
+      await useAuthStore.getState().loadUser();
+
+      const snapshot = JSON.parse(localStorage.getItem('trek_auth_snapshot') ?? '{}');
+      expect(snapshot?.state?.isAuthenticated).toBe(false);
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    });
+  });
+
+  describe('FE-STORE-AUTH-PERSIST-003: network error preserves snapshot', () => {
+    it('snapshot retains isAuthenticated:true on network error (offline PWA skips login screen)', async () => {
+      useAuthStore.setState({ user: buildUser(), isAuthenticated: true });
+
+      server.use(
+        http.get('/api/auth/me', () =>
+          HttpResponse.json({ error: 'Server error' }, { status: 500 })
+        )
+      );
+
+      await useAuthStore.getState().loadUser();
+
+      // Persist middleware writes the state; isAuthenticated must stay true
+      const snapshot = JSON.parse(localStorage.getItem('trek_auth_snapshot') ?? '{}');
+      expect(snapshot?.state?.isAuthenticated).toBe(true);
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    });
+  });
 });

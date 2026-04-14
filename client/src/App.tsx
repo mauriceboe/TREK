@@ -93,7 +93,15 @@ export default function App() {
 
   useEffect(() => {
     if (!location.pathname.startsWith('/shared/') && !location.pathname.startsWith('/public/') && !location.pathname.startsWith('/login')) {
-      loadUser()
+      // If the persist snapshot already has an authenticated user, validate
+      // silently so the PWA shell renders immediately without a spinner.
+      const alreadyAuthenticated = useAuthStore.getState().isAuthenticated
+      if (alreadyAuthenticated) {
+        useAuthStore.setState({ isLoading: false })
+        loadUser({ silent: true })
+      } else {
+        loadUser()
+      }
     }
     authApi.getAppConfig().then(async (config: { demo_mode?: boolean; dev_mode?: boolean; is_prerelease?: boolean; has_maps_key?: boolean; version?: string; timezone?: string; require_mfa?: boolean; trip_reminders_enabled?: boolean; permissions?: Record<string, PermissionLevel> }) => {
       if (config?.demo_mode) setDemoMode(true)

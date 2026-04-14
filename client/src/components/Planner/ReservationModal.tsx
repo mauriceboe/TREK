@@ -10,7 +10,7 @@ import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
 import CustomTimePicker from '../shared/CustomTimePicker'
-import { getAuthUrl } from '../../api/authUrl'
+import { openFile } from '../../utils/fileDownload'
 import type { Day, Place, Reservation, TripFile, AssignmentsMap, Accommodation } from '../../types'
 
 const TYPE_OPTIONS = [
@@ -587,7 +587,7 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
               <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
                 <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
-                <a href="#" onClick={async (e) => { e.preventDefault(); const u = await getAuthUrl(f.url, 'download'); window.open(u, '_blank', 'noreferrer') }} style={{ color: 'var(--text-faint)', display: 'flex', flexShrink: 0, cursor: 'pointer' }}><ExternalLink size={11} /></a>
+                <a href="#" onClick={(e) => { e.preventDefault(); openFile(f.url).catch(() => {}) }} style={{ color: 'var(--text-faint)', display: 'flex', flexShrink: 0, cursor: 'pointer' }}><ExternalLink size={11} /></a>
                 <button type="button" onClick={async () => {
                   // Always unlink, never delete the file
                   // Clear primary reservation_id if it points to this reservation

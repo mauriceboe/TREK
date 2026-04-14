@@ -7,6 +7,7 @@ import remarkBreaks from 'remark-breaks'
 import { Plus, Trash2, Pin, PinOff, Pencil, X, Check, StickyNote, Settings, ExternalLink, Maximize2, Loader2 } from 'lucide-react'
 import { collabApi } from '../../api/client'
 import { getAuthUrl } from '../../api/authUrl'
+import { openFile } from '../../utils/fileDownload'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 import { addListener, removeListener } from '../../api/websocket'
@@ -111,10 +112,7 @@ function FilePreviewPortal({ file, onClose }: FilePreviewPortalProps) {
   const isPdf = file.mime_type === 'application/pdf'
   const isTxt = file.mime_type?.startsWith('text/')
 
-  const openInNewTab = async () => {
-    const u = await getAuthUrl(rawUrl, 'download')
-    window.open(u, '_blank', 'noreferrer')
-  }
+  const openInNewTab = () => openFile(rawUrl).catch(() => {})
 
   return ReactDOM.createPortal(
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>

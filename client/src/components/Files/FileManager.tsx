@@ -10,6 +10,7 @@ import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 
 import { getAuthUrl } from '../../api/authUrl'
+import { downloadFile, openFile } from '../../utils/fileDownload'
 
 function isImage(mimeType) {
   if (!mimeType) return false
@@ -30,16 +31,8 @@ function formatSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-async function triggerDownload(url: string, filename: string) {
-  const authUrl = await getAuthUrl(url, 'download')
-  const res = await fetch(authUrl)
-  const blob = await res.blob()
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 100)
+function triggerDownload(url: string, filename: string) {
+  downloadFile(url, filename).catch(() => {})
 }
 
 function formatDateWithLocale(dateStr, locale) {
@@ -120,7 +113,7 @@ function ImageLightbox({ files, initialIndex, onClose }: ImageLightboxProps) {
         </span>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button
-            onClick={async () => { const u = await getAuthUrl(file.url, 'download'); window.open(u, '_blank', 'noreferrer') }}
+            onClick={() => openFile(file.url).catch(() => {})}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', display: 'flex', padding: 4 }}
             title={t('files.openTab')}>
             <ExternalLink size={16} />
@@ -750,7 +743,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{previewFile.original_name}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <button
-                  onClick={async () => { const u = await getAuthUrl(previewFile.url, 'download'); window.open(u, '_blank', 'noreferrer') }}
+                  onClick={() => openFile(previewFile.url).catch(() => {})}
                   style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'none', padding: '4px 8px', borderRadius: 6, transition: 'color 0.15s' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}>
@@ -778,7 +771,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
               title={previewFile.original_name}
             >
               <p style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
-                <button onClick={async () => { const u = await getAuthUrl(previewFile.url, 'download'); window.open(u, '_blank', 'noopener noreferrer') }} style={{ color: 'var(--text-primary)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}>{t('files.downloadPdf')}</button>
+                <button onClick={() => openFile(previewFile.url).catch(() => {})} style={{ color: 'var(--text-primary)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}>{t('files.downloadPdf')}</button>
               </p>
             </object>
           </div>

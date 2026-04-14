@@ -10,7 +10,7 @@ import {
   Calendar, Hash, CheckCircle2, Circle, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Users,
   ExternalLink, BookMarked, Lightbulb, Link2, Clock,
 } from 'lucide-react'
-import { getAuthUrl } from '../../api/authUrl'
+import { openFile } from '../../utils/fileDownload'
 import type { Reservation, Day, TripFile, AssignmentsMap } from '../../types'
 
 interface AssignmentLookupEntry {
@@ -253,7 +253,7 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
           <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 3 }}>{t('files.title')}</div>
           <div style={{ padding: '4px 8px', borderRadius: 7, background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: 3 }}>
             {attachedFiles.map(f => (
-              <a key={f.id} href="#" onClick={async (e) => { e.preventDefault(); const u = await getAuthUrl(f.url, 'download'); window.open(u, '_blank', 'noreferrer') }} style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', cursor: 'pointer' }}>
+              <a key={f.id} href="#" onClick={(e) => { e.preventDefault(); openFile(f.url).catch(() => {}) }} style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', cursor: 'pointer' }}>
                 <FileText size={9} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
               </a>
