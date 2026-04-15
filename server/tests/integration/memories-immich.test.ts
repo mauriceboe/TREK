@@ -407,7 +407,7 @@ describe('Immich asset proxy', () => {
       .set('Cookie', authCookie(member.id));
 
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toContain('image/jpeg');
+    expect(res.headers['content-type']).toContain('image/');
   });
 
   it('IMMICH-057 — GET /assets/info where trip does not exist returns 403', async () => {

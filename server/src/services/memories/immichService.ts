@@ -241,9 +241,10 @@ export async function streamImmichAsset(
   const creds = getImmichCredentials(effectiveUserId);
   if (!creds) return { error: 'Not found', status: 404 };
 
-  const path = kind === 'thumbnail' ? 'thumbnail' : 'original';
   const timeout = kind === 'thumbnail' ? 10000 : 30000;
-  const url = `${creds.immich_url}/api/assets/${assetId}/${path}`;
+  const url = kind === 'thumbnail'
+    ? `${creds.immich_url}/api/assets/${assetId}/thumbnail?size=thumbnail`
+    : `${creds.immich_url}/api/assets/${assetId}/thumbnail?size=fullsize`;
 
   response.set('Cache-Control', 'public, max-age=86400');
   await pipeAsset(url, response, { 'x-api-key': creds.immich_api_key }, AbortSignal.timeout(timeout));
