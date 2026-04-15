@@ -200,6 +200,24 @@ router.put('/bag-tracking', (req: Request, res: Response) => {
   res.json(result);
 });
 
+// ── Collab Features ───────────────────────────────────────────────────────
+
+router.get('/collab-features', (_req: Request, res: Response) => {
+  res.json(svc.getCollabFeatures());
+});
+
+router.put('/collab-features', (req: Request, res: Response) => {
+  const result = svc.updateCollabFeatures(req.body);
+  const authReq = req as AuthRequest;
+  writeAudit({
+    userId: authReq.user.id,
+    action: 'admin.collab_features',
+    ip: getClientIp(req),
+    details: result,
+  });
+  res.json(result);
+});
+
 // ── Packing Templates ──────────────────────────────────────────────────────
 
 router.get('/packing-templates', (_req: Request, res: Response) => {

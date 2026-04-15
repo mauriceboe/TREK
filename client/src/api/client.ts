@@ -272,6 +272,8 @@ export const adminApi = {
   checkVersion: () => apiClient.get('/admin/version-check').then(r => r.data),
   getBagTracking: () => apiClient.get('/admin/bag-tracking').then(r => r.data),
   updateBagTracking: (enabled: boolean) => apiClient.put('/admin/bag-tracking', { enabled }).then(r => r.data),
+  getCollabFeatures: () => apiClient.get('/admin/collab-features').then(r => r.data),
+  updateCollabFeatures: (features: Record<string, boolean>) => apiClient.put('/admin/collab-features', features).then(r => r.data),
   packingTemplates: () => apiClient.get('/admin/packing-templates').then(r => r.data),
   getPackingTemplate: (id: number) => apiClient.get(`/admin/packing-templates/${id}`).then(r => r.data),
   createPackingTemplate: (data: { name: string }) => apiClient.post('/admin/packing-templates', data).then(r => r.data),

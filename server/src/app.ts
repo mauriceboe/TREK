@@ -45,6 +45,7 @@ import publicConfigRoutes from './routes/publicConfig';
 import { mcpHandler } from './mcp';
 import { Addon } from './types';
 import { getPhotoProviderConfig } from './services/memories/helpersService';
+import { getCollabFeatures } from './services/adminService';
 
 export function createApp(): express.Application {
   const app = express();
@@ -236,6 +237,7 @@ export function createApp(): express.Application {
     }
 
     res.json({
+      collabFeatures: getCollabFeatures(),
       addons: [
         ...addons.map(a => ({ ...a, enabled: !!a.enabled })),
         ...providers.map(p => ({

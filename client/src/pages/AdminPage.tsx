@@ -192,6 +192,10 @@ export default function AdminPage(): React.ReactElement {
   const [bagTrackingEnabled, setBagTrackingEnabled] = useState<boolean>(false)
   useEffect(() => { adminApi.getBagTracking().then(d => setBagTrackingEnabled(d.enabled)).catch(() => {}) }, [])
 
+  // Collab features
+  const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, polls: true, whatsnext: true })
+  useEffect(() => { adminApi.getCollabFeatures().then(d => setCollabFeatures(d)).catch(() => {}) }, [])
+
   // OIDC config
   const [oidcConfig, setOidcConfig] = useState<OidcConfig>({ issuer: '', client_id: '', client_secret: '', client_secret_set: false, display_name: '', discovery_url: '' })
   const [savingOidc, setSavingOidc] = useState<boolean>(false)
@@ -797,6 +801,10 @@ export default function AdminPage(): React.ReactElement {
                 const next = !bagTrackingEnabled
                 setBagTrackingEnabled(next)
                 try { await adminApi.updateBagTracking(next) } catch { setBagTrackingEnabled(!next) }
+              }} collabFeatures={collabFeatures} onToggleCollabFeature={async (key: string) => {
+                const next = { ...collabFeatures, [key]: !collabFeatures[key] }
+                setCollabFeatures(next)
+                try { await adminApi.updateCollabFeatures({ [key]: next[key] }) } catch { setCollabFeatures(collabFeatures) }
               }} />
             </div>
           )}
