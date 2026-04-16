@@ -63,7 +63,7 @@ export function validateShareTokenForPhoto(token: string, photoId: number): { jo
     FROM journey_photos jp
     JOIN trek_photos tkp ON tkp.id = jp.photo_id
     JOIN journey_entries je ON jp.entry_id = je.id
-    WHERE jp.id = ? AND je.journey_id = ?
+    WHERE jp.photo_id = ? AND je.journey_id = ?
   `).get(photoId, row.journey_id) as any;
   if (!photo) return null;
   const journey = db.prepare('SELECT user_id FROM journeys WHERE id = ?').get(row.journey_id) as any;

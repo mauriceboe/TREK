@@ -273,18 +273,19 @@ describe('Immich browse and search', () => {
     expect(res.body.buckets.length).toBeGreaterThan(0);
   });
 
-  it('IMMICH-042 — POST /search returns mapped assets', async () => {
+  it('IMMICH-042 — POST /search returns mapped assets with hasMore flag', async () => {
     const { user } = createUser(testDb);
     setImmichCredentials(testDb, user.id, 'https://immich.example.com', 'test-api-key');
 
     const res = await request(app)
       .post(`${IMMICH}/search`)
       .set('Cookie', authCookie(user.id))
-      .send({});
+      .send({ page: 1, size: 50 });
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.assets)).toBe(true);
     expect(res.body.assets[0]).toMatchObject({ id: 'asset-search-1', city: 'Paris', country: 'France' });
+    expect(typeof res.body.hasMore).toBe('boolean');
   });
 
   it('IMMICH-043 — POST /search when upstream throws returns 502', async () => {
@@ -611,43 +612,77 @@ describe('Immich syncAlbumAssets', () => {
 
 // ── searchPhotos pagination safety ────────────────────────────────────────────
 
-describe('Immich searchPhotos pagination safety', () => {
-  it('IMMICH-090 — searchPhotos stops at page 20 when hasMore is always true', async () => {
+describe('Immich searchPhotos pagination pass-through', () => {
+  it('IMMICH-090 — POST /search proxies client page param and returns hasMore', async () => {
     const { user } = createUser(testDb);
     setImmichCredentials(testDb, user.id, 'https://immich.example.com', 'test-api-key');
 
-    // Return a full page of 1000 items on every call, so the loop would
-    // run indefinitely without the page > 20 safety check.
+    // Return a full page so hasMore=true (items.length >= size)
     const fullPageResponse = {
       ok: true, status: 200,
       headers: { get: () => null },
       json: () => Promise.resolve({
         assets: {
-          items: Array.from({ length: 1000 }, (_, i) => ({
-            id: `asset-${i}`,
+          items: Array.from({ length: 50 }, (_, i) => ({
+            id: `asset-p2-${i}`,
             fileCreatedAt: '2024-06-01T10:00:00.000Z',
-            exifInfo: { city: 'Paris', country: 'France' },
+            exifInfo: { city: 'Berlin', country: 'Germany' },
           })),
         },
       }),
       body: null,
     } as any;
 
-    // Clear previous call history so the count only reflects this test
     vi.mocked(safeFetch).mockClear();
     vi.mocked(safeFetch).mockResolvedValue(fullPageResponse);
 
     const res = await request(app)
       .post(`${IMMICH}/search`)
       .set('Cookie', authCookie(user.id))
-      .send({});
+      .send({ page: 2, size: 50 });
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.assets)).toBe(true);
-    // 20 pages × 1000 items = 20000 assets total (safety limit)
-    expect(res.body.assets.length).toBe(20000);
-    // safeFetch should have been called exactly 20 times (the safety limit)
-    expect(vi.mocked(safeFetch)).toHaveBeenCalledTimes(20);
+    // Single page returned — not 20× aggregation
+    expect(res.body.assets.length).toBe(50);
+    expect(res.body.hasMore).toBe(true);
+    // Immich was called exactly once
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledTimes(1);
+    // page=2 was forwarded to Immich
+    const callBody = JSON.parse(vi.mocked(safeFetch).mock.calls[0][1]!.body as string);
+    expect(callBody.page).toBe(2);
+  });
+
+  it('IMMICH-091 — POST /search returns hasMore=false on last page', async () => {
+    const { user } = createUser(testDb);
+    setImmichCredentials(testDb, user.id, 'https://immich.example.com', 'test-api-key');
+
+    // Partial page → hasMore=false
+    const partialPageResponse = {
+      ok: true, status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve({
+        assets: {
+          items: Array.from({ length: 3 }, (_, i) => ({
+            id: `asset-last-${i}`,
+            fileCreatedAt: '2024-06-01T10:00:00.000Z',
+            exifInfo: { city: 'Rome', country: 'Italy' },
+          })),
+        },
+      }),
+      body: null,
+    } as any;
+
+    vi.mocked(safeFetch).mockResolvedValue(partialPageResponse);
+
+    const res = await request(app)
+      .post(`${IMMICH}/search`)
+      .set('Cookie', authCookie(user.id))
+      .send({ page: 5, size: 50 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.assets.length).toBe(3);
+    expect(res.body.hasMore).toBe(false);
   });
 });
 

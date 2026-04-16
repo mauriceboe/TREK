@@ -1,8 +1,8 @@
 // FE-COMP-JOURNEYPDF-001 to FE-COMP-JOURNEYPDF-006
 //
 // JourneyBookPDF.tsx exports an async function `downloadJourneyBookPDF(journey)`
-// that opens a new browser window and writes a full HTML document into it.
-// It does NOT render a React component. Tests verify window.open behaviour.
+// that renders a PDF preview in an srcdoc iframe overlay (Safari-safe pattern).
+// Tests verify the overlay DOM structure and HTML content.
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
@@ -77,55 +77,57 @@ function buildJourney(overrides: Partial<JourneyDetail> = {}): JourneyDetail {
   } as unknown as JourneyDetail;
 }
 
-// ── Mock window.open ─────────────────────────────────────────────────────────
+// ── Helpers to inspect the overlay ───────────────────────────────────────────
 
-let mockWindow: {
-  document: { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
-  focus: ReturnType<typeof vi.fn>;
-};
+function getOverlay(): HTMLElement | null {
+  return document.getElementById('journey-pdf-overlay');
+}
 
-beforeEach(() => {
-  mockWindow = {
-    document: { write: vi.fn(), close: vi.fn() },
-    focus: vi.fn(),
-  };
-  vi.spyOn(window, 'open').mockReturnValue(mockWindow as any);
-});
+function getIframe(): HTMLIFrameElement | null {
+  return getOverlay()?.querySelector('iframe') ?? null;
+}
+
+// ── Setup ────────────────────────────────────────────────────────────────────
 
 afterEach(() => {
+  document.getElementById('journey-pdf-overlay')?.remove();
   vi.restoreAllMocks();
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('downloadJourneyBookPDF', () => {
-  it('FE-COMP-JOURNEYPDF-001: opens a new window', async () => {
+  it('FE-COMP-JOURNEYPDF-001: appends overlay to document body', async () => {
     await downloadJourneyBookPDF(buildJourney());
-    expect(window.open).toHaveBeenCalledWith('', '_blank');
+    expect(getOverlay()).not.toBeNull();
+    expect(document.body.contains(getOverlay())).toBe(true);
   });
 
-  it('FE-COMP-JOURNEYPDF-002: writes HTML to the new window', async () => {
+  it('FE-COMP-JOURNEYPDF-002: overlay contains an iframe with srcdoc HTML', async () => {
     await downloadJourneyBookPDF(buildJourney());
-    expect(mockWindow.document.write).toHaveBeenCalledTimes(1);
-    const html = mockWindow.document.write.mock.calls[0][0] as string;
+    const iframe = getIframe();
+    expect(iframe).not.toBeNull();
+    const html = iframe!.srcdoc;
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('</html>');
   });
 
-  it('FE-COMP-JOURNEYPDF-003: closes the document after writing', async () => {
+  it('FE-COMP-JOURNEYPDF-003: overlay has close and save buttons', async () => {
     await downloadJourneyBookPDF(buildJourney());
-    expect(mockWindow.document.close).toHaveBeenCalledTimes(1);
+    const overlay = getOverlay()!;
+    expect(overlay.querySelector('#journey-pdf-close')).not.toBeNull();
+    expect(overlay.querySelector('#journey-pdf-save')).not.toBeNull();
   });
 
   it('FE-COMP-JOURNEYPDF-004: HTML contains the journey title', async () => {
     await downloadJourneyBookPDF(buildJourney());
-    const html = mockWindow.document.write.mock.calls[0][0] as string;
+    const html = getIframe()!.srcdoc;
     expect(html).toContain('Iceland Ring Road');
   });
 
   it('FE-COMP-JOURNEYPDF-005: HTML contains entry content', async () => {
     await downloadJourneyBookPDF(buildJourney());
-    const html = mockWindow.document.write.mock.calls[0][0] as string;
+    const html = getIframe()!.srcdoc;
     expect(html).toContain('Golden Circle');
     // Story text is rendered via markdown
     expect(html).toContain('An incredible day of geysers and waterfalls.');
@@ -137,8 +139,8 @@ describe('downloadJourneyBookPDF', () => {
   it('FE-COMP-JOURNEYPDF-006: handles empty entries gracefully', async () => {
     const journey = buildJourney({ entries: [] });
     await downloadJourneyBookPDF(journey);
-    expect(window.open).toHaveBeenCalled();
-    const html = mockWindow.document.write.mock.calls[0][0] as string;
+    expect(getOverlay()).not.toBeNull();
+    const html = getIframe()!.srcdoc;
     expect(html).toContain('Iceland Ring Road');
     // No entry pages, but cover and closing page are still present
     expect(html).toContain('Journey Book');

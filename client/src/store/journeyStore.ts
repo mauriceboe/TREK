@@ -124,7 +124,8 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
   },
 
   loadJourney: async (id) => {
-    set({ loading: true, notFound: false })
+    const cold = get().current?.id !== id
+    if (cold) set({ loading: true, notFound: false })
     try {
       const data = await journeyApi.get(id)
       set({ current: data })
@@ -134,7 +135,7 @@ export const useJourneyStore = create<JourneyState>((set, get) => ({
       }
       throw err
     } finally {
-      set({ loading: false })
+      if (cold) set({ loading: false })
     }
   },
 

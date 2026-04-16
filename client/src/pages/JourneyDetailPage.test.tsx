@@ -674,7 +674,10 @@ describe('JourneyDetailPage', () => {
   // ── FE-PAGE-JOURNEYDETAIL-027 ──────────────────────────────────────────
   describe('FE-PAGE-JOURNEYDETAIL-027: Shows loading spinner before data loads', () => {
     it('renders a spinner while journey data is loading', () => {
-      // Do NOT await the waitFor -- we check the loading state before data arrives
+      // Pre-seed the store into a loading state (current: null, loading: true).
+      // We can't rely on render() timing because RTL wraps in act(), which flushes
+      // all microtasks including the MSW response before render() returns.
+      useJourneyStore.setState({ loading: true, current: null });
       render(<JourneyDetailPage />);
       // The spinner has animate-spin class on a div
       const spinner = document.querySelector('.animate-spin');

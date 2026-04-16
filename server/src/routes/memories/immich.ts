@@ -60,16 +60,12 @@ router.get('/browse', authenticate, async (req: Request, res: Response) => {
 
 router.post('/search', authenticate, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { from, to, size } = req.body;
+  const { from, to, size, page } = req.body;
+  const pageNum = Math.max(1, Number(page) || 1);
   const pageSize = Math.min(Number(size) || 50, 200);
-  const allAssets: any[] = [];
-  for (let page = 1; page <= 20; page++) {
-    const result = await searchPhotos(authReq.user.id, from, to, page, pageSize);
-    if (result.error) return res.status(result.status!).json({ error: result.error });
-    if (result.assets) allAssets.push(...result.assets);
-    if (!result.hasMore) break;
-  }
-  res.json({ assets: allAssets });
+  const result = await searchPhotos(authReq.user.id, from, to, pageNum, pageSize);
+  if (result.error) return res.status(result.status!).json({ error: result.error });
+  res.json({ assets: result.assets || [], hasMore: !!result.hasMore });
 });
 
 // ── Asset Details ──────────────────────────────────────────────────────────

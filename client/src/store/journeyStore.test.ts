@@ -314,6 +314,47 @@ describe('journeyStore', () => {
     expect(storedEntry?.photos[0].id).toBe(201);
   });
 
+  // ── loadJourney silent refresh ───────────────────────────────────────────
+
+  it('FE-STORE-JOURNEY-016: loadJourney does not set loading when refreshing same journey', async () => {
+    const existing = buildJourneyDetail({ id: 5, title: 'Old' });
+    useJourneyStore.setState({ current: existing, loading: false });
+
+    const loadingValues: boolean[] = [];
+    const unsub = useJourneyStore.subscribe(s => loadingValues.push(s.loading));
+
+    const refreshed = buildJourneyDetail({ id: 5, title: 'Refreshed' });
+    server.use(
+      http.get('/api/journeys/5', () => HttpResponse.json(refreshed))
+    );
+
+    await useJourneyStore.getState().loadJourney(5);
+    unsub();
+
+    expect(loadingValues.every(v => v === false)).toBe(true);
+    expect(useJourneyStore.getState().current?.title).toBe('Refreshed');
+  });
+
+  it('FE-STORE-JOURNEY-017: loadJourney sets loading on cold load (different journey)', async () => {
+    const existing = buildJourneyDetail({ id: 5 });
+    useJourneyStore.setState({ current: existing, loading: false });
+
+    const loadingValues: boolean[] = [];
+    const unsub = useJourneyStore.subscribe(s => loadingValues.push(s.loading));
+
+    const other = buildJourneyDetail({ id: 99 });
+    server.use(
+      http.get('/api/journeys/99', () => HttpResponse.json(other))
+    );
+
+    await useJourneyStore.getState().loadJourney(99);
+    unsub();
+
+    expect(loadingValues).toContain(true);
+    expect(useJourneyStore.getState().current?.id).toBe(99);
+    expect(useJourneyStore.getState().loading).toBe(false);
+  });
+
   // ── clear ────────────────────────────────────────────────────────────────
 
   it('FE-STORE-JOURNEY-015: clear resets state', () => {
