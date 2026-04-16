@@ -433,22 +433,30 @@ export async function testSynologyConnection(userId: number, synologyUrl: string
 }
 
 export async function listSynologyAlbums(userId: number): Promise<ServiceResult<AlbumsList>> {
-    const result = await _requestSynologyApi<{ list: SynologyPhotoItem[] }>(userId, {
-        api: 'SYNO.Foto.Browse.Album',
-        method: 'list',
-        version: 4,
-        offset: 0,
-        limit: 100,
-    });
-    if (!result.success) return result as ServiceResult<AlbumsList>;
+    const allAlbums: AlbumsList = {albums: []};
+    const LIMIT = 1000; // Synology API max limit per request
+    for(let i = 0; true; i++) {
+        const result = await _requestSynologyApi<{ list: SynologyPhotoItem[] }>(userId, {
+            api: 'SYNO.Foto.Browse.Album',
+            method: 'list',
+            version: 4,
+            category: 'normal_share_with_me',
+            offset: i*LIMIT,
+            limit: LIMIT,
+            additional: ["sharing_info"],
+        });
+        if (!result.success) return result as ServiceResult<AlbumsList>;
 
-    const albums = (result.data.list || []).map((album: any) => ({
-        id: String(album.id),
-        albumName: album.name || '',
-        assetCount: album.item_count || 0,
-    }));
+        const albums = (result.data.list || []).map((album: any) => ({
+            id: album.passphrase?.trim() ? album.passphrase.trim() : String(album.id),
+            albumName: album.name || '',
+            assetCount: album.item_count || 0,
+        }));
+        allAlbums.albums.push(...albums);
+        if (result.data.list.length < LIMIT) break;
+    };
 
-    return success({ albums });
+    return success(allAlbums);
 }
 
 
