@@ -100,8 +100,8 @@ router.post('/search', authenticate, async (req: Request, res: Response) => {
     const page = _parseNumberBodyField(body.page, 1) - 1;
     let limit = _parseNumberBodyField(body.limit, 100);
     const size = _parseNumberBodyField(body.size, 0);
-    if(page > 0) offset = page*limit;
     if(size > 0) limit = size;
+    if(page > 0) offset = page*limit;
 
     handleServiceResult(res, await searchSynologyPhotos(
         authReq.user.id,
