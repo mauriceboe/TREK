@@ -150,39 +150,72 @@ export default function JourneyPage() {
             )}
           </div>
 
-          {/* Header — desktop */}
-          <div className="hidden md:flex items-start justify-between px-8 pt-10 pb-7">
-            <div>
-              <h1 className="text-[32px] font-extrabold tracking-[-0.025em] text-zinc-900 dark:text-white leading-none">{t('journey.title')}</h1>
-              <p className="text-[13px] text-zinc-500 mt-1.5">{t("journey.frontpage.subtitle")}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {searchOpen && (
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false) } }}
-                  placeholder={t('journey.search.placeholder')}
-                  autoFocus
-                  className="w-52 px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-[10px] text-[13px] bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:border-zinc-400 focus:outline-none"
-                />
-              )}
-              <button
-                onClick={() => {
-                  setSearchOpen(s => !s)
-                  if (searchOpen) setSearchQuery('')
-                }}
-                className={`w-9 h-9 rounded-[10px] border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-500 transition-colors ${searchOpen ? 'bg-zinc-100 dark:bg-zinc-700' : 'bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
-              >
-                {searchOpen ? <X size={15} /> : <Search size={15} />}
-              </button>
-              <button
-                onClick={() => openCreateModal()}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-all hover:-translate-y-px"
-              >
-                <Plus size={14} />
-                {t('journey.frontpage.createJourney')}
-              </button>
+          {/* Header — desktop (unified toolbar) */}
+          <div className="hidden md:block px-8 pt-10 pb-7">
+            <div style={{
+              background: 'var(--bg-tertiary)', borderRadius: 18,
+              border: '1px solid var(--border-primary)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+              padding: '14px 16px 14px 22px',
+              display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+            }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', flexShrink: 0 }}>
+                {t('journey.title')}
+              </h2>
+              <div style={{ width: 1, height: 22, background: 'var(--border-faint)', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                {t('journey.frontpage.subtitle')}
+              </span>
+
+              <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginLeft: 'auto', flexShrink: 0 }}>
+                {searchOpen && (
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false) } }}
+                    placeholder={t('journey.search.placeholder')}
+                    autoFocus
+                    className="w-52 px-3 py-2 rounded-[10px] text-[13px] bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none"
+                    style={{ border: '1px solid var(--border-primary)' }}
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    setSearchOpen(s => !s)
+                    if (searchOpen) setSearchQuery('')
+                  }}
+                  title={t('journey.search.placeholder')}
+                  style={{
+                    appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '7px 11px', borderRadius: 99,
+                    background: searchOpen ? 'var(--bg-card)' : 'transparent',
+                    color: searchOpen ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: searchOpen ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { if (!searchOpen) { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.color = 'var(--text-primary)' } }}
+                  onMouseLeave={e => { if (!searchOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' } }}
+                >
+                  {searchOpen ? <X size={15} /> : <Search size={15} />}
+                </button>
+                <button
+                  onClick={() => openCreateModal()}
+                  style={{
+                    appearance: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '9px 14px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                    background: 'var(--accent)', color: 'var(--accent-text)', flexShrink: 0,
+                    marginLeft: 2,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  {t('journey.frontpage.createJourney')}
+                </button>
+              </div>
             </div>
           </div>
 
