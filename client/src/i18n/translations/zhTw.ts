@@ -606,6 +606,12 @@ const zhTw: Record<string, string> = {
   'admin.fileTypesFormat': '以逗號分隔的副檔名（如 jpg,png,pdf,doc）。使用 * 允許所有型別。',
   'admin.fileTypesSaved': '檔案型別設定已儲存',
 
+  'admin.placesPhotos.title': '地點照片',
+  'admin.placesPhotos.subtitle': '從 Google Places API 獲取照片。停用可節省 API 配額。Wikimedia 照片不受影響。',
+  'admin.placesAutocomplete.title': '地點自動補全',
+  'admin.placesAutocomplete.subtitle': '使用 Google Places API 提供搜尋建議。停用可節省 API 配額。',
+  'admin.placesDetails.title': '地點詳情',
+  'admin.placesDetails.subtitle': '從 Google Places API 獲取地點詳細資訊（營業時間、評分、網站）。停用可節省 API 配額。',
   'admin.bagTracking.title': '行李追蹤',
   'admin.bagTracking.subtitle': '為打包物品啟用重量和行李分配',
   'admin.collab.chat.title': '聊天',

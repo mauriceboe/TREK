@@ -8,10 +8,19 @@
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
-const { mockDbGet, mockDbRun, mockCheckSsrf } = vi.hoisted(() => ({
+const { mockDbGet, mockDbRun, mockCheckSsrf, mockCacheGet, mockCacheGetErrored, mockCachePut, mockCacheGetInFlight, mockCacheSetInFlight } = vi.hoisted(() => ({
   mockDbGet: vi.fn(() => undefined as any),
   mockDbRun: vi.fn(),
   mockCheckSsrf: vi.fn(async () => ({ allowed: true })),
+  mockCacheGet: vi.fn(() => null as any),
+  mockCacheGetErrored: vi.fn(() => false),
+  mockCachePut: vi.fn(async (placeId: string, _bytes: Buffer, attribution: string | null) => ({
+    photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`,
+    filePath: `/tmp/${placeId}.jpg`,
+    attribution,
+  })),
+  mockCacheGetInFlight: vi.fn(() => undefined),
+  mockCacheSetInFlight: vi.fn(),
 }));
 
 vi.mock('../../../src/db/database', () => ({
@@ -33,6 +42,16 @@ vi.mock('../../../src/config', () => ({
   ENCRYPTION_KEY: '0'.repeat(64),
 }));
 
+vi.mock('../../../src/services/placePhotoCache', () => ({
+  get: (placeId: string) => mockCacheGet(placeId),
+  getErrored: (placeId: string) => mockCacheGetErrored(placeId),
+  put: (placeId: string, bytes: Buffer, attribution: string | null) => mockCachePut(placeId, bytes, attribution),
+  markError: vi.fn(),
+  getInFlight: (placeId: string) => mockCacheGetInFlight(placeId),
+  setInFlight: (placeId: string, p: Promise<any>) => mockCacheSetInFlight(placeId, p),
+  serveFilePath: vi.fn(() => null),
+}));
+
 import {
   parseOpeningHours,
   buildOsmDetails,
@@ -46,6 +65,19 @@ afterEach(() => {
   mockDbRun.mockReset();
   mockCheckSsrf.mockReset();
   mockCheckSsrf.mockResolvedValue({ allowed: true });
+  mockCacheGet.mockReset();
+  mockCacheGet.mockReturnValue(null);
+  mockCacheGetErrored.mockReset();
+  mockCacheGetErrored.mockReturnValue(false);
+  mockCachePut.mockReset();
+  mockCachePut.mockImplementation(async (placeId: string, _bytes: Buffer, attribution: string | null) => ({
+    photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`,
+    filePath: `/tmp/${placeId}.jpg`,
+    attribution,
+  }));
+  mockCacheGetInFlight.mockReset();
+  mockCacheGetInFlight.mockReturnValue(undefined);
+  mockCacheSetInFlight.mockReset();
 });
 
 // ── parseOpeningHours ─────────────────────────────────────────────────────────
@@ -995,11 +1027,9 @@ describe('getPlaceDetails (fetch stubbed)', () => {
     expect(place.rating_count).toBe(200000);
     expect(place.open_now).toBe(true);
     expect(place.source).toBe('google');
-    expect(place.reviews).toHaveLength(1);
-    expect(place.reviews[0].author).toBe('John');
-    expect(place.reviews[0].rating).toBe(5);
-    expect(place.reviews[0].text).toBe('Amazing!');
-    expect(place.reviews[0].photo).toBe('https://photo.url');
+    // Lean mask — reviews/summary not fetched in getPlaceDetails; use getPlaceDetailsExpanded for those
+    expect(place.reviews).toHaveLength(0);
+    expect(place.summary).toBeNull();
   });
 
   it('MAPS-041c: throws with status when Google API returns non-ok response', async () => {
@@ -1016,8 +1046,10 @@ describe('getPlaceDetails (fetch stubbed)', () => {
     });
   });
 
-  it('MAPS-041d: maps reviews with optional fields absent to null', async () => {
+  it('MAPS-041d: getPlaceDetailsExpanded maps reviews with optional fields absent to null', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
+    // expanded=1 cache miss → return undefined
+    mockDbGet.mockReturnValueOnce(undefined);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -1028,8 +1060,8 @@ describe('getPlaceDetails (fetch stubbed)', () => {
         ],
       }),
     }));
-    const { getPlaceDetails } = await import('../../../src/services/mapsService');
-    const result = await getPlaceDetails(1, 'ChIJ456');
+    const { getPlaceDetailsExpanded } = await import('../../../src/services/mapsService');
+    const result = await getPlaceDetailsExpanded(1, 'ChIJ456');
     const review = (result.place as any).reviews[0];
     expect(review.author).toBeNull();
     expect(review.rating).toBeNull();
@@ -1104,8 +1136,10 @@ describe('getPlaceDetails (fetch stubbed)', () => {
     expect((result.place as any).open_now).toBe(false);
   });
 
-  it('MAPS-041g: truncates reviews to first 5 entries', async () => {
+  it('MAPS-041g: getPlaceDetailsExpanded truncates reviews to first 5 entries', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
+    // expanded=1 cache miss
+    mockDbGet.mockReturnValueOnce(undefined);
     const manyReviews = Array.from({ length: 8 }, (_, i) => ({
       authorAttribution: { displayName: `User${i}` },
       rating: 4,
@@ -1116,8 +1150,8 @@ describe('getPlaceDetails (fetch stubbed)', () => {
       ok: true,
       json: async () => ({ id: 'ChIJMany', reviews: manyReviews }),
     }));
-    const { getPlaceDetails } = await import('../../../src/services/mapsService');
-    const result = await getPlaceDetails(1, 'ChIJMany');
+    const { getPlaceDetailsExpanded } = await import('../../../src/services/mapsService');
+    const result = await getPlaceDetailsExpanded(1, 'ChIJMany');
     expect((result.place as any).reviews).toHaveLength(5);
   });
 });
@@ -1125,16 +1159,26 @@ describe('getPlaceDetails (fetch stubbed)', () => {
 // ── getPlacePhoto (fetch stubbed) ────────────────────────────────────────────
 
 describe('getPlacePhoto (fetch stubbed)', () => {
-  it('MAPS-042: returns Wikimedia photo for coordinate-based lookup (no API key)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        query: { pages: { '1': { thumbnail: { source: 'https://wiki.org/photo.jpg' } } } },
-      }),
-    }));
+  it('MAPS-042: returns proxy URL for coordinate-based lookup via Wikimedia (no API key)', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      // First call: Wikimedia Commons API
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          query: { pages: { '1': { thumbnail: { source: 'https://wiki.org/photo.jpg' } } } },
+        }),
+      })
+      // Second call: fetch Wikimedia image bytes
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(100),
+      })
+    );
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
-    const result = await getPlacePhoto(999, 'coords:48.8,2.3', 48.8, 2.3, 'Eiffel Tower');
-    expect(result.photoUrl).toBe('https://wiki.org/photo.jpg');
+    const placeId = 'coords:48.8,2.3';
+    const result = await getPlacePhoto(999, placeId, 48.8, 2.3, 'Eiffel Tower');
+    expect(result.photoUrl).toBe(`/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`);
+    expect(mockCachePut).toHaveBeenCalledOnce();
   });
 
   it('MAPS-043: throws 404 when Wikimedia returns nothing and no API key', async () => {
@@ -1146,37 +1190,28 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     await expect(getPlacePhoto(999, 'coords:0.0,0.0', 0, 0)).rejects.toMatchObject({ status: 404 });
   });
 
-  it('MAPS-043b: returns cached photo when cache entry is fresh and valid', async () => {
-    // First call populates cache; second call should use cache without fetching
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        query: { pages: { '1': { thumbnail: { source: 'https://wiki.org/cached.jpg' } } } },
-      }),
-    }));
-    const { getPlacePhoto } = await import('../../../src/services/mapsService');
-    const uniqueId = `coords:cache-test-${Date.now()}`;
-    const first = await getPlacePhoto(999, uniqueId, 48.8, 2.3, 'Cache Test');
+  it('MAPS-043b: returns cached photo when disk cache returns a hit', async () => {
+    const placeId = `coords:cache-test-${Date.now()}`;
+    const cachedUrl = `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`;
+    mockCacheGet.mockReturnValue({
+      photoUrl: cachedUrl,
+      filePath: `/tmp/${placeId}.jpg`,
+      attribution: null,
+    });
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const second = await getPlacePhoto(999, uniqueId, 48.8, 2.3, 'Cache Test');
-    expect(second.photoUrl).toBe(first.photoUrl);
+    const { getPlacePhoto } = await import('../../../src/services/mapsService');
+    const result = await getPlacePhoto(999, placeId, 48.8, 2.3, 'Cache Test');
+    expect(result.photoUrl).toBe(cachedUrl);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('MAPS-043c: throws 404 from cache when cached entry is an error', async () => {
-    // Seed the cache with an error entry by triggering a no-result Wikimedia call
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ query: { pages: {} } }),
-    }));
-    const { getPlacePhoto } = await import('../../../src/services/mapsService');
-    const errorId = `coords:error-cache-${Date.now()}`;
-    // First call causes error to be cached
-    await expect(getPlacePhoto(999, errorId, 0, 0)).rejects.toMatchObject({ status: 404 });
-    // Second call should throw directly from cache (no fetch)
+  it('MAPS-043c: throws 404 from error cache without making a network request', async () => {
+    mockCacheGetErrored.mockReturnValue(true);
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
+    const { getPlacePhoto } = await import('../../../src/services/mapsService');
+    const errorId = `coords:error-cache-${Date.now()}`;
     await expect(getPlacePhoto(999, errorId, 0, 0)).rejects.toMatchObject({ status: 404 });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -1194,7 +1229,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     await expect(getPlacePhoto(999, throwId, 48.8, 2.3, 'Place')).rejects.toMatchObject({ status: 404 });
   });
 
-  it('MAPS-044: returns photo via Google path when API key present and photos exist', async () => {
+  it('MAPS-044: returns proxy URL via Google path when API key present and photos exist', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
     const fetchMock = vi.fn()
       // First call: get place details (with photos)
@@ -1204,17 +1239,18 @@ describe('getPlacePhoto (fetch stubbed)', () => {
           photos: [{ name: 'places/ChIJABC/photos/photo1', authorAttributions: [{ displayName: 'Photographer' }] }],
         }),
       })
-      // Second call: get media URL
+      // Second call: fetch image bytes
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ photoUri: 'https://lh3.googleusercontent.com/photo.jpg' }),
+        arrayBuffer: async () => new ArrayBuffer(200),
       });
     vi.stubGlobal('fetch', fetchMock);
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
     const uniqueId = `ChIJABC-${Date.now()}`;
     const result = await getPlacePhoto(1, uniqueId, 48.8, 2.3, 'Place');
-    expect(result.photoUrl).toBe('https://lh3.googleusercontent.com/photo.jpg');
+    expect(result.photoUrl).toBe(`/api/maps/place-photo/${encodeURIComponent(uniqueId)}/bytes`);
     expect(result.attribution).toBe('Photographer');
+    expect(mockCachePut).toHaveBeenCalledOnce();
   });
 
   it('MAPS-044b: throws 404 when Google details fetch returns non-ok', async () => {
@@ -1240,7 +1276,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     await expect(getPlacePhoto(1, noPhotoId, 48.8, 2.3)).rejects.toMatchObject({ status: 404 });
   });
 
-  it('MAPS-044d: throws 404 when media endpoint returns no photoUri', async () => {
+  it('MAPS-044d: throws 404 when media endpoint returns non-ok status', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -1250,8 +1286,9 @@ describe('getPlacePhoto (fetch stubbed)', () => {
         }),
       })
       .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}), // no photoUri
+        ok: false,
+        status: 403,
+        arrayBuffer: async () => new ArrayBuffer(0),
       });
     vi.stubGlobal('fetch', fetchMock);
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
@@ -1259,7 +1296,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     await expect(getPlacePhoto(1, noUriId, 48.8, 2.3)).rejects.toMatchObject({ status: 404 });
   });
 
-  it('MAPS-044e: returns photo with null attribution when authorAttributions is empty', async () => {
+  it('MAPS-044e: returns proxy URL with null attribution when authorAttributions is empty', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -1270,28 +1307,34 @@ describe('getPlacePhoto (fetch stubbed)', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ photoUri: 'https://lh3.googleusercontent.com/noattr.jpg' }),
+        arrayBuffer: async () => new ArrayBuffer(150),
       });
     vi.stubGlobal('fetch', fetchMock);
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
     const noAttrId = `ChIJNoAttr-${Date.now()}`;
     const result = await getPlacePhoto(1, noAttrId, 48.8, 2.3);
-    expect(result.photoUrl).toBe('https://lh3.googleusercontent.com/noattr.jpg');
+    expect(result.photoUrl).toBe(`/api/maps/place-photo/${encodeURIComponent(noAttrId)}/bytes`);
     expect(result.attribution).toBeNull();
   });
 
-  it('MAPS-044f: uses Wikimedia when API key present but placeId is coords: prefix', async () => {
+  it('MAPS-044f: uses Wikimedia and returns proxy URL when API key present but placeId is coords: prefix', async () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        query: { pages: { '1': { thumbnail: { source: 'https://wiki.org/coords-photo.jpg' } } } },
-      }),
-    }));
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          query: { pages: { '1': { thumbnail: { source: 'https://wiki.org/coords-photo.jpg' } } } },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(120),
+      })
+    );
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
-    // Use a unique placeId to avoid hitting the in-memory cache from other tests
     const uniqueId = `coords:44f-test-${Date.now()}`;
     const result = await getPlacePhoto(1, uniqueId, 48.8, 2.3, 'Coords Place');
-    expect(result.photoUrl).toBe('https://wiki.org/coords-photo.jpg');
+    expect(result.photoUrl).toBe(`/api/maps/place-photo/${encodeURIComponent(uniqueId)}/bytes`);
+    expect(mockCachePut).toHaveBeenCalledOnce();
   });
 });

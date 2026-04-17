@@ -194,6 +194,18 @@ export default function AdminPage(): React.ReactElement {
   const [bagTrackingEnabled, setBagTrackingEnabled] = useState<boolean>(false)
   useEffect(() => { adminApi.getBagTracking().then(d => setBagTrackingEnabled(d.enabled)).catch(() => {}) }, [])
 
+  // Places photos
+  const [placesPhotosEnabled, setPlacesPhotosEnabledState] = useState<boolean>(true)
+  useEffect(() => { adminApi.getPlacesPhotos().then(d => setPlacesPhotosEnabledState(d.enabled)).catch(() => {}) }, [])
+
+  // Places autocomplete
+  const [placesAutocompleteEnabled, setPlacesAutocompleteEnabledState] = useState<boolean>(true)
+  useEffect(() => { adminApi.getPlacesAutocomplete().then(d => setPlacesAutocompleteEnabledState(d.enabled)).catch(() => {}) }, [])
+
+  // Places details
+  const [placesDetailsEnabled, setPlacesDetailsEnabledState] = useState<boolean>(true)
+  useEffect(() => { adminApi.getPlacesDetails().then(d => setPlacesDetailsEnabledState(d.enabled)).catch(() => {}) }, [])
+
   // Collab features
   const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, polls: true, whatsnext: true })
   useEffect(() => { adminApi.getCollabFeatures().then(d => setCollabFeatures(d)).catch(() => {}) }, [])
@@ -242,7 +254,7 @@ export default function AdminPage(): React.ReactElement {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false)
 
-  const { user: currentUser, updateApiKeys, setAppRequireMfa, setTripRemindersEnabled, logout } = useAuthStore()
+  const { user: currentUser, updateApiKeys, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, logout } = useAuthStore()
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -1021,6 +1033,66 @@ export default function AdminPage(): React.ReactElement {
                         {t('admin.keyInvalid')}
                       </p>
                     )}
+                  </div>
+
+                  {/* Place Photos Toggle */}
+                  <div className="flex items-center justify-between py-3 border-t border-slate-100">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">{t('admin.placesPhotos.title')}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('admin.placesPhotos.subtitle')}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const next = !placesPhotosEnabled
+                        setPlacesPhotosEnabledState(next)
+                        setPlacesPhotosEnabled(next)
+                        try { await adminApi.updatePlacesPhotos(next) } catch { setPlacesPhotosEnabledState(!next); setPlacesPhotosEnabled(!next) }
+                      }}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: placesPhotosEnabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
+                    >
+                      <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200" style={{ transform: placesPhotosEnabled ? 'translateX(20px)' : 'translateX(0)' }} />
+                    </button>
+                  </div>
+
+                  {/* Place Autocomplete Toggle */}
+                  <div className="flex items-center justify-between py-3 border-t border-slate-100">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">{t('admin.placesAutocomplete.title')}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('admin.placesAutocomplete.subtitle')}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const next = !placesAutocompleteEnabled
+                        setPlacesAutocompleteEnabledState(next)
+                        setPlacesAutocompleteEnabled(next)
+                        try { await adminApi.updatePlacesAutocomplete(next) } catch { setPlacesAutocompleteEnabledState(!next); setPlacesAutocompleteEnabled(!next) }
+                      }}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: placesAutocompleteEnabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
+                    >
+                      <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200" style={{ transform: placesAutocompleteEnabled ? 'translateX(20px)' : 'translateX(0)' }} />
+                    </button>
+                  </div>
+
+                  {/* Place Details Toggle */}
+                  <div className="flex items-center justify-between py-3 border-t border-slate-100">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">{t('admin.placesDetails.title')}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t('admin.placesDetails.subtitle')}</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const next = !placesDetailsEnabled
+                        setPlacesDetailsEnabledState(next)
+                        setPlacesDetailsEnabled(next)
+                        try { await adminApi.updatePlacesDetails(next) } catch { setPlacesDetailsEnabledState(!next); setPlacesDetailsEnabled(!next) }
+                      }}
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: placesDetailsEnabled ? 'var(--text-primary)' : 'var(--border-primary)' }}
+                    >
+                      <span className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200" style={{ transform: placesDetailsEnabled ? 'translateX(20px)' : 'translateX(0)' }} />
+                    </button>
                   </div>
 
                   {/* Open-Meteo Weather Info */}

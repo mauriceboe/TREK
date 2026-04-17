@@ -588,6 +588,12 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesSaved': 'تم حفظ إعدادات أنواع الملفات',
 
   // Packing Templates & Bag Tracking
+  'admin.placesPhotos.title': 'صور الأماكن',
+  'admin.placesPhotos.subtitle': 'جلب الصور من Google Places API. عطّلها للحفاظ على حصة API. صور Wikimedia غير متأثرة.',
+  'admin.placesAutocomplete.title': 'الإكمال التلقائي للأماكن',
+  'admin.placesAutocomplete.subtitle': 'استخدام Google Places API لاقتراحات البحث. عطّلها للحفاظ على حصة API.',
+  'admin.placesDetails.title': 'تفاصيل الأماكن',
+  'admin.placesDetails.subtitle': 'جلب معلومات تفصيلية عن الأماكن (الساعات، التقييم، الموقع) من Google Places API. عطّلها للحفاظ على حصة API.',
   'admin.bagTracking.title': 'تتبع الأمتعة',
   'admin.bagTracking.subtitle': 'تفعيل الوزن وتعيين الأمتعة للعناصر',
   'admin.collab.chat.title': 'الدردشة',

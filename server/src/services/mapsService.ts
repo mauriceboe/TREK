@@ -2,6 +2,19 @@ import { db } from '../db/database';
 import { decrypt_api_key } from './apiKeyCrypto';
 import { checkSsrf } from '../utils/ssrfGuard';
 
+// ── Google API call counter ───────────────────────────────────────────────────
+
+let googleApiCallCount = 0;
+
+export function getGoogleApiCallCount(): number { return googleApiCallCount; }
+export function resetGoogleApiCallCount(): void { googleApiCallCount = 0; }
+
+function googleFetch(endpoint: string, label: string, init?: RequestInit): Promise<Response> {
+  googleApiCallCount++;
+  console.debug(`[Google API] #${googleApiCallCount} ${label} → ${endpoint}`);
+  return fetch(endpoint, init);
+}
+
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
 interface NominatimResult {
@@ -55,26 +68,8 @@ interface GooglePlaceDetails extends GooglePlaceResult {
 
 const UA = 'TREK Travel Planner (https://github.com/mauriceboe/TREK)';
 
-// ── Photo cache ──────────────────────────────────────────────────────────────
-
-const photoCache = new Map<string, { photoUrl: string; attribution: string | null; fetchedAt: number; error?: boolean }>();
-const PHOTO_TTL = 12 * 60 * 60 * 1000; // 12 hours
-const ERROR_TTL = 5 * 60 * 1000; // 5 min for errors
-const CACHE_MAX_ENTRIES = 1000;
-const CACHE_PRUNE_TARGET = 500;
-const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of photoCache) {
-    if (now - entry.fetchedAt > PHOTO_TTL) photoCache.delete(key);
-  }
-  if (photoCache.size > CACHE_MAX_ENTRIES) {
-    const entries = [...photoCache.entries()].sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
-    const toDelete = entries.slice(0, entries.length - CACHE_PRUNE_TARGET);
-    toDelete.forEach(([key]) => photoCache.delete(key));
-  }
-}, CACHE_CLEANUP_INTERVAL);
+// ── Photo cache (disk-backed) ────────────────────────────────────────────────
+import * as placePhotoCache from './placePhotoCache';
 
 // ── API key retrieval ────────────────────────────────────────────────────────
 
@@ -311,7 +306,7 @@ export async function searchPlaces(userId: number, query: string, lang?: string)
     return { places, source: 'openstreetmap' };
   }
 
-  const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+  const response = await googleFetch('https://places.googleapis.com/v1/places:searchText', 'searchText', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -371,7 +366,7 @@ export async function autocompletePlaces(
     };
   }
 
-  const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+  const response = await googleFetch('https://places.googleapis.com/v1/places:autocomplete', 'autocomplete', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -451,12 +446,79 @@ export async function getPlaceDetails(userId: number, placeId: string, lang?: st
   }
 
   // Google details
+  const langKey = lang || 'de';
   const apiKey = getMapsKey(userId);
   if (!apiKey) {
     throw Object.assign(new Error('Google Maps API key not configured'), { status: 400 });
   }
 
-  const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=${lang || 'de'}`, {
+  // Check DB cache first (lean mask, expanded=0) — 7-day TTL
+  const DETAILS_TTL = 7 * 24 * 60 * 60 * 1000;
+  const cached = db.prepare(
+    'SELECT payload_json, fetched_at FROM place_details_cache WHERE place_id = ? AND lang = ? AND expanded = 0'
+  ).get(placeId, langKey) as { payload_json: string; fetched_at: number } | undefined;
+  if (cached && Date.now() - cached.fetched_at < DETAILS_TTL) return { place: JSON.parse(cached.payload_json) };
+
+  const response = await googleFetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=${langKey}`, `getPlaceDetails(${placeId})`, {
+    method: 'GET',
+    headers: {
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,websiteUri,nationalPhoneNumber,regularOpeningHours,googleMapsUri',
+    },
+  });
+
+  const data = await response.json() as GooglePlaceDetails & { error?: { message?: string } };
+
+  if (!response.ok) {
+    const err = new Error(data.error?.message || 'Google Places API error') as Error & { status: number };
+    err.status = response.status;
+    throw err;
+  }
+
+  const place = {
+    google_place_id: data.id,
+    name: data.displayName?.text || '',
+    address: data.formattedAddress || '',
+    lat: data.location?.latitude || null,
+    lng: data.location?.longitude || null,
+    rating: data.rating || null,
+    rating_count: data.userRatingCount || null,
+    website: data.websiteUri || null,
+    phone: data.nationalPhoneNumber || null,
+    opening_hours: data.regularOpeningHours?.weekdayDescriptions || null,
+    open_now: data.regularOpeningHours?.openNow ?? null,
+    google_maps_url: data.googleMapsUri || null,
+    summary: null,
+    reviews: [],
+    source: 'google' as const,
+    cached_at: Date.now(),
+  };
+
+  try {
+    db.prepare(
+      'INSERT OR REPLACE INTO place_details_cache (place_id, lang, expanded, payload_json, fetched_at) VALUES (?, ?, 0, ?, ?)'
+    ).run(placeId, langKey, JSON.stringify(place), Date.now());
+  } catch (dbErr) {
+    console.error('Failed to cache place details:', dbErr);
+  }
+
+  return { place };
+}
+
+export async function getPlaceDetailsExpanded(userId: number, placeId: string, lang?: string, refresh = false): Promise<{ place: Record<string, unknown> }> {
+  const langKey = lang || 'de';
+  const apiKey = getMapsKey(userId);
+  if (!apiKey) throw Object.assign(new Error('Google Maps API key not configured'), { status: 400 });
+
+  // Check DB cache for expanded result
+  if (!refresh) {
+    const cached = db.prepare(
+      'SELECT payload_json FROM place_details_cache WHERE place_id = ? AND lang = ? AND expanded = 1'
+    ).get(placeId, langKey) as { payload_json: string } | undefined;
+    if (cached) return { place: JSON.parse(cached.payload_json) };
+  }
+
+  const response = await googleFetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=${langKey}`, `getPlaceDetailsExpanded(${placeId})`, {
     method: 'GET',
     headers: {
       'X-Goog-Api-Key': apiKey,
@@ -494,12 +556,21 @@ export async function getPlaceDetails(userId: number, placeId: string, lang?: st
       photo: r.authorAttribution?.photoUri || null,
     })),
     source: 'google' as const,
+    cached_at: Date.now(),
   };
+
+  try {
+    db.prepare(
+      'INSERT OR REPLACE INTO place_details_cache (place_id, lang, expanded, payload_json, fetched_at) VALUES (?, ?, 1, ?, ?)'
+    ).run(placeId, langKey, JSON.stringify(place), Date.now());
+  } catch (dbErr) {
+    console.error('Failed to cache expanded place details:', dbErr);
+  }
 
   return { place };
 }
 
-// ── Place photo (Google or Wikimedia, with caching + DB persistence) ─────────
+// ── Place photo (Google or Wikimedia, disk-cached) ────────────────────────────
 
 export async function getPlacePhoto(
   userId: number,
@@ -508,84 +579,110 @@ export async function getPlacePhoto(
   lng: number,
   name?: string,
 ): Promise<{ photoUrl: string; attribution: string | null }> {
-  // Check cache first
-  const cached = photoCache.get(placeId);
-  if (cached) {
-    const ttl = cached.error ? ERROR_TTL : PHOTO_TTL;
-    if (Date.now() - cached.fetchedAt < ttl) {
-      if (cached.error) throw Object.assign(new Error('(Cache) No photo available'), { status: 404 });
-      return { photoUrl: cached.photoUrl, attribution: cached.attribution };
+  // Disk cache hit — serve immediately, no Google call
+  const diskHit = placePhotoCache.get(placeId);
+  if (diskHit) return { photoUrl: diskHit.photoUrl, attribution: diskHit.attribution };
+
+  // Recent error — don't hammer the API
+  if (placePhotoCache.getErrored(placeId)) {
+    throw Object.assign(new Error('(Cache) No photo available'), { status: 404 });
+  }
+
+  // Deduplicate concurrent requests for the same placeId
+  const existing = placePhotoCache.getInFlight(placeId);
+  if (existing) {
+    const result = await existing;
+    if (!result) throw Object.assign(new Error('(Cache) No photo available'), { status: 404 });
+    return { photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`, attribution: result.attribution };
+  }
+
+  const fetchPromise = (async (): Promise<{ filePath: string; attribution: string | null } | null> => {
+    const apiKey = getMapsKey(userId);
+    const isCoordLookup = placeId.startsWith('coords:');
+
+    // No Google key or coordinate-only lookup → try Wikimedia (URL-based, not byte-cached)
+    if (!apiKey || isCoordLookup) {
+      if (!isNaN(lat) && !isNaN(lng)) {
+        try {
+          const wiki = await fetchWikimediaPhoto(lat, lng, name);
+          if (wiki) {
+            // Wikimedia photos: fetch bytes and cache to disk
+            const ssrf = await checkSsrf(wiki.photoUrl, true);
+            if (!ssrf.allowed) throw Object.assign(new Error('Photo URL blocked'), { status: 403 });
+            const imgRes = await fetch(wiki.photoUrl);
+            if (imgRes.ok) {
+              const bytes = Buffer.from(await imgRes.arrayBuffer());
+              const cached = await placePhotoCache.put(placeId, bytes, wiki.attribution);
+              return { filePath: cached.filePath, attribution: cached.attribution };
+            }
+          }
+        } catch { /* fall through */ }
+      }
+      placePhotoCache.markError(placeId);
+      return null;
     }
-    photoCache.delete(placeId);
-  }
 
-  const apiKey = getMapsKey(userId);
-  const isCoordLookup = placeId.startsWith('coords:');
+    // Google Photos — fetch details to get photo name
+    const detailsRes = await googleFetch(`https://places.googleapis.com/v1/places/${placeId}`, `getPlacePhoto/details(${placeId})`, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'photos',
+      },
+    });
+    const details = await detailsRes.json() as GooglePlaceDetails & { error?: { message?: string } };
 
-  // No Google key or coordinate-only lookup -> try Wikimedia
-  if (!apiKey || isCoordLookup) {
-    if (!isNaN(lat) && !isNaN(lng)) {
-      try {
-        const wiki = await fetchWikimediaPhoto(lat, lng, name);
-        if (wiki) {
-          photoCache.set(placeId, { ...wiki, fetchedAt: Date.now() });
-          return wiki;
-        } else {
-          photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
-        }
-      } catch { /* fall through */ }
+    if (!detailsRes.ok) {
+      console.error('Google Places photo details error:', details.error?.message || detailsRes.status);
+      placePhotoCache.markError(placeId);
+      return null;
     }
-    throw Object.assign(new Error('(Wikimedia) No photo available'), { status: 404 });
-  }
 
-  // Google Photos
-  const detailsRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-    headers: {
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'photos',
-    },
-  });
-  const details = await detailsRes.json() as GooglePlaceDetails & { error?: { message?: string } };
+    if (!details.photos?.length) {
+      placePhotoCache.markError(placeId);
+      return null;
+    }
 
-  if (!detailsRes.ok) {
-    console.error('Google Places photo details error:', details.error?.message || detailsRes.status);
-    photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
-    throw Object.assign(new Error('(Google Places) Photo could not be retrieved'), { status: 404 });
-  }
+    const photo = details.photos[0];
+    const photoName = photo.name;
+    const attribution = photo.authorAttributions?.[0]?.displayName || null;
 
-  if (!details.photos?.length) {
-    photoCache.set(placeId, { photoUrl: '', attribution: null, fetchedAt: Date.now(), error: true });
-    throw Object.assign(new Error('(Google Places) No photo available'), { status: 404 });
-  }
+    // Fetch actual image bytes
+    const mediaRes = await googleFetch(
+      `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400`,
+      `getPlacePhoto/media(${placeId})`,
+      { headers: { 'X-Goog-Api-Key': apiKey } }
+    );
 
-  const photo = details.photos[0];
-  const photoName = photo.name;
-  const attribution = photo.authorAttributions?.[0]?.displayName || null;
+    if (!mediaRes.ok) {
+      placePhotoCache.markError(placeId);
+      return null;
+    }
 
-  const mediaRes = await fetch(
-    `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400&skipHttpRedirect=true`,
-    { headers: { 'X-Goog-Api-Key': apiKey } }
-  );
-  const mediaData = await mediaRes.json() as { photoUri?: string };
-  const photoUrl = mediaData.photoUri;
+    const bytes = Buffer.from(await mediaRes.arrayBuffer());
+    if (!bytes.length) {
+      placePhotoCache.markError(placeId);
+      return null;
+    }
 
-  if (!photoUrl) {
-    photoCache.set(placeId, { photoUrl: '', attribution, fetchedAt: Date.now(), error: true });
-    throw Object.assign(new Error('(Google Places) Photo URL not available'), { status: 404 });
-  }
+    const cached = await placePhotoCache.put(placeId, bytes, attribution);
 
-  photoCache.set(placeId, { photoUrl, attribution, fetchedAt: Date.now() });
+    // Persist stable proxy URL to database
+    try {
+      db.prepare(
+        'UPDATE places SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE google_place_id = ? AND (image_url IS NULL OR image_url = \'\')'
+      ).run(cached.photoUrl, placeId);
+    } catch (dbErr) {
+      console.error('Failed to persist photo URL to database:', dbErr);
+    }
 
-  // Persist photo URL to database
-  try {
-    db.prepare(
-      'UPDATE places SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE google_place_id = ? AND (image_url IS NULL OR image_url = ?)'
-    ).run(photoUrl, placeId, '');
-  } catch (dbErr) {
-    console.error('Failed to persist photo URL to database:', dbErr);
-  }
+    return { filePath: cached.filePath, attribution };
+  })();
 
-  return { photoUrl, attribution };
+  placePhotoCache.setInFlight(placeId, fetchPromise);
+
+  const result = await fetchPromise;
+  if (!result) throw Object.assign(new Error('No photo available'), { status: 404 });
+  return { photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`, attribution: result.attribution };
 }
 
 // ── Reverse geocoding ────────────────────────────────────────────────────────

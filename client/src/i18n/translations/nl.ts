@@ -546,6 +546,12 @@ const nl: Record<string, string> = {
   'admin.fileTypesFormat': 'Kommagescheiden extensies (bijv. jpg,png,pdf,doc). Gebruik * om alle typen toe te staan.',
   'admin.fileTypesSaved': 'Bestandstype-instellingen opgeslagen',
 
+  'admin.placesPhotos.title': "Plaatsfoto's",
+  'admin.placesPhotos.subtitle': "Haalt foto's op via de Google Places API. Schakel uit om API-quota te besparen. Wikimedia-foto's worden niet beïnvloed.",
+  'admin.placesAutocomplete.title': 'Plaatsautocomplete',
+  'admin.placesAutocomplete.subtitle': 'Gebruikt de Google Places API voor zoeksuggesties. Schakel uit om API-quota te besparen.',
+  'admin.placesDetails.title': 'Plaatsdetails',
+  'admin.placesDetails.subtitle': 'Haalt gedetailleerde plaatsinformatie (openingstijden, beoordeling, website) op via de Google Places API. Schakel uit om API-quota te besparen.',
   'admin.bagTracking.title': 'Bagagetracking',
   'admin.bagTracking.subtitle': 'Gewicht en bagagetoewijzing inschakelen voor paklijstitems',
   'admin.collab.chat.title': 'Chat',

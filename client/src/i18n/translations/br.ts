@@ -546,6 +546,12 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesSaved': 'Configurações de tipos de arquivo salvas',
 
   // Packing Templates & Bag Tracking
+  'admin.placesPhotos.title': 'Fotos de Locais',
+  'admin.placesPhotos.subtitle': 'Busca fotos da Google Places API. Desative para economizar cota da API. Fotos do Wikimedia não são afetadas.',
+  'admin.placesAutocomplete.title': 'Autocompletar de Locais',
+  'admin.placesAutocomplete.subtitle': 'Usa a Google Places API para sugestões de pesquisa. Desative para economizar cota da API.',
+  'admin.placesDetails.title': 'Detalhes do Local',
+  'admin.placesDetails.subtitle': 'Busca informações detalhadas do local (horários, avaliação, site) da Google Places API. Desative para economizar cota da API.',
   'admin.bagTracking.title': 'Rastreamento de malas',
   'admin.bagTracking.subtitle': 'Ativar peso e atribuição de mala para itens da lista',
   'admin.collab.chat.title': 'Chat',

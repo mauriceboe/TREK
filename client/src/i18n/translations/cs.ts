@@ -546,6 +546,12 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesSaved': 'Nastavení souborů uloženo',
 
   // Šablony balení (Packing Templates)
+  'admin.placesPhotos.title': 'Fotografie míst',
+  'admin.placesPhotos.subtitle': 'Načítání fotografií z Google Places API. Zakázáním ušetříte kvótu API. Fotografie z Wikimedia nejsou ovlivněny.',
+  'admin.placesAutocomplete.title': 'Automatické doplňování míst',
+  'admin.placesAutocomplete.subtitle': 'Použití Google Places API pro návrhy vyhledávání. Zakázáním ušetříte kvótu API.',
+  'admin.placesDetails.title': 'Podrobnosti o místě',
+  'admin.placesDetails.subtitle': 'Načítání podrobných informací o místě (hodiny, hodnocení, web) z Google Places API. Zakázáním ušetříte kvótu API.',
   'admin.bagTracking.title': 'Sledování zavazadel',
   'admin.bagTracking.subtitle': 'Povolit váhu a přiřazení k zavazadlům u položek balení',
   'admin.collab.chat.title': 'Chat',

@@ -545,6 +545,12 @@ const fr: Record<string, string> = {
   'admin.fileTypesFormat': 'Extensions séparées par des virgules (ex. jpg,png,pdf,doc). Utilisez * pour autoriser tous les types.',
   'admin.fileTypesSaved': 'Paramètres des types de fichiers enregistrés',
 
+  'admin.placesPhotos.title': 'Photos de lieux',
+  'admin.placesPhotos.subtitle': "Récupère les photos depuis l'API Google Places. Désactivez pour économiser le quota API. Les photos Wikimedia ne sont pas affectées.",
+  'admin.placesAutocomplete.title': 'Autocomplétion des lieux',
+  'admin.placesAutocomplete.subtitle': "Utilise l'API Google Places pour les suggestions de recherche. Désactivez pour économiser le quota API.",
+  'admin.placesDetails.title': 'Détails du lieu',
+  'admin.placesDetails.subtitle': "Récupère les informations détaillées du lieu (horaires, note, site web) depuis l'API Google Places. Désactivez pour économiser le quota API.",
   'admin.bagTracking.title': 'Suivi des bagages',
   'admin.bagTracking.subtitle': 'Activer le poids et l\'attribution de bagages pour les articles',
   'admin.collab.chat.title': 'Chat',

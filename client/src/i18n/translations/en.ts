@@ -609,6 +609,12 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesFormat': 'Comma-separated extensions (e.g. jpg,png,pdf,doc). Use * to allow all types.',
   'admin.fileTypesSaved': 'File type settings saved',
 
+  'admin.placesPhotos.title': 'Place Photos',
+  'admin.placesPhotos.subtitle': 'Fetch photos from the Google Places API. Disable to save API quota. Wikimedia photos are unaffected.',
+  'admin.placesAutocomplete.title': 'Place Autocomplete',
+  'admin.placesAutocomplete.subtitle': 'Use the Google Places API for search suggestions. Disable to save API quota.',
+  'admin.placesDetails.title': 'Place Details',
+  'admin.placesDetails.subtitle': 'Fetch detailed place information (hours, rating, website) from the Google Places API. Disable to save API quota.',
   // Packing Templates & Bag Tracking
   'admin.bagTracking.title': 'Bag Tracking',
   'admin.bagTracking.subtitle': 'Enable weight and bag assignment for packing items',

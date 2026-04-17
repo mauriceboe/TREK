@@ -85,6 +85,19 @@ export function fetchPhoto(
     return
   }
 
+  // If photoId is already our stable proxy URL, use it directly — no API round-trip needed
+  if (photoId && photoId.startsWith('/api/maps/place-photo/')) {
+    const entry: PhotoEntry = { photoUrl: photoId, thumbDataUrl: null }
+    cache.set(cacheKey, entry)
+    callback?.(entry)
+    notify(cacheKey, entry)
+    // Generate base64 thumb in background
+    urlToBase64(photoId).then(thumb => {
+      if (thumb) { entry.thumbDataUrl = thumb; notifyThumb(cacheKey, thumb) }
+    })
+    return
+  }
+
   inFlight.add(cacheKey)
   mapsApi.placePhoto(photoId, lat, lng, name)
     .then(async (data: { photoUrl?: string }) => {

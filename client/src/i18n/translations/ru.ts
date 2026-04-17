@@ -546,6 +546,12 @@ const ru: Record<string, string> = {
   'admin.fileTypesFormat': 'Расширения через запятую (напр. jpg,png,pdf,doc). Используйте * для разрешения всех типов.',
   'admin.fileTypesSaved': 'Настройки типов файлов сохранены',
 
+  'admin.placesPhotos.title': 'Фотографии мест',
+  'admin.placesPhotos.subtitle': 'Загрузка фотографий из Google Places API. Отключите для экономии квоты API. Фотографии Wikimedia не затронуты.',
+  'admin.placesAutocomplete.title': 'Автодополнение мест',
+  'admin.placesAutocomplete.subtitle': 'Использование Google Places API для поисковых подсказок. Отключите для экономии квоты API.',
+  'admin.placesDetails.title': 'Сведения о месте',
+  'admin.placesDetails.subtitle': 'Загрузка подробной информации о месте (часы работы, рейтинг, веб-сайт) из Google Places API. Отключите для экономии квоты API.',
   'admin.bagTracking.title': 'Отслеживание багажа',
   'admin.bagTracking.subtitle': 'Включить вес и привязку к багажу для вещей',
   'admin.collab.chat.title': 'Чат',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getCategoryIcon } from './categoryIcons'
 import { getCached, isLoading, fetchPhoto, onThumbReady } from '../../services/photoService'
+import { useAuthStore } from '../../store/authStore'
 import type { Place } from '../../types'
 
 interface Category {
@@ -18,10 +19,12 @@ export default React.memo(function PlaceAvatar({ place, size = 32, category }: P
   const [photoSrc, setPhotoSrc] = useState<string | null>(place.image_url || null)
   const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const placesPhotosEnabled = useAuthStore(s => s.placesPhotosEnabled)
 
   // Observe visibility — fetch photo only when avatar enters viewport
   useEffect(() => {
     if (place.image_url) { setVisible(true); return }
+    if (!placesPhotosEnabled) return
     const el = ref.current
     if (!el) return
     // Check if already cached — show immediately without waiting for intersection
@@ -37,6 +40,7 @@ export default React.memo(function PlaceAvatar({ place, size = 32, category }: P
   useEffect(() => {
     if (!visible) return
     if (place.image_url) { setPhotoSrc(place.image_url); return }
+    if (!placesPhotosEnabled) return
     const photoId = place.google_place_id || place.osm_id
     if (!photoId && !(place.lat && place.lng)) { setPhotoSrc(null); return }
 

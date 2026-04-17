@@ -546,6 +546,12 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesSaved': 'Fájltípus-beállítások mentve',
 
   // Csomagolási sablonok és poggyászkövetés
+  'admin.placesPhotos.title': 'Helyfotók',
+  'admin.placesPhotos.subtitle': 'Fotók lekérése a Google Places API-ból. Tiltsa le az API-kvóta megtakarításához. A Wikimedia-fotók nem érintettek.',
+  'admin.placesAutocomplete.title': 'Hely automatikus kiegészítése',
+  'admin.placesAutocomplete.subtitle': 'A Google Places API használata keresési javaslatokhoz. Tiltsa le az API-kvóta megtakarításához.',
+  'admin.placesDetails.title': 'Hely részletei',
+  'admin.placesDetails.subtitle': 'Részletes helyinformációk lekérése (nyitvatartás, értékelés, weboldal) a Google Places API-ból. Tiltsa le az API-kvóta megtakarításához.',
   'admin.bagTracking.title': 'Poggyászkövetés',
   'admin.bagTracking.subtitle': 'Súly- és táskahozzárendelés engedélyezése csomagolási tételeknél',
   'admin.collab.chat.title': 'Chat',

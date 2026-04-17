@@ -66,9 +66,9 @@ function createPlaceIcon(place, orderNumbers, isSelected) {
     ">${label}</span>`
   }
 
-  // Base64 data URL thumbnails — no external image fetch during zoom
-  // Only use base64 data URLs for markers — external URLs cause zoom lag
-  if (place.image_url && place.image_url.startsWith('data:')) {
+  // Prefer base64 data URLs (no zoom lag); also accept same-origin proxy URLs as a fallback
+  // while the thumb is still being generated in the background
+  if (place.image_url && (place.image_url.startsWith('data:') || place.image_url.startsWith('/api/maps/place-photo/'))) {
     const imgIcon = L.divIcon({
       className: '',
       html: `<div style="
@@ -275,6 +275,7 @@ function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
 
 // Module-level photo cache shared with PlaceAvatar
 import { getCached, isLoading, fetchPhoto, onThumbReady, getAllThumbs } from '../../services/photoService'
+import { useAuthStore } from '../../store/authStore'
 
 // Live location tracker — blue dot with pulse animation (like Apple/Google Maps)
 function LocationTracker() {
@@ -398,20 +399,19 @@ export const MapView = memo(function MapView({
 
   // photoUrls: only base64 thumbs for smooth map zoom
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>(getAllThumbs)
+  const placesPhotosEnabled = useAuthStore(s => s.placesPhotosEnabled)
 
   // Fetch photos via shared service — subscribe to thumb (base64) availability
   const placeIds = useMemo(() => places.map(p => p.id).join(','), [places])
   useEffect(() => {
-    if (!places || places.length === 0) return
+    if (!places || places.length === 0 || !placesPhotosEnabled) return
     const cleanups: (() => void)[] = []
 
     const setThumb = (cacheKey: string, thumb: string) => {
-      iconCache.clear()
       setPhotoUrls(prev => prev[cacheKey] === thumb ? prev : { ...prev, [cacheKey]: thumb })
     }
 
     for (const place of places) {
-      if (place.image_url && place.image_url.startsWith('data:')) continue
       const cacheKey = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
       if (!cacheKey) continue
 
@@ -424,9 +424,9 @@ export const MapView = memo(function MapView({
       // Subscribe for when thumb becomes available
       cleanups.push(onThumbReady(cacheKey, thumb => setThumb(cacheKey, thumb)))
 
-      // Always fetch through API — returns fresh URL + converts to base64
       if (!cached && !isLoading(cacheKey)) {
-        const photoId = place.google_place_id || place.osm_id
+        // Use the persisted proxy URL as photoId so photoService generates a base64 thumb from it
+        const photoId = place.image_url || place.google_place_id || place.osm_id
         if (photoId || (place.lat && place.lng)) {
           fetchPhoto(cacheKey, photoId || `coords:${place.lat}:${place.lng}`, place.lat, place.lng, place.name)
         }
@@ -434,7 +434,7 @@ export const MapView = memo(function MapView({
     }
 
     return () => cleanups.forEach(fn => fn())
-  }, [placeIds])
+  }, [placeIds, placesPhotosEnabled])
 
   const clusterIconCreateFunction = useCallback((cluster) => {
     const count = cluster.getChildCount()
@@ -451,7 +451,7 @@ export const MapView = memo(function MapView({
   const markers = useMemo(() => places.map((place) => {
     const isSelected = place.id === selectedPlaceId
     const pck = place.google_place_id || place.osm_id || `${place.lat},${place.lng}`
-    const resolvedPhoto = (pck && photoUrls[pck]) || (place.image_url?.startsWith('data:') ? place.image_url : null) || null
+    const resolvedPhoto = (pck && photoUrls[pck]) || place.image_url || null
     const orderNumbers = dayOrderMap[place.id] ?? null
     const icon = createPlaceIcon({ ...place, image_url: resolvedPhoto }, orderNumbers, isSelected)
 

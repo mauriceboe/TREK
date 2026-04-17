@@ -545,6 +545,12 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesFormat': 'Estensioni separate da virgola (es. jpg,png,pdf,doc). Usa * per consentire tutti i tipi.',
   'admin.fileTypesSaved': 'Impostazioni dei tipi di file salvate',
     // Packing Templates & Bag Tracking
+  'admin.placesPhotos.title': 'Foto dei luoghi',
+  'admin.placesPhotos.subtitle': "Recupera le foto dall'API Google Places. Disabilita per risparmiare la quota API. Le foto di Wikimedia non sono interessate.",
+  'admin.placesAutocomplete.title': 'Completamento automatico dei luoghi',
+  'admin.placesAutocomplete.subtitle': "Utilizza l'API Google Places per i suggerimenti di ricerca. Disabilita per risparmiare la quota API.",
+  'admin.placesDetails.title': 'Dettagli del luogo',
+  'admin.placesDetails.subtitle': "Recupera informazioni dettagliate sul luogo (orari, valutazione, sito web) dall'API Google Places. Disabilita per risparmiare la quota API.",
   'admin.bagTracking.title': 'Tracciamento valigia',
   'admin.bagTracking.subtitle': 'Abilita il peso e l\'assegnazione della valigia per gli elementi della lista valigia',
   'admin.collab.chat.title': 'Chat',

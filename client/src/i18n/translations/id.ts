@@ -610,6 +610,12 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'admin.fileTypesSaved': 'Pengaturan jenis file disimpan',
 
   // Packing Templates & Bag Tracking
+  'admin.placesPhotos.title': 'Foto Tempat',
+  'admin.placesPhotos.subtitle': 'Mengambil foto dari Google Places API. Nonaktifkan untuk menghemat kuota API. Foto Wikimedia tidak terpengaruh.',
+  'admin.placesAutocomplete.title': 'Pelengkapan Otomatis Tempat',
+  'admin.placesAutocomplete.subtitle': 'Menggunakan Google Places API untuk saran pencarian. Nonaktifkan untuk menghemat kuota API.',
+  'admin.placesDetails.title': 'Detail Tempat',
+  'admin.placesDetails.subtitle': 'Mengambil informasi detail tempat (jam, penilaian, situs web) dari Google Places API. Nonaktifkan untuk menghemat kuota API.',
   'admin.bagTracking.title': 'Pelacak Tas',
   'admin.bagTracking.subtitle': 'Aktifkan berat dan penugasan tas untuk item packing',
   'admin.collab.chat.title': 'Chat',

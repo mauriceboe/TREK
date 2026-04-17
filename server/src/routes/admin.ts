@@ -201,6 +201,63 @@ router.put('/bag-tracking', (req: Request, res: Response) => {
   res.json(result);
 });
 
+// ── Places Photos ───────────────────────────────────────────────────────
+
+router.get('/places-photos', (_req: Request, res: Response) => {
+  res.json(svc.getPlacesPhotos());
+});
+
+router.put('/places-photos', (req: Request, res: Response) => {
+  if (typeof req.body.enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+  const result = svc.updatePlacesPhotos(req.body.enabled);
+  const authReq = req as AuthRequest;
+  writeAudit({
+    userId: authReq.user.id,
+    action: 'admin.places_photos',
+    ip: getClientIp(req),
+    details: { enabled: result.enabled },
+  });
+  res.json(result);
+});
+
+// ── Places Autocomplete ──────────────────────────────────────────────────
+
+router.get('/places-autocomplete', (_req: Request, res: Response) => {
+  res.json(svc.getPlacesAutocomplete());
+});
+
+router.put('/places-autocomplete', (req: Request, res: Response) => {
+  if (typeof req.body.enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+  const result = svc.updatePlacesAutocomplete(req.body.enabled);
+  const authReq = req as AuthRequest;
+  writeAudit({
+    userId: authReq.user.id,
+    action: 'admin.places_autocomplete',
+    ip: getClientIp(req),
+    details: { enabled: result.enabled },
+  });
+  res.json(result);
+});
+
+// ── Places Details ───────────────────────────────────────────────────────
+
+router.get('/places-details', (_req: Request, res: Response) => {
+  res.json(svc.getPlacesDetails());
+});
+
+router.put('/places-details', (req: Request, res: Response) => {
+  if (typeof req.body.enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+  const result = svc.updatePlacesDetails(req.body.enabled);
+  const authReq = req as AuthRequest;
+  writeAudit({
+    userId: authReq.user.id,
+    action: 'admin.places_details',
+    ip: getClientIp(req),
+    details: { enabled: result.enabled },
+  });
+  res.json(result);
+});
+
 // ── Collab Features ───────────────────────────────────────────────────────
 
 router.get('/collab-features', (_req: Request, res: Response) => {

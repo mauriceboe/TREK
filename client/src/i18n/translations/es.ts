@@ -541,6 +541,12 @@ const es: Record<string, string> = {
   'admin.fileTypesFormat': 'Extensiones separadas por comas (p. ej. jpg,png,pdf,doc). Usa * para permitir todos los tipos.',
   'admin.fileTypesSaved': 'Ajustes de tipos de archivo guardados',
 
+  'admin.placesPhotos.title': 'Fotos de Lugares',
+  'admin.placesPhotos.subtitle': 'Obtiene fotos de la Google Places API. Desactiva para ahorrar cuota de API. Las fotos de Wikimedia no se ven afectadas.',
+  'admin.placesAutocomplete.title': 'Autocompletado de Lugares',
+  'admin.placesAutocomplete.subtitle': 'Usa la Google Places API para sugerencias de búsqueda. Desactiva para ahorrar cuota de API.',
+  'admin.placesDetails.title': 'Detalles del Lugar',
+  'admin.placesDetails.subtitle': 'Obtiene información detallada del lugar (horarios, valoración, web) de la Google Places API. Desactiva para ahorrar cuota de API.',
   'admin.bagTracking.title': 'Seguimiento de equipaje',
   'admin.bagTracking.subtitle': 'Activar peso y asignación de equipaje para artículos de la lista',
   'admin.collab.chat.title': 'Chat',
