@@ -87,7 +87,7 @@ describe('ReservationModal', () => {
   });
 
   it('FE-PLANNER-RESMODAL-003: shows "Edit Reservation" title when editing', () => {
-    const res = buildReservation({ title: 'Flight NY', type: 'flight' });
+    const res = buildReservation({ title: 'Nice Dinner', type: 'restaurant' });
     render(<ReservationModal {...defaultProps} reservation={res} />);
     expect(screen.getByText(/Edit Reservation/i)).toBeInTheDocument();
   });
@@ -101,34 +101,26 @@ describe('ReservationModal', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('FE-PLANNER-RESMODAL-005: all 9 type buttons are visible', () => {
+  it('FE-PLANNER-RESMODAL-005: all 5 type buttons are visible (transport types removed)', () => {
     render(<ReservationModal {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /Flight/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Accommodation/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Restaurant/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Train/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Car$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Cruise/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Event/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Tour/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Other/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Flight$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Train$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Car$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Cruise$/i })).not.toBeInTheDocument();
   });
 
   // ── Type selection ──────────────────────────────────────────────────────────
 
-  it('FE-PLANNER-RESMODAL-006: clicking Flight type button shows flight-specific fields', async () => {
+  it('FE-PLANNER-RESMODAL-006: clicking Event type button activates it', async () => {
     render(<ReservationModal {...defaultProps} />);
-    await userEvent.click(screen.getByRole('button', { name: /Flight/i }));
-    // Flight-specific airline field has placeholder="Lufthansa" (exact, not the title placeholder)
-    expect(screen.getByPlaceholderText('Lufthansa')).toBeInTheDocument();
-  });
-
-  it('FE-PLANNER-RESMODAL-007: flight type shows airline/airport fields', async () => {
-    render(<ReservationModal {...defaultProps} />);
-    await userEvent.click(screen.getByRole('button', { name: /Flight/i }));
-    expect(screen.getByText(/Airline/i)).toBeInTheDocument();
-    expect(screen.getByText(/^From$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^To$/i)).toBeInTheDocument();
+    const eventBtn = screen.getByRole('button', { name: /Event/i });
+    await userEvent.click(eventBtn);
+    expect(eventBtn).toHaveStyle({ background: 'var(--text-primary)' });
   });
 
   it('FE-PLANNER-RESMODAL-008: hotel type shows check-in/check-out time fields', async () => {
@@ -139,12 +131,10 @@ describe('ReservationModal', () => {
     expect(screen.getByText(/Check-out/i)).toBeInTheDocument();
   });
 
-  it('FE-PLANNER-RESMODAL-009: train type shows train number/platform/seat fields', async () => {
+  it('FE-PLANNER-RESMODAL-009: restaurant type shows location field', async () => {
     render(<ReservationModal {...defaultProps} />);
-    await userEvent.click(screen.getByRole('button', { name: /Train/i }));
-    expect(screen.getByText(/Train No\./i)).toBeInTheDocument();
-    expect(screen.getByText(/Platform/i)).toBeInTheDocument();
-    expect(screen.getByText(/Seat/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Restaurant/i }));
+    expect(screen.getByPlaceholderText(/Address, Airport/i)).toBeInTheDocument();
   });
 
   it('FE-PLANNER-RESMODAL-010: hotel type hides assignment picker', async () => {
@@ -183,13 +173,10 @@ describe('ReservationModal', () => {
     expect(screen.getByDisplayValue('Breakfast included')).toBeInTheDocument();
   });
 
-  it('FE-PLANNER-RESMODAL-014: editing pre-fills type — train type does not show flight fields', () => {
-    const res = buildReservation({ type: 'train' });
+  it('FE-PLANNER-RESMODAL-014: editing pre-fills type — restaurant type shows location field', () => {
+    const res = buildReservation({ type: 'restaurant', location: 'Via Roma 1' });
     render(<ReservationModal {...defaultProps} reservation={res} />);
-    // Flight-specific airline input has placeholder="Lufthansa" (exact) — should NOT appear for train type
-    expect(screen.queryByPlaceholderText('Lufthansa')).not.toBeInTheDocument();
-    // Train fields should appear
-    expect(screen.getByText(/Train No\./i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Via Roma 1')).toBeInTheDocument();
   });
 
   // ── Validation ──────────────────────────────────────────────────────────────
@@ -232,18 +219,18 @@ describe('ReservationModal', () => {
 
   // ── Submit flow ─────────────────────────────────────────────────────────────
 
-  it('FE-PLANNER-RESMODAL-016: submitting valid flight calls onSave with correct shape', async () => {
+  it('FE-PLANNER-RESMODAL-016: submitting valid restaurant booking calls onSave with correct shape', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ReservationModal {...defaultProps} onSave={onSave} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Flight/i }));
-    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Air France 777');
+    await userEvent.click(screen.getByRole('button', { name: /Restaurant/i }));
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Le Jules Verne');
 
     await userEvent.click(screen.getByRole('button', { name: /^Add$/i }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Air France 777', type: 'flight' })
+      expect.objectContaining({ title: 'Le Jules Verne', type: 'restaurant' })
     );
   });
 
@@ -439,17 +426,17 @@ describe('ReservationModal', () => {
     );
   });
 
-  it('FE-PLANNER-RESMODAL-031: train type — saving calls onSave with train type', async () => {
+  it('FE-PLANNER-RESMODAL-031: event type — saving calls onSave with event type', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ReservationModal {...defaultProps} onSave={onSave} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Train/i }));
-    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Eurostar Paris');
+    await userEvent.click(screen.getByRole('button', { name: /Event/i }));
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Louvre Museum');
     await userEvent.click(screen.getByRole('button', { name: /^Add$/i }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Eurostar Paris', type: 'train' })
+      expect.objectContaining({ title: 'Louvre Museum', type: 'event' })
     );
   });
 
@@ -473,7 +460,7 @@ describe('ReservationModal', () => {
 
   it('FE-PLANNER-RESMODAL-036: file upload to existing reservation calls onFileUpload', async () => {
     const onFileUpload = vi.fn().mockResolvedValue(undefined);
-    const res = buildReservation({ id: 10, title: 'My Trip', type: 'flight' });
+    const res = buildReservation({ id: 10, title: 'My Trip', type: 'other' });
     render(
       <ReservationModal
         {...defaultProps}
@@ -575,26 +562,18 @@ describe('ReservationModal', () => {
     expect(screen.queryByPlaceholderText('0.00')).not.toBeInTheDocument();
   });
 
-  it('FE-PLANNER-RESMODAL-042: flight type metadata saved with airline and flight number', async () => {
+  it('FE-PLANNER-RESMODAL-042: hotel type metadata saved with check-in time', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ReservationModal {...defaultProps} onSave={onSave} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Flight/i }));
-    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'AF 447 CDG → JFK');
-    await userEvent.type(screen.getByPlaceholderText('Lufthansa'), 'Air France');
-    await userEvent.type(screen.getByPlaceholderText('LH 123'), 'AF 447');
+    await userEvent.click(screen.getByRole('button', { name: /Accommodation/i }));
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Grand Hotel');
 
     await userEvent.click(screen.getByRole('button', { name: /^Add$/i }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'flight',
-        metadata: expect.objectContaining({
-          airline: 'Air France',
-          flight_number: 'AF 447',
-        }),
-      })
+      expect.objectContaining({ title: 'Grand Hotel', type: 'hotel' })
     );
   });
 
@@ -634,22 +613,21 @@ describe('ReservationModal', () => {
     expect(screen.getByText(/Budget category/i)).toBeInTheDocument();
   });
 
-  it('FE-PLANNER-RESMODAL-045: car type shows date/time section', async () => {
+  it('FE-PLANNER-RESMODAL-045: tour type shows time pickers', async () => {
     render(<ReservationModal {...defaultProps} />);
-    await userEvent.click(screen.getByRole('button', { name: /^Car$/i }));
-    // Car type still shows date fields (not hotel which hides them)
+    await userEvent.click(screen.getByRole('button', { name: /^Tour$/i }));
     await waitFor(() => {
-      expect(screen.getAllByTestId('date-picker').length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId('time-picker').length).toBeGreaterThan(0);
     });
   });
 
-  it('FE-PLANNER-RESMODAL-046: cruise type renders and saves correctly', async () => {
+  it('FE-PLANNER-RESMODAL-046: other type renders and saves correctly', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ReservationModal {...defaultProps} onSave={onSave} />);
-    await userEvent.click(screen.getByRole('button', { name: /Cruise/i }));
-    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Caribbean Cruise');
+    await userEvent.click(screen.getByRole('button', { name: /^Other$/i }));
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Misc item');
     await userEvent.click(screen.getByRole('button', { name: /^Add$/i }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ type: 'cruise' })));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ type: 'other' })));
   });
 
   it('FE-PLANNER-RESMODAL-047: clicking budget category select changes the value', async () => {
@@ -730,23 +708,17 @@ describe('ReservationModal', () => {
     });
   });
 
-  it('FE-PLANNER-RESMODAL-035: flight with train number metadata saved correctly', async () => {
+  it('FE-PLANNER-RESMODAL-035: hotel type saves correctly', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<ReservationModal {...defaultProps} onSave={onSave} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Train/i }));
-    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'ICE 792');
-    await userEvent.type(screen.getByPlaceholderText(/ICE 123/i), 'ICE 792');
-    await userEvent.type(screen.getByPlaceholderText(/^12$/i), '5');
-    await userEvent.type(screen.getByPlaceholderText(/42A/i), '14B');
+    await userEvent.click(screen.getByRole('button', { name: /^Accommodation$/i }));
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. Lufthansa/i), 'Hotel Test');
     await userEvent.click(screen.getByRole('button', { name: /^Add$/i }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'train',
-        metadata: expect.objectContaining({ train_number: 'ICE 792', platform: '5', seat: '14B' }),
-      })
+      expect.objectContaining({ type: 'hotel' })
     );
   });
 });

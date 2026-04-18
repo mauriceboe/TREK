@@ -69,9 +69,10 @@ interface ReservationCardProps {
   onNavigateToFiles: () => void
   assignmentLookup: Record<number, AssignmentLookupEntry>
   canEdit: boolean
+  days?: Day[]
 }
 
-function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateToFiles, assignmentLookup, canEdit }: ReservationCardProps) {
+function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateToFiles, assignmentLookup, canEdit, days = [] }: ReservationCardProps) {
   const { toggleReservationStatus } = useTripStore()
   const toast = useToast()
   const { t, locale } = useTranslation()
@@ -108,6 +109,21 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
   const hasTime = r.reservation_time?.includes('T')
   const hasCode = !!r.confirmation_number
   const dateCols = [hasDate, hasTime, hasCode].filter(Boolean).length
+
+  const TRANSPORT_TYPES_SET = new Set(['flight', 'train', 'bus', 'car', 'cruise'])
+  const isTransportType = TRANSPORT_TYPES_SET.has(r.type)
+  const startDay = r.day_id ? days.find(d => d.id === r.day_id) : undefined
+  const endDay = r.end_day_id ? days.find(d => d.id === r.end_day_id) : undefined
+  const dayLabel = (day: typeof startDay): string => {
+    if (!day) return ''
+    const base = day.title || t('dayplan.dayN', { n: day.day_number })
+    if (day.date) {
+      const d = new Date(day.date + 'T00:00:00Z')
+      const dateStr = d.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
+      return `${base} · ${dateStr}`
+    }
+    return base
+  }
 
   return (
     <div style={{
@@ -186,6 +202,15 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
 
       {/* Body */}
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+        {/* Day label for transport reservations linked to a day */}
+        {isTransportType && startDay && (
+          <div>
+            <div style={fieldLabelStyle}>{t('reservations.date')}</div>
+            <div style={{ ...fieldValueStyle, textAlign: 'center' }}>
+              {dayLabel(startDay)}{endDay && endDay.id !== startDay.id ? ` – ${dayLabel(endDay)}` : ''}
+            </div>
+          </div>
+        )}
         {/* Date / Time row */}
         {hasDate && (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: hasTime ? '1fr 1fr' : '1fr' }}>
@@ -430,9 +455,11 @@ interface ReservationsPanelProps {
   onEdit: (reservation: Reservation) => void
   onDelete: (id: number) => void
   onNavigateToFiles: () => void
+  titleKey?: string
+  addManualKey?: string
 }
 
-export default function ReservationsPanel({ tripId, reservations, days, assignments, files = [], onAdd, onEdit, onDelete, onNavigateToFiles }: ReservationsPanelProps) {
+export default function ReservationsPanel({ tripId, reservations, days, assignments, files = [], onAdd, onEdit, onDelete, onNavigateToFiles, titleKey = 'reservations.title', addManualKey = 'reservations.addManual' }: ReservationsPanelProps) {
   const { t, locale } = useTranslation()
   const can = useCanDo()
   const trip = useTripStore((s) => s.trip)
@@ -483,7 +510,7 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
           display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
         }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', flexShrink: 0 }}>
-            {t('reservations.title')}
+            {t(titleKey)}
           </h2>
 
           {reservations.length > 0 && (
@@ -557,7 +584,7 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
               <Plus size={14} strokeWidth={2.5} />
-              <span className="hidden sm:inline">{t('reservations.addManual')}</span>
+              <span className="hidden sm:inline">{t(addManualKey)}</span>
             </button>
           )}
         </div>
@@ -579,12 +606,12 @@ export default function ReservationsPanel({ tripId, reservations, days, assignme
           <>
             {allPending.length > 0 && (
               <Section title={t('reservations.pending')} count={allPending.length} accent="gray" storageKey={`trek:bookings-pending-open:${tripId}`}>
-                {allPending.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} />)}
+                {allPending.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} days={days} />)}
               </Section>
             )}
             {allConfirmed.length > 0 && (
               <Section title={t('reservations.confirmed')} count={allConfirmed.length} accent="green" storageKey={`trek:bookings-confirmed-open:${tripId}`}>
-                {allConfirmed.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} />)}
+                {allConfirmed.map(r => <ReservationCard key={r.id} r={r} tripId={tripId} onEdit={onEdit} onDelete={onDelete} files={files} onNavigateToFiles={onNavigateToFiles} assignmentLookup={assignmentLookup} canEdit={canEdit} days={days} />)}
               </Section>
             )}
           </>

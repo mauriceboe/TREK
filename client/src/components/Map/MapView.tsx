@@ -603,15 +603,18 @@ export const MapView = memo(function MapView({
         {markers}
       </MarkerClusterGroup>
 
-      {route && route.length > 1 && (
+      {route && route.length > 0 && (
         <>
-          <Polyline
-            positions={route}
-            color="#111827"
-            weight={3}
-            opacity={0.9}
-            dashArray="6, 5"
-          />
+          {route.map((seg, i) => seg.length > 1 && (
+            <Polyline
+              key={i}
+              positions={seg}
+              color="#111827"
+              weight={3}
+              opacity={0.9}
+              dashArray="6, 5"
+            />
+          ))}
           {routeSegments.map((seg, i) => (
             <RouteLabel key={i} midpoint={seg.mid} from={seg.from} to={seg.to} walkingText={seg.walkingText} drivingText={seg.drivingText} />
           ))}

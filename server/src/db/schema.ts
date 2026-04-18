@@ -165,6 +165,7 @@ function createTables(db: Database.Database): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
       day_id INTEGER REFERENCES days(id) ON DELETE SET NULL,
+      end_day_id INTEGER REFERENCES days(id) ON DELETE SET NULL,
       place_id INTEGER REFERENCES places(id) ON DELETE SET NULL,
       assignment_id INTEGER REFERENCES day_assignments(id) ON DELETE SET NULL,
       title TEXT NOT NULL,

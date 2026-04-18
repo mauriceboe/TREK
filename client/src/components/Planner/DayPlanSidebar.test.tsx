@@ -440,26 +440,27 @@ describe('DayPlanSidebar', () => {
       type: 'flight',
       title: 'Paris to London',
       reservation_time: '2025-06-01T08:00:00',
+      day_id: 10,
     })
     render(<DayPlanSidebar {...makeDefaultProps({ days: [day], reservations: [reservation] })} />)
     expect(screen.getByText('Paris to London')).toBeInTheDocument()
   })
 
-  it('FE-PLANNER-DAYPLAN-031: clicking transport item shows detail modal', async () => {
+  it('FE-PLANNER-DAYPLAN-031: clicking transport item calls onEditTransport', async () => {
     const user = userEvent.setup()
+    const onEditTransport = vi.fn()
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Travel Day' })
     const reservation = buildReservation({
       id: 200,
       type: 'flight',
       title: 'Air France 123',
       reservation_time: '2025-06-01T08:00:00',
+      day_id: 10,
     })
-    render(<DayPlanSidebar {...makeDefaultProps({ days: [day], reservations: [reservation] })} />)
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day], reservations: [reservation], onEditTransport })} />)
     await user.click(screen.getByText('Air France 123'))
-    // Detail modal should appear (shows the title again in the modal)
     await waitFor(() => {
-      const titles = screen.getAllByText('Air France 123')
-      expect(titles.length).toBeGreaterThan(1)
+      expect(onEditTransport).toHaveBeenCalledWith(expect.objectContaining({ id: 200 }))
     })
   })
 
@@ -664,6 +665,7 @@ describe('DayPlanSidebar', () => {
     const reservation = buildReservation({
       id: 200, type: 'flight', title: 'CDG to LHR',
       reservation_time: '2025-06-01T08:00:00',
+      day_id: 10,
     })
     render(<DayPlanSidebar {...makeDefaultProps({
       days: [day],
@@ -684,6 +686,8 @@ describe('DayPlanSidebar', () => {
       id: 201, type: 'flight', title: 'Transatlantic',
       reservation_time: '2025-06-01T22:00:00',
       reservation_end_time: '2025-06-02T06:00:00',
+      day_id: 10,
+      end_day_id: 11,
     } as any)
     render(<DayPlanSidebar {...makeDefaultProps({
       days: [day1, day2],
@@ -704,6 +708,8 @@ describe('DayPlanSidebar', () => {
       id: 300, type: 'car', title: 'Renault Rental',
       reservation_time: '2025-06-01T09:00:00',
       reservation_end_time: '2025-06-03T17:00:00',
+      day_id: 10,
+      end_day_id: 12,
     } as any)
     render(<DayPlanSidebar {...makeDefaultProps({
       days: [day1, day2, day3],
@@ -786,20 +792,22 @@ describe('DayPlanSidebar', () => {
 
   // ── Transport detail modal with metadata ───────────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-051: transport detail modal shows flight metadata', async () => {
+  it('FE-PLANNER-DAYPLAN-051: clicking flight transport calls onEditTransport with reservation', async () => {
     const user = userEvent.setup()
+    const onEditTransport = vi.fn()
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Travel' })
     const reservation = {
       ...buildReservation({
         id: 202, type: 'flight', title: 'Paris to Berlin',
         reservation_time: '2025-06-01T07:30:00',
+        day_id: 10,
       }),
       metadata: JSON.stringify({ airline: 'Lufthansa', flight_number: 'LH1234', departure_airport: 'CDG', arrival_airport: 'BER' }),
     }
-    render(<DayPlanSidebar {...makeDefaultProps({ days: [day], reservations: [reservation as any] })} />)
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day], reservations: [reservation as any], onEditTransport })} />)
     await user.click(screen.getByText('Paris to Berlin'))
     await waitFor(() => {
-      expect(screen.getByText('Lufthansa')).toBeInTheDocument()
+      expect(onEditTransport).toHaveBeenCalledWith(expect.objectContaining({ id: 202, type: 'flight' }))
     })
   })
 
@@ -1124,6 +1132,7 @@ describe('DayPlanSidebar', () => {
     const flight = buildReservation({
       id: 201, type: 'flight', title: 'Afternoon Flight',
       reservation_time: '2025-06-01T14:00:00',
+      day_id: 10,
     })
     render(<DayPlanSidebar {...makeDefaultProps({
       days: [day], places: [place], assignments: { '10': [assignment] }, reservations: [flight],
@@ -1682,5 +1691,43 @@ describe('DayPlanSidebar', () => {
     })} />)
     // Optimize button should not be visible when no day is selected
     expect(screen.queryByRole('button', { name: /optimize/i })).not.toBeInTheDocument()
+  })
+
+  // ── Edit reservation pencil button ───────────────────────────────────────
+
+  it('FE-PLANNER-DAYPLAN-097: pencil button on non-transport reservation calls onEditReservation', async () => {
+    const user = userEvent.setup()
+    const place = buildPlace({ id: 1, name: 'Hotel du Lac' })
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
+    const res = buildReservation({ id: 77, trip_id: 1, type: 'hotel', status: 'pending', assignment_id: 99 } as any)
+    const onEditReservation = vi.fn()
+    const onEditTransport = vi.fn()
+    render(<DayPlanSidebar {...makeDefaultProps({
+      days: [day], places: [place], assignments: { '10': [assignment] }, reservations: [res],
+      onEditReservation, onEditTransport,
+    })} />)
+    const pencil = screen.getByTitle(/edit/i)
+    await user.click(pencil)
+    expect(onEditReservation).toHaveBeenCalledWith(res)
+    expect(onEditTransport).not.toHaveBeenCalled()
+  })
+
+  it('FE-PLANNER-DAYPLAN-098: pencil button on transport reservation calls onEditTransport', async () => {
+    const user = userEvent.setup()
+    const place = buildPlace({ id: 1, name: 'Geneva Airport' })
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    const assignment = buildAssignment({ id: 99, day_id: 10, order_index: 0, place })
+    const res = buildReservation({ id: 88, trip_id: 1, type: 'flight', status: 'pending', assignment_id: 99 } as any)
+    const onEditReservation = vi.fn()
+    const onEditTransport = vi.fn()
+    render(<DayPlanSidebar {...makeDefaultProps({
+      days: [day], places: [place], assignments: { '10': [assignment] }, reservations: [res],
+      onEditReservation, onEditTransport,
+    })} />)
+    const pencil = screen.getByTitle(/edit/i)
+    await user.click(pencil)
+    expect(onEditTransport).toHaveBeenCalledWith(res)
+    expect(onEditReservation).not.toHaveBeenCalled()
   })
 })

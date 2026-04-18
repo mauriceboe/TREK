@@ -157,6 +157,7 @@ export interface Reservation {
   id: number;
   trip_id: number;
   day_id?: number | null;
+  end_day_id?: number | null;
   place_id?: number | null;
   assignment_id?: number | null;
   title: string;

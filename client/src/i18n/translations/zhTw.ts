@@ -927,6 +927,7 @@ const zhTw: Record<string, string> = {
 
   // Trip Planner
   'trip.tabs.plan': '計劃',
+  'trip.tabs.transports': '交通',
   'trip.tabs.reservations': '預訂',
   'trip.tabs.reservationsShort': '預訂',
   'trip.tabs.packing': '行李清單',
@@ -1194,6 +1195,7 @@ const zhTw: Record<string, string> = {
   'reservations.span.end': '結束',
   'reservations.span.ongoing': '進行中',
   'reservations.validation.endBeforeStart': '結束日期/時間必須晚於開始日期/時間',
+  'reservations.addBooking': '新增預訂',
 
   // Budget
   'budget.title': '預算',
@@ -2286,6 +2288,11 @@ const zhTw: Record<string, string> = {
   // System notices — personal thank you
   'system_notice.v3_thankyou.title': '來自我的一封私人信',
   'system_notice.v3_thankyou.body': '在你繼續之前——我想停下來說幾句。\n\nTREK 最初只是我為自己的旅行而做的一個業餘專案。我從未想過它會成長為 4,000 人信賴的冒險規劃工具。每一顆星標、每一個 issue、每一個功能請求——我都會讀，它們在全職工作和大學學業之間的深夜裡支撐著我繼續前行。\n\n我想讓你們知道：TREK 將永遠開源，永遠可自託管，永遠屬於你們。沒有追蹤，沒有訂閱，沒有任何附加條件。只是一個熱愛旅行的人為同樣熱愛旅行的你們打造的工具。\n\n特別感謝 [jubnl](https://github.com/jubnl)——你已經成為一位不可思議的合作者。3.0 版本中許多精彩之處都留下了你的印記。感謝你在這個專案還很粗糙的時候就選擇了相信它。\n\n也感謝你們每一位——回報了 bug、翻譯了文字、向朋友分享了 TREK，或者只是用它規劃了一次旅行——**謝謝你們**。你們是這一切存在的原因。\n\n願我們一起踏上更多的冒險旅程。\n\n— Maurice\n\n---\n\n[加入 Discord 社群](https://discord.gg/7Q6M6jDwzf)\n\n如果 TREK 讓你的旅行更美好，一杯[小小的咖啡](https://ko-fi.com/mauriceboe)能讓這盞燈一直亮著。',
+  'transport.addTransport': 'Add transport',
+  'transport.modalTitle.create': 'Add transport',
+  'transport.modalTitle.edit': 'Edit transport',
+  'transport.title': '交通',
+  'transport.addManual': '手動新增交通',
 }
 
 export default zhTw

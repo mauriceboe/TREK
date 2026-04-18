@@ -930,6 +930,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
 
   // Trip Planner
   'trip.tabs.plan': 'Plan',
+  'trip.tabs.transports': 'Transports',
   'trip.tabs.reservations': 'Bookings',
   'trip.tabs.reservationsShort': 'Book',
   'trip.tabs.packing': 'Packing List',
@@ -1195,6 +1196,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'reservations.span.end': 'End',
   'reservations.span.ongoing': 'Ongoing',
   'reservations.validation.endBeforeStart': 'End date/time must be after start date/time',
+  'reservations.addBooking': 'Add booking',
 
   // Budget
   'budget.title': 'Budget',
@@ -2327,6 +2329,11 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'system_notice.pager.counter': '{current} / {total}',
   'system_notice.pager.goto': 'Go to notice {n}',
   'system_notice.pager.position': 'Notice {current} of {total}',
+  'transport.addTransport': 'Add transport',
+  'transport.modalTitle.create': 'Add transport',
+  'transport.modalTitle.edit': 'Edit transport',
+  'transport.title': 'Transports',
+  'transport.addManual': 'Manual Transport',
 }
 
 export default en

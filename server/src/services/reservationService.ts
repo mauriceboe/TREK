@@ -123,6 +123,7 @@ interface CreateReservationData {
   confirmation_number?: string;
   notes?: string;
   day_id?: number;
+  end_day_id?: number;
   place_id?: number;
   assignment_id?: number;
   status?: string;
@@ -137,7 +138,7 @@ interface CreateReservationData {
 export function createReservation(tripId: string | number, data: CreateReservationData): { reservation: any; accommodationCreated: boolean } {
   const {
     title, reservation_time, reservation_end_time, location,
-    confirmation_number, notes, day_id, place_id, assignment_id,
+    confirmation_number, notes, day_id, end_day_id, place_id, assignment_id,
     status, type, accommodation_id, metadata, create_accommodation,
     endpoints, needs_review
   } = data;
@@ -158,11 +159,12 @@ export function createReservation(tripId: string | number, data: CreateReservati
   }
 
   const result = db.prepare(`
-    INSERT INTO reservations (trip_id, day_id, place_id, assignment_id, title, reservation_time, reservation_end_time, location, confirmation_number, notes, status, type, accommodation_id, metadata, needs_review)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO reservations (trip_id, day_id, end_day_id, place_id, assignment_id, title, reservation_time, reservation_end_time, location, confirmation_number, notes, status, type, accommodation_id, metadata, needs_review)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     tripId,
     day_id || null,
+    end_day_id ?? null,
     place_id || null,
     assignment_id || null,
     title,
@@ -242,6 +244,7 @@ interface UpdateReservationData {
   confirmation_number?: string;
   notes?: string;
   day_id?: number;
+  end_day_id?: number | null;
   place_id?: number;
   assignment_id?: number;
   status?: string;
@@ -256,7 +259,7 @@ interface UpdateReservationData {
 export function updateReservation(id: string | number, tripId: string | number, data: UpdateReservationData, current: Reservation): { reservation: any; accommodationChanged: boolean } {
   const {
     title, reservation_time, reservation_end_time, location,
-    confirmation_number, notes, day_id, place_id, assignment_id,
+    confirmation_number, notes, day_id, end_day_id, place_id, assignment_id,
     status, type, accommodation_id, metadata, create_accommodation,
     endpoints, needs_review
   } = data;
@@ -294,6 +297,7 @@ export function updateReservation(id: string | number, tripId: string | number, 
       confirmation_number = ?,
       notes = ?,
       day_id = ?,
+      end_day_id = ?,
       place_id = ?,
       assignment_id = ?,
       status = COALESCE(?, status),
@@ -310,6 +314,7 @@ export function updateReservation(id: string | number, tripId: string | number, 
     confirmation_number !== undefined ? (confirmation_number || null) : current.confirmation_number,
     notes !== undefined ? (notes || null) : current.notes,
     day_id !== undefined ? (day_id || null) : current.day_id,
+    end_day_id !== undefined ? (end_day_id ?? null) : (current as any).end_day_id ?? null,
     place_id !== undefined ? (place_id || null) : current.place_id,
     assignment_id !== undefined ? (assignment_id || null) : current.assignment_id,
     status || null,

@@ -867,6 +867,7 @@ const ru: Record<string, string> = {
 
   // Trip Planner
   'trip.tabs.plan': 'План',
+  'trip.tabs.transports': 'Транспорт',
   'trip.tabs.reservations': 'Бронирования',
   'trip.tabs.reservationsShort': 'Брони',
   'trip.tabs.packing': 'Список вещей',
@@ -1134,6 +1135,7 @@ const ru: Record<string, string> = {
   'reservations.span.end': 'Конец',
   'reservations.span.ongoing': 'Продолжается',
   'reservations.validation.endBeforeStart': 'Дата/время окончания должны быть позже даты/времени начала',
+  'reservations.addBooking': 'Добавить бронирование',
 
   // Budget
   'budget.title': 'Бюджет',
@@ -2285,6 +2287,11 @@ const ru: Record<string, string> = {
   // System notices — personal thank you
   'system_notice.v3_thankyou.title': 'Личное слово от меня',
   'system_notice.v3_thankyou.body': 'Прежде чем продолжить — хочу остановиться на мгновение.\n\nTREK начинался как сторонний проект, который я создал для собственных поездок. Я никогда не думал, что он вырастет во что-то, чему 4 000 из вас доверяют планирование своих приключений. Каждая звёздочка, каждый issue, каждый запрос на фичу — я читаю их все, и именно они поддерживают меня в поздние ночи между основной работой и университетом.\n\nХочу, чтобы вы знали: TREK всегда будет open source, всегда self-hosted, всегда вашим. Никакого отслеживания, никаких подписок, никаких подвохов. Просто инструмент, созданный человеком, который любит путешествовать так же, как и вы.\n\nОсобая благодарность [jubnl](https://github.com/jubnl) — ты стал невероятным соратником. Многое из того, что делает версию 3.0 великолепной, несёт твой отпечаток. Спасибо, что поверил в этот проект, когда он был ещё сырым.\n\nИ каждому из вас, кто сообщил об ошибке, перевёл строку, поделился TREK с другом или просто использовал его для планирования поездки — **спасибо**. Вы — причина, по которой всё это существует.\n\nЗа множество новых приключений вместе.\n\n— Maurice\n\n---\n\n[Присоединяйся к сообществу в Discord](https://discord.gg/7Q6M6jDwzf)\n\nЕсли TREK делает твои путешествия лучше, [маленький кофе](https://ko-fi.com/mauriceboe) всегда помогает держать свет включённым.',
+  'transport.addTransport': 'Add transport',
+  'transport.modalTitle.create': 'Add transport',
+  'transport.modalTitle.edit': 'Edit transport',
+  'transport.title': 'Транспорт',
+  'transport.addManual': 'Ручной транспорт',
 }
 
 export default ru

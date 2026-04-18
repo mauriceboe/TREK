@@ -832,6 +832,7 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
 
   // Trip Planner
   'trip.tabs.plan': 'Plan',
+  'trip.tabs.transports': 'Transport',
   'trip.tabs.reservations': 'Rezerwacje',
   'trip.tabs.reservationsShort': 'Rezerwacje',
   'trip.tabs.packing': 'Lista pakowania',
@@ -1088,6 +1089,7 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
   'reservations.span.end': 'Koniec',
   'reservations.span.ongoing': 'W trakcie',
   'reservations.validation.endBeforeStart': 'Data/godzina zakończenia musi być późniejsza niż data/godzina rozpoczęcia',
+  'reservations.addBooking': 'Dodaj rezerwację',
 
   // Budget
   'budget.title': 'Budżet',
@@ -2278,6 +2280,11 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
   // System notices — personal thank you
   'system_notice.v3_thankyou.title': 'Osobiste słowo ode mnie',
   'system_notice.v3_thankyou.body': 'Zanim pójdziesz dalej — chcę się na chwilę zatrzymać.\n\nTREK zaczął się jako poboczny projekt, który zbudowałem na własne podróże. Nigdy nie wyobrażałem sobie, że wyrośnie na coś, czemu 4000 z was ufa przy planowaniu swoich przygód. Każda gwiazdka, każdy issue, każda prośba o funkcję — czytam je wszystkie i to one trzymają mnie na nogach podczas późnych nocy między pracą na pełny etat a uczelnią.\n\nChcę, żebyście wiedzieli: TREK zawsze będzie open source, zawsze self-hosted, zawsze wasz. Bez śledzenia, bez subskrypcji, bez haczyków. Po prostu narzędzie zbudowane przez kogoś, kto kocha podróżowanie tak samo jak wy.\n\nSzczególne podziękowania dla [jubnl](https://github.com/jubnl) — stałeś się niesamowitym współpracownikiem. Tak wiele z tego, co czyni wersję 3.0 wspaniałą, nosi twój ślad. Dziękuję, że uwierzyłeś w ten projekt, gdy był jeszcze surowy.\n\nI każdemu z was, kto zgłosił błąd, przetłumaczył tekst, podzielił się TREK z przyjacielem lub po prostu użył go do zaplanowania podróży — **dziękuję**. To wy jesteście powodem, dla którego to istnieje.\n\nZa wiele kolejnych wspólnych przygód.\n\n— Maurice\n\n---\n\n[Dołącz do społeczności na Discordzie](https://discord.gg/7Q6M6jDwzf)\n\nJeśli TREK sprawia, że Twoje podróże są lepsze, [mała kawa](https://ko-fi.com/mauriceboe) zawsze pomaga utrzymać światła włączone.',
+  'transport.addTransport': 'Add transport',
+  'transport.modalTitle.create': 'Add transport',
+  'transport.modalTitle.edit': 'Edit transport',
+  'transport.title': 'Transport',
+  'transport.addManual': 'Ręczny transport',
 }
 
 export default pl

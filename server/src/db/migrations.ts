@@ -1703,6 +1703,41 @@ function runMigrations(db: Database.Database): void {
       db.exec('CREATE INDEX IF NOT EXISTS idx_reservation_endpoints_reservation_id ON reservation_endpoints(reservation_id)');
       try { db.exec('ALTER TABLE reservations ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0'); } catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
     },
+    // Migration 110 — link transport reservations to days via day_id / end_day_id
+    () => {
+      try {
+        db.exec('ALTER TABLE reservations ADD COLUMN end_day_id INTEGER REFERENCES days(id) ON DELETE SET NULL');
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column name')) throw err;
+      }
+
+      db.exec(`
+        UPDATE reservations
+        SET day_id = (
+          SELECT d.id FROM days d
+          WHERE d.trip_id = reservations.trip_id
+            AND d.date = substr(reservations.reservation_time, 1, 10)
+          LIMIT 1
+        )
+        WHERE type IN ('flight','train','car','cruise','bus')
+          AND reservation_time IS NOT NULL
+          AND day_id IS NULL
+      `);
+
+      db.exec(`
+        UPDATE reservations
+        SET end_day_id = (
+          SELECT d.id FROM days d
+          WHERE d.trip_id = reservations.trip_id
+            AND d.date = substr(reservations.reservation_end_time, 1, 10)
+          LIMIT 1
+        )
+        WHERE type IN ('flight','train','car','cruise','bus')
+          AND reservation_end_time IS NOT NULL
+          AND end_day_id IS NULL
+          AND substr(reservations.reservation_end_time, 1, 10) != substr(reservations.reservation_time, 1, 10)
+      `);
+    },
   ];
 
   if (currentVersion < migrations.length) {

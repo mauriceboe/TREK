@@ -167,6 +167,7 @@ export interface Reservation {
   notes: string | null
   url: string | null
   day_id?: number | null
+  end_day_id?: number | null
   place_id?: number | null
   assignment_id?: number | null
   accommodation_id?: number | null
