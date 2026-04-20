@@ -1235,7 +1235,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
       // First call: get place details (with photos)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        text: async () => JSON.stringify({
           photos: [{ name: 'places/ChIJABC/photos/photo1', authorAttributions: [{ displayName: 'Photographer' }] }],
         }),
       })
@@ -1258,7 +1258,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 403,
-      json: async () => ({ error: { message: 'Forbidden' } }),
+      text: async () => JSON.stringify({ error: { message: 'Forbidden' } }),
     }));
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
     const errId = `ChIJErr-${Date.now()}`;
@@ -1269,7 +1269,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'gkey' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ photos: [] }),
+      text: async () => JSON.stringify({ photos: [] }),
     }));
     const { getPlacePhoto } = await import('../../../src/services/mapsService');
     const noPhotoId = `ChIJNone-${Date.now()}`;
@@ -1281,7 +1281,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        text: async () => JSON.stringify({
           photos: [{ name: 'places/ChIJXYZ/photos/photo1', authorAttributions: [] }],
         }),
       })
@@ -1301,7 +1301,7 @@ describe('getPlacePhoto (fetch stubbed)', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
+        text: async () => JSON.stringify({
           photos: [{ name: 'places/ChIJNoAttr/photos/photo1', authorAttributions: [] }],
         }),
       })
