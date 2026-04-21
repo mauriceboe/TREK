@@ -649,8 +649,14 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                     </div>
                     {dayGroups.map(({ day, dayPlaces }) => (
                       <div key={day.id}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '8px 10px 2px' }}>
-                          {day.title || `${t('dayplan.dayN', { n: day.day_number })}${day.date ? ` · ${day.date}` : ''}`}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '8px 10px 2px' }}>
+                          <span>{day.title || t('dayplan.dayN', { n: day.day_number })}</span>
+                          {day.date && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 600, color: 'var(--text-faint)',
+                              background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 999,
+                            }}>{day.date}</span>
+                          )}
                         </div>
                         {dayPlaces.map(placeBtn)}
                       </div>

@@ -462,7 +462,8 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                           onChange={v => setHotelDayRange(prev => ({ start: v, end: Math.max(v, prev.end) }))}
                           options={days.map((d, i) => ({
                             value: d.id,
-                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}`,
+                            label: d.title || t('planner.dayN', { n: i + 1 }),
+                            badge: d.date ? new Date(d.date + 'T00:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : undefined,
                           }))}
                           size="sm"
                         />
@@ -474,7 +475,8 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                           onChange={v => setHotelDayRange(prev => ({ start: Math.min(prev.start, v), end: v }))}
                           options={days.map((d, i) => ({
                             value: d.id,
-                            label: `${d.title || t('planner.dayN', { n: i + 1 })}${d.date ? ` — ${new Date(d.date + 'T00:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}`,
+                            label: d.title || t('planner.dayN', { n: i + 1 }),
+                            badge: d.date ? new Date(d.date + 'T00:00:00Z').toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : undefined,
                           }))}
                           size="sm"
                         />

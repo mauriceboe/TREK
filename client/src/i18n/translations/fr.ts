@@ -2341,9 +2341,9 @@ const fr: Record<string, string> = {
   // System notices — personal thank you
   'system_notice.v3_thankyou.title': 'Un mot personnel de ma part',
   'system_notice.v3_thankyou.body': 'Avant de continuer — je veux prendre un instant.\n\nTREK a commencé comme un projet perso que j\'ai construit pour mes propres voyages. Je n\'aurais jamais imaginé qu\'il grandirait au point que 4 000 d\'entre vous lui fassent confiance pour planifier vos aventures. Chaque étoile, chaque issue, chaque demande de fonctionnalité — je les lis toutes, et ce sont elles qui me font tenir pendant les nuits blanches entre un travail à temps plein et l\'université.\n\nJe veux que vous sachiez : TREK sera toujours open source, toujours auto-hébergé, toujours à vous. Pas de tracking, pas d\'abonnements, pas de conditions cachées. Juste un outil construit par quelqu\'un qui aime voyager autant que vous.\n\nUn merci tout particulier à [jubnl](https://github.com/jubnl) — tu es devenu un collaborateur incroyable. Une grande partie de ce qui rend la 3.0 géniale porte ton empreinte. Merci d\'avoir cru en ce projet quand il était encore brut.\n\nEt à chacun d\'entre vous qui a signalé un bug, traduit une chaîne, partagé TREK avec un ami ou simplement l\'a utilisé pour planifier un voyage — **merci**. Vous êtes la raison pour laquelle tout ceci existe.\n\nÀ de nombreuses autres aventures ensemble.\n\n— Maurice\n\n---\n\n[Rejoins la communauté sur Discord](https://discord.gg/7Q6M6jDwzf)\n\nSi TREK rend tes voyages meilleurs, un [petit café](https://ko-fi.com/mauriceboe) aide toujours à garder les lumières allumées.',
-  'transport.addTransport': 'Add transport',
-  'transport.modalTitle.create': 'Add transport',
-  'transport.modalTitle.edit': 'Edit transport',
+  'transport.addTransport': 'Ajouter un transport',
+  'transport.modalTitle.create': 'Ajouter un transport',
+  'transport.modalTitle.edit': 'Modifier le transport',
   'transport.title': 'Transports',
   'transport.addManual': 'Transport manuel',
 }

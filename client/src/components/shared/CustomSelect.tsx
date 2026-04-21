@@ -9,6 +9,7 @@ interface SelectOption {
   isHeader?: boolean
   searchLabel?: string
   groupLabel?: string
+  badge?: string
 }
 
 interface CustomSelectProps {
@@ -104,6 +105,13 @@ export default function CustomSelect({
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? 'var(--text-primary)' : 'var(--text-faint)' }}>
           {selected ? selected.label : placeholder}
         </span>
+        {selected?.badge && (
+          <span style={{
+            flexShrink: 0, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+            background: 'var(--bg-tertiary)', padding: '2px 7px', borderRadius: 999,
+            letterSpacing: '0.01em',
+          }}>{selected.badge}</span>
+        )}
         <ChevronDown size={sm ? 12 : 14} style={{ flexShrink: 0, color: 'var(--text-faint)', transition: 'transform 200ms cubic-bezier(0.23,1,0.32,1)', transform: open ? 'rotate(180deg)' : 'none' }} />
       </button>
 
@@ -186,6 +194,13 @@ export default function CustomSelect({
                   >
                     {option.icon && <span style={{ display: 'flex', flexShrink: 0 }}>{option.icon}</span>}
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option.label}</span>
+                    {option.badge && (
+                      <span style={{
+                        flexShrink: 0, fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+                        background: 'var(--bg-tertiary)', padding: '2px 7px', borderRadius: 999,
+                        letterSpacing: '0.01em',
+                      }}>{option.badge}</span>
+                    )}
                     {isSelected && <Check size={13} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />}
                   </button>
                 )

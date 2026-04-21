@@ -222,7 +222,8 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
     { value: '', label: '—' },
     ...days.map(d => ({
       value: d.id,
-      label: d.title || `${t('dayplan.dayN', { n: d.day_number })}${d.date ? ` · ${formatDate(d.date, locale) ?? ''}` : ''}`,
+      label: d.title || t('dayplan.dayN', { n: d.day_number }),
+      badge: d.date ? (formatDate(d.date, locale) ?? undefined) : undefined,
     })),
   ]
 
