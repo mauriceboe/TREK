@@ -61,14 +61,15 @@ export default function Modal({
       <div
         className={`
           trek-modal-enter
-          rounded-2xl shadow-2xl w-full ${sizeClasses[size] || sizeClasses.md}
-          flex flex-col max-h-[calc(100vh-180px)] md:max-h-[calc(100vh-90px)]
+          rounded-2xl overflow-hidden shadow-2xl w-full ${sizeClasses[size] || sizeClasses.md}
+          flex flex-col
+          max-h-[calc(100dvh-var(--bottom-nav-h)-90px)] sm:max-h-[calc(100dvh-90px)]
         `}
         style={{ background: 'var(--bg-card)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
+        {/* Header — stays put even while the body scrolls */}
+        <div className="flex items-center justify-between p-6 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
           {!hideCloseButton && (
             <button
@@ -80,14 +81,14 @@ export default function Modal({
           )}
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Body — scrolls when content overflows. min-h-0 lets the flex child shrink below its intrinsic height. */}
+        <div className="flex-1 overflow-y-auto p-6 min-h-0">
           {children}
         </div>
 
-        {/* Footer */}
+        {/* Footer — sticky at the bottom of the modal, never compressed */}
         {footer && (
-          <div className="p-6" style={{ borderTop: '1px solid var(--border-secondary)' }}>
+          <div className="p-6 flex-shrink-0" style={{ borderTop: '1px solid var(--border-secondary)' }}>
             {footer}
           </div>
         )}

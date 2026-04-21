@@ -360,6 +360,25 @@ export default function PlaceFormModal({
       onClose={onClose}
       title={place ? t('places.editPlace') : t('places.addPlace')}
       size="lg"
+      footer={
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSaving || hasTimeError}
+            className="px-6 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-700 disabled:opacity-60 font-medium"
+          >
+            {isSaving ? t('common.saving') : place ? t('common.update') : t('common.add')}
+          </button>
+        </div>
+      }
     >
       <form onSubmit={handleSubmit} className="space-y-4" onPaste={handlePaste}>
         {/* Place Search */}
@@ -613,23 +632,6 @@ export default function PlaceFormModal({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={isSaving || hasTimeError}
-            className="px-6 py-2 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-700 disabled:opacity-60 font-medium"
-          >
-            {isSaving ? t('common.saving') : place ? t('common.update') : t('common.add')}
-          </button>
-        </div>
       </form>
     </Modal>
   )
