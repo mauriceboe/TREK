@@ -1218,6 +1218,8 @@ const nl: Record<string, string> = {
   'files.title': 'Bestanden',
   'files.pageTitle': 'Bestanden en documenten',
   'files.subtitle': '{count} bestanden voor {trip}',
+  'files.download': 'Downloaden',
+  'files.openError': 'Bestand kon niet worden geopend',
   'files.downloadPdf': 'PDF downloaden',
   'files.count': '{count} bestanden',
   'files.countSingular': '1 bestand',

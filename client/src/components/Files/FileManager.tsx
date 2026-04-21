@@ -10,7 +10,7 @@ import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 
 import { getAuthUrl } from '../../api/authUrl'
-import { downloadFile, openFile } from '../../utils/fileDownload'
+import { downloadFile, openFile as openFileUrl } from '../../utils/fileDownload'
 
 function isImage(mimeType) {
   if (!mimeType) return false
@@ -113,7 +113,7 @@ function ImageLightbox({ files, initialIndex, onClose }: ImageLightboxProps) {
         </span>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button
-            onClick={() => openFile(file.url).catch(() => {})}
+            onClick={() => openFileUrl(file.url, file.original_name).catch(() => {})}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', display: 'flex', padding: 4 }}
             title={t('files.openTab')}>
             <ExternalLink size={16} />
@@ -743,7 +743,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{previewFile.original_name}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <button
-                  onClick={() => openFile(previewFile.url).catch(() => {})}
+                  onClick={() => openFileUrl(previewFile.url, previewFile.original_name).catch(() => toast.error(t('files.openError')))}
                   style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'none', padding: '4px 8px', borderRadius: 6, transition: 'color 0.15s' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}>
@@ -771,7 +771,7 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
               title={previewFile.original_name}
             >
               <p style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
-                <button onClick={() => openFile(previewFile.url).catch(() => {})} style={{ color: 'var(--text-primary)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}>{t('files.downloadPdf')}</button>
+                <button onClick={() => openFileUrl(previewFile.url, previewFile.original_name).catch(() => toast.error(t('files.openError')))} style={{ color: 'var(--text-primary)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}>{t('files.downloadPdf')}</button>
               </p>
             </object>
           </div>

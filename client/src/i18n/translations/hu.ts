@@ -1219,6 +1219,8 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'Fájlok',
   'files.pageTitle': 'Fájlok és dokumentumok',
   'files.subtitle': '{count} fájl a következőhöz: {trip}',
+  'files.download': 'Letöltés',
+  'files.openError': 'A fájl megnyitása sikertelen',
   'files.downloadPdf': 'PDF letöltése',
   'files.count': '{count} fájl',
   'files.countSingular': '1 fájl',

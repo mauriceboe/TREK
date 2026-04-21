@@ -1279,6 +1279,8 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'File',
   'files.pageTitle': 'File & Dokumen',
   'files.subtitle': '{count} file untuk {trip}',
+  'files.download': 'Unduh',
+  'files.openError': 'Tidak dapat membuka file',
   'files.downloadPdf': 'Unduh PDF',
   'files.count': '{count} file',
   'files.countSingular': '1 berkas',

@@ -365,19 +365,32 @@ describe('File download', () => {
     expect(res.status).toBe(401);
   });
 
-  it('FILE-008 — GET /:id/download with Bearer JWT downloads or 404s (no physical file in tests)', async () => {
+  it('FILE-008 — GET /:id/download with Bearer JWT downloads file', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
     const upload = await uploadFile(trip.id, user.id, FIXTURE_PDF);
     const fileId = upload.body.file.id;
 
-    // authenticateDownload accepts a signed JWT as Bearer token
     const token = generateToken(user.id);
 
     const dl = await request(app)
       .get(`/api/trips/${trip.id}/files/${fileId}/download`)
       .set('Authorization', `Bearer ${token}`);
     // multer stores the file to disk during uploadFile — physical file exists
+    expect(dl.status).toBe(200);
+  });
+
+  it('FILE-011 — GET /:id/download with trek_session cookie downloads file', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const upload = await uploadFile(trip.id, user.id, FIXTURE_PDF);
+    const fileId = upload.body.file.id;
+
+    const token = generateToken(user.id);
+
+    const dl = await request(app)
+      .get(`/api/trips/${trip.id}/files/${fileId}/download`)
+      .set('Cookie', `trek_session=${token}`);
     expect(dl.status).toBe(200);
   });
 });

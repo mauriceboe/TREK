@@ -234,6 +234,22 @@ describe('BACKUP-034 isValidBackupFilename', () => {
   it('accepts filename with hyphens and underscores', () => {
     expect(isValidBackupFilename('backup-my_trek-2026.zip')).toBe(true);
   });
+
+  it('accepts auto-backup filename', () => {
+    expect(isValidBackupFilename('auto-backup-2026-04-21T00-00-00.zip')).toBe(true);
+  });
+
+  it('rejects auto-backup with empty body', () => {
+    expect(isValidBackupFilename('auto-backup-.zip')).toBe(false);
+  });
+
+  it('rejects backup with empty body', () => {
+    expect(isValidBackupFilename('backup-.zip')).toBe(false);
+  });
+
+  it('rejects arbitrary auto- prefix that is not auto-backup', () => {
+    expect(isValidBackupFilename('auto-notbackup-2026.zip')).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

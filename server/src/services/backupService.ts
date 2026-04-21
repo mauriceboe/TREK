@@ -62,7 +62,7 @@ export function parseAutoBackupBody(body: Record<string, unknown>): {
 }
 
 export function isValidBackupFilename(filename: string): boolean {
-  return /^backup-[\w\-]+\.zip$/.test(filename);
+  return /^(?:auto-)?backup-[\w-]+\.zip$/.test(filename);
 }
 
 export function backupFilePath(filename: string): string {

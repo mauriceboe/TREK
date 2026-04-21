@@ -1191,6 +1191,8 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'Arquivos',
   'files.pageTitle': 'Arquivos e documentos',
   'files.subtitle': '{count} arquivos para {trip}',
+  'files.download': 'Baixar',
+  'files.openError': 'Não foi possível abrir o arquivo',
   'files.downloadPdf': 'Baixar PDF',
   'files.count': '{count} arquivos',
   'files.countSingular': '1 arquivo',

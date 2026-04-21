@@ -1170,6 +1170,8 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'Pliki',
   'files.pageTitle': 'Pliki i dokumenty',
   'files.subtitle': '{count} plików dla {trip}',
+  'files.download': 'Pobierz',
+  'files.openError': 'Nie można otworzyć pliku',
   'files.downloadPdf': 'Pobierz PDF',
   'files.count': '{count} plików',
   'files.countSingular': '1 plik',

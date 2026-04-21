@@ -1281,6 +1281,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'Files',
   'files.pageTitle': 'Files & Documents',
   'files.subtitle': '{count} files for {trip}',
+  'files.download': 'Download',
+  'files.openError': 'Could not open file',
   'files.downloadPdf': 'Download PDF',
   'files.count': '{count} files',
   'files.countSingular': '1 file',

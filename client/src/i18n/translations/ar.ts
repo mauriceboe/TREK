@@ -1222,6 +1222,8 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'files.title': 'الملفات',
   'files.pageTitle': 'الملفات والمستندات',
   'files.subtitle': '{count} ملف لـ {trip}',
+  'files.download': 'تنزيل',
+  'files.openError': 'تعذر فتح الملف',
   'files.downloadPdf': 'تنزيل PDF',
   'files.count': '{count} ملفات',
   'files.countSingular': 'ملف واحد',

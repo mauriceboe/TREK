@@ -1218,6 +1218,8 @@ const zh: Record<string, string> = {
   'files.title': '文件',
   'files.pageTitle': '文件与文档',
   'files.subtitle': '{trip} 的 {count} 个文件',
+  'files.download': '下载',
+  'files.openError': '无法打开文件',
   'files.downloadPdf': '下载 PDF',
   'files.count': '{count} 个文件',
   'files.countSingular': '1 个文件',

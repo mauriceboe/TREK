@@ -1278,6 +1278,8 @@ const zhTw: Record<string, string> = {
   'files.title': '檔案',
   'files.pageTitle': '檔案與文件',
   'files.subtitle': '{trip} 的 {count} 個檔案',
+  'files.download': '下載',
+  'files.openError': '無法開啟檔案',
   'files.downloadPdf': '下載 PDF',
   'files.count': '{count} 個檔案',
   'files.countSingular': '1 個檔案',

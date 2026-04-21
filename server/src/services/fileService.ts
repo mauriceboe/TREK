@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import type { Request } from 'express';
 import { db, canAccessTrip } from '../db/database';
 import { consumeEphemeralToken } from './ephemeralTokens';
 import { verifyJwtAndLoadUser } from '../middleware/auth';
@@ -72,23 +73,30 @@ export function resolveFilePath(filename: string): { resolved: string; safe: boo
 // Token-based download auth
 // ---------------------------------------------------------------------------
 
-export function authenticateDownload(bearerToken: string | undefined, queryToken: string | undefined): { userId: number } | { error: string; status: number } {
-  if (!bearerToken && !queryToken) {
-    return { error: 'Authentication required', status: 401 };
-  }
+export function authenticateDownload(req: Request): { userId: number } | { error: string; status: number } {
+  const cookieToken = (req as any).cookies?.trek_session as string | undefined;
+  const authHeader = req.headers['authorization'];
+  const bearerToken = authHeader ? (authHeader.split(' ')[1] || undefined) : undefined;
+  const queryToken = req.query.token as string | undefined;
 
-  if (bearerToken) {
+  // Cookie and Bearer both carry a full JWT — try them first (cookie wins).
+  const jwtToken = cookieToken || bearerToken;
+  if (jwtToken) {
     // Use the shared helper so the password_version gate applies here too;
     // previously this bypassed the check and stolen download tokens stayed
     // valid across a password reset.
-    const user = verifyJwtAndLoadUser(bearerToken);
+    const user = verifyJwtAndLoadUser(jwtToken);
     if (!user) return { error: 'Invalid or expired token', status: 401 };
     return { userId: user.id };
   }
 
-  const uid = consumeEphemeralToken(queryToken!, 'download');
-  if (!uid) return { error: 'Invalid or expired token', status: 401 };
-  return { userId: uid };
+  if (queryToken) {
+    const uid = consumeEphemeralToken(queryToken, 'download');
+    if (!uid) return { error: 'Invalid or expired token', status: 401 };
+    return { userId: uid };
+  }
+
+  return { error: 'Authentication required', status: 401 };
 }
 
 // ---------------------------------------------------------------------------

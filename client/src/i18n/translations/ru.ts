@@ -1218,6 +1218,8 @@ const ru: Record<string, string> = {
   'files.title': 'Файлы',
   'files.pageTitle': 'Файлы и документы',
   'files.subtitle': '{count} файлов для {trip}',
+  'files.download': 'Скачать',
+  'files.openError': 'Не удалось открыть файл',
   'files.downloadPdf': 'Скачать PDF',
   'files.count': '{count} файлов',
   'files.countSingular': '1 файл',

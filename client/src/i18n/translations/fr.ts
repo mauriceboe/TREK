@@ -1218,6 +1218,8 @@ const fr: Record<string, string> = {
   'files.title': 'Fichiers',
   'files.pageTitle': 'Fichiers et documents',
   'files.subtitle': '{count} fichiers pour {trip}',
+  'files.download': 'Télécharger',
+  'files.openError': "Impossible d'ouvrir le fichier",
   'files.downloadPdf': 'Télécharger le PDF',
   'files.count': '{count} fichiers',
   'files.countSingular': '1 fichier',

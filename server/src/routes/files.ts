@@ -77,15 +77,11 @@ const upload = multer({
 // Routes
 // ---------------------------------------------------------------------------
 
-// Authenticated file download (supports Bearer header or ?token= query param)
+// Authenticated file download (supports cookie, Bearer header, or ?token= query param)
 router.get('/:id/download', (req: Request, res: Response) => {
   const { tripId, id } = req.params;
 
-  const authHeader = req.headers['authorization'];
-  const bearerToken = authHeader && authHeader.split(' ')[1];
-  const queryToken = req.query.token as string | undefined;
-
-  const auth = authenticateDownload(bearerToken, queryToken);
+  const auth = authenticateDownload(req);
   if ('error' in auth) return res.status(auth.status).json({ error: auth.error });
 
   const trip = verifyTripAccess(tripId, auth.userId);

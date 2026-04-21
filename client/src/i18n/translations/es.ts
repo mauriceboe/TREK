@@ -1168,6 +1168,8 @@ const es: Record<string, string> = {
   'files.title': 'Archivos',
   'files.pageTitle': 'Archivos y documentos',
   'files.subtitle': '{count} archivos para {trip}',
+  'files.download': 'Descargar',
+  'files.openError': 'No se pudo abrir el archivo',
   'files.downloadPdf': 'Descargar PDF',
   'files.count': '{count} archivos',
   'files.countSingular': '1 archivo',
