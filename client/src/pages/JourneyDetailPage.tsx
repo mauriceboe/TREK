@@ -1010,9 +1010,16 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
   }, [])
 
   const allPhotos: { photo: JourneyPhoto; entry: JourneyEntry }[] = []
+  const seenPhotoIds = new Map<number, number>() // photo_id → index in allPhotos
   for (const e of entries) {
     for (const p of e.photos) {
-      allPhotos.push({ photo: p, entry: e })
+      const existing = seenPhotoIds.get(p.photo_id)
+      if (existing === undefined) {
+        seenPhotoIds.set(p.photo_id, allPhotos.length)
+        allPhotos.push({ photo: p, entry: e })
+      } else if (e.title === 'Gallery' && allPhotos[existing].entry.title !== 'Gallery') {
+        allPhotos[existing] = { photo: p, entry: e }
+      }
     }
   }
 
@@ -1057,23 +1064,27 @@ function GalleryView({ entries, journeyId, userId, trips, onPhotoClick, onRefres
   }
 
   const handleDeletePhoto = async (photoId: number) => {
-    // Optimistic update — remove photo from local state immediately
     const store = useJourneyStore.getState()
-    if (store.current) {
-      const updated = {
-        ...store.current,
-        entries: store.current.entries.map(e => ({
-          ...e,
-          photos: e.photos.filter(p => p.id !== photoId),
-        })).filter(e => e.type !== 'entry' || e.title !== 'Gallery' || e.photos.length > 0 || e.story),
-      }
-      useJourneyStore.setState({ current: updated })
+    if (!store.current) return
+    const target = store.current.entries.flatMap(e => e.photos).find(p => p.id === photoId)
+    if (!target) return
+    const siblingIds = store.current.entries.flatMap(e => e.photos).filter(p => p.photo_id === target.photo_id).map(p => p.id)
+
+    // Optimistic update — remove every row with this photo_id
+    const updated = {
+      ...store.current,
+      entries: store.current.entries.map(e => ({
+        ...e,
+        photos: e.photos.filter(p => p.photo_id !== target.photo_id),
+      })).filter(e => e.type !== 'entry' || e.title !== 'Gallery' || e.photos.length > 0 || e.story),
     }
+    useJourneyStore.setState({ current: updated })
+
     try {
-      await journeyApi.deletePhoto(photoId)
+      await Promise.all(siblingIds.map(id => journeyApi.deletePhoto(id)))
     } catch {
       toast.error(t('common.error'))
-      onRefresh() // Revert on error
+      onRefresh()
     }
   }
 
@@ -1793,11 +1804,11 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
     : t('journey.picker.newGallery')
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-5" style={{ background: 'rgba(9,9,11,0.75)' }}>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.2)] max-w-[720px] md:max-w-[960px] w-full max-h-[85vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center md:p-5 overscroll-none" style={{ background: 'rgba(9,9,11,0.75)' }} onClick={onClose} onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault() }}>
+      <div className="bg-white dark:bg-zinc-900 rounded-t-2xl md:rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.2)] max-w-[720px] md:max-w-[960px] w-full max-h-[calc(100dvh-var(--bottom-nav-h)-20px)] md:max-h-[85vh] flex flex-col overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 flex-shrink-0">
           <h2 className="text-[16px] font-bold text-zinc-900 dark:text-white">
             {provider === 'immich' ? 'Immich' : 'Synology Photos'}
           </h2>
@@ -1807,7 +1818,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
         </div>
 
         {/* Filter bar */}
-        <div className="px-6 py-3 border-b border-zinc-200 dark:border-zinc-700">
+        <div className="px-6 py-3 border-b border-zinc-200 dark:border-zinc-700 flex-shrink-0">
           {/* Tabs */}
           <div className="flex gap-1.5 mb-3">
             {[
@@ -1893,7 +1904,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
         </div>
 
         {/* Add-to entry selector */}
-        <div className="px-6 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+        <div className="px-6 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex-shrink-0">
           <div className="relative flex items-center gap-2">
             <span className="text-[10px] font-semibold tracking-[0.12em] uppercase text-zinc-500">{t('journey.picker.addTo')}</span>
             <button
@@ -1946,7 +1957,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
           const allSelected = selectable.length > 0 && selectable.every((a: any) => selected.has(a.id))
           if (selectable.length === 0) return null
           return (
-            <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+            <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex-shrink-0">
               <button
                 onClick={() => {
                   if (allSelected) {
@@ -1971,7 +1982,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
         })()}
 
         {/* Photo grid */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 min-h-0">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="w-6 h-6 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
@@ -2044,7 +2055,7 @@ function ProviderPicker({ provider, userId, entries, trips, existingAssetIds, on
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 flex-shrink-0">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-200/60 dark:bg-zinc-700/60 text-[11px] leading-none text-zinc-500 dark:text-zinc-400">
             <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[10px] leading-none font-bold">{selected.size}</span>
             <span className="leading-[18px]">{t('journey.picker.selected')}</span>
@@ -2243,6 +2254,9 @@ function EntryEditor({ entry, journeyId, tripDates, galleryPhotos, onClose, onSa
     pendingLinkIds.length > 0
   )
 
+  const uniqueGalleryPhotos = Array.from(new Map(galleryPhotos.map(gp => [gp.photo_id, gp])).values())
+  const availableGalleryPhotos = uniqueGalleryPhotos.filter(gp => !photos.some(p => p.photo_id === gp.photo_id))
+
   const handleClose = () => {
     if (isDirty && !window.confirm(t('journey.editor.discardChangesConfirm'))) return
     onClose()
@@ -2352,7 +2366,7 @@ function EntryEditor({ entry, journeyId, tripDates, galleryPhotos, onClose, onSa
             {showGalleryPick && (
               <div className="mt-2 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 bg-zinc-50 dark:bg-zinc-800/50">
                 <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5 max-h-[160px] overflow-y-auto">
-                  {galleryPhotos.filter(gp => !photos.some(p => p.id === gp.id)).map(gp => (
+                  {availableGalleryPhotos.map(gp => (
                     <div
                       key={gp.id}
                       onClick={async () => {
@@ -2372,7 +2386,7 @@ function EntryEditor({ entry, journeyId, tripDates, galleryPhotos, onClose, onSa
                       <img src={photoUrl(gp)} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" onError={e => { const img = e.currentTarget; const orig = photoUrl(gp, 'original'); if (!img.src.includes('/original')) img.src = orig }} />
                     </div>
                   ))}
-                  {galleryPhotos.filter(gp => !photos.some(p => p.id === gp.id)).length === 0 && (
+                  {availableGalleryPhotos.length === 0 && (
                     <div className="col-span-full text-center py-3 text-[11px] text-zinc-400">{t('journey.editor.allPhotosAdded')}</div>
                   )}
                 </div>

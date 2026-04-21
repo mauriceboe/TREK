@@ -58,7 +58,7 @@ export function listJourneys(userId: number) {
   return db.prepare(`
     SELECT DISTINCT j.*,
       (SELECT COUNT(*) FROM journey_entries je WHERE je.journey_id = j.id AND je.type != 'skeleton') as entry_count,
-      (SELECT COUNT(*) FROM journey_photos jp JOIN journey_entries je2 ON jp.entry_id = je2.id WHERE je2.journey_id = j.id) as photo_count,
+      (SELECT COUNT(DISTINCT jp.photo_id) FROM journey_photos jp JOIN journey_entries je2 ON jp.entry_id = je2.id WHERE je2.journey_id = j.id) as photo_count,
       (SELECT COUNT(DISTINCT je3.location_name) FROM journey_entries je3 WHERE je3.journey_id = j.id AND je3.location_name IS NOT NULL AND je3.location_name != '') as place_count,
       (SELECT MIN(t.start_date) FROM journey_trips jt JOIN trips t ON jt.trip_id = t.id WHERE jt.journey_id = j.id) as trip_date_min,
       (SELECT MAX(t.end_date) FROM journey_trips jt JOIN trips t ON jt.trip_id = t.id WHERE jt.journey_id = j.id) as trip_date_max
@@ -160,7 +160,7 @@ export function getJourneyFull(journeyId: number, userId: number) {
 
   // stats
   const entryCount = entries.filter(e => e.type === 'entry').length;
-  const photoCount = photos.length;
+  const photoCount = new Set(photos.map(p => p.photo_id)).size;
   const places = [...new Set(entries.map(e => e.location_name).filter(Boolean))];
 
   const userPrefs = db.prepare(
