@@ -950,6 +950,52 @@ describe('Copy trip with data', () => {
     expect(newNotes).toHaveLength(1);
     expect(newNotes[0].text).toBe('Pack early!');
   });
+
+  it('TRIP-027 — copy preserves todos (unchecked, unassigned) and budget category order', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Todo Trip' });
+
+    // Two todos: one checked and assigned — both should arrive unchecked and unassigned
+    testDb.prepare(
+      'INSERT INTO todo_items (trip_id, name, checked, category, sort_order, due_date, description, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(trip.id, 'Buy tickets', 0, 'Transport', 0, '2026-06-01', 'Check Ryanair', 1);
+    testDb.prepare(
+      'INSERT INTO todo_items (trip_id, name, checked, category, sort_order, assigned_user_id, priority) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(trip.id, 'Book hotel', 1, 'Accommodation', 1, user.id, 0);
+
+    // Two budget category order rows
+    const insOrder = testDb.prepare('INSERT INTO budget_category_order (trip_id, category, sort_order) VALUES (?, ?, ?)');
+    insOrder.run(trip.id, 'Transport', 0);
+    insOrder.run(trip.id, 'Accommodation', 1);
+
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/copy`)
+      .set('Cookie', authCookie(user.id))
+      .send({ title: 'Todo Trip (Copy)' });
+
+    expect(res.status).toBe(201);
+    const newId = res.body.trip.id;
+
+    // Todos copied with checked reset and assigned_user_id nulled
+    const newTodos = testDb.prepare('SELECT * FROM todo_items WHERE trip_id = ? ORDER BY sort_order').all(newId) as any[];
+    expect(newTodos).toHaveLength(2);
+    expect(newTodos[0].name).toBe('Buy tickets');
+    expect(newTodos[0].category).toBe('Transport');
+    expect(newTodos[0].checked).toBe(0);
+    expect(newTodos[0].assigned_user_id).toBeNull();
+    expect(newTodos[0].due_date).toBe('2026-06-01');
+    expect(newTodos[0].description).toBe('Check Ryanair');
+    expect(newTodos[0].priority).toBe(1);
+    expect(newTodos[1].name).toBe('Book hotel');
+    expect(newTodos[1].checked).toBe(0);
+    expect(newTodos[1].assigned_user_id).toBeNull();
+
+    // Budget category order copied
+    const newOrder = testDb.prepare('SELECT category, sort_order FROM budget_category_order WHERE trip_id = ? ORDER BY sort_order').all(newId) as any[];
+    expect(newOrder).toHaveLength(2);
+    expect(newOrder[0]).toMatchObject({ category: 'Transport', sort_order: 0 });
+    expect(newOrder[1]).toMatchObject({ category: 'Accommodation', sort_order: 1 });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

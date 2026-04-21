@@ -681,6 +681,24 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
       if (newDayId) insertNote.run(newDayId, newTripId, n.text, n.time, n.icon, n.sort_order);
     }
 
+    const oldTodos = db.prepare('SELECT * FROM todo_items WHERE trip_id = ?').all(sourceTripId) as any[];
+    const insertTodo = db.prepare(`
+      INSERT INTO todo_items (trip_id, name, checked, category, sort_order, due_date, description, assigned_user_id, priority)
+      VALUES (?, ?, 0, ?, ?, ?, ?, NULL, ?)
+    `);
+    for (const t of oldTodos) {
+      insertTodo.run(newTripId, t.name, t.category, t.sort_order, t.due_date, t.description, t.priority);
+    }
+
+    const oldCategoryOrder = db.prepare('SELECT category, sort_order FROM budget_category_order WHERE trip_id = ?').all(sourceTripId) as any[];
+    const insertCategoryOrder = db.prepare(`
+      INSERT INTO budget_category_order (trip_id, category, sort_order)
+      VALUES (?, ?, ?)
+    `);
+    for (const o of oldCategoryOrder) {
+      insertCategoryOrder.run(newTripId, o.category, o.sort_order);
+    }
+
     return Number(newTripId);
   });
 
