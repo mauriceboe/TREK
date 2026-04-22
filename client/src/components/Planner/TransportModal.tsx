@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Plane, Train, Car, Ship } from 'lucide-react'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
@@ -7,6 +7,8 @@ import AirportSelect, { type Airport } from './AirportSelect'
 import LocationSelect, { type LocationPoint } from './LocationSelect'
 import { useTranslation } from '../../i18n'
 import { useToast } from '../shared/Toast'
+import { useTripStore } from '../../store/tripStore'
+import { useAddonStore } from '../../store/addonStore'
 import { formatDate } from '../../utils/formatters'
 import type { Day, Reservation, ReservationEndpoint } from '../../types'
 
@@ -75,6 +77,8 @@ const defaultForm = {
   arrival_time: '',
   confirmation_number: '',
   notes: '',
+  price: '',
+  budget_category: '',
   meta_airline: '',
   meta_flight_number: '',
   meta_train_number: '',
@@ -94,6 +98,13 @@ interface TransportModalProps {
 export function TransportModal({ isOpen, onClose, onSave, reservation, days, selectedDayId }: TransportModalProps) {
   const { t, locale } = useTranslation()
   const toast = useToast()
+  const isBudgetEnabled = useAddonStore(s => s.isEnabled('budget'))
+  const budgetItems = useTripStore(s => s.budgetItems)
+  const budgetCategories = useMemo(() => {
+    const cats = new Set<string>()
+    budgetItems.forEach(i => { if (i.category) cats.add(i.category) })
+    return Array.from(cats).sort()
+  }, [budgetItems])
   const [form, setForm] = useState({ ...defaultForm })
   const [isSaving, setIsSaving] = useState(false)
   const [fromPick, setFromPick] = useState<EndpointPick>({})
@@ -126,6 +137,8 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
         meta_train_number: meta.train_number || '',
         meta_platform: meta.platform || '',
         meta_seat: meta.seat || '',
+        price: meta.price || '',
+        budget_category: (meta.budget_category && budgetItems.some(i => i.category === meta.budget_category)) ? meta.budget_category : '',
       })
       if (type === 'flight') {
         setFromPick({ airport: airportFromEndpoint(from) || undefined })
@@ -139,7 +152,7 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
       setFromPick({})
       setToPick({})
     }
-  }, [isOpen, reservation, selectedDayId])
+  }, [isOpen, reservation, selectedDayId, budgetItems])
 
   const set = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }))
 
@@ -173,6 +186,10 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
         if (form.meta_platform) metadata.platform = form.meta_platform
         if (form.meta_seat) metadata.seat = form.meta_seat
       }
+      if (isBudgetEnabled) {
+        if (form.price) metadata.price = form.price
+        if (form.budget_category) metadata.budget_category = form.budget_category
+      }
 
       const startDate = startDay?.date ?? null
       const endDate = (endDay ?? startDay)?.date ?? null
@@ -199,6 +216,11 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
         endpoints,
         needs_review: false,
+      }
+      if (isBudgetEnabled) {
+        (payload as any).create_budget_entry = form.price && parseFloat(form.price) > 0
+          ? { total_price: parseFloat(form.price), category: form.budget_category || t(`reservations.type.${form.type}`) || 'Other' }
+          : { total_price: 0 }
       }
       await onSave(payload)
     } catch (err: unknown) {
@@ -421,6 +443,40 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
             placeholder={t('reservations.notesPlaceholder')}
             style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }} />
         </div>
+
+        {/* Price + Budget Category */}
+        {isBudgetEnabled && (
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label style={labelStyle}>{t('reservations.price')}</label>
+                <input type="text" inputMode="decimal" value={form.price}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^\d*[.,]?\d{0,2}$/.test(v)) set('price', v.replace(',', '.')) }}
+                  onPaste={e => { e.preventDefault(); let txt = e.clipboardData.getData('text').trim().replace(/[^\d.,-]/g, ''); const lc = txt.lastIndexOf(','), ld = txt.lastIndexOf('.'), dp = Math.max(lc, ld); if (dp > -1) { txt = txt.substring(0, dp).replace(/[.,]/g, '') + '.' + txt.substring(dp + 1) } else { txt = txt.replace(/[.,]/g, '') } set('price', txt) }}
+                  placeholder="0.00"
+                  style={inputStyle} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label style={labelStyle}>{t('reservations.budgetCategory')}</label>
+                <CustomSelect
+                  value={form.budget_category}
+                  onChange={v => set('budget_category', v)}
+                  options={[
+                    { value: '', label: t('reservations.budgetCategoryAuto') },
+                    ...budgetCategories.map(c => ({ value: c, label: c })),
+                  ]}
+                  placeholder={t('reservations.budgetCategoryAuto')}
+                  size="sm"
+                />
+              </div>
+            </div>
+            {form.price && parseFloat(form.price) > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: -4 }}>
+                {t('reservations.budgetHint')}
+              </div>
+            )}
+          </>
+        )}
 
       </form>
     </Modal>
