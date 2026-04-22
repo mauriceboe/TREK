@@ -12,8 +12,9 @@ export const SUPPORTED_LANGUAGES = [
   { value: 'zh',    label: '简体中文',              locale: 'zh-CN' },
   { value: 'zh-TW', label: '繁體中文',              locale: 'zh-TW' },
   { value: 'it',    label: 'Italiano',             locale: 'it-IT' },
-  { value: 'ar',    label: 'العربية',              locale: 'ar-SA' },
+  { value: 'ar',    label: 'العربية',                 locale: 'ar-SA' },
   { value: 'id',    label: 'Bahasa Indonesia',     locale: 'id-ID' },
+  { value: 'ja',    label: '日本語',                locale: 'ja-JP' },
 ] as const
 
 export type SupportedLanguageCode = typeof SUPPORTED_LANGUAGES[number]['value']
