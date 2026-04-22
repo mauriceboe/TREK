@@ -1939,10 +1939,10 @@ const ja: Record<string, string | { name: string; category: string }[]> = {
  'todo.detail.create': 'タスクを作成',
  
  // Notifications — dev test events
-  'notif.test.title': '[Test] Notification',
-  'notif.test.simple.text': 'This is a simple test notification.',
-  'notif.test.boolean.text': 'Do you accept this test notification?',
-  'notif.test.navigate.text': 'Click below to navigate to the dashboard.',
+  'notif.test.title': '[テスト] 通知',
+  'notif.test.simple.text': 'これはシンプルなテスト通知です。',
+  'notif.test.boolean.text': 'このテスト通知を承認しますか？',
+  'notif.test.navigate.text': '下をクリックしてダッシュボードに移動してください。',
 
  // Notifications
  'notif.trip_invite.title': '旅行への招待',
