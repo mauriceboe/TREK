@@ -343,7 +343,10 @@ export default function TripPlannerPage(): React.ReactElement | null {
   }, [tripId])
 
   useEffect(() => {
-    if (tripId) tripActions.loadReservations(tripId)
+    if (tripId) {
+      tripActions.loadReservations(tripId)
+      tripActions.loadBudgetItems?.(tripId)
+    }
   }, [tripId])
 
   useTripWebSocket(tripId)
