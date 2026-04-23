@@ -32,6 +32,13 @@ function triggerAnchorDownload(blobUrl: string, filename?: string): void {
   setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove() }, 100)
 }
 
+// navigator.standalone is true only on iOS when running as an
+// add-to-home-screen PWA. In that context, target="_blank" hands off to
+// Safari, which cannot access blob URLs sandboxed to the WebView.
+function isIosStandalone(): boolean {
+  return (navigator as any).standalone === true
+}
+
 /**
  * Fetches a protected file using cookie auth (credentials: include) and
  * triggers a browser download. Works inside PWA standalone mode because the
@@ -56,7 +63,13 @@ export async function downloadFile(url: string, filename?: string): Promise<void
  * (including text/html and image/svg+xml which can execute script) are forced
  * to download so that an uploaded file cannot run code in the TREK origin.
  *
- * Falls back to a download trigger if the popup is blocked.
+ * Uses a synthetic <a target="_blank" rel="noopener noreferrer"> click rather
+ * than window.open(). window.open() called with the "noreferrer"/"noopener"
+ * window feature returns null per spec, which previously made the popup-block
+ * fallback trigger a download in the *current* tab on top of the new-tab open
+ * — i.e. the file opened twice. The anchor approach avoids that ambiguity:
+ * the new tab is opened by the browser's normal link-handling path, and no
+ * spurious in-page download is triggered.
  */
 export async function openFile(url: string, filename?: string): Promise<void> {
   assertRelativeUrl(url)
@@ -71,11 +84,19 @@ export async function openFile(url: string, filename?: string): Promise<void> {
     return
   }
 
-  const win = window.open(blobUrl, '_blank', 'noreferrer')
-  if (win) {
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000)
-  } else {
-    // Popup blocked — fall back to download
+  // iOS PWA: target="_blank" would open Safari, which can't access the blob
+  if (isIosStandalone()) {
     triggerAnchorDownload(blobUrl, filename)
+    return
   }
+
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  // Keep the blob URL alive long enough for the new tab to load it, then
+  // clean up the DOM node and revoke the URL.
+  setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove() }, 30_000)
 }

@@ -74,32 +74,42 @@ describe('downloadFile', () => {
 })
 
 describe('openFile', () => {
-  it('fetches with credentials:include and opens blob URL in new tab', async () => {
+  it('fetches with credentials:include and opens blob URL via target=_blank anchor', async () => {
     vi.stubGlobal('fetch', makeFetchMock(200))
-    const mockWin = { closed: false }
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue(mockWin as Window)
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
     await openFile('/uploads/files/doc.pdf')
 
     expect(window.fetch).toHaveBeenCalledWith('/uploads/files/doc.pdf', { credentials: 'include' })
     expect(URL.createObjectURL).toHaveBeenCalled()
-    expect(openSpy).toHaveBeenCalledWith('blob:mock-url', '_blank', 'noreferrer')
+    // Must NOT call window.open — that path returns null when noreferrer is
+    // set, which previously caused the file to also open in the current tab.
+    expect(openSpy).not.toHaveBeenCalled()
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+
+    // The anchor used to open the new tab must be target=_blank, must NOT
+    // carry a `download` attribute (otherwise it would download in-page
+    // instead of opening), and must use rel=noopener noreferrer.
+    const appendCalls = (document.body.appendChild as ReturnType<typeof vi.fn>).mock.calls
+    const anchor = appendCalls[0]?.[0] as HTMLAnchorElement
+    expect(anchor.target).toBe('_blank')
+    expect(anchor.rel).toBe('noopener noreferrer')
+    expect(anchor.hasAttribute('download')).toBe(false)
 
     // Revoke happens after 30s timeout
     vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
   })
 
-  it('falls back to anchor download when popup is blocked', async () => {
+  it('does not trigger a second in-page action for safe inline types (regression: no double-open)', async () => {
     vi.stubGlobal('fetch', makeFetchMock(200))
-    vi.spyOn(window, 'open').mockReturnValue(null)
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
-    await openFile('/uploads/files/doc.pdf')
+    await openFile('/uploads/files/doc.pdf', 'doc.pdf')
 
-    expect(clickSpy).toHaveBeenCalled()
-    vi.runAllTimers()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+    // Exactly ONE anchor click — opening the new tab. No fallback download.
+    expect(clickSpy).toHaveBeenCalledTimes(1)
   })
 
   it('throws on 401 response', async () => {
@@ -108,28 +118,55 @@ describe('openFile', () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
-  it('forces download for unsafe MIME types (HTML, SVG) instead of opening inline', async () => {
+  it('forces download for unsafe MIME types (HTML) instead of opening inline', async () => {
     const htmlBlob = new Blob(['<script>alert(1)</script>'], { type: 'text/html' })
     vi.stubGlobal('fetch', makeFetchMock(200, htmlBlob))
     const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window)
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
-    await openFile('/uploads/files/malicious.html')
+    await openFile('/uploads/files/malicious.html', 'malicious.html')
 
     // Must NOT open inline — download anchor clicked instead
     expect(openSpy).not.toHaveBeenCalled()
-    expect(clickSpy).toHaveBeenCalled()
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+
+    const appendCalls = (document.body.appendChild as ReturnType<typeof vi.fn>).mock.calls
+    const anchor = appendCalls[0]?.[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('malicious.html')
   })
 
   it('forces download for SVG MIME type', async () => {
     const svgBlob = new Blob(['<svg><script>alert(1)</script></svg>'], { type: 'image/svg+xml' })
     vi.stubGlobal('fetch', makeFetchMock(200, svgBlob))
-    vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window)
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
     await openFile('/uploads/files/malicious.svg')
 
-    expect(window.open).not.toHaveBeenCalled()
-    expect(clickSpy).toHaveBeenCalled()
+    expect(openSpy).not.toHaveBeenCalled()
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to download in iOS PWA standalone mode (blob URL inaccessible to Safari)', async () => {
+    vi.stubGlobal('fetch', makeFetchMock(200))
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    // Simulate iOS PWA (Add-to-Home-Screen) context
+    Object.defineProperty(navigator, 'standalone', { configurable: true, value: true })
+
+    try {
+      await openFile('/uploads/files/doc.pdf', 'doc.pdf')
+
+      // Single anchor click — and it must be a DOWNLOAD anchor (no target=_blank),
+      // because target="_blank" in iOS PWA would hand off to Safari which cannot
+      // read the in-WebView blob URL.
+      expect(clickSpy).toHaveBeenCalledTimes(1)
+      const appendCalls = (document.body.appendChild as ReturnType<typeof vi.fn>).mock.calls
+      const anchor = appendCalls[0]?.[0] as HTMLAnchorElement
+      expect(anchor.target).toBe('')
+      expect(anchor.download).toBe('doc.pdf')
+    } finally {
+      // Clean up the non-standard iOS-only property we forced above.
+      delete (navigator as any).standalone
+    }
   })
 })
