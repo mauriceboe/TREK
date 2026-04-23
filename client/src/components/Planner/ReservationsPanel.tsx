@@ -236,7 +236,16 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
               <div style={fieldLabelStyle}>{t('reservations.date')}</div>
               <div style={{ ...fieldValueStyle, textAlign: 'center' }}>
                 {fmtDate(r.reservation_time)}
-                {r.reservation_end_time && (r.reservation_end_time.includes('T') ? r.reservation_end_time.split('T')[0] : r.reservation_end_time) !== r.reservation_time.split('T')[0] && (
+                {(() => {
+                  const endDatePart = r.reservation_end_time
+                    ? r.reservation_end_time.includes('T')
+                        ? r.reservation_end_time.split('T')[0]
+                        : /^\d{4}-\d{2}-\d{2}$/.test(r.reservation_end_time)
+                            ? r.reservation_end_time
+                            : null
+                    : null
+                  return endDatePart && endDatePart !== r.reservation_time.split('T')[0]
+                })() && (
                   <> – {fmtDate(r.reservation_end_time)}</>
                 )}
               </div>

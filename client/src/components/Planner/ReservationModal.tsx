@@ -182,6 +182,8 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
       let combinedEndTime = form.reservation_end_time
       if (form.end_date) {
         combinedEndTime = form.reservation_end_time ? `${form.end_date}T${form.reservation_end_time}` : form.end_date
+      } else if (form.reservation_end_time && form.reservation_time) {
+        combinedEndTime = `${form.reservation_time.split('T')[0]}T${form.reservation_end_time}`
       }
       if (isBudgetEnabled) {
         if (form.price) metadata.price = form.price
