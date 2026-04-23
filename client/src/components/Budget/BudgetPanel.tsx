@@ -634,7 +634,7 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
   }
   const handleRenameCategory = async (oldName, newName) => {
     if (!newName.trim() || newName.trim() === oldName) return
-    const items = grouped[oldName] || []
+    const items = grouped.get(oldName) || []
     for (const item of Array.from(items)) await updateBudgetItem(tripId, item.id, { category: newName.trim() })
   }
   const handleAddCategory = () => {
