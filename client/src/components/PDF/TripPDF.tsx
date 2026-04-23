@@ -140,23 +140,58 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
   const totalCost = Object.values(assignments || {})
     .flatMap(a => a).reduce((s, a) => s + (parseFloat(a.place?.price) || 0), 0)
 
+  // Span helpers for multi-day transport (mirrors DayPlanSidebar logic)
+  const pdfGetDayOrder = (d: Day) => d.day_number
+  const pdfGetSpanPhase = (r: any, dayId: number): 'single' | 'start' | 'middle' | 'end' => {
+    const startId = r.day_id
+    const endId = r.end_day_id ?? startId
+    if (!startId || startId === endId) return 'single'
+    if (dayId === startId) return 'start'
+    if (dayId === endId) return 'end'
+    return 'middle'
+  }
+  const pdfGetDisplayTime = (r: any, dayId: number): string | null => {
+    const phase = pdfGetSpanPhase(r, dayId)
+    if (phase === 'end') return r.reservation_end_time || null
+    if (phase === 'middle') return null
+    return r.reservation_time || null
+  }
+  const pdfGetSpanLabel = (r: any, phase: string): string | null => {
+    if (phase === 'single') return null
+    if (r.type === 'flight') return tr(`reservations.span.${phase === 'start' ? 'departure' : phase === 'end' ? 'arrival' : 'inTransit'}`)
+    if (r.type === 'car') return tr(`reservations.span.${phase === 'start' ? 'pickup' : phase === 'end' ? 'return' : 'active'}`)
+    return tr(`reservations.span.${phase === 'start' ? 'start' : phase === 'end' ? 'end' : 'ongoing'}`)
+  }
+  const pdfGetTransportForDay = (dayId: number) => (reservations || []).filter(r => {
+    if (r.type === 'hotel') return false
+    const startId = r.day_id
+    const endId = r.end_day_id ?? startId
+    if (startId == null) return false
+    if (endId !== startId) {
+      const startDay = sorted.find(d => d.id === startId)
+      const endDay = sorted.find(d => d.id === endId)
+      const thisDay = sorted.find(d => d.id === dayId)
+      if (!startDay || !endDay || !thisDay) return false
+      return pdfGetDayOrder(thisDay) >= pdfGetDayOrder(startDay) && pdfGetDayOrder(thisDay) <= pdfGetDayOrder(endDay)
+    }
+    return startId === dayId
+  })
+
   // Build day HTML
   const daysHtml = sorted.map((day, di) => {
     const assigned = assignments[String(day.id)] || []
     const notes = (dayNotes || []).filter(n => n.day_id === day.id)
     const cost = dayCost(assignments, day.id, loc)
 
-    // Reservations for this day (hotel rendered via accommodations block)
-    const dayReservations = (reservations || []).filter(r => {
-      if (!r.reservation_time || r.type === 'hotel') return false
-      return day.date && r.reservation_time.split('T')[0] === day.date
-    })
+    // Reservations for this day (hotel rendered via accommodations block; car middle-phase rendered in sidebar header only)
+    const dayReservations = pdfGetTransportForDay(day.id)
+      .filter(r => !(r.type === 'car' && pdfGetSpanPhase(r, day.id) === 'middle'))
 
     const merged = []
     assigned.forEach(a => merged.push({ type: 'place', k: a.order_index ?? a.sort_order ?? 0, data: a }))
     notes.forEach(n    => merged.push({ type: 'note',  k: n.sort_order ?? 0, data: n }))
     dayReservations.forEach(r => {
-      const pos = r.day_plan_position ?? (merged.length > 0 ? Math.max(...merged.map(m => m.k)) + 0.5 : 0.5)
+      const pos = r.day_positions?.[day.id] ?? r.day_positions?.[String(day.id)] ?? r.day_plan_position ?? (merged.length > 0 ? Math.max(...merged.map(m => m.k)) + 0.5 : 0.5)
       merged.push({ type: 'reservation', k: pos, data: r })
     })
     merged.sort((a, b) => a.k - b.k)
@@ -177,13 +212,17 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
             else if (r.type === 'event') subtitle = [meta.venue].filter(Boolean).join(' · ')
             else if (r.type === 'tour') subtitle = [meta.operator].filter(Boolean).join(' · ')
             const locationLine = r.location || meta.location || ''
-            const time = r.reservation_time?.includes('T') ? r.reservation_time.split('T')[1]?.substring(0, 5) : ''
+            const phase = pdfGetSpanPhase(r, day.id)
+            const spanLabel = pdfGetSpanLabel(r, phase)
+            const displayTime = pdfGetDisplayTime(r, day.id)
+            const time = displayTime?.includes('T') ? displayTime.split('T')[1]?.substring(0, 5) : ''
+            const titleHtml = `${spanLabel ? escHtml(spanLabel) + ': ' : ''}${escHtml(r.title)}`
             return `
               <div class="note-card" style="border-left: 3px solid ${color};">
                 <div class="note-line" style="background: ${color};"></div>
                 <span class="note-icon">${icon}</span>
                 <div class="note-body">
-                  <div class="note-text" style="font-weight: 600;">${escHtml(r.title)}${time ? ` <span style="color:#6b7280;font-weight:400;font-size:10px;">${time}</span>` : ''}</div>
+                  <div class="note-text" style="font-weight: 600;">${titleHtml}${time ? ` <span style="color:#6b7280;font-weight:400;font-size:10px;">${time}</span>` : ''}</div>
                   ${subtitle ? `<div class="note-time">${escHtml(subtitle)}</div>` : ''}
                   ${locationLine ? `<div class="note-time">${escHtml(locationLine)}</div>` : ''}
                   ${r.confirmation_number ? `<div class="note-time" style="font-size:9px;">Code: ${escHtml(r.confirmation_number)}</div>` : ''}
