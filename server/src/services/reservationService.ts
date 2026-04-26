@@ -61,16 +61,24 @@ function resolveDayIdFromTime(
   return row?.id ?? null;
 }
 
-const saveEndpoints = db.transaction((reservationId: number, endpoints: EndpointInput[]) => {
-  db.prepare('DELETE FROM reservation_endpoints WHERE reservation_id = ?').run(reservationId);
-  const insert = db.prepare(`
-    INSERT INTO reservation_endpoints (reservation_id, role, sequence, name, code, lat, lng, timezone, local_time, local_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  endpoints.forEach((e, i) => {
-    insert.run(reservationId, e.role, e.sequence ?? i, e.name, e.code ?? null, e.lat, e.lng, e.timezone ?? null, e.local_time ?? null, e.local_date ?? null);
+function saveEndpoints(reservationId: number, endpoints: EndpointInput[]): void {
+  // Bind the transaction lazily on each call. Binding at module load time
+  // captures the DB connection that was open then, which becomes invalid
+  // after demo-reset / restore-from-backup closes and reinitialises the
+  // connection — every later endpoint save would throw
+  // "The database connection is not open".
+  const tx = db.transaction((rid: number, eps: EndpointInput[]) => {
+    db.prepare('DELETE FROM reservation_endpoints WHERE reservation_id = ?').run(rid);
+    const insert = db.prepare(`
+      INSERT INTO reservation_endpoints (reservation_id, role, sequence, name, code, lat, lng, timezone, local_time, local_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    eps.forEach((e, i) => {
+      insert.run(rid, e.role, e.sequence ?? i, e.name, e.code ?? null, e.lat, e.lng, e.timezone ?? null, e.local_time ?? null, e.local_date ?? null);
+    });
   });
-});
+  tx(reservationId, endpoints);
+}
 
 export function listReservations(tripId: string | number) {
   const reservations = db.prepare(`
