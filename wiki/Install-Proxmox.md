@@ -82,9 +82,15 @@ See [Environment-Variables](Environment-Variables) for the full variable referen
 
 ## Updating
 
-The script supports in-place updates via the community scripts update mechanism. In the **Proxmox VE Shell**, run the same install command again and select **Update** when prompted, or use the community scripts update helper if you have it installed.
+Run the following command inside the **LXC container** and select **Update** when prompted:
 
-The update process automatically backs up your data and uploads before applying the new release, then restores them afterward.
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/trek.sh)"
+```
+
+> **Tip:** Always check the [community-scripts TREK page](https://community-scripts.org/scripts/trek) to confirm the latest command before running.
+
+The script stops the service, backs up your data and uploads, applies the new release, restores the backup, and restarts. No manual steps required.
 
 ## Next Steps
 
