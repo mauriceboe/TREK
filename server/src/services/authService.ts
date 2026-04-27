@@ -15,6 +15,7 @@ import { decrypt_api_key, maybe_encrypt_api_key, encrypt_api_key } from './apiKe
 import { createEphemeralToken } from './ephemeralTokens';
 import { revokeUserSessions } from '../mcp';
 import { startTripReminders } from '../scheduler';
+import { deleteUserCompletely } from './userCleanupService';
 import { verifyJwtAndLoadUser } from '../middleware/auth';
 import { User } from '../types';
 import { DEMO_EMAIL_PRIMARY, isDemoEmail } from './demo';
@@ -527,7 +528,7 @@ export function deleteAccount(userId: number, userEmail: string, userRole: strin
       return { error: 'Cannot delete the last admin account', status: 400 };
     }
   }
-  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  deleteUserCompletely(userId);
   return { success: true };
 }
 

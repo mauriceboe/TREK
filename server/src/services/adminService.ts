@@ -8,6 +8,7 @@ import { updateJwtSecret } from '../config';
 import { maybe_encrypt_api_key, decrypt_api_key } from './apiKeyCrypto';
 import { getAllPermissions, savePermissions as savePerms, PERMISSION_ACTIONS } from './permissions';
 import { revokeUserSessions, revokeUserSessionsForClient } from '../mcp';
+import { deleteUserCompletely } from './userCleanupService';
 import { validatePassword } from './passwordPolicy';
 import { getPhotoProviderConfig } from './memories/helpersService';
 import { send as sendNotification } from './notificationService';
@@ -170,7 +171,7 @@ export function deleteUser(id: string, currentUserId: number) {
   const userToDel = db.prepare('SELECT id, email FROM users WHERE id = ?').get(id) as { id: number; email: string } | undefined;
   if (!userToDel) return { error: 'User not found', status: 404 };
 
-  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  deleteUserCompletely(userToDel.id);
   return { email: userToDel.email };
 }
 
