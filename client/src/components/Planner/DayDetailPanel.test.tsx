@@ -892,6 +892,183 @@ describe('DayDetailPanel', () => {
     expect(screen.getByText(/June|15/i)).toBeInTheDocument();
   });
 
+  // ── Accommodation date-range picker — non-monotonic day IDs (issue #889) ─────
+
+  // Builds the reporter's exact ID layout: day_number 1-9 → IDs 17-25, day_number 10-16 → IDs 1-7.
+  // This happens after repeated trip-length changes via generateDays (no import/migration needed).
+  function buildNonMonotonicDays() {
+    return [
+      buildDay({ id: 17, trip_id: 1, date: '2026-04-30' }),
+      buildDay({ id: 18, trip_id: 1, date: '2026-05-01' }),
+      buildDay({ id: 19, trip_id: 1, date: '2026-05-02' }),
+      buildDay({ id: 20, trip_id: 1, date: '2026-05-03' }),
+      buildDay({ id: 21, trip_id: 1, date: '2026-05-04' }),
+      buildDay({ id: 22, trip_id: 1, date: '2026-05-05' }),
+      buildDay({ id: 23, trip_id: 1, date: '2026-05-06' }),
+      buildDay({ id: 24, trip_id: 1, date: '2026-05-07' }),
+      buildDay({ id: 25, trip_id: 1, date: '2026-05-08' }),
+      buildDay({ id: 1,  trip_id: 1, date: '2026-05-09' }),
+      buildDay({ id: 2,  trip_id: 1, date: '2026-05-10' }),
+      buildDay({ id: 3,  trip_id: 1, date: '2026-05-11' }),
+      buildDay({ id: 4,  trip_id: 1, date: '2026-05-12' }),
+      buildDay({ id: 5,  trip_id: 1, date: '2026-05-13' }),
+      buildDay({ id: 6,  trip_id: 1, date: '2026-05-14' }),
+      buildDay({ id: 7,  trip_id: 1, date: '2026-05-15' }),
+    ];
+  }
+
+  // Returns the two CustomSelect trigger buttons for start/end day pickers.
+  // When no dropdown is open, these are the only globally-visible buttons whose textContent
+  // matches /Day \d+/ (the main panel title is a div, not a button).
+  // [0] = start trigger, [1] = end trigger (DOM source order).
+  function getDayPickerTriggers() {
+    return screen.getAllByRole('button').filter(b => /Day \d+/.test(b.textContent ?? ''));
+  }
+
+  it('FE-PLANNER-DAYDETAIL-056: non-monotonic IDs — end picker does not clobber start-day', async () => {
+    const days = buildNonMonotonicDays();
+    const place = buildPlace({ id: 50, name: 'Range Hotel' });
+    let capturedBody: any;
+    server.use(
+      http.post('/api/trips/1/accommodations', async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({
+          accommodation: {
+            id: 99, place_id: 50, place_name: 'Range Hotel', place_address: null,
+            start_day_id: capturedBody.start_day_id, end_day_id: capturedBody.end_day_id,
+            check_in: null, check_out: null, confirmation: null,
+          },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={days[0]} days={days} places={[place]} />);
+    await userEvent.click(await screen.findByText(/Add accommodation/i));
+    await userEvent.click(await screen.findByRole('button', { name: /Range Hotel/i }));
+
+    // Both triggers show "Day 1"; the second one is the end picker.
+    await userEvent.click(getDayPickerTriggers()[1]);
+    // Select "Day 16" (id=7) from the open dropdown — textContent starts with "Day 16".
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 16'))!);
+
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      // start must remain id 17 (day 1) — old code would clobber it to id 7 via Math.min
+      expect(capturedBody?.start_day_id).toBe(17);
+      expect(capturedBody?.end_day_id).toBe(7);
+    });
+  });
+
+  it('FE-PLANNER-DAYDETAIL-057: non-monotonic IDs — start picker does not collapse end when start has high ID', async () => {
+    const days = buildNonMonotonicDays();
+    const place = buildPlace({ id: 51, name: 'Span Hotel' });
+    let capturedBody: any;
+    server.use(
+      http.post('/api/trips/1/accommodations', async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({
+          accommodation: {
+            id: 100, place_id: 51, place_name: 'Span Hotel', place_address: null,
+            start_day_id: capturedBody.start_day_id, end_day_id: capturedBody.end_day_id,
+            check_in: null, check_out: null, confirmation: null,
+          },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={days[0]} days={days} places={[place]} />);
+    await userEvent.click(await screen.findByText(/Add accommodation/i));
+    await userEvent.click(await screen.findByRole('button', { name: /Span Hotel/i }));
+
+    // Set end to day 16 (id=7, low ID but last day by position).
+    await userEvent.click(getDayPickerTriggers()[1]);
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 16'))!);
+
+    // Set start to day 9 (id=25, high ID, but earlier by position than day 16).
+    // Old code: Math.max(25, 7) = 25 → end collapses to day 9.
+    // New code: position(id=25)=8 < position(id=7)=15 → end stays at 7 (day 16).
+    await userEvent.click(getDayPickerTriggers()[0]);
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 9'))!);
+
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      expect(capturedBody?.start_day_id).toBe(25); // day 9
+      expect(capturedBody?.end_day_id).toBe(7);    // day 16 — must NOT have collapsed
+    });
+  });
+
+  it('FE-PLANNER-DAYDETAIL-058: non-monotonic IDs — All days button sets correct first/last IDs', async () => {
+    const days = buildNonMonotonicDays();
+    const place = buildPlace({ id: 52, name: 'Full Trip Hotel' });
+    let capturedBody: any;
+    server.use(
+      http.post('/api/trips/1/accommodations', async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({
+          accommodation: {
+            id: 101, place_id: 52, place_name: 'Full Trip Hotel', place_address: null,
+            start_day_id: capturedBody.start_day_id, end_day_id: capturedBody.end_day_id,
+            check_in: null, check_out: null, confirmation: null,
+          },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={days[0]} days={days} places={[place]} />);
+    await userEvent.click(await screen.findByText(/Add accommodation/i));
+    await userEvent.click(await screen.findByRole('button', { name: /Full Trip Hotel/i }));
+
+    // "All" is the day.allDays translation (en: "All") — the Apply-to-entire-trip button.
+    // When categories=[] the category-filter "All" button is not rendered, so this is unique.
+    await userEvent.click(screen.getByRole('button', { name: /^All$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      // days[0].id=17 (first by position), days[15].id=7 (last by position)
+      expect(capturedBody?.start_day_id).toBe(17);
+      expect(capturedBody?.end_day_id).toBe(7);
+    });
+  });
+
+  it('FE-PLANNER-DAYDETAIL-059: sequential IDs — end picker clamping still works (regression guard)', async () => {
+    const seqDays = [
+      buildDay({ id: 101, trip_id: 1, date: '2026-06-01' }),
+      buildDay({ id: 102, trip_id: 1, date: '2026-06-02' }),
+      buildDay({ id: 103, trip_id: 1, date: '2026-06-03' }),
+    ];
+    const place = buildPlace({ id: 53, name: 'Seq Hotel' });
+    let capturedBody: any;
+    server.use(
+      http.post('/api/trips/1/accommodations', async ({ request }) => {
+        capturedBody = await request.json();
+        return HttpResponse.json({
+          accommodation: {
+            id: 102, place_id: 53, place_name: 'Seq Hotel', place_address: null,
+            start_day_id: capturedBody.start_day_id, end_day_id: capturedBody.end_day_id,
+            check_in: null, check_out: null, confirmation: null,
+          },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={seqDays[0]} days={seqDays} places={[place]} />);
+    await userEvent.click(await screen.findByText(/Add accommodation/i));
+    await userEvent.click(await screen.findByRole('button', { name: /Seq Hotel/i }));
+
+    // Pick end = day 3 (id=103, position 2 > position 0 of start id=101).
+    await userEvent.click(getDayPickerTriggers()[1]);
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 3'))!);
+
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      expect(capturedBody?.start_day_id).toBe(101);
+      expect(capturedBody?.end_day_id).toBe(103);
+    });
+  });
+
   it('FE-PLANNER-DAYDETAIL-040: 12h time format renders reservation time with AM/PM', async () => {
     seedStore(useSettingsStore, {
       settings: { time_format: '12h', temperature_unit: 'celsius', blur_booking_codes: false },

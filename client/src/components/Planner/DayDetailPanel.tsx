@@ -463,7 +463,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <CustomSelect
                           value={hotelDayRange.start}
-                          onChange={v => setHotelDayRange(prev => ({ start: v, end: Math.max(v, prev.end) }))}
+                          onChange={v => setHotelDayRange(prev => ({ start: v, end: days.findIndex(d => d.id === v) > days.findIndex(d => d.id === prev.end) ? v : prev.end }))}
                           options={days.map((d, i) => ({
                             value: d.id,
                             label: d.title || t('planner.dayN', { n: i + 1 }),
@@ -478,7 +478,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <CustomSelect
                           value={hotelDayRange.end}
-                          onChange={v => setHotelDayRange(prev => ({ start: Math.min(prev.start, v), end: v }))}
+                          onChange={v => setHotelDayRange(prev => ({ start: days.findIndex(d => d.id === v) < days.findIndex(d => d.id === prev.start) ? v : prev.start, end: v }))}
                           options={days.map((d, i) => ({
                             value: d.id,
                             label: d.title || t('planner.dayN', { n: i + 1 }),
