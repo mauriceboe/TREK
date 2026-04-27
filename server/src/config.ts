@@ -104,7 +104,7 @@ export const ENCRYPTION_KEY = _encryptionKey;
 // Supported values: de, en, es, fr, hu, nl, br, cs, pl, ru, zh, zh-TW, it, ar
 // Must stay in sync with client/src/i18n/supportedLanguages.ts (canonical source).
 // Kept duplicated here because server and client are separate npm packages.
-const SUPPORTED_LANG_CODES = ['de', 'en', 'es', 'fr', 'hu', 'nl', 'br', 'cs', 'pl', 'ru', 'zh', 'zh-TW', 'it', 'ar'];
+const SUPPORTED_LANG_CODES = ['de', 'en', 'es', 'fr', 'hu', 'nl', 'br', 'cs', 'pl', 'ru', 'zh', 'zh-TW', 'it', 'ar', 'ua'];
 const rawDefaultLang = process.env.DEFAULT_LANGUAGE || 'en';
 if (!SUPPORTED_LANG_CODES.includes(rawDefaultLang)) {
   console.warn(`DEFAULT_LANGUAGE="${rawDefaultLang}" is not supported. Falling back to "en". Supported: ${SUPPORTED_LANG_CODES.join(', ')}`);

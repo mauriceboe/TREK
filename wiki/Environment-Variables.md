@@ -40,7 +40,7 @@ Setting `ENCRYPTION_KEY` explicitly is recommended so you can back it up indepen
 
 Verified in `server/src/config.ts` (line 107):
 
-`de`, `en`, `es`, `fr`, `hu`, `nl`, `br`, `cs`, `pl`, `ru`, `zh`, `zh-TW`, `it`, `ar`
+`de`, `en`, `es`, `fr`, `hu`, `nl`, `br`, `cs`, `pl`, `ru`, `zh`, `zh-TW`, `it`, `ar`, `ua`
 
 > **Note:** `id` (Indonesian / Bahasa Indonesia) appears in `client/src/i18n/supportedLanguages.ts` but is not in the server's supported-codes list in `config.ts`. Setting `DEFAULT_LANGUAGE=id` will fall back to `en` with a warning in the server log.
 

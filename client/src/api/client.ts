@@ -14,9 +14,10 @@ import ru from '../i18n/translations/ru'
 import zh from '../i18n/translations/zh'
 import zhTw from '../i18n/translations/zhTw'
 import ar from '../i18n/translations/ar'
+import ua from '../i18n/translations/ua'
 
 const rateLimitTranslations: Record<string, Record<string, string | unknown>> = {
-  en, br, de, es, fr, it, nl, pl, cs, hu, ru, zh, 'zh-TW': zhTw, ar,
+  en, br, de, es, fr, it, nl, pl, cs, hu, ru, zh, 'zh-TW': zhTw, ar, ua,
 }
 
 function translateRateLimit(): string {

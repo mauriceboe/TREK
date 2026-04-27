@@ -89,6 +89,7 @@ const I18N: Record<string, EmailStrings> = {
   'zh-TW': { footer: '您收到這封郵件是因為您在 TREK 中啟用了通知。', manage: '管理偏好設定', madeWith: 'Made with', openTrek: '開啟 TREK' },
   ar: { footer: 'تلقيت هذا لأنك قمت بتفعيل الإشعارات في TREK.', manage: 'إدارة التفضيلات', madeWith: 'Made with', openTrek: 'فتح TREK' },
   id: { footer: 'Anda menerima ini karena Anda telah mengaktifkan notifikasi di TREK.', manage: 'Kelola preferensi di Pengaturan', madeWith: 'Dibuat dengan', openTrek: 'Buka TREK' },
+  ua: { footer: 'Ви отримали це, тому що у вас увімкнені сповіщення в TREK.', manage: 'Керувати налаштуваннями', madeWith: 'Зроблено з', openTrek: 'Відкрити TREK' },
 };
 
 // Translated notification texts per event type
@@ -275,6 +276,18 @@ const EVENT_TEXTS: Record<string, Record<NotifEventType, EventTextFn>> = {
     packing_tagged: p => ({ title: `Pengepakan: ${p.category}`, body: `${p.actor} menugaskan Anda ke kategori "${p.category}" di "${p.trip}".` }),
     version_available: p => ({ title: 'Versi TREK baru tersedia', body: `TREK ${p.version} sekarang tersedia. Kunjungi panel admin untuk memperbarui.` }),
   },
+  ua: {
+    trip_invite: p => ({ title: `Запрошення до "${p.trip}"`, body: `${p.actor} запросив ${p.invitee || 'учасника'} до поїздки "${p.trip}".` }),
+    booking_change: p => ({ title: `Нове бронювання: ${p.booking}`, body: `${p.actor} додав бронювання "${p.booking}" (${p.type}) до "${p.trip}".` }),
+    trip_reminder: p => ({ title: `Нагадування про поїздку: ${p.trip}`, body: `Ваша поїздка "${p.trip}" скоро почнеться!` }),
+    todo_due: p => ({ title: `Завдання до виконання: ${p.todo}`, body: `"${p.todo}" в "${p.trip}" має бути виконано до ${p.due}.` }),
+    vacay_invite: p => ({ title: 'Запрошення Vacay Fusion', body: `${p.actor} запрошує вас об’єднати плани відпустки. Відкрийте TREK, щоб прийняти або відхилити.` }),
+    photos_shared: p => ({ title: `${p.count} фото`, body: `${p.actor} поділився ${p.count} фото в "${p.trip}".` }),
+    collab_message: p => ({ title: `Нове повідомлення в "${p.trip}"`, body: `${p.actor}: ${p.preview}` }),
+    packing_tagged: p => ({ title: `Список речей: ${p.category}`, body: `${p.actor} назначив вас до категорії "${p.category}" в "${p.trip}".` }),
+    version_available: p => ({ title: 'Доступна нова версія TREK', body: `TREK ${p.version} тепер доступний. Перейдіть в панель адміністратора для оновлення.` }),
+    synology_session_cleared: () => ({ title: 'Сесія Synology очищена', body: 'Ваш обліковий запис або URL-адреса Synology змінилися. Ви вийшли з Synology Photos.' }),
+  },
 };
 
 // Get localized event text
@@ -350,6 +363,7 @@ const PASSWORD_RESET_I18N: Record<string, PasswordResetStrings> = {
   br: { subject: 'Redefinir sua senha', greeting: 'Olá', body: 'Recebemos um pedido para redefinir a senha da sua conta TREK. Clique no botão abaixo para definir uma nova senha.', ctaIntro: 'Redefinir senha', expiry: 'Este link expira em 60 minutos.', ignore: 'Se você não solicitou isto, pode ignorar este e-mail — sua senha não será alterada.' },
   cs: { subject: 'Obnovení hesla', greeting: 'Ahoj', body: 'Obdrželi jsme žádost o obnovení hesla k tvému účtu TREK. Klikni na tlačítko níže a nastav nové heslo.', ctaIntro: 'Obnovit heslo', expiry: 'Odkaz vyprší za 60 minut.', ignore: 'Pokud jsi o obnovení nežádal/a, tento e-mail ignoruj — heslo zůstane beze změny.' },
   pl: { subject: 'Zresetuj hasło', greeting: 'Cześć', body: 'Otrzymaliśmy prośbę o zresetowanie hasła do Twojego konta TREK. Kliknij przycisk poniżej, aby ustawić nowe hasło.', ctaIntro: 'Zresetuj hasło', expiry: 'Link wygaśnie za 60 minut.', ignore: 'Jeśli to nie Ty, zignoruj tę wiadomość — Twoje hasło pozostanie bez zmian.' },
+  ua: { subject: 'Скидання пароля', greeting: 'Привіт', body: 'Ми отримали запит на скидання пароля для вашого облікового запису TREK. Натисніть кнопку нижче, щоб встановити новий пароль.', ctaIntro: 'Скинути пароль', expiry: 'Це посилання дійсне протягом 60 хвилин.', ignore: 'Якщо ви не запитували скидання — просто проігноруйте цей лист, пароль залишиться без змін.' },
 };
 
 function buildPasswordResetHtml(subject: string, strings: PasswordResetStrings, recipient: string, resetUrl: string, lang: string): string {

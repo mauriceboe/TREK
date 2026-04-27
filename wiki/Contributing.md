@@ -60,4 +60,4 @@ See the [[Development Environment|Development-environment]] page for the full se
 | Database | SQLite with WAL mode                                                            |
 | Auth | JWT (HS256), bcrypt, TOTP MFA, OIDC                                             |
 | Maps | Leaflet + react-leaflet, OSRM, Nominatim, CartoDB tiles                         |
-| i18n | 15 languages (EN, DE, ES, FR, NL, IT, PT-BR, CS, PL, HU, RU, ZH, ZH-TW, AR, ID) |
+| i18n | 16 languages (EN, DE, ES, FR, NL, IT, PT-BR, CS, PL, HU, RU, ZH, ZH-TW, AR, ID, UA) |
