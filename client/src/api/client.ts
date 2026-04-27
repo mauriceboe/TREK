@@ -75,7 +75,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && (error.response?.data as { code?: string } | undefined)?.code === 'AUTH_REQUIRED') {
       const { pathname } = window.location
       if (!isAuthPublicPath(pathname)) {
-        const currentPath = pathname + window.location.search
+        const currentPath = pathname + window.location.search + window.location.hash
         window.location.href = '/login?redirect=' + encodeURIComponent(currentPath)
       }
     }

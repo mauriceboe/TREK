@@ -58,7 +58,7 @@ function ProtectedRoute({ children, adminRequired = false, addonId }: ProtectedR
   }
 
   if (!isAuthenticated) {
-    const redirectParam = encodeURIComponent(location.pathname + location.search)
+    const redirectParam = encodeURIComponent(location.pathname + location.search + location.hash)
     return <Navigate to={`/login?redirect=${redirectParam}`} replace />
   }
 

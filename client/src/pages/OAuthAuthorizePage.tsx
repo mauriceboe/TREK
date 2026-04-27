@@ -124,7 +124,7 @@ export default function OAuthAuthorizePage(): React.ReactElement {
   }
 
   function handleLoginRedirect() {
-    const next = '/oauth/authorize?' + params.toString()
+    const next = '/oauth/authorize?' + params.toString() + window.location.hash
     window.location.href = '/login?redirect=' + encodeURIComponent(next)
   }
 

@@ -56,6 +56,12 @@ export default function LoginPage(): React.ReactElement {
   }, [])
 
   useEffect(() => {
+    if (redirectTarget !== '/dashboard') {
+      sessionStorage.setItem('oidc_redirect', redirectTarget)
+    }
+  }, [redirectTarget])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
 
     const invite = params.get('invite')
@@ -83,7 +89,9 @@ export default function LoginPage(): React.ReactElement {
           window.history.replaceState({}, '', '/login')
           if (data.token) {
             await loadUser()
-            navigate('/dashboard', { replace: true })
+            const savedRedirect = sessionStorage.getItem('oidc_redirect') || '/dashboard'
+            sessionStorage.removeItem('oidc_redirect')
+            navigate(savedRedirect, { replace: true })
           } else {
             setError(data.error || t('login.oidcFailed'))
           }
@@ -104,6 +112,7 @@ export default function LoginPage(): React.ReactElement {
         invalid_state: t('login.oidc.invalidState'),
       }
       setError(errorMessages[oidcError] || oidcError)
+      sessionStorage.removeItem('oidc_redirect')
       window.history.replaceState({}, '', '/login')
       return
     }
