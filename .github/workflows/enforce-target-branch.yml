@@ -21,6 +21,12 @@ jobs:
             const labels = context.payload.pull_request.labels.map(l => l.name);
             const prNumber = context.payload.pull_request.number;
 
+            // bypass-branch-check label skips all enforcement
+            if (labels.includes('bypass-branch-check')) {
+              console.log('bypass-branch-check label present, skipping enforcement.');
+              return;
+            }
+
             // If the base was fixed, remove the label and let it through
             if (base !== 'main') {
               if (labels.includes('wrong-base-branch')) {
