@@ -29,9 +29,24 @@ Go to **Settings → Integrations → Photo Providers**. Each enabled provider s
 |-------|----------|-------|
 | Server URL | Yes | Full URL of your Immich instance, e.g. `https://immich.example.com` |
 | API Key | Yes | Stored encrypted; never returned to the browser after saving |
-| Auto-upload to Immich | No | Checkbox; when enabled, photos you upload in TREK are also pushed to your Immich library |
+| Mirror journey photos to Immich on upload | No | Checkbox; when enabled, photos you upload in TREK are also pushed to your Immich library |
 
 Enter the full URL of your Immich instance and an Immich API key. The API key is stored encrypted on the TREK server and is never returned to the browser after it is saved.
+
+#### Required API key permissions
+
+When generating the API key in Immich (**Account Settings → API Keys**), grant only the scopes TREK actually uses:
+
+| Permission | Why TREK needs it |
+|------------|-------------------|
+| `user.read` | Verify the API key and identify the connected account |
+| `timeline.read` | Browse photos by date |
+| `asset.read` | Read photo metadata and search results |
+| `asset.view` | Load thumbnails and preview images |
+| `album.read` | List owned + shared albums and their contents |
+| `asset.upload` | *Only if you enable "Mirror journey photos to Immich on upload"* — push TREK uploads back to your library |
+
+TREK never modifies or deletes anything in Immich, so no `update`, `delete`, or admin scopes are needed.
 
 ### Synology Photos
 
@@ -42,6 +57,17 @@ Enter the full URL of your Immich instance and an Immich API key. The API key is
 | Password | Yes | Stored encrypted; leave blank to keep the existing password |
 | OTP code | No | One-time password for 2FA; only needed on first connection or when re-authenticating |
 | Skip SSL verification | No | Checkbox; disable TLS certificate validation for self-signed certificates |
+
+#### Required DSM account permissions
+
+Synology Photos doesn't use API keys — TREK signs in with a regular DSM user account. To minimize blast radius, create a **dedicated low-privilege DSM user** for TREK rather than reusing your admin account:
+
+- A standard (non-admin) DSM user account is sufficient.
+- The account must have access to the **Synology Photos** package (DSM → **Control Panel → User & Group → [user] → Applications**, allow Synology Photos).
+- The account must be able to log in to DSM (not disabled, not IP-blocked).
+- Network access to DSM (typically port `5000` HTTP / `5001` HTTPS, or your reverse-proxy host).
+- 2FA is supported — enter the OTP at first connection; TREK stores the resulting device token so you won't be re-prompted on subsequent saves.
+- Read-only access is enough — TREK only lists albums, lists items, runs searches, and fetches thumbnails. It never writes, uploads, or deletes.
 
 ---
 
