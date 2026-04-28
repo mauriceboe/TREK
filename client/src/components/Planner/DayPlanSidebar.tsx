@@ -21,6 +21,7 @@ import { useTripStore } from '../../store/tripStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useTranslation } from '../../i18n'
+import { isDayInAccommodationRange } from '../../utils/dayOrder'
 import { formatDate, formatTime, dayTotalCost, currencyDecimals } from '../../utils/formatters'
 import { useDayNotes } from '../../hooks/useDayNotes'
 import Tooltip from '../shared/Tooltip'
@@ -397,7 +398,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   const getTransportForDay = (dayId: number) => {
     const dayAssignmentIds = (assignments[String(dayId)] || []).map(a => a.id)
     return reservations.filter(r => {
-      if (r.type === 'hotel') return false
+      if (!TRANSPORT_TYPES.has(r.type)) return false
       if (r.assignment_id && dayAssignmentIds.includes(r.assignment_id)) return false
 
       const startDayId = r.day_id
@@ -1214,7 +1215,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                         </Tooltip>
                       )}
                       {(() => {
-                        const dayAccs = accommodations.filter(a => day.id >= a.start_day_id && day.id <= a.end_day_id)
+                        const dayAccs = accommodations.filter(a => isDayInAccommodationRange(day, a.start_day_id, a.end_day_id, days))
                           // Sort: check-out first, then ongoing stays, then check-in last
                           .sort((a, b) => {
                             const aIsOut = a.end_day_id === day.id && a.start_day_id !== day.id
@@ -1725,7 +1726,11 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                         return (
                           <React.Fragment key={`transport-${res.id}-${day.id}`}>
                           <div
-                            onClick={() => canEditDays && onEditTransport?.(res)}
+                            onClick={() => {
+                              if (!canEditDays) return
+                              if (TRANSPORT_TYPES.has(res.type)) onEditTransport?.(res)
+                              else onEditReservation?.(res)
+                            }}
                             onDragOver={e => {
                               e.preventDefault(); e.stopPropagation()
                               const rect = e.currentTarget.getBoundingClientRect()

@@ -666,15 +666,20 @@ export default function TripPlannerPage(): React.ReactElement | null {
   const handleSaveTransport = async (data) => {
     try {
       if (editingTransport) {
-        await tripActions.updateReservation(tripId, editingTransport.id, data)
+        const r = await tripActions.updateReservation(tripId, editingTransport.id, data)
         toast.success(t('trip.toast.reservationUpdated'))
+        setShowTransportModal(false)
+        setEditingTransport(null)
+        setTransportModalDayId(null)
+        return r
       } else {
-        await tripActions.addReservation(tripId, data)
+        const r = await tripActions.addReservation(tripId, data)
         toast.success(t('trip.toast.reservationAdded'))
+        setShowTransportModal(false)
+        setEditingTransport(null)
+        setTransportModalDayId(null)
+        return r
       }
-      setShowTransportModal(false)
-      setEditingTransport(null)
-      setTransportModalDayId(null)
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : t('common.unknownError')) }
   }
 
@@ -1194,7 +1199,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
       <TripFormModal isOpen={showTripForm} onClose={() => setShowTripForm(false)} onSave={async (data) => { await tripActions.updateTrip(tripId, data); toast.success(t('trip.toast.tripUpdated')) }} trip={trip} />
       <TripMembersModal isOpen={showMembersModal} onClose={() => setShowMembersModal(false)} tripId={tripId} tripTitle={trip?.title} />
       <ReservationModal isOpen={showReservationModal} onClose={() => { setShowReservationModal(false); setEditingReservation(null); setBookingForAssignmentId(null) }} onSave={handleSaveReservation} reservation={editingReservation} days={days} places={places} assignments={assignments} selectedDayId={selectedDayId} files={files} onFileUpload={canUploadFiles ? (fd) => tripActions.addFile(tripId, fd) : undefined} onFileDelete={(id) => tripActions.deleteFile(tripId, id)} accommodations={tripAccommodations} defaultAssignmentId={bookingForAssignmentId} />
-      {showTransportModal && <TransportModal isOpen={showTransportModal} onClose={() => { setShowTransportModal(false); setEditingTransport(null); setTransportModalDayId(null) }} onSave={handleSaveTransport} reservation={editingTransport} days={days} selectedDayId={transportModalDayId} />}
+      {showTransportModal && <TransportModal isOpen={showTransportModal} onClose={() => { setShowTransportModal(false); setEditingTransport(null); setTransportModalDayId(null) }} onSave={handleSaveTransport} reservation={editingTransport} days={days} selectedDayId={transportModalDayId} files={files} onFileUpload={canUploadFiles ? (fd) => tripActions.addFile(tripId, fd) : undefined} onFileDelete={(id) => tripActions.deleteFile(tripId, id)} />}
       <ConfirmDialog
         isOpen={!!deletePlaceId}
         onClose={() => setDeletePlaceId(null)}

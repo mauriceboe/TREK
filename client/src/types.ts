@@ -31,6 +31,7 @@ export interface Trip {
 export interface Day {
   id: number
   trip_id: number
+  day_number?: number
   date: string
   title: string | null
   notes: string | null

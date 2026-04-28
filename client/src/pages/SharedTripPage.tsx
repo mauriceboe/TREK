@@ -10,6 +10,7 @@ import { getCategoryIcon } from '../components/shared/categoryIcons'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Clock, MapPin, FileText, Train, Plane, Bus, Car, Ship, Ticket, Hotel, Map, Luggage, Wallet, MessageCircle } from 'lucide-react'
+import { isDayInAccommodationRange } from '../utils/dayOrder'
 
 const TRANSPORT_TYPES = new Set(['flight', 'train', 'bus', 'car', 'cruise'])
 const TRANSPORT_ICONS = { flight: Plane, train: Train, bus: Bus, car: Car, cruise: Ship }
@@ -184,7 +185,7 @@ export default function SharedTripPage() {
             const da = assignments[String(day.id)] || []
             const notes = (dayNotes[String(day.id)] || [])
             const dayTransport = (reservations || []).filter((r: any) => TRANSPORT_TYPES.has(r.type) && r.reservation_time?.split('T')[0] === day.date)
-            const dayAccs = (accommodations || []).filter((a: any) => day.id >= a.start_day_id && day.id <= a.end_day_id)
+            const dayAccs = (accommodations || []).filter((a: any) => isDayInAccommodationRange(day, a.start_day_id, a.end_day_id, sortedDays))
 
             const merged = [
               ...da.map((a: any) => ({ type: 'place', k: a.order_index, data: a })),

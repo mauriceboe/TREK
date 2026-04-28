@@ -1069,6 +1069,100 @@ describe('DayDetailPanel', () => {
     });
   });
 
+  // ── Post-save state filter — non-monotonic IDs (issue #889 follow-up) ────────
+
+  it('FE-PLANNER-DAYDETAIL-060: non-monotonic IDs — hotel stays visible after edit-save (issue #889 regression)', async () => {
+    const days = buildNonMonotonicDays();
+    let getCallCount = 0;
+    server.use(
+      http.get('/api/trips/1/accommodations', () => {
+        getCallCount++;
+        const acc = getCallCount === 1
+          // Initial load: single-day so old filter (17>=17 && 17<=17) passes — hotel visible, edit possible
+          ? { id: 1, place_id: 50, place_name: 'Span Hotel', place_address: null, start_day_id: 17, end_day_id: 17, check_in: null, check_out: null, confirmation: null }
+          // Post-save relist: full span — old filter (17>=17 && 17<=7) would drop it, new code keeps it
+          : { id: 1, place_id: 50, place_name: 'Span Hotel', place_address: null, start_day_id: 17, end_day_id: 7, check_in: null, check_out: null, confirmation: null };
+        return HttpResponse.json({ accommodations: [acc] });
+      }),
+      http.put('/api/trips/1/accommodations/1', async ({ request }) => {
+        const body = await request.json() as any;
+        return HttpResponse.json({
+          accommodation: { id: 1, place_id: 50, place_name: 'Span Hotel', place_address: null,
+            start_day_id: body.start_day_id, end_day_id: body.end_day_id,
+            check_in: null, check_out: null, confirmation: null },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={days[0]} days={days} />);
+    await screen.findByText('Span Hotel');
+
+    // Pencil = 3rd button (index 2): collapse, close, pencil, remove
+    const allButtons = screen.getAllByRole('button');
+    await userEvent.click(allButtons[2]);
+
+    // Extend end picker to Day 16 (id=7)
+    await userEvent.click(getDayPickerTriggers()[1]);
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 16'))!);
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    // Old code: 17>=17 && 17<=7 → false (hotel vanishes). New code: position 0 in [0,15] → visible.
+    await waitFor(() => {
+      expect(screen.getByText('Span Hotel')).toBeInTheDocument();
+    });
+  });
+
+  it('FE-PLANNER-DAYDETAIL-061: non-monotonic IDs — hotel appears after create-save on intermediate day', async () => {
+    const days = buildNonMonotonicDays();
+    const place = buildPlace({ id: 55, name: 'Created Hotel' });
+    // Current day: days[5] = id 22, position 5 (within any full-span range)
+    const currentDay = days[5];
+    server.use(
+      http.post('/api/trips/1/accommodations', async ({ request }) => {
+        const body = await request.json() as any;
+        return HttpResponse.json({
+          accommodation: { id: 200, place_id: 55, place_name: 'Created Hotel', place_address: null,
+            start_day_id: body.start_day_id, end_day_id: body.end_day_id,
+            check_in: null, check_out: null, confirmation: null },
+        });
+      }),
+    );
+
+    render(<DayDetailPanel {...defaultProps} day={currentDay} days={days} places={[place]} />);
+    await userEvent.click(await screen.findByText(/Add accommodation/i));
+    await userEvent.click(await screen.findByRole('button', { name: /Created Hotel/i }));
+
+    // Extend end to Day 16 (id=7) — start stays at current day id=22
+    await userEvent.click(getDayPickerTriggers()[1]);
+    await userEvent.click(screen.getAllByRole('button').find(b => b.textContent?.startsWith('Day 16'))!);
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    // Old code: 22>=22 && 22<=7 → false (hotel vanishes). New code: position 5 in [5,15] → visible.
+    await waitFor(() => {
+      expect(screen.getByText('Created Hotel')).toBeInTheDocument();
+    });
+  });
+
+  it('FE-PLANNER-DAYDETAIL-062: non-monotonic IDs — hotel shown on initial load when it spans the full trip', async () => {
+    const days = buildNonMonotonicDays();
+    server.use(
+      http.get('/api/trips/1/accommodations', () =>
+        HttpResponse.json({
+          accommodations: [{ id: 1, place_id: 60, place_name: 'Full Trip Hotel', place_address: null,
+            start_day_id: 17, end_day_id: 7, check_in: null, check_out: null, confirmation: null }],
+        })
+      ),
+    );
+
+    // Day 1 (id=17): old filter: 17>=17 && 17<=7 → false. New: position 0 in [0,15] → visible.
+    render(<DayDetailPanel {...defaultProps} day={days[0]} days={days} />);
+    await screen.findByText('Full Trip Hotel');
+
+    // Intermediate day (id=1, position 9): old filter: 1>=17 → false. New: 9 in [0,15] → visible.
+    render(<DayDetailPanel {...defaultProps} day={days[9]} days={days} />);
+    await screen.findByText('Full Trip Hotel');
+  });
+
   it('FE-PLANNER-DAYDETAIL-040: 12h time format renders reservation time with AM/PM', async () => {
     seedStore(useSettingsStore, {
       settings: { time_format: '12h', temperature_unit: 'celsius', blur_booking_codes: false },

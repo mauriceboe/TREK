@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Plane, Train, Car, Ship } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useParams } from 'react-router-dom'
+import { Plane, Train, Car, Ship, Paperclip, FileText, X, ExternalLink, Link2 } from 'lucide-react'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import CustomTimePicker from '../shared/CustomTimePicker'
@@ -10,7 +11,9 @@ import { useToast } from '../shared/Toast'
 import { useTripStore } from '../../store/tripStore'
 import { useAddonStore } from '../../store/addonStore'
 import { formatDate } from '../../utils/formatters'
-import type { Day, Reservation, ReservationEndpoint } from '../../types'
+import { openFile } from '../../utils/fileDownload'
+import apiClient from '../../api/client'
+import type { Day, Reservation, ReservationEndpoint, TripFile } from '../../types'
 
 const TRANSPORT_TYPES = ['flight', 'train', 'car', 'cruise'] as const
 type TransportType = typeof TRANSPORT_TYPES[number]
@@ -89,26 +92,36 @@ const defaultForm = {
 interface TransportModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Record<string, any>) => Promise<void>
+  onSave: (data: Record<string, any>) => Promise<Reservation | undefined>
   reservation: Reservation | null
   days: Day[]
   selectedDayId: number | null
+  files?: TripFile[]
+  onFileUpload?: (fd: FormData) => Promise<void>
+  onFileDelete?: (fileId: number) => Promise<void>
 }
 
-export function TransportModal({ isOpen, onClose, onSave, reservation, days, selectedDayId }: TransportModalProps) {
+export function TransportModal({ isOpen, onClose, onSave, reservation, days, selectedDayId, files = [], onFileUpload, onFileDelete }: TransportModalProps) {
   const { t, locale } = useTranslation()
   const toast = useToast()
   const isBudgetEnabled = useAddonStore(s => s.isEnabled('budget'))
   const budgetItems = useTripStore(s => s.budgetItems)
+  const loadFiles = useTripStore(s => s.loadFiles)
   const budgetCategories = useMemo(() => {
     const cats = new Set<string>()
     budgetItems.forEach(i => { if (i.category) cats.add(i.category) })
     return Array.from(cats).sort()
   }, [budgetItems])
+  const { id: tripId } = useParams<{ id: string }>()
   const [form, setForm] = useState({ ...defaultForm })
   const [isSaving, setIsSaving] = useState(false)
   const [fromPick, setFromPick] = useState<EndpointPick>({})
   const [toPick, setToPick] = useState<EndpointPick>({})
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [showFilePicker, setShowFilePicker] = useState(false)
+  const [linkedFileIds, setLinkedFileIds] = useState<number[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -222,13 +235,54 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
           ? { total_price: parseFloat(form.price), category: form.budget_category || t(`reservations.type.${form.type}`) || 'Other' }
           : { total_price: 0 }
       }
-      await onSave(payload)
+      const saved = await onSave(payload)
+      if (!reservation?.id && saved?.id && pendingFiles.length > 0 && onFileUpload) {
+        for (const file of pendingFiles) {
+          const fd = new FormData()
+          fd.append('file', file)
+          fd.append('reservation_id', String(saved.id))
+          fd.append('description', form.title)
+          await onFileUpload(fd)
+        }
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t('common.unknownError'))
     } finally {
       setIsSaving(false)
     }
   }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (reservation?.id) {
+      setUploadingFile(true)
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('reservation_id', String(reservation.id))
+        fd.append('description', reservation.title)
+        await onFileUpload!(fd)
+        toast.success(t('reservations.toast.fileUploaded'))
+      } catch {
+        toast.error(t('reservations.toast.uploadError'))
+      } finally {
+        setUploadingFile(false)
+        e.target.value = ''
+      }
+    } else {
+      setPendingFiles(prev => [...prev, file])
+      e.target.value = ''
+    }
+  }
+
+  const attachedFiles = reservation?.id
+    ? files.filter(f =>
+        f.reservation_id === reservation.id ||
+        linkedFileIds.includes(f.id) ||
+        (f.linked_reservation_ids && f.linked_reservation_ids.includes(reservation.id))
+      )
+    : []
 
   const inputStyle = {
     width: '100%', border: '1px solid var(--border-primary)', borderRadius: 10,
@@ -442,6 +496,94 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
             placeholder={t('reservations.notesPlaceholder')}
             style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }} />
+        </div>
+
+        {/* Files */}
+        <div>
+          <label style={labelStyle}>{t('files.title')}</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {attachedFiles.map(f => (
+              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
+                <a href="#" onClick={(e) => { e.preventDefault(); openFile(f.url).catch(() => {}) }} style={{ color: 'var(--text-faint)', display: 'flex', flexShrink: 0, cursor: 'pointer' }}><ExternalLink size={11} /></a>
+                <button type="button" onClick={async () => {
+                  if (f.reservation_id === reservation?.id) {
+                    try { await apiClient.put(`/trips/${tripId}/files/${f.id}`, { reservation_id: null }) } catch {}
+                  }
+                  try {
+                    const linksRes = await apiClient.get(`/trips/${tripId}/files/${f.id}/links`)
+                    const link = (linksRes.data.links || []).find((l: any) => l.reservation_id === reservation?.id)
+                    if (link) await apiClient.delete(`/trips/${tripId}/files/${f.id}/link/${link.id}`)
+                  } catch {}
+                  setLinkedFileIds(prev => prev.filter(id => id !== f.id))
+                  if (tripId) loadFiles(tripId)
+                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+            {pendingFiles.map((f, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
+                <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: 0, flexShrink: 0 }}>
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+            <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {onFileUpload && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile} style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+                border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
+                fontSize: 11, color: 'var(--text-faint)', cursor: uploadingFile ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}>
+                <Paperclip size={11} />
+                {uploadingFile ? t('reservations.uploading') : t('reservations.attachFile')}
+              </button>}
+              {reservation?.id && files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).length > 0 && (
+                <div style={{ position: 'relative' }}>
+                  <button type="button" onClick={() => setShowFilePicker(v => !v)} style={{
+                    display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px',
+                    border: '1px dashed var(--border-primary)', borderRadius: 8, background: 'none',
+                    fontSize: 11, color: 'var(--text-faint)', cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                    <Link2 size={11} /> {t('reservations.linkExisting')}
+                  </button>
+                  {showFilePicker && (
+                    <div style={{
+                      position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50,
+                      background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 10,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: 4, minWidth: 220, maxHeight: 200, overflowY: 'auto',
+                    }}>
+                      {files.filter(f => !f.deleted_at && !attachedFiles.some(af => af.id === f.id)).map(f => (
+                        <button key={f.id} type="button" onClick={async () => {
+                          try {
+                            await apiClient.post(`/trips/${tripId}/files/${f.id}/link`, { reservation_id: reservation.id })
+                            setLinkedFileIds(prev => [...prev, f.id])
+                            setShowFilePicker(false)
+                            if (tripId) loadFiles(tripId)
+                          } catch {}
+                        }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                            background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                            color: 'var(--text-secondary)', borderRadius: 7, textAlign: 'left',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                          <FileText size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Price + Budget Category */}

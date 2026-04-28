@@ -1,7 +1,7 @@
 import ReactDOM from 'react-dom'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Trash2, ExternalLink, Download, X, FileText, FileImage, File, MapPin, Ticket, StickyNote, Star, RotateCcw, Pencil, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, Trash2, ExternalLink, Download, X, FileText, FileImage, File, MapPin, Ticket, StickyNote, Star, RotateCcw, Pencil, Check, ChevronLeft, ChevronRight, Plane, Train, Car, Ship } from 'lucide-react'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import { filesApi } from '../../api/client'
@@ -234,6 +234,15 @@ function AvatarChip({ name, avatarUrl, size = 20 }: { name: string; avatarUrl?: 
       )}
     </>
   )
+}
+
+const TRANSPORT_TYPES = new Set(['flight', 'train', 'car', 'cruise'])
+
+function transportIcon(type: string) {
+  if (type === 'train') return Train
+  if (type === 'car') return Car
+  if (type === 'cruise') return Ship
+  return Plane
 }
 
 interface FileManagerProps {
@@ -490,7 +499,9 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
               <SourceBadge key={p.id} icon={MapPin} label={`${t('files.sourcePlan')} · ${p.name}`} />
             ))}
             {linkedReservations.map(r => (
-              <SourceBadge key={r.id} icon={Ticket} label={`${t('files.sourceBooking')} · ${r.title || t('files.sourceBooking')}`} />
+              TRANSPORT_TYPES.has(r.type)
+                ? <SourceBadge key={r.id} icon={transportIcon(r.type)} label={`${t('files.sourceTransport')} · ${r.title || t('files.sourceTransport')}`} />
+                : <SourceBadge key={r.id} icon={Ticket} label={`${t('files.sourceBooking')} · ${r.title || t('files.sourceBooking')}`} />
             ))}
             {file.note_id && (
               <SourceBadge icon={StickyNote} label={t('files.sourceCollab') || 'Collab Notes'} />
@@ -673,52 +684,68 @@ export default function FileManager({ files = [], onUpload, onDelete, onUpdate, 
                   </div>
                 )
 
+                const bookingReservations = reservations.filter(r => !TRANSPORT_TYPES.has(r.type))
+                const transportReservations = reservations.filter(r => TRANSPORT_TYPES.has(r.type))
+
+                const reservationBtn = (r: Reservation) => {
+                  const isLinked = file.reservation_id === r.id || (file.linked_reservation_ids || []).includes(r.id)
+                  const Icon = TRANSPORT_TYPES.has(r.type) ? transportIcon(r.type) : Ticket
+                  return (
+                    <button key={r.id} onClick={async () => {
+                      if (isLinked) {
+                        if (file.reservation_id === r.id) {
+                          await handleAssign(file.id, { reservation_id: null })
+                        } else {
+                          try {
+                            const linksRes = await filesApi.getLinks(tripId, file.id)
+                            const link = (linksRes.links || []).find((l: any) => l.reservation_id === r.id)
+                            if (link) await filesApi.removeLink(tripId, file.id, link.id)
+                            refreshFiles()
+                          } catch {}
+                        }
+                      } else {
+                        if (!file.reservation_id) {
+                          await handleAssign(file.id, { reservation_id: r.id })
+                        } else {
+                          try {
+                            await filesApi.addLink(tripId, file.id, { reservation_id: r.id })
+                            refreshFiles()
+                          } catch {}
+                        }
+                      }
+                    }} style={{
+                      width: '100%', textAlign: 'left', padding: '6px 10px 6px 20px', background: isLinked ? 'var(--bg-hover)' : 'none',
+                      border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)',
+                      borderRadius: 8, fontFamily: 'inherit', fontWeight: isLinked ? 600 : 400,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background = isLinked ? 'var(--bg-hover)' : 'transparent'}>
+                      <Icon size={12} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title || r.name}</span>
+                      {isLinked && <Check size={14} style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--accent)' }} />}
+                    </button>
+                  )
+                }
+
                 const bookingsSection = reservations.length > 0 && (
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {t('files.assignBooking')}
-                    </div>
-                    {reservations.map(r => {
-                      const isLinked = file.reservation_id === r.id || (file.linked_reservation_ids || []).includes(r.id)
-                      return (
-                        <button key={r.id} onClick={async () => {
-                          if (isLinked) {
-                            // Unlink: if primary reservation_id, clear it; if via file_links, remove link
-                            if (file.reservation_id === r.id) {
-                              await handleAssign(file.id, { reservation_id: null })
-                            } else {
-                              try {
-                                const linksRes = await filesApi.getLinks(tripId, file.id)
-                                const link = (linksRes.links || []).find((l: any) => l.reservation_id === r.id)
-                                if (link) await filesApi.removeLink(tripId, file.id, link.id)
-                                refreshFiles()
-                              } catch {}
-                            }
-                          } else {
-                            // Link: if no primary, set it; otherwise use file_links
-                            if (!file.reservation_id) {
-                              await handleAssign(file.id, { reservation_id: r.id })
-                            } else {
-                              try {
-                                await filesApi.addLink(tripId, file.id, { reservation_id: r.id })
-                                refreshFiles()
-                              } catch {}
-                            }
-                          }
-                        }} style={{
-                          width: '100%', textAlign: 'left', padding: '6px 10px 6px 20px', background: isLinked ? 'var(--bg-hover)' : 'none',
-                          border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)',
-                          borderRadius: 8, fontFamily: 'inherit', fontWeight: isLinked ? 600 : 400,
-                          display: 'flex', alignItems: 'center', gap: 6,
-                        }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                          onMouseLeave={e => e.currentTarget.style.background = isLinked ? 'var(--bg-hover)' : 'transparent'}>
-                          <Ticket size={12} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title || r.name}</span>
-                          {isLinked && <Check size={14} style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--accent)' }} />}
-                        </button>
-                      )
-                    })}
+                    {bookingReservations.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {t('files.assignBooking')}
+                        </div>
+                        {bookingReservations.map(reservationBtn)}
+                      </>
+                    )}
+                    {transportReservations.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', padding: '8px 10px 4px', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: bookingReservations.length > 0 ? 4 : 0 }}>
+                          {t('files.assignTransport')}
+                        </div>
+                        {transportReservations.map(reservationBtn)}
+                      </>
+                    )}
                   </div>
                 )
 
