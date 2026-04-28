@@ -2,6 +2,15 @@ apiVersion: v1
 entries:
   trek:
   - apiVersion: v2
+    appVersion: 3.0.11
+    created: "2026-04-28T03:17:50.499976287Z"
+    description: Minimal Helm chart for TREK app
+    digest: 3e0ff316d0e1d677c09188ca86aad751bcb3434850c8a06d3bae7657d4f3da72
+    name: trek
+    urls:
+    - https://mauriceboe.github.io/TREK/trek-3.0.11.tgz
+    version: 3.0.11
+  - apiVersion: v2
     appVersion: 3.0.10
     created: "2026-04-26T22:22:47.282397115Z"
     description: Minimal Helm chart for TREK app
@@ -127,4 +136,4 @@ entries:
     urls:
     - https://mauriceboe.github.io/TREK/trek-2.9.12.tgz
     version: 2.9.12
-generated: "2026-04-26T22:22:47.281854637Z"
+generated: "2026-04-28T03:17:50.499192276Z"
