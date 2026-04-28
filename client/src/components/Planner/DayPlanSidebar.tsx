@@ -398,7 +398,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
   const getTransportForDay = (dayId: number) => {
     const dayAssignmentIds = (assignments[String(dayId)] || []).map(a => a.id)
     return reservations.filter(r => {
-      if (r.type === 'hotel') return false
+      if (!TRANSPORT_TYPES.has(r.type)) return false
       if (r.assignment_id && dayAssignmentIds.includes(r.assignment_id)) return false
 
       const startDayId = r.day_id
@@ -1726,7 +1726,11 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                         return (
                           <React.Fragment key={`transport-${res.id}-${day.id}`}>
                           <div
-                            onClick={() => canEditDays && onEditTransport?.(res)}
+                            onClick={() => {
+                              if (!canEditDays) return
+                              if (TRANSPORT_TYPES.has(res.type)) onEditTransport?.(res)
+                              else onEditReservation?.(res)
+                            }}
                             onDragOver={e => {
                               e.preventDefault(); e.stopPropagation()
                               const rect = e.currentTarget.getBoundingClientRect()
