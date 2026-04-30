@@ -507,13 +507,10 @@ export function MapViewGL({
     return { top, right: rightWidth + 40, bottom, left: leftWidth + 40 }
   }, [leftWidth, rightWidth, hasInspector, hasDayDetail])
 
-  // Also fit when the places collection changes so the initial render
-  // zooms to the trip instead of the default center.
-  const placeBoundsKey = useMemo(
-    () => places.filter(p => p.lat && p.lng).map(p => `${p.id}:${p.lat}:${p.lng}`).join('|'),
-    [places]
-  )
+  const prevFitKey = useRef(-1)
   useEffect(() => {
+    if (fitKey === prevFitKey.current) return
+    prevFitKey.current = fitKey
     const map = mapRef.current
     if (!map) return
     const target = dayPlaces.length > 0 ? dayPlaces : places
@@ -533,7 +530,7 @@ export function MapViewGL({
     }
     if (map.loaded()) run()
     else map.once('load', run)
-  }, [fitKey, placeBoundsKey, paddingOpts, mapbox3d]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fitKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // flyTo selected place
   useEffect(() => {

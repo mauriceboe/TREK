@@ -7,6 +7,16 @@ import { resetAllStores } from '../../../tests/helpers/store'
 import { buildPlace } from '../../../tests/helpers/factories'
 import * as photoService from '../../services/photoService'
 
+const mapMock = vi.hoisted(() => ({
+  panTo: vi.fn(),
+  setView: vi.fn(),
+  fitBounds: vi.fn(),
+  getZoom: vi.fn().mockReturnValue(10),
+  on: vi.fn(),
+  off: vi.fn(),
+  panBy: vi.fn(),
+}))
+
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: any) => <div data-testid="map-container">{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
@@ -27,15 +37,7 @@ vi.mock('react-leaflet', () => ({
   Polyline: ({ positions }: any) => <div data-testid="polyline" data-points={JSON.stringify(positions)} />,
   CircleMarker: () => <div data-testid="circle-marker" />,
   Circle: () => <div data-testid="circle" />,
-  useMap: () => ({
-    panTo: vi.fn(),
-    setView: vi.fn(),
-    fitBounds: vi.fn(),
-    getZoom: () => 10,
-    on: vi.fn(),
-    off: vi.fn(),
-    panBy: vi.fn(),
-  }),
+  useMap: () => mapMock,
   useMapEvents: () => ({}),
 }))
 
@@ -79,6 +81,7 @@ function buildMapPlace(overrides: Record<string, any> = {}) {
 }
 
 afterEach(() => {
+  vi.clearAllMocks()
   resetAllStores()
 })
 
@@ -215,5 +218,34 @@ describe('MapView', () => {
     ]
     render(<MapView places={places} selectedPlaceId={5} />)
     expect(screen.getByTestId('marker')).toBeTruthy()
+  })
+
+  it('FE-COMP-MAPVIEW-018: changing selectedPlaceId/hasInspector does not refit bounds (issue #921)', () => {
+    const places = [
+      buildMapPlace({ id: 1, lat: 48.8584, lng: 2.2945 }),
+      buildMapPlace({ id: 2, lat: 48.86, lng: 2.337 }),
+    ]
+    const { rerender } = render(<MapView places={places} fitKey={1} selectedPlaceId={null} hasInspector={false} />)
+    const initialCount = mapMock.fitBounds.mock.calls.length
+
+    // Toggle selectedPlaceId on — mimics opening place inspector (hasInspector flips,
+    // paddingOpts memo creates new object). fitBounds must NOT fire again.
+    rerender(<MapView places={places} fitKey={1} selectedPlaceId={1} hasInspector={true} />)
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(initialCount)
+
+    // Toggle selectedPlaceId off — mimics closing inspector via X button.
+    rerender(<MapView places={places} fitKey={1} selectedPlaceId={null} hasInspector={false} />)
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(initialCount)
+  })
+
+  it('FE-COMP-MAPVIEW-019: bumping fitKey triggers a new fitBounds call', () => {
+    const places = [
+      buildMapPlace({ id: 1, lat: 48.8584, lng: 2.2945 }),
+    ]
+    const { rerender } = render(<MapView places={places} fitKey={1} />)
+    const afterFirst = mapMock.fitBounds.mock.calls.length
+
+    rerender(<MapView places={places} fitKey={2} />)
+    expect(mapMock.fitBounds.mock.calls.length).toBeGreaterThan(afterFirst)
   })
 })

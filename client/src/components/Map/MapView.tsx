@@ -186,7 +186,7 @@ function BoundsController({ places, fitKey, paddingOpts, hasDayDetail }: BoundsC
         }
       }
     } catch {}
-  }, [fitKey, places, paddingOpts, map, hasDayDetail])
+  }, [fitKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }
@@ -233,18 +233,7 @@ interface RouteLabelProps {
 }
 
 function RouteLabel({ midpoint, walkingText, drivingText }: RouteLabelProps) {
-  const map = useMap()
-  const [visible, setVisible] = useState(map ? map.getZoom() >= 12 : false)
-
-  useEffect(() => {
-    if (!map) return
-    const check = () => setVisible(map.getZoom() >= 12)
-    check()
-    map.on('zoomend', check)
-    return () => map.off('zoomend', check)
-  }, [map])
-
-  if (!visible || !midpoint) return null
+  if (!midpoint) return null
 
   const icon = L.divIcon({
     className: 'route-info-pill',
