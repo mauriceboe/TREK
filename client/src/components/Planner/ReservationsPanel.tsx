@@ -11,6 +11,9 @@ import {
   ExternalLink, BookMarked, Lightbulb, Link2, Clock, ArrowRight, AlertCircle,
 } from 'lucide-react'
 import { openFile } from '../../utils/fileDownload'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import type { Reservation, Day, TripFile, AssignmentsMap } from '../../types'
 
 interface AssignmentLookupEntry {
@@ -364,7 +367,9 @@ function ReservationCard({ r, tripId, onEdit, onDelete, files = [], onNavigateTo
         {r.notes && (
           <div>
             <div style={fieldLabelStyle}>{t('reservations.notes')}</div>
-            <div style={{ ...fieldValueStyle, fontWeight: 400, lineHeight: 1.5 }}>{r.notes}</div>
+            <div className="collab-note-md" style={{ ...fieldValueStyle, fontWeight: 400, lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+              <Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{r.notes}</Markdown>
+            </div>
           </div>
         )}
 

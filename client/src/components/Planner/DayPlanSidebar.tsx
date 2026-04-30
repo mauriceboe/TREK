@@ -14,6 +14,7 @@ import PlaceAvatar from '../shared/PlaceAvatar'
 import { useContextMenu, ContextMenu } from '../shared/ContextMenu'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import WeatherWidget from '../Weather/WeatherWidget'
 import { useToast } from '../shared/Toast'
 import { getCategoryIcon } from '../shared/categoryIcons'
@@ -2228,7 +2229,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar({
                   {res.notes && (
                     <div style={{ padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
                       <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 3 }}>{t('reservations.notes')}</div>
-                      <div className="collab-note-md" style={{ fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-word' }}><Markdown remarkPlugins={[remarkGfm]}>{res.notes}</Markdown></div>
+                      <div className="collab-note-md" style={{ fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}><Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{res.notes}</Markdown></div>
                     </div>
                   )}
 

@@ -807,7 +807,7 @@ img[alt="TREK"] {
 .collab-note-md code, .collab-note-md-full code { font-size: 0.9em; padding: 1px 5px; border-radius: 4px; background: var(--bg-secondary); }
 .collab-note-md-full pre { padding: 10px 12px; border-radius: 8px; background: var(--bg-secondary); overflow-x: auto; margin: 0.5em 0; }
 .collab-note-md-full pre code { padding: 0; background: none; }
-.collab-note-md a, .collab-note-md-full a { color: #3b82f6; text-decoration: underline; }
+.collab-note-md a, .collab-note-md-full a { color: #3b82f6; text-decoration: underline; word-break: break-all; }
 .collab-note-md blockquote, .collab-note-md-full blockquote { border-left: 3px solid var(--border-primary); padding-left: 12px; margin: 0.5em 0; color: var(--text-muted); }
 .collab-note-md-full table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
 .collab-note-md-full th, .collab-note-md-full td { border: 1px solid var(--border-primary); padding: 4px 8px; font-size: 0.9em; }

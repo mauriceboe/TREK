@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { openFile } from '../../utils/fileDownload'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import { X, Clock, MapPin, ExternalLink, Phone, Euro, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Users, Mountain, TrendingUp } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import { mapsApi } from '../../api/client'
@@ -349,8 +350,8 @@ export default function PlaceInspector({
 
           {/* Notes */}
           {place.notes && (
-            <div className="collab-note-md" style={{ background: 'var(--bg-hover)', borderRadius: 10, overflow: 'hidden', fontSize: 12, color: 'var(--text-muted)', lineHeight: '1.5', padding: '8px 12px' }}>
-              <Markdown remarkPlugins={[remarkGfm]}>{place.notes}</Markdown>
+            <div className="collab-note-md" style={{ background: 'var(--bg-hover)', borderRadius: 10, overflow: 'hidden', fontSize: 12, color: 'var(--text-muted)', lineHeight: '1.5', padding: '8px 12px', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+              <Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{place.notes}</Markdown>
             </div>
           )}
 
@@ -399,7 +400,7 @@ export default function PlaceInspector({
                           </div>
                         )}
                       </div>
-                      {res.notes && <div className="collab-note-md" style={{ padding: '0 10px 6px', fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.4 }}><Markdown remarkPlugins={[remarkGfm]}>{res.notes}</Markdown></div>}
+                      {res.notes && <div className="collab-note-md" style={{ padding: '0 10px 6px', fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.4, wordBreak: 'break-word', overflowWrap: 'anywhere' }}><Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{res.notes}</Markdown></div>}
                       {(() => {
                         const meta = typeof res.metadata === 'string' ? JSON.parse(res.metadata || '{}') : (res.metadata || {})
                         if (!meta || Object.keys(meta).length === 0) return null
