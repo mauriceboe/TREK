@@ -502,4 +502,46 @@ describe('Accommodations', () => {
     ).get(reservationBefore.id);
     expect(reservationAfter).toBeUndefined();
   });
+
+  it('ACCOM-006 — DELETE accommodation also removes its linked budget item (issue #933)', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id, { title: 'Hotel Budget Trip' });
+    const day1 = createDay(testDb, trip.id, { date: '2026-11-01' });
+    const day2 = createDay(testDb, trip.id, { date: '2026-11-03' });
+    const place = createPlace(testDb, trip.id, { name: 'Grand Hotel' });
+
+    // Create a hotel reservation that creates an accommodation and a linked budget item
+    const createRes = await request(app)
+      .post(`/api/trips/${trip.id}/reservations`)
+      .set('Cookie', authCookie(user.id))
+      .send({
+        title: 'Grand Hotel Stay',
+        type: 'hotel',
+        day_id: day1.id,
+        create_accommodation: { place_id: place.id, start_day_id: day1.id, end_day_id: day2.id },
+        create_budget_entry: { total_price: 450, category: 'Accommodation' },
+      });
+    expect(createRes.status).toBe(201);
+
+    const accommodationId = testDb.prepare(
+      'SELECT id FROM day_accommodations WHERE trip_id = ?'
+    ).get(trip.id) as any;
+    expect(accommodationId).toBeDefined();
+
+    const budgetBefore = testDb.prepare(
+      'SELECT id FROM budget_items WHERE trip_id = ?'
+    ).get(trip.id);
+    expect(budgetBefore).toBeDefined();
+
+    // Delete via the accommodation endpoint (the primary bug path)
+    const delRes = await request(app)
+      .delete(`/api/trips/${trip.id}/accommodations/${accommodationId.id}`)
+      .set('Cookie', authCookie(user.id));
+    expect(delRes.status).toBe(200);
+
+    const budgetAfter = testDb.prepare(
+      'SELECT id FROM budget_items WHERE trip_id = ?'
+    ).get(trip.id);
+    expect(budgetAfter).toBeUndefined();
+  });
 });

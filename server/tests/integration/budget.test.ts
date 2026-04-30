@@ -189,6 +189,25 @@ describe('Delete budget item', () => {
       .set('Cookie', authCookie(user.id));
     expect(list.body.items).toHaveLength(0);
   });
+
+  it('BUDGET-004b — DELETE budget item does NOT delete its linked reservation', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const reservation = createReservation(testDb, trip.id, { title: 'Hotel Booking', type: 'hotel' });
+
+    const result = testDb.prepare(
+      'INSERT INTO budget_items (trip_id, name, category, total_price, reservation_id) VALUES (?, ?, ?, ?, ?)'
+    ).run(trip.id, 'Hotel Cost', 'Accommodation', 250, reservation.id);
+    const itemId = result.lastInsertRowid as number;
+
+    const del = await request(app)
+      .delete(`/api/trips/${trip.id}/budget/${itemId}`)
+      .set('Cookie', authCookie(user.id));
+    expect(del.status).toBe(200);
+
+    const reservationAfter = testDb.prepare('SELECT id FROM reservations WHERE id = ?').get(reservation.id);
+    expect(reservationAfter).toBeDefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

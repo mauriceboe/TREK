@@ -117,9 +117,12 @@ accommodationsRouter.delete('/:id', authenticate, requireTripAccess, (req: Reque
 
   if (!dayService.getAccommodation(id, tripId)) return res.status(404).json({ error: 'Accommodation not found' });
 
-  const { linkedReservationId } = dayService.deleteAccommodation(id);
+  const { linkedReservationId, deletedBudgetItemId } = dayService.deleteAccommodation(id);
   if (linkedReservationId) {
     broadcast(tripId, 'reservation:deleted', { reservationId: linkedReservationId }, req.headers['x-socket-id'] as string);
+  }
+  if (deletedBudgetItemId) {
+    broadcast(tripId, 'budget:deleted', { itemId: deletedBudgetItemId }, req.headers['x-socket-id'] as string);
   }
 
   res.json({ success: true });

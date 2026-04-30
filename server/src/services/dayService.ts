@@ -292,14 +292,19 @@ export function updateAccommodation(id: string | number, existing: DayAccommodat
   return getAccommodationWithPlace(Number(id));
 }
 
-/** Delete accommodation and its linked reservation. Returns the linked reservation id if one existed. */
-export function deleteAccommodation(id: string | number): { linkedReservationId: number | null } {
-  // Delete linked reservation
+/** Delete accommodation and its linked reservation (and any linked budget item). */
+export function deleteAccommodation(id: string | number): { linkedReservationId: number | null; deletedBudgetItemId: number | null } {
   const linkedRes = db.prepare('SELECT id FROM reservations WHERE accommodation_id = ?').get(Number(id)) as { id: number } | undefined;
+  let deletedBudgetItemId: number | null = null;
   if (linkedRes) {
+    const linkedBudget = db.prepare('SELECT id FROM budget_items WHERE reservation_id = ?').get(linkedRes.id) as { id: number } | undefined;
+    if (linkedBudget) {
+      db.prepare('DELETE FROM budget_items WHERE id = ?').run(linkedBudget.id);
+      deletedBudgetItemId = linkedBudget.id;
+    }
     db.prepare('DELETE FROM reservations WHERE id = ?').run(linkedRes.id);
   }
 
   db.prepare('DELETE FROM day_accommodations WHERE id = ?').run(id);
-  return { linkedReservationId: linkedRes ? linkedRes.id : null };
+  return { linkedReservationId: linkedRes ? linkedRes.id : null, deletedBudgetItemId };
 }

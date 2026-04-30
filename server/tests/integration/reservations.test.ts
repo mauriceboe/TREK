@@ -452,4 +452,41 @@ describe('Reservation accommodation delete', () => {
     ).get(accom.id);
     expect(accomAfter).toBeUndefined();
   });
+
+  it('RESV-009b — DELETE reservation linked to accommodation also removes its linked budget item (issue #933)', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const day1 = createDay(testDb, trip.id, { date: '2025-08-01' });
+    const day2 = createDay(testDb, trip.id, { date: '2025-08-03' });
+    const place = createPlace(testDb, trip.id, { name: 'Seaside Resort' });
+
+    const createRes = await request(app)
+      .post(`/api/trips/${trip.id}/reservations`)
+      .set('Cookie', authCookie(user.id))
+      .send({
+        title: 'Seaside Resort Stay',
+        type: 'hotel',
+        day_id: day1.id,
+        create_accommodation: { place_id: place.id, start_day_id: day1.id, end_day_id: day2.id },
+        create_budget_entry: { total_price: 320, category: 'Accommodation' },
+      });
+    expect(createRes.status).toBe(201);
+    const reservationId = createRes.body.reservation.id;
+
+    const budgetBefore = testDb.prepare(
+      'SELECT id FROM budget_items WHERE trip_id = ? AND reservation_id = ?'
+    ).get(trip.id, reservationId);
+    expect(budgetBefore).toBeDefined();
+
+    // Delete via the reservation endpoint
+    const delRes = await request(app)
+      .delete(`/api/trips/${trip.id}/reservations/${reservationId}`)
+      .set('Cookie', authCookie(user.id));
+    expect(delRes.status).toBe(200);
+
+    const budgetAfter = testDb.prepare(
+      'SELECT id FROM budget_items WHERE trip_id = ?'
+    ).get(trip.id);
+    expect(budgetAfter).toBeUndefined();
+  });
 });
