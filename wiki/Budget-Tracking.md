@@ -12,6 +12,8 @@ Open the **Budget** tab inside the trip planner. The tab is only visible when th
 
 > **Admin:** Budget is an addon. Enable it in [Admin-Addons](Admin-Addons).
 
+![Create Budget](assets/BudgetCreateBudget.gif)
+
 ## Currency
 
 Use the currency picker in the Budget toolbar to select one currency for the entire trip. 46 currencies are supported (EUR, USD, GBP, JPY, CHF, CZK, PLN, SEK, NOK, DKK, TRY, THB, AUD, CAD, NZD, BRL, MXN, INR, IDR, MYR, PHP, SGD, KRW, CNY, HKD, TWD, ZAR, AED, SAR, ILS, EGP, MAD, HUF, RON, BGN, HRK, ISK, RUB, UAH, BDT, LKR, VND, CLP, COP, PEN, ARS). All amounts are displayed in this currency.
@@ -54,12 +56,16 @@ The **Persons** column behaves differently depending on the trip:
 - **Single-user trip** — enter a number of persons directly.
 - **Multi-member trip** — a member chip picker appears. Click the edit button to assign or remove members from an expense. Click an assigned member chip again to mark them as **paid** (the chip shows a green ring).
 
+![Add Expense](assets/BudgetAddExpensive.gif)
+
 ## Settlement calculator
 
 When multiple members are assigned to expenses and there are outstanding debts between members, a collapsible **Settlement** section appears inside the total card. Click the section header to expand it. It shows the minimum number of transfers needed to settle all debts (using a greedy matching algorithm), including:
 
 - Transfer flows: who pays whom and how much.
 - Net balances: each member's overall surplus or deficit.
+
+![Final Settlement](assets/BudgetFinalSettlement.gif)
 
 ## Budget summary
 
