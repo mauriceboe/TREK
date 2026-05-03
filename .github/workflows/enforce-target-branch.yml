@@ -27,6 +27,33 @@ jobs:
               return;
             }
 
+            // Wiki-only PRs are exempt from branch enforcement
+            const files = [];
+            for (let page = 1; ; page++) {
+              const { data } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                per_page: 100,
+                page,
+              });
+              files.push(...data);
+              if (data.length < 100) break;
+            }
+            const allWiki = files.length > 0 && files.every(f => f.filename.startsWith('wiki/'));
+            if (allWiki) {
+              console.log('All changed files are under wiki/ — skipping enforcement.');
+              if (labels.includes('wrong-base-branch')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'wrong-base-branch',
+                });
+              }
+              return;
+            }
+
             // If the base was fixed, remove the label and let it through
             if (base !== 'main') {
               if (labels.includes('wrong-base-branch')) {

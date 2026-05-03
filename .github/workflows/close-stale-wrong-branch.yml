@@ -32,6 +32,30 @@ jobs:
               const hasLabel = pull.labels.some(l => l.name === 'wrong-base-branch');
               if (!hasLabel) continue;
 
+              // Wiki-only PRs are exempt — clear label and skip
+              const files = [];
+              for (let page = 1; ; page++) {
+                const { data } = await github.rest.pulls.listFiles({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pull.number,
+                  per_page: 100,
+                  page,
+                });
+                files.push(...data);
+                if (data.length < 100) break;
+              }
+              const allWiki = files.length > 0 && files.every(f => f.filename.startsWith('wiki/'));
+              if (allWiki) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pull.number,
+                  name: 'wrong-base-branch',
+                });
+                continue;
+              }
+
               const createdAt = new Date(pull.created_at);
               if (createdAt > twentyFourHoursAgo) continue; // grace period not over yet
 
