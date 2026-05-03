@@ -474,6 +474,8 @@ function createTables(db: Database.Database): void {
       PRIMARY KEY (user_id, event_type, channel)
     );
     CREATE INDEX IF NOT EXISTS idx_ncp_user ON notification_channel_preferences(user_id);
+
+    CREATE TABLE IF NOT EXISTS migrations (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp bigint NOT NULL, name varchar NOT NULL);
   `);
 }
 

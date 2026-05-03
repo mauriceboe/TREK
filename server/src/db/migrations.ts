@@ -2141,6 +2141,12 @@ function runMigrations(db: Database.Database): void {
             > (SELECT day_number FROM days WHERE id = end_day_id)
       `);
     },
+    // prepare migration to nest + typeorm
+    () => {
+      db.exec(`CREATE TABLE IF NOT EXISTS migrations (id integer PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp bigint NOT NULL, name varchar NOT NULL);`);
+      db.exec(`INSERT INTO migrations (timestamp, name) VALUES (1777810195344, 'InitialSchema1777810195344');`);
+      db.exec(`INSERT INTO app_settings (key, value) VALUES ('app_version', '${process.env.APP_VERSION || '3.0.14'}')`);
+    },
   ];
 
   if (currentVersion < migrations.length) {
