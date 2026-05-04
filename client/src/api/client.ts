@@ -33,6 +33,7 @@ function translateRateLimit(): string {
 export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: 8000,
   headers: {
     'Content-Type': 'application/json',
   },

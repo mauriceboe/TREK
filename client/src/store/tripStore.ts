@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { StoreApi } from 'zustand'
 import { tagsApi, categoriesApi } from '../api/client'
-import { offlineDb } from '../db/offlineDb'
+import { offlineDb, upsertTags, upsertCategories } from '../db/offlineDb'
 import { tripRepo } from '../repo/tripRepo'
 import { dayRepo } from '../repo/dayRepo'
 import { placeRepo } from '../repo/placeRepo'
@@ -89,26 +89,36 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
   loadTrip: async (tripId: number | string) => {
     set({ isLoading: true, error: null })
     try {
-      const [tripData, daysData, placesData, packingData, todoData, tagsData, categoriesData] = await Promise.all([
+      // All reads from IndexedDB — instant, no network wait
+      const [tripData, daysData, placesData, packingData, todoData, cachedTags, cachedCategories] = await Promise.all([
         tripRepo.get(tripId),
         dayRepo.list(tripId),
         placeRepo.list(tripId),
         packingRepo.list(tripId),
         todoRepo.list(tripId),
-        navigator.onLine
-          ? tagsApi.list().catch(() => offlineDb.tags.toArray().then(tags => ({ tags })))
-          : offlineDb.tags.toArray().then(tags => ({ tags })),
-        navigator.onLine
-          ? categoriesApi.list().catch(() => offlineDb.categories.toArray().then(categories => ({ categories })))
-          : offlineDb.categories.toArray().then(categories => ({ categories })),
+        offlineDb.tags.toArray(),
+        offlineDb.categories.toArray(),
       ])
 
-      const assignmentsMap: AssignmentsMap = {}
-      const dayNotesMap: DayNotesMap = {}
-      for (const day of daysData.days) {
-        assignmentsMap[String(day.id)] = day.assignments || []
-        dayNotesMap[String(day.id)] = day.notes_items || []
+      // Tags/categories background refresh (network-only, applied when ready)
+      const tagsRefresh = tagsApi.list()
+        .then(fresh => { upsertTags(fresh.tags).catch(() => {}); return fresh })
+        .catch(() => null)
+      const categoriesRefresh = categoriesApi.list()
+        .then(fresh => { upsertCategories(fresh.categories).catch(() => {}); return fresh })
+        .catch(() => null)
+
+      const buildMaps = (days: Day[]) => {
+        const assignmentsMap: AssignmentsMap = {}
+        const dayNotesMap: DayNotesMap = {}
+        for (const day of days) {
+          assignmentsMap[String(day.id)] = day.assignments || []
+          dayNotesMap[String(day.id)] = day.notes_items || []
+        }
+        return { assignmentsMap, dayNotesMap }
       }
+
+      const { assignmentsMap, dayNotesMap } = buildMaps(daysData.days)
 
       set({
         trip: tripData.trip,
@@ -118,10 +128,36 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
         dayNotes: dayNotesMap,
         packingItems: packingData.items,
         todoItems: todoData.items,
-        tags: tagsData.tags,
-        categories: categoriesData.categories,
+        tags: cachedTags,
+        categories: cachedCategories,
         isLoading: false,
       })
+
+      // Apply background refreshes — update state when fresh data arrives
+      Promise.all([
+        tripData.refresh,
+        daysData.refresh,
+        placesData.refresh,
+        packingData.refresh,
+        todoData.refresh,
+        tagsRefresh,
+        categoriesRefresh,
+      ]).then(([freshTrip, freshDays, freshPlaces, freshPacking, freshTodo, freshTags, freshCategories]) => {
+        const updates: Partial<TripStoreState> = {}
+        if (freshTrip) updates.trip = freshTrip.trip
+        if (freshDays) {
+          const { assignmentsMap: am, dayNotesMap: dm } = buildMaps(freshDays.days)
+          updates.days = freshDays.days
+          updates.assignments = am
+          updates.dayNotes = dm
+        }
+        if (freshPlaces) updates.places = freshPlaces.places
+        if (freshPacking) updates.packingItems = freshPacking.items
+        if (freshTodo) updates.todoItems = freshTodo.items
+        if (freshTags) updates.tags = freshTags.tags
+        if (freshCategories) updates.categories = freshCategories.categories
+        if (Object.keys(updates).length > 0) set(updates)
+      }).catch(() => {})
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       set({ isLoading: false, error: message })

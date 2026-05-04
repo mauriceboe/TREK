@@ -4,17 +4,27 @@ import { mutationQueue, generateUUID } from '../sync/mutationQueue'
 import type { PackingItem } from '../types'
 
 export const packingRepo = {
-  async list(tripId: number | string): Promise<{ items: PackingItem[] }> {
-    if (!navigator.onLine) {
-      const cached = await offlineDb.packingItems
-        .where('trip_id')
-        .equals(Number(tripId))
-        .toArray()
-      return { items: cached }
-    }
-    const result = await packingApi.list(tripId)
-    upsertPackingItems(result.items)
-    return result
+  async list(tripId: number | string): Promise<{ items: PackingItem[]; refresh: Promise<{ items: PackingItem[] } | null> }> {
+    const cached = await offlineDb.packingItems
+      .where('trip_id')
+      .equals(Number(tripId))
+      .toArray()
+
+    const refresh = (async () => {
+      try {
+        const result = await packingApi.list(tripId)
+        upsertPackingItems(result.items)
+        return result
+      } catch {
+        return null
+      }
+    })()
+
+    if (cached.length > 0) return { items: cached, refresh }
+
+    const fresh = await refresh
+    if (!fresh) return { items: [], refresh: Promise.resolve(null) }
+    return { items: fresh.items, refresh: Promise.resolve(fresh) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ item: PackingItem }> {

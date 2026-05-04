@@ -4,17 +4,27 @@ import { mutationQueue, generateUUID } from '../sync/mutationQueue'
 import type { Day } from '../types'
 
 export const dayRepo = {
-  async list(tripId: number | string): Promise<{ days: Day[] }> {
-    if (!navigator.onLine) {
-      const cached = await offlineDb.days
-        .where('trip_id')
-        .equals(Number(tripId))
-        .sortBy('day_number' as keyof Day)
-      return { days: cached as Day[] }
-    }
-    const result = await daysApi.list(tripId)
-    upsertDays(result.days)
-    return result
+  async list(tripId: number | string): Promise<{ days: Day[]; refresh: Promise<{ days: Day[] } | null> }> {
+    const cached = (await offlineDb.days
+      .where('trip_id')
+      .equals(Number(tripId))
+      .sortBy('day_number' as keyof Day)) as Day[]
+
+    const refresh = (async () => {
+      try {
+        const result = await daysApi.list(tripId)
+        upsertDays(result.days)
+        return result
+      } catch {
+        return null
+      }
+    })()
+
+    if (cached.length > 0) return { days: cached, refresh }
+
+    const fresh = await refresh
+    if (!fresh) return { days: [], refresh: Promise.resolve(null) }
+    return { days: fresh.days, refresh: Promise.resolve(fresh) }
   },
 
   async update(tripId: number | string, dayId: number | string, data: Record<string, unknown>): Promise<{ day: Day }> {

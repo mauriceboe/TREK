@@ -4,15 +4,25 @@ import { mutationQueue, generateUUID } from '../sync/mutationQueue'
 import type { Accommodation } from '../types'
 
 export const accommodationRepo = {
-  async list(tripId: number | string): Promise<{ accommodations: Accommodation[] }> {
-    if (!navigator.onLine) {
-      const accommodations = await offlineDb.accommodations
-        .where('trip_id').equals(Number(tripId)).toArray()
-      return { accommodations }
-    }
-    const result = await accommodationsApi.list(tripId)
-    upsertAccommodations(result.accommodations || []).catch(() => {})
-    return result
+  async list(tripId: number | string): Promise<{ accommodations: Accommodation[]; refresh: Promise<{ accommodations: Accommodation[] } | null> }> {
+    const cached = await offlineDb.accommodations
+      .where('trip_id').equals(Number(tripId)).toArray()
+
+    const refresh = (async () => {
+      try {
+        const result = await accommodationsApi.list(tripId)
+        upsertAccommodations(result.accommodations || []).catch(() => {})
+        return result
+      } catch {
+        return null
+      }
+    })()
+
+    if (cached.length > 0) return { accommodations: cached, refresh }
+
+    const fresh = await refresh
+    if (!fresh) return { accommodations: [], refresh: Promise.resolve(null) }
+    return { accommodations: fresh.accommodations, refresh: Promise.resolve(fresh) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ accommodation: Accommodation }> {

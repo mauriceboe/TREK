@@ -4,17 +4,27 @@ import { mutationQueue, generateUUID } from '../sync/mutationQueue'
 import type { Place } from '../types'
 
 export const placeRepo = {
-  async list(tripId: number | string, params?: Record<string, unknown>): Promise<{ places: Place[] }> {
-    if (!navigator.onLine) {
-      const cached = await offlineDb.places
-        .where('trip_id')
-        .equals(Number(tripId))
-        .toArray()
-      return { places: cached }
-    }
-    const result = await placesApi.list(tripId, params)
-    upsertPlaces(result.places)
-    return result
+  async list(tripId: number | string, params?: Record<string, unknown>): Promise<{ places: Place[]; refresh: Promise<{ places: Place[] } | null> }> {
+    const cached = await offlineDb.places
+      .where('trip_id')
+      .equals(Number(tripId))
+      .toArray()
+
+    const refresh = (async () => {
+      try {
+        const result = await placesApi.list(tripId, params)
+        upsertPlaces(result.places)
+        return result
+      } catch {
+        return null
+      }
+    })()
+
+    if (cached.length > 0) return { places: cached, refresh }
+
+    const fresh = await refresh
+    if (!fresh) return { places: [], refresh: Promise.resolve(null) }
+    return { places: fresh.places, refresh: Promise.resolve(fresh) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ place: Place }> {

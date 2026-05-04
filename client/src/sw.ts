@@ -100,7 +100,7 @@ const authRedirectPlugin = {
 function buildApiStrategy(cfg: SwCacheConfig): NetworkFirst {
   return new NetworkFirst({
     cacheName: 'api-data',
-    networkTimeoutSeconds: 5,
+    networkTimeoutSeconds: 2,
     plugins: [
       authRedirectPlugin,
       new ExpirationPlugin({

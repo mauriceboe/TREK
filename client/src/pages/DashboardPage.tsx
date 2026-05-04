@@ -744,12 +744,17 @@ export default function DashboardPage(): React.ReactElement {
   const loadTrips = async () => {
     setIsLoading(true)
     try {
-      const { trips, archivedTrips } = await tripRepo.list()
+      const { trips, archivedTrips, refresh } = await tripRepo.list()
       setTrips(sortTrips(trips))
       setArchivedTrips(sortTrips(archivedTrips))
+      setIsLoading(false)
+      refresh.then(fresh => {
+        if (!fresh) return
+        setTrips(sortTrips(fresh.trips))
+        setArchivedTrips(sortTrips(fresh.archivedTrips))
+      }).catch(() => {})
     } catch {
       toast.error(t('dashboard.toast.loadError'))
-    } finally {
       setIsLoading(false)
     }
   }

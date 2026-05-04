@@ -4,17 +4,27 @@ import { mutationQueue, generateUUID } from '../sync/mutationQueue'
 import type { TripFile } from '../types'
 
 export const fileRepo = {
-  async list(tripId: number | string): Promise<{ files: TripFile[] }> {
-    if (!navigator.onLine) {
-      const cached = await offlineDb.tripFiles
-        .where('trip_id')
-        .equals(Number(tripId))
-        .toArray()
-      return { files: cached }
-    }
-    const result = await filesApi.list(tripId)
-    upsertTripFiles(result.files)
-    return result
+  async list(tripId: number | string): Promise<{ files: TripFile[]; refresh: Promise<{ files: TripFile[] } | null> }> {
+    const cached = await offlineDb.tripFiles
+      .where('trip_id')
+      .equals(Number(tripId))
+      .toArray()
+
+    const refresh = (async () => {
+      try {
+        const result = await filesApi.list(tripId)
+        upsertTripFiles(result.files)
+        return result
+      } catch {
+        return null
+      }
+    })()
+
+    if (cached.length > 0) return { files: cached, refresh }
+
+    const fresh = await refresh
+    if (!fresh) return { files: [], refresh: Promise.resolve(null) }
+    return { files: fresh.files, refresh: Promise.resolve(fresh) }
   },
 
   async update(tripId: number | string, id: number, data: Record<string, unknown>): Promise<unknown> {
