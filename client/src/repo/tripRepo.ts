@@ -11,6 +11,7 @@ export const tripRepo = {
     const all = await offlineDb.trips.toArray()
 
     const refresh: TripsRefresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const [active, archived] = await Promise.all([
           tripsApi.list(),
@@ -41,6 +42,7 @@ export const tripRepo = {
     const cached = await offlineDb.trips.get(Number(tripId))
 
     const refresh: TripRefresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await tripsApi.get(tripId)
         upsertTrip(result.trip)

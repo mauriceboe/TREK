@@ -11,6 +11,7 @@ export const dayRepo = {
       .sortBy('day_number' as keyof Day)) as Day[]
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await daysApi.list(tripId)
         upsertDays(result.days)

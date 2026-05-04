@@ -11,6 +11,7 @@ export const fileRepo = {
       .toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await filesApi.list(tripId)
         upsertTripFiles(result.files)

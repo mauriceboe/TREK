@@ -89,6 +89,15 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
   loadTrip: async (tripId: number | string) => {
     set({ isLoading: true, error: null })
     try {
+      // Fire tags/categories network refresh immediately — they're global (not trip-specific)
+      // and must be in-flight before the await below so MSW resolves them during the wait
+      const tagsRefresh = tagsApi.list()
+        .then(fresh => { upsertTags(fresh.tags).catch(() => {}); return fresh })
+        .catch(() => null)
+      const categoriesRefresh = categoriesApi.list()
+        .then(fresh => { upsertCategories(fresh.categories).catch(() => {}); return fresh })
+        .catch(() => null)
+
       // All reads from IndexedDB — instant, no network wait
       const [tripData, daysData, placesData, packingData, todoData, cachedTags, cachedCategories] = await Promise.all([
         tripRepo.get(tripId),
@@ -99,14 +108,6 @@ export const useTripStore = create<TripStoreState>((set, get) => ({
         offlineDb.tags.toArray(),
         offlineDb.categories.toArray(),
       ])
-
-      // Tags/categories background refresh (network-only, applied when ready)
-      const tagsRefresh = tagsApi.list()
-        .then(fresh => { upsertTags(fresh.tags).catch(() => {}); return fresh })
-        .catch(() => null)
-      const categoriesRefresh = categoriesApi.list()
-        .then(fresh => { upsertCategories(fresh.categories).catch(() => {}); return fresh })
-        .catch(() => null)
 
       const buildMaps = (days: Day[]) => {
         const assignmentsMap: AssignmentsMap = {}

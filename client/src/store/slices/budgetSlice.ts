@@ -24,6 +24,9 @@ export const createBudgetSlice = (set: SetState, get: GetState): BudgetSlice => 
     try {
       const data = await budgetRepo.list(tripId)
       set({ budgetItems: data.items })
+      data.refresh.then(fresh => {
+        if (fresh) set({ budgetItems: fresh.items })
+      }).catch(() => {})
     } catch (err: unknown) {
       console.error('Failed to load budget items:', err)
     }

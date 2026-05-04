@@ -11,6 +11,7 @@ export const budgetRepo = {
       .toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await budgetApi.list(tripId)
         upsertBudgetItems(result.items)

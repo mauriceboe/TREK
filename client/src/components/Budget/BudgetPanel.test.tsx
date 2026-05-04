@@ -10,8 +10,11 @@ import { usePermissionsStore } from '../../store/permissionsStore';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
 import { buildUser, buildTrip, buildBudgetItem, buildSettings } from '../../../tests/helpers/factories';
 import BudgetPanel from './BudgetPanel';
+import { offlineDb } from '../../db/offlineDb';
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   // Settlement and per-person APIs needed by BudgetPanel
   server.use(

@@ -11,6 +11,7 @@ export const reservationRepo = {
       .toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await reservationsApi.list(tripId)
         upsertReservations(result.reservations)

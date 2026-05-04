@@ -4,6 +4,7 @@ import { useTripStore } from '../../src/store/tripStore';
 import { resetAllStores } from '../helpers/store';
 import { buildTrip, buildDay, buildPlace, buildPackingItem, buildTodoItem, buildTag, buildCategory, buildAssignment, buildDayNote } from '../helpers/factories';
 import { server } from '../helpers/msw/server';
+import { offlineDb } from '../../src/db/offlineDb';
 
 vi.mock('../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,11 @@ vi.mock('../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Flush pending macro tasks so any in-flight repo IIFEs from the previous test
+  // finish writing to IDB before we wipe it (prevents stale IDB data in next test).
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 
@@ -74,6 +79,10 @@ describe('tripStore', () => {
       const todoItem = buildTodoItem({ trip_id: 1 });
       const tag = buildTag();
       const category = buildCategory();
+
+      // Seed IDB so tags/categories are available for the immediate IDB read in loadTrip
+      await offlineDb.tags.put(tag);
+      await offlineDb.categories.put(category);
 
       server.use(
         http.get('/api/trips/1', () => HttpResponse.json({ trip })),

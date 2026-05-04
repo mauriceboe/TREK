@@ -9,6 +9,7 @@ import { buildUser, buildTrip, buildTripFile } from '../../tests/helpers/factori
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import FilesPage from './FilesPage';
+import { offlineDb } from '../db/offlineDb';
 
 vi.mock('../components/Files/FileManager', () => ({
   default: ({ files }: { files: unknown[]; onUpload: unknown; onDelete: unknown }) =>
@@ -29,7 +30,9 @@ function renderFilesPage(tripId: number | string = 1) {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   vi.clearAllMocks();
   resetAllStores();
   seedStore(useAuthStore, { isAuthenticated: true, user: buildUser() });

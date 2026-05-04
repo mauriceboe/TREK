@@ -4,8 +4,11 @@ import { server } from '../../../tests/helpers/msw/server';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
 import { buildBudgetItem } from '../../../tests/helpers/factories';
 import { useTripStore } from '../tripStore';
+import { offlineDb } from '../../db/offlineDb';
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   server.resetHandlers();
 });

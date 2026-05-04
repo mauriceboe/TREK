@@ -11,6 +11,7 @@ export const placeRepo = {
       .toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await placesApi.list(tripId, params)
         upsertPlaces(result.places)

@@ -4,6 +4,7 @@ import { useTripStore } from '../../../src/store/tripStore';
 import { resetAllStores, seedStore } from '../../helpers/store';
 import { buildPlace, buildAssignment } from '../../helpers/factories';
 import { server } from '../../helpers/msw/server';
+import { offlineDb } from '../../../src/db/offlineDb';
 
 vi.mock('../../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock('../../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 

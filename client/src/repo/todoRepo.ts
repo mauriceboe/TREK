@@ -11,6 +11,7 @@ export const todoRepo = {
       .toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await todoApi.list(tripId)
         upsertTodoItems(result.items)

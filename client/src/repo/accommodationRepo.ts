@@ -9,6 +9,7 @@ export const accommodationRepo = {
       .where('trip_id').equals(Number(tripId)).toArray()
 
     const refresh = (async () => {
+      if (!navigator.onLine) return null
       try {
         const result = await accommodationsApi.list(tripId)
         upsertAccommodations(result.accommodations || []).catch(() => {})

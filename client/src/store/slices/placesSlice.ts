@@ -20,6 +20,9 @@ export const createPlacesSlice = (set: SetState, get: GetState): PlacesSlice => 
     try {
       const data = await placeRepo.list(tripId)
       set({ places: data.places })
+      data.refresh.then(fresh => {
+        if (fresh) set({ places: fresh.places })
+      }).catch(() => {})
     } catch (err: unknown) {
       console.error('Failed to refresh places:', err)
     }
