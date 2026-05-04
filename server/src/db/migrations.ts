@@ -2222,6 +2222,13 @@ function runMigrations(db: Database.Database): void {
         db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('whitespace_migration_collision', 'true')").run();
       }
     },
+    () => {
+      db.exec(`CREATE TABLE IF NOT EXISTS schema_version_new (id INTEGER PRIMARY KEY AUTOINCREMENT,version INTEGER NOT NULL)`)
+      db.exec(`INSERT INTO schema_version_new (version) SELECT version FROM schema_version`)
+      db.exec(`DROP TABLE schema_version`)
+      db.exec(`ALTER TABLE schema_version_new RENAME TO schema_version`)
+      db.exec(`UPDATE app_settings SET value = '${process.env.APP_VERSION || '3.0.15'}' WHERE key = 'app_version'`);
+    },
   ];
 
   if (currentVersion < migrations.length) {

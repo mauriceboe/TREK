@@ -20,8 +20,11 @@ const app = createApp();
 
 import * as scheduler from './scheduler';
 
-const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
+const PORT = Number(process.env.PORT) || 3001;
+const HOST = process.env.HOST;
+const APP_VERSION: string = process.env.APP_VERSION || (require('../../package.json') as { version: string }).version;
+
+const onListen = () => {
   const { logInfo: sLogInfo, logWarn: sLogWarn } = require('./services/auditLog');
   const LOG_LVL = (process.env.LOG_LEVEL || 'info').toLowerCase();
   const tz = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -29,7 +32,8 @@ const server = app.listen(PORT, () => {
   const banner = [
     '──────────────────────────────────────',
     '  TREK API started',
-    `  Version      ${process.env.APP_VERSION}`,
+    `  Version      ${APP_VERSION}`,
+    ...(HOST ? [`  Host:        ${HOST}`] : []),
     `  Port:        ${PORT}`,
     `  Environment: ${process.env.NODE_ENV?.toLowerCase() || 'development'}`,
     `  Timezone:    ${tz}`,
@@ -57,7 +61,11 @@ const server = app.listen(PORT, () => {
   import('./websocket').then(({ setupWebSocket }) => {
     setupWebSocket(server);
   });
-});
+};
+
+const server = HOST
+  ? app.listen(PORT, HOST, onListen)
+  : app.listen(PORT, onListen);
 
 // Graceful shutdown
 function shutdown(signal: string): void {

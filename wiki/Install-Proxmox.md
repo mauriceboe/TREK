@@ -78,6 +78,17 @@ The environment file is located at `/opt/trek/server/.env` inside the container.
 systemctl restart trek
 ```
 
+### Binding to a specific network interface
+
+If your Proxmox host has multiple network interfaces and you want TREK to listen on only one of them, set the `HOST` variable in `/opt/trek/server/.env`:
+
+```
+HOST=10.0.0.72   # bind only on this LAN interface
+PORT=3001
+```
+
+> **Note:** `HOST` is only relevant for source-based and Proxmox installs. Do not use it in Docker or any containerised deployment.
+
 See [Environment-Variables](Environment-Variables) for the full variable reference.
 
 ## Updating
