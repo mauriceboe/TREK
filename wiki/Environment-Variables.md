@@ -16,6 +16,7 @@ Complete reference for all environment variables TREK reads.
 | Variable | Description | Default |
 |---|---|---|
 | `PORT` | Server port | `3000` |
+| `HOST` | Bind address for the HTTP server (e.g. `127.0.0.1`, `10.0.0.72`). **Source / Proxmox installs only** — do not set this in Docker or any containerized deployment. See note below. | all interfaces |
 | `NODE_ENV` | Environment (`production` / `development`) | `production` |
 | `ENCRYPTION_KEY` | At-rest encryption key — see resolution order below | auto |
 | `TZ` | Timezone for logs, reminders, and cron jobs (e.g. `Europe/Berlin`) | `UTC` |
@@ -24,6 +25,22 @@ Complete reference for all environment variables TREK reads.
 | `ALLOWED_ORIGINS` | Comma-separated origins for CORS and email notification links | same-origin |
 | `ALLOW_INTERNAL_NETWORK` | Allow outbound requests to private/RFC-1918 IPs. Set `true` if Immich or other integrated services are on your local network. Loopback (`127.x`) and link-local (`169.254.x`) addresses remain blocked regardless. | `false` |
 | `APP_URL` | Public base URL (e.g. `https://trek.example.com`). Required when OIDC is enabled — must match the redirect URI registered with your IdP. Also used as the base URL for email notification links. | — |
+
+### `HOST` — Source and Proxmox installs only
+
+By default TREK binds to all network interfaces (`0.0.0.0`), which is the correct behaviour inside a container because Docker handles port exposure at the host level. Setting `HOST` overrides the bind address at the Node.js level.
+
+**When to use it:** only when running TREK directly on a host (git sources or the [Proxmox community script](Install-Proxmox)) and you need to restrict which interface the server listens on — for example, to expose TREK only on a LAN interface while keeping it off the public-facing one.
+
+**Never set `HOST` in Docker, Docker Compose, Helm, or Unraid deployments.** Use Docker's `-p <host-ip>:<host-port>:<container-port>` syntax or your orchestrator's port binding instead.
+
+```
+# .env — source / Proxmox installs only
+HOST=10.0.0.72   # bind only on this LAN interface
+PORT=3001
+```
+
+When `HOST` is set, the startup banner includes a `Host:` line confirming the bound address.
 
 ### `ENCRYPTION_KEY` — Resolution Order
 
