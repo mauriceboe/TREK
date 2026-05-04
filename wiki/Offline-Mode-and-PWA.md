@@ -22,9 +22,9 @@ Once installed, TREK launches in **standalone** mode (fullscreen, no browser UI)
 
 TREK uses **two independent offline layers**:
 
-1. **IndexedDB (Dexie)** — the primary offline store. On login and whenever the network comes back online, TREK syncs full trip bundles into IndexedDB. All reads check `navigator.onLine` first; when offline, the app reads directly from IndexedDB without touching the network or the service-worker cache.
+1. **IndexedDB (Dexie)** — the primary offline store. On login and whenever the network comes back online, TREK syncs full trip bundles into IndexedDB. All reads use a **stale-while-revalidate** strategy: cached data is returned instantly from IndexedDB, then a background network request updates the data when it completes. This means the UI is always instant regardless of connectivity — `navigator.onLine` is not used as a gate because it is unreliable on mobile (returns `true` whenever any network interface is active, even without actual internet access).
 
-2. **Service-worker cache (Workbox)** — a secondary safety net for *degraded connectivity* (flaky Wi-Fi, captive portals) where `navigator.onLine` is `true` but the network is unreliable. The SW intercepts API calls and serves cached responses if the network times out.
+2. **Service-worker cache (Workbox)** — a secondary safety net for *degraded connectivity* (flaky Wi-Fi, captive portals). The SW intercepts API calls and serves cached responses if the network does not respond within the timeout.
 
 This means a week-long offline trip works even if the SW cache has expired — the IndexedDB data has no time-based eviction (only stale trips older than 7 days are evicted on the next sync).
 
@@ -36,7 +36,7 @@ This means a week-long offline trip works even if the SW cache has expired — t
 |---------|------------|----------|-------------|---------------------|
 | CartoDB / OpenStreetMap map tiles | `map-tiles` | CacheFirst | 30 days | 1 000 |
 | Leaflet / CDN assets (unpkg) | `cdn-libs` | CacheFirst | 365 days | 30 |
-| API responses (trips, places, bookings, etc.) | `api-data` | NetworkFirst (5 s timeout) | **7 days** | **500** |
+| API responses (trips, places, bookings, etc.) | `api-data` | NetworkFirst (2 s timeout) | **7 days** | **500** |
 | Cover images and avatars (`/uploads/covers`, `/uploads/avatars`) | `user-uploads` | CacheFirst | 7 days | 300 |
 | App shell (HTML / JS / CSS) | precache | Precached | Until next deploy | — |
 
