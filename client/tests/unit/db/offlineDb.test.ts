@@ -133,7 +133,7 @@ describe('offlineDb — places', () => {
 
 describe('offlineDb — packing / todo / budget / reservations / files', () => {
   it('upserts packing items', async () => {
-    const item: PackingItem = { id: 1, trip_id: 1, name: 'Passport', category: null, checked: 0, quantity: 1 };
+    const item: PackingItem = { id: 1, trip_id: 1, name: 'Passport', category: null, category_id: null, category_type: null, category_owner_id: null, checked: 0, quantity: 1 };
     await upsertPackingItems([item]);
     expect(await offlineDb.packingItems.count()).toBe(1);
   });
@@ -238,7 +238,7 @@ describe('offlineDb — clearTripData', () => {
     await upsertTrip(makeTrip(1));
     await upsertDays([makeDay(1, 1), makeDay(2, 1)]);
     await upsertPlaces([makePlace(10, 1)]);
-    const item: PackingItem = { id: 5, trip_id: 1, name: 'Towel', category: null, checked: 0, quantity: 1 };
+    const item: PackingItem = { id: 5, trip_id: 1, name: 'Towel', category: null, category_id: null, category_type: null, category_owner_id: null, checked: 0, quantity: 1 };
     await upsertPackingItems([item]);
 
     // Also add data for a different trip — should NOT be removed

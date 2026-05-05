@@ -661,13 +661,31 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
       bagMap.set(bag.id, r.lastInsertRowid);
     }
 
-    const oldPacking = db.prepare('SELECT * FROM packing_items WHERE trip_id = ?').all(sourceTripId) as any[];
+    // Personal/private categories belong to a specific user; only shared carry over.
+    const oldSharedCats = db.prepare(
+      `SELECT * FROM packing_categories WHERE trip_id = ? AND type = 'shared'`
+    ).all(sourceTripId) as any[];
+    const catMap = new Map<number, number | bigint>();
+    const insertCat = db.prepare(
+      `INSERT INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, 'shared', NULL, ?)`
+    );
+    for (const c of oldSharedCats) {
+      const r = insertCat.run(newTripId, c.name, c.sort_order);
+      catMap.set(c.id, r.lastInsertRowid);
+    }
+
+    const oldPacking = db.prepare(
+      `SELECT i.* FROM packing_items i
+       LEFT JOIN packing_categories c ON c.id = i.category_id
+       WHERE i.trip_id = ? AND (c.id IS NULL OR c.type = 'shared')`
+    ).all(sourceTripId) as any[];
     const insertPacking = db.prepare(`
-      INSERT INTO packing_items (trip_id, name, checked, category, sort_order, weight_grams, bag_id)
+      INSERT INTO packing_items (trip_id, name, checked, category_id, sort_order, weight_grams, bag_id)
       VALUES (?, ?, 0, ?, ?, ?, ?)
     `);
     for (const p of oldPacking) {
-      insertPacking.run(newTripId, p.name, p.category, p.sort_order, p.weight_grams,
+      const newCatId = p.category_id ? (catMap.get(p.category_id) ?? null) : null;
+      insertPacking.run(newTripId, p.name, newCatId, p.sort_order, p.weight_grams,
         p.bag_id ? (bagMap.get(p.bag_id) ?? null) : null);
     }
 
@@ -707,7 +725,7 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
 
 // ── Trip summary (used by MCP get_trip_summary tool) ──────────────────────
 
-export function getTripSummary(tripId: number) {
+export function getTripSummary(tripId: number, userId?: number) {
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId) as Record<string, unknown> | undefined;
   if (!trip) return null;
 
@@ -728,7 +746,9 @@ export function getTripSummary(tripId: number) {
     currency: trip.currency,
   };
 
-  const packingItems = listPackingItems(tripId);
+  // Fall back to the owner so callers without a user context still get a sane shared-only view.
+  const viewerId = userId ?? ownerRow.user_id;
+  const packingItems = listPackingItems(tripId, viewerId);
   const packing = {
     items: packingItems,
     total: packingItems.length,

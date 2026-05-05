@@ -4,13 +4,36 @@ import { canAccessTrip } from '../../db/database';
 import { isDemoUser } from '../../services/authService';
 import {
   createItem as createPackingItem, updateItem as updatePackingItem,
+  toggleCheck as togglePackingCheck,
   deleteItem as deletePackingItem,
   reorderItems as reorderPackingItems,
   listBags, createBag, updateBag, deleteBag, setBagMembers,
   getCategoryAssignees as getPackingCategoryAssignees,
   updateCategoryAssignees as updatePackingCategoryAssignees,
+  listCategories as listPackingCategories,
+  createCategory as createPackingCategory,
+  updateCategory as updatePackingCategory,
+  deleteCategory as deletePackingCategory,
   applyTemplate, saveAsTemplate, bulkImport,
 } from '../../services/packingService';
+import { db } from '../../db/database';
+
+// Adapts MCP's free-text `category` argument to the FK storage model.
+function resolvePackingCategoryId(tripId: number, name: string | undefined): number | null {
+  if (!name?.trim()) return null;
+  const trimmed = name.trim();
+  const existing = db.prepare(
+    `SELECT id FROM packing_categories WHERE trip_id = ? AND name = ? AND type = 'shared'`
+  ).get(tripId, trimmed) as { id: number } | undefined;
+  if (existing) return existing.id;
+  const maxOrder = db.prepare(
+    `SELECT MAX(sort_order) as max FROM packing_categories WHERE trip_id = ?`
+  ).get(tripId) as { max: number | null };
+  const result = db.prepare(
+    `INSERT INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, 'shared', NULL, ?)`
+  ).run(tripId, trimmed, (maxOrder.max ?? -1) + 1);
+  return result.lastInsertRowid as number;
+}
 import {
   safeBroadcast, TOOL_ANNOTATIONS_READONLY, TOOL_ANNOTATIONS_WRITE, TOOL_ANNOTATIONS_DELETE,
   TOOL_ANNOTATIONS_NON_IDEMPOTENT,
@@ -42,7 +65,8 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
     async ({ tripId, name, category }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
-      const item = createPackingItem(tripId, { name, category: category || 'General' });
+      const category_id = resolvePackingCategoryId(tripId, category || 'General');
+      const item = createPackingItem(tripId, { name, category_id }, userId);
       safeBroadcast(tripId, 'packing:created', { item });
       return ok({ item });
     }
@@ -62,9 +86,12 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
     async ({ tripId, itemId, checked }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
-      const item = updatePackingItem(tripId, itemId, { checked: checked ? 1 : 0 }, ['checked']);
+      const item = togglePackingCheck(tripId, itemId, userId, checked);
       if (!item) return { content: [{ type: 'text' as const, text: 'Packing item not found.' }], isError: true };
-      safeBroadcast(tripId, 'packing:updated', { item });
+      // Per-user check state on personal/private categories shouldn't broadcast.
+      if (!(item as any).category_type || (item as any).category_type === 'shared') {
+        safeBroadcast(tripId, 'packing:updated', { item });
+      }
       return ok({ item });
     }
   );
@@ -106,10 +133,18 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
     async ({ tripId, itemId, name, category }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
-      const bodyKeys = ['name', 'category'].filter(k => k === 'name' ? name !== undefined : category !== undefined);
-      const item = updatePackingItem(tripId, itemId, { name, category }, bodyKeys);
+      const bodyKeys: string[] = [];
+      if (name !== undefined) bodyKeys.push('name');
+      let category_id: number | null | undefined;
+      if (category !== undefined) {
+        category_id = resolvePackingCategoryId(tripId, category);
+        bodyKeys.push('category_id');
+      }
+      const item = updatePackingItem(tripId, itemId, { name, category_id }, bodyKeys, userId);
       if (!item) return { content: [{ type: 'text' as const, text: 'Packing item not found.' }], isError: true };
-      safeBroadcast(tripId, 'packing:updated', { item });
+      if (!(item as any).category_type || (item as any).category_type === 'shared') {
+        safeBroadcast(tripId, 'packing:updated', { item });
+      }
       return ok({ item });
     }
   );
@@ -254,7 +289,7 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
   if (W) server.registerTool(
     'set_packing_category_assignees',
     {
-      description: 'Assign trip members to a packing category.',
+      description: 'Assign trip members to a shared packing category. Resolves the category by name (case-sensitive) within the trip.',
       inputSchema: {
         tripId: z.number().int().positive(),
         categoryName: z.string().min(1).max(100),
@@ -265,8 +300,13 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
     async ({ tripId, categoryName, userIds }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
-      updatePackingCategoryAssignees(tripId, categoryName, userIds);
-      safeBroadcast(tripId, 'packing:assignees', { categoryName, userIds });
+      const cat = db.prepare(
+        `SELECT id FROM packing_categories WHERE trip_id = ? AND name = ? AND type = 'shared'`
+      ).get(tripId, categoryName) as { id: number } | undefined;
+      if (!cat) return { content: [{ type: 'text' as const, text: 'Shared packing category not found.' }], isError: true };
+      const result = updatePackingCategoryAssignees(tripId, cat.id, userIds);
+      if (result === null) return { content: [{ type: 'text' as const, text: 'Assignees only apply to shared categories.' }], isError: true };
+      safeBroadcast(tripId, 'packing:assignees', { categoryId: cat.id, userIds });
       return ok({ success: true });
     }
   );
@@ -329,6 +369,90 @@ export function registerPackingTools(server: McpServer, userId: number, scopes: 
       bulkImport(tripId, items);
       safeBroadcast(tripId, 'packing:updated', {});
       return ok({ success: true, count: items.length });
+    }
+  );
+
+  // --- PACKING CATEGORIES (shared / personal / private) ---
+
+  if (R) server.registerTool(
+    'list_packing_categories',
+    {
+      description: 'List packing categories for a trip. Other users\' private categories are hidden.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+      },
+      annotations: TOOL_ANNOTATIONS_READONLY,
+    },
+    async ({ tripId }) => {
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const categories = listPackingCategories(tripId, userId);
+      return ok({ categories });
+    }
+  );
+
+  if (W) server.registerTool(
+    'create_packing_category',
+    {
+      description: 'Create a packing category. shared = visible to everyone with shared checks; personal = visible to everyone but each person tracks their own checks; private = visible only to you.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        name: z.string().min(1).max(100),
+        type: z.enum(['shared', 'personal', 'private']),
+      },
+      annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
+    },
+    async ({ tripId, name, type }) => {
+      if (isDemoUser(userId)) return demoDenied();
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const result = createPackingCategory(tripId, userId, { name, type });
+      if (result && (result as any).error === 'duplicate') {
+        return { content: [{ type: 'text' as const, text: 'A category with that name and type already exists.' }], isError: true };
+      }
+      if (type === 'shared') safeBroadcast(tripId, 'packing:category-created', { category: result });
+      return ok({ category: result });
+    }
+  );
+
+  if (W) server.registerTool(
+    'update_packing_category',
+    {
+      description: 'Rename a packing category or change its visibility type. Converting shared → personal moves the current global checked state into your own per-user checks; the reverse discards per-user state.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        categoryId: z.number().int().positive(),
+        name: z.string().min(1).max(100).optional(),
+        type: z.enum(['shared', 'personal', 'private']).optional(),
+      },
+      annotations: TOOL_ANNOTATIONS_WRITE,
+    },
+    async ({ tripId, categoryId, name, type }) => {
+      if (isDemoUser(userId)) return demoDenied();
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const updated = updatePackingCategory(tripId, categoryId, userId, { name, type });
+      if (!updated) return { content: [{ type: 'text' as const, text: 'Packing category not found or not owned by you.' }], isError: true };
+      if ((updated as any).type === 'shared') safeBroadcast(tripId, 'packing:category-updated', { category: updated });
+      return ok({ category: updated });
+    }
+  );
+
+  if (W) server.registerTool(
+    'delete_packing_category',
+    {
+      description: 'Delete a packing category and all of its items. Personal/private categories can only be deleted by their owner.',
+      inputSchema: {
+        tripId: z.number().int().positive(),
+        categoryId: z.number().int().positive(),
+      },
+      annotations: TOOL_ANNOTATIONS_DELETE,
+    },
+    async ({ tripId, categoryId }) => {
+      if (isDemoUser(userId)) return demoDenied();
+      if (!canAccessTrip(tripId, userId)) return noAccess();
+      const cat = db.prepare('SELECT type FROM packing_categories WHERE id = ? AND trip_id = ?').get(categoryId, tripId) as { type: string } | undefined;
+      const deleted = deletePackingCategory(tripId, categoryId, userId);
+      if (!deleted) return { content: [{ type: 'text' as const, text: 'Packing category not found or not owned by you.' }], isError: true };
+      if (!cat || cat.type === 'shared') safeBroadcast(tripId, 'packing:category-deleted', { catId: Number(categoryId) });
+      return ok({ success: true });
     }
   );
 }

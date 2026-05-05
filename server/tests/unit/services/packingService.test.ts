@@ -65,9 +65,16 @@ describe('saveAsTemplate', () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
 
-    testDb.prepare('INSERT INTO packing_items (trip_id, name, category, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Shirt', 'Clothes', 0);
-    testDb.prepare('INSERT INTO packing_items (trip_id, name, category, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Shorts', 'Clothes', 1);
-    testDb.prepare('INSERT INTO packing_items (trip_id, name, category, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Toothbrush', 'Toiletries', 2);
+    // Seed shared categories first, then items with FK.
+    const clothes = testDb.prepare(
+      `INSERT INTO packing_categories (trip_id, name, type, sort_order) VALUES (?, 'Clothes', 'shared', 0)`
+    ).run(trip.id).lastInsertRowid as number;
+    const toiletries = testDb.prepare(
+      `INSERT INTO packing_categories (trip_id, name, type, sort_order) VALUES (?, 'Toiletries', 'shared', 1)`
+    ).run(trip.id).lastInsertRowid as number;
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Shirt', clothes, 0);
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Shorts', clothes, 1);
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id, checked, sort_order) VALUES (?, ?, ?, 0, ?)').run(trip.id, 'Toothbrush', toiletries, 2);
 
     const result = saveAsTemplate(trip.id, user.id, 'My Template');
 

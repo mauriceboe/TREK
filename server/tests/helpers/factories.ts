@@ -214,6 +214,8 @@ export interface TestPackingItem {
   trip_id: number;
   name: string;
   category: string;
+  category_id: number;
+  category_type: 'shared' | 'personal' | 'private';
   checked: number;
 }
 
@@ -222,10 +224,41 @@ export function createPackingItem(
   tripId: number,
   overrides: Partial<{ name: string; category: string }> = {}
 ): TestPackingItem {
+  const categoryName = overrides.category ?? 'Clothing';
+  // Get-or-create the shared category, then insert the item with FK.
+  let cat = db.prepare(
+    `SELECT id FROM packing_categories WHERE trip_id = ? AND name = ? AND type = 'shared'`
+  ).get(tripId, categoryName) as { id: number } | undefined;
+  if (!cat) {
+    const r = db.prepare(
+      `INSERT INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, 'shared', NULL, 0)`
+    ).run(tripId, categoryName);
+    cat = { id: Number(r.lastInsertRowid) };
+  }
   const result = db.prepare(
-    'INSERT INTO packing_items (trip_id, name, category, checked) VALUES (?, ?, ?, 0)'
-  ).run(tripId, overrides.name ?? 'Test Item', overrides.category ?? 'Clothing');
-  return db.prepare('SELECT * FROM packing_items WHERE id = ?').get(result.lastInsertRowid) as TestPackingItem;
+    'INSERT INTO packing_items (trip_id, name, category_id, checked) VALUES (?, ?, ?, 0)'
+  ).run(tripId, overrides.name ?? 'Test Item', cat.id);
+  // Return the joined shape that route handlers/tests expect.
+  return db.prepare(`
+    SELECT i.*, c.name AS category, c.type AS category_type
+    FROM packing_items i LEFT JOIN packing_categories c ON c.id = i.category_id
+    WHERE i.id = ?
+  `).get(result.lastInsertRowid) as TestPackingItem;
+}
+
+// Create a packing category directly (bypassing the route) for tests that
+// need a non-shared category seeded ahead of time.
+export function createPackingCategory(
+  db: Database.Database,
+  tripId: number,
+  data: { name: string; type?: 'shared' | 'personal' | 'private'; ownerUserId?: number | null }
+): { id: number; name: string; type: string; owner_user_id: number | null } {
+  const type = data.type ?? 'shared';
+  const ownerUserId = type === 'shared' ? null : (data.ownerUserId ?? null);
+  const r = db.prepare(
+    `INSERT INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, ?, ?, 0)`
+  ).run(tripId, data.name, type, ownerUserId);
+  return db.prepare('SELECT * FROM packing_categories WHERE id = ?').get(r.lastInsertRowid) as any;
 }
 
 // ---------------------------------------------------------------------------

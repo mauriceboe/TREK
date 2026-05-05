@@ -127,7 +127,7 @@ export function registerResources(server: McpServer, userId: number, scopes: str
     async (uri, { tripId }) => {
       const id = parseId(tripId);
       if (id === null || !canAccessTrip(id, userId)) return accessDenied(uri.href);
-      const items = listPackingItems(id);
+      const items = listPackingItems(id, userId);
       return jsonContent(uri.href, items);
     }
   );

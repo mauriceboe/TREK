@@ -7,11 +7,12 @@ import { server } from '../../../tests/helpers/msw/server';
 import { useAuthStore } from '../../store/authStore';
 import { useTripStore } from '../../store/tripStore';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
-import { buildUser, buildTrip, buildPackingItem } from '../../../tests/helpers/factories';
+import { buildUser, buildTrip, buildPackingItem, packingCategoryIdFor, resetPackingCategoryIds } from '../../../tests/helpers/factories';
 import PackingListPanel from './PackingListPanel';
 
 beforeEach(() => {
   resetAllStores();
+  resetPackingCategoryIds();
   // Side-effect APIs PackingListPanel calls on mount
   server.use(
     http.get('/api/trips/:id/members', () =>
@@ -19,6 +20,9 @@ beforeEach(() => {
     ),
     http.get('/api/trips/:id/packing/category-assignees', () =>
       HttpResponse.json({ assignees: {} })
+    ),
+    http.get('/api/trips/:id/packing/categories', () =>
+      HttpResponse.json({ categories: [] })
     ),
     http.get('/api/admin/bag-tracking', () =>
       HttpResponse.json({ enabled: false })
@@ -313,13 +317,13 @@ describe('PackingListPanel', () => {
     await waitFor(() => expect(patchBody).toMatchObject({ quantity: 5 }));
   });
 
-  it('FE-COMP-PACKING-027: add new category via form calls POST', async () => {
+  it('FE-COMP-PACKING-027: add new category via form POSTs to /categories with name and type', async () => {
     const user = userEvent.setup();
     let postBody: Record<string, unknown> | null = null;
     server.use(
-      http.post('/api/trips/1/packing', async ({ request }) => {
+      http.post('/api/trips/1/packing/categories', async ({ request }) => {
         postBody = await request.json() as Record<string, unknown>;
-        return HttpResponse.json({ item: buildPackingItem({ name: '...', category: 'Valuables' }) });
+        return HttpResponse.json({ category: { id: 999, trip_id: 1, name: 'Valuables', type: 'shared', owner_user_id: null, sort_order: 0 } });
       })
     );
     render(<PackingListPanel tripId={1} items={[]} />);
@@ -329,7 +333,7 @@ describe('PackingListPanel', () => {
     await user.type(input, 'Valuables');
     await user.keyboard('{Enter}');
 
-    await waitFor(() => expect(postBody).toMatchObject({ category: 'Valuables' }));
+    await waitFor(() => expect(postBody).toMatchObject({ name: 'Valuables', type: 'shared' }));
   });
 
   it('FE-COMP-PACKING-028: category group collapse hides items, expand shows them', async () => {
@@ -460,33 +464,31 @@ describe('PackingListPanel', () => {
     });
   });
 
-  it('FE-COMP-PACKING-035: category rename via context menu calls PUT', async () => {
+  it('FE-COMP-PACKING-035: category rename via context menu PATCHes /categories/:catId', async () => {
     const user = userEvent.setup();
     const item = buildPackingItem({ id: 90, name: 'Shirt', category: 'Clothing' });
-    let putBody: Record<string, unknown> | null = null;
+    const catId = packingCategoryIdFor('Clothing')!;
+    let patchBody: Record<string, unknown> | null = null;
     server.use(
-      http.put('/api/trips/1/packing/90', async ({ request }) => {
-        putBody = await request.json() as Record<string, unknown>;
-        return HttpResponse.json({ item: buildPackingItem({ id: 90, name: 'Shirt', category: 'Apparel' }) });
+      http.patch(`/api/trips/1/packing/categories/${catId}`, async ({ request }) => {
+        patchBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ category: { id: catId, trip_id: 1, name: 'Apparel', type: 'shared', owner_user_id: null, sort_order: 0 } });
       })
     );
     const { container } = render(<PackingListPanel tripId={1} items={[item]} />);
 
-    // Open the category context menu
     const moreBtn = container.querySelector('svg.lucide-more-horizontal')?.closest('button');
     expect(moreBtn).toBeTruthy();
     await user.click(moreBtn!);
 
-    // Click "Rename" in the menu
     await user.click(await screen.findByText('Rename'));
 
-    // Category name input appears — type new name and save
     const catInput = screen.getByDisplayValue('Clothing');
     await user.clear(catInput);
     await user.type(catInput, 'Apparel');
     await user.keyboard('{Enter}');
 
-    await waitFor(() => expect(putBody).toMatchObject({ category: 'Apparel' }));
+    await waitFor(() => expect(patchBody).toMatchObject({ name: 'Apparel' }));
   });
 
   it('FE-COMP-PACKING-036: assignee dropdown opens and lists members when clicked', async () => {
@@ -879,9 +881,10 @@ describe('PackingListPanel', () => {
   });
 
   it('FE-COMP-PACKING-052: category assignee chip renders when assignees exist', async () => {
+    const catId = packingCategoryIdFor('Electronics')!;
     server.use(
       http.get('/api/trips/:id/packing/category-assignees', () =>
-        HttpResponse.json({ assignees: { Electronics: [{ user_id: 2, username: 'alice', avatar: null }] } })
+        HttpResponse.json({ assignees: { [catId]: [{ user_id: 2, username: 'alice', avatar: null }] } })
       )
     );
     const item = buildPackingItem({ name: 'Camera', category: 'Electronics' });
@@ -959,28 +962,25 @@ describe('PackingListPanel', () => {
     expect(screen.getByText('8 items')).toBeInTheDocument();
   });
 
-  it('FE-COMP-PACKING-037: delete category via context menu calls DELETE for all items', async () => {
+  it('FE-COMP-PACKING-037: delete category via context menu DELETEs /categories/:catId once', async () => {
     const user = userEvent.setup();
     const item1 = buildPackingItem({ id: 100, name: 'Rope', category: 'Gear' });
     const item2 = buildPackingItem({ id: 101, name: 'Map', category: 'Gear' });
-    const deletedIds: number[] = [];
+    const catId = packingCategoryIdFor('Gear')!;
+    let deletedCatId = -1;
     server.use(
-      http.delete('/api/trips/1/packing/:itemId', ({ params }) => {
-        deletedIds.push(Number(params.itemId));
+      http.delete(`/api/trips/1/packing/categories/${catId}`, () => {
+        deletedCatId = catId;
         return HttpResponse.json({ success: true });
       })
     );
     const { container } = render(<PackingListPanel tripId={1} items={[item1, item2]} />);
 
-    // Open context menu and click Delete Category
     const moreBtn = container.querySelector('svg.lucide-more-horizontal')?.closest('button');
     await user.click(moreBtn!);
     await user.click(await screen.findByText('Delete Category'));
 
-    await waitFor(() => {
-      expect(deletedIds).toContain(100);
-      expect(deletedIds).toContain(101);
-    });
+    await waitFor(() => expect(deletedCatId).toBe(catId));
   });
 
   it('FE-COMP-PACKING-056: pressing Enter in quantity input commits value', async () => {
@@ -1019,9 +1019,10 @@ describe('PackingListPanel', () => {
     });
   });
 
-  it('FE-COMP-PACKING-058: selecting a different category in picker calls PUT with new category', async () => {
+  it('FE-COMP-PACKING-058: selecting a different category in picker PUTs with new category_id', async () => {
     const itemA = buildPackingItem({ id: 74, name: 'Camera', category: 'Electronics' });
     const itemB = buildPackingItem({ id: 75, name: 'Passport', category: 'Documents' });
+    const documentsId = packingCategoryIdFor('Documents')!;
     let putBody: Record<string, unknown> | null = null;
     server.use(
       http.put('/api/trips/1/packing/74', async ({ request }) => {
@@ -1031,15 +1032,13 @@ describe('PackingListPanel', () => {
     );
     render(<PackingListPanel tripId={1} items={[itemA, itemB]} />);
 
-    // Use fireEvent (no pointer events) to open the category picker — avoids mouseLeave closing picker
     const catChangeBtns = screen.getAllByTitle('Change Category');
     fireEvent.click(catChangeBtns[0]);
 
-    // Picker shows available categories — find and click the 'Documents' button (role=button, text=Documents)
-    const docBtn = await screen.findByRole('button', { name: 'Documents' });
+    const docBtn = await screen.findByRole('button', { name: /Documents/ });
     fireEvent.click(docBtn);
 
-    await waitFor(() => expect(putBody).toMatchObject({ category: 'Documents' }));
+    await waitFor(() => expect(putBody).toMatchObject({ category_id: documentsId }));
   });
 
   it('FE-COMP-PACKING-059: clicking member in UserPlus dropdown calls setCategoryAssignees', async () => {
@@ -1075,10 +1074,11 @@ describe('PackingListPanel', () => {
   });
 
   it('FE-COMP-PACKING-060: clicking assignee chip removes assignee via setCategoryAssignees', async () => {
+    const catId = packingCategoryIdFor('Electronics')!;
     let putBody: Record<string, unknown> | null = null;
     server.use(
       http.get('/api/trips/:id/packing/category-assignees', () =>
-        HttpResponse.json({ assignees: { Electronics: [{ user_id: 2, username: 'alice', avatar: null }] } })
+        HttpResponse.json({ assignees: { [catId]: [{ user_id: 2, username: 'alice', avatar: null }] } })
       ),
       http.get('/api/trips/:id/members', () =>
         HttpResponse.json({
@@ -1087,7 +1087,7 @@ describe('PackingListPanel', () => {
           current_user_id: 1,
         })
       ),
-      http.put('/api/trips/1/packing/category-assignees/:cat', async ({ request }) => {
+      http.put(`/api/trips/1/packing/category-assignees/${catId}`, async ({ request }) => {
         putBody = await request.json() as Record<string, unknown>;
         return HttpResponse.json({ assignees: [] });
       })

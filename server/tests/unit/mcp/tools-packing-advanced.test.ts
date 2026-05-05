@@ -39,7 +39,7 @@ vi.mock('../../../src/websocket', () => ({ broadcast: broadcastMock }));
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
-import { createUser, createTrip, createPackingItem } from '../../helpers/factories';
+import { createUser, createTrip, createPackingItem, createPackingCategory } from '../../helpers/factories';
 import { createMcpHarness, parseToolResult, type McpHarness } from '../../helpers/mcp-harness';
 
 beforeAll(() => {
@@ -316,6 +316,7 @@ describe('Tool: set_packing_category_assignees', () => {
   it('sets category assignees and broadcasts', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
+    createPackingCategory(testDb, trip.id, { name: 'Clothing' });
     await withHarness(user.id, async (h) => {
       const result = await h.client.callTool({
         name: 'set_packing_category_assignees',
@@ -330,7 +331,8 @@ describe('Tool: set_packing_category_assignees', () => {
   it('clears assignees when passed empty array', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
-    testDb.prepare('INSERT INTO packing_category_assignees (trip_id, category_name, user_id) VALUES (?, ?, ?)').run(trip.id, 'Clothing', user.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Clothing' });
+    testDb.prepare('INSERT INTO packing_category_assignees (trip_id, category_id, user_id) VALUES (?, ?, ?)').run(trip.id, cat.id, user.id);
     await withHarness(user.id, async (h) => {
       const result = await h.client.callTool({
         name: 'set_packing_category_assignees',

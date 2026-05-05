@@ -155,7 +155,7 @@ export function registerTripTools(server: McpServer, userId: number, scopes: str
     },
     async ({ tripId }) => {
       if (!canAccessTrip(tripId, userId)) return noAccess();
-      const summary = getTripSummary(tripId);
+      const summary = getTripSummary(tripId, userId);
       if (!summary) return noAccess();
       // Addon availability gates
       const packingEnabled = isAddonEnabled(ADDON_IDS.PACKING);

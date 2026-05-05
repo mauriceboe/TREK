@@ -83,13 +83,29 @@ export interface DayNote {
   created_at: string
 }
 
+export interface PackingCategory {
+  id: number
+  trip_id: number
+  name: string
+  type: 'shared' | 'personal' | 'private'
+  owner_user_id: number | null
+  sort_order: number
+}
+
 export interface PackingItem {
   id: number
   trip_id: number
   name: string
   category: string | null
+  category_id: number | null
+  category_type: 'shared' | 'personal' | 'private' | null
+  category_owner_id: number | null
   checked: number
   quantity: number
+  weight_grams?: number | null
+  bag_id?: number | null
+  sort_order?: number
+  created_at?: string
 }
 
 export interface TodoItem {
