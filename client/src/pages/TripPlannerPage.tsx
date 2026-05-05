@@ -735,7 +735,7 @@ export default function TripPlannerPage(): React.ReactElement | null {
       const timer = setTimeout(() => setSplashDone(true), 1500)
       return () => clearTimeout(timer)
     }
-  }, [isLoading, trip])
+  }, [isLoading, trip?.id])
   // Show escape hatch after 12 seconds on splash (covers slow first-load scenarios)
   useEffect(() => {
     const timer = setTimeout(() => setSlowLoad(true), 12000)

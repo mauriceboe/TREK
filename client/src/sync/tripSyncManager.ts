@@ -5,10 +5,8 @@
  * Eviction: trips where end_date < today - 7 days.
  * File blobs: all non-photo files (MIME type != image/*) for cached trips.
  *
- * Call syncAll() on:
- *   - login success
- *   - trip list refresh (DashboardPage)
- *   - WS reconnect (phase 7)
+ * syncAll() is manual-only — triggered via Settings → Offline tab.
+ * No automatic sync on login, dashboard load, or WS reconnect.
  */
 import { tripsApi, tagsApi, categoriesApi } from '../api/client'
 import {
@@ -135,79 +133,102 @@ async function cacheFilesForTrip(files: TripFile[]): Promise<void> {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+const SYNC_TIMEOUT_MS = 90_000
+const SYNC_STALE_MS = 120_000
+
 let _syncing = false
 let _interrupted = false
+let _syncStartedAt = 0
 
 export const tripSyncManager = {
   /**
    * Sync all cache-eligible trips.
    * Evicts stale trips. Caches file blobs in the background.
-   * No-ops when offline.
+   * No-ops when offline or already syncing (unless stale flag).
    */
   async syncAll(): Promise<void> {
-    if (_syncing || !navigator.onLine) return
+    // Treat a _syncing flag that's been set for >2 minutes as stale (e.g. page unload mid-sync)
+    if (_syncing && Date.now() - _syncStartedAt < SYNC_STALE_MS) return
+    if (!navigator.onLine) return
     _syncing = true
+    _syncStartedAt = Date.now()
     _interrupted = false
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('syncAll timeout')), SYNC_TIMEOUT_MS)
+    )
+
     try {
-      const { trips } = await tripsApi.list() as { trips: Trip[] }
-
-      // Evict stale trips first
-      const stale = trips.filter(isStale)
-      await Promise.all(stale.map(t => clearTripData(t.id).catch(console.error)))
-
-      // Sync eligible trips — stop early if interrupted (e.g. user navigated to a trip page)
-      const toSync = trips.filter(shouldCache)
-      for (const trip of toSync) {
-        if (_interrupted) break
-        try {
-          await syncTrip(trip.id)
-        } catch (err) {
-          if (isQuotaError(err)) {
-            console.warn(`[tripSync] quota exceeded for trip ${trip.id}, clearing trip data and retrying`)
-            try {
-              await clearTripData(trip.id)
-              await syncTrip(trip.id)
-            } catch (retryErr) {
-              if (isQuotaError(retryErr)) {
-                // Trip data + blob cache — free largest storage first before nuking everything
-                console.warn('[tripSync] quota still exceeded — clearing blob cache and retrying')
-                await clearBlobCache()
-                try {
-                  await syncTrip(trip.id)
-                } catch {
-                  console.warn('[tripSync] quota still exceeded after blob eviction — clearing all IDB data')
-                  await clearAll()
-                  return
-                }
-              } else {
-                console.error(`[tripSync] failed for trip ${trip.id} after eviction:`, retryErr)
-              }
-            }
-          } else {
-            console.error(`[tripSync] failed for trip ${trip.id}:`, err)
-          }
-        }
-      }
-
-      if (_interrupted) return
-
-      // Cache global user data (tags + categories) — fire-and-forget
-      tagsApi.list().then(d => upsertTags(d.tags)).catch(() => {})
-      categoriesApi.list().then(d => upsertCategories(d.categories)).catch(() => {})
-
-      // Cache file blobs + map tiles in background (don't block syncAll)
-      const tileUrl = useSettingsStore.getState().settings.map_tile_url || undefined
-      for (const trip of toSync) {
-        if (_interrupted) break
-        const files = await offlineDb.tripFiles.where('trip_id').equals(trip.id).toArray()
-        cacheFilesForTrip(files).catch(console.error)
-
-        const places = await offlineDb.places.where('trip_id').equals(trip.id).toArray()
-        prefetchTilesForTrip(trip.id, places, tileUrl).catch(console.error)
+      await Promise.race([this._doSync(), timeout])
+    } catch (err) {
+      if (err instanceof Error && err.message === 'syncAll timeout') {
+        console.warn('[tripSync] syncAll timed out after 90 s — interrupting')
+        _interrupted = true
       }
     } finally {
       _syncing = false
     }
+  },
+
+  async _doSync(): Promise<void> {
+    const { trips } = await tripsApi.list() as { trips: Trip[] }
+
+    // Evict stale trips first
+    const stale = trips.filter(isStale)
+    await Promise.all(stale.map(t => clearTripData(t.id).catch(console.error)))
+
+    // Sync eligible trips — stop early if interrupted (e.g. user navigated to a trip page)
+    const toSync = trips.filter(shouldCache)
+    for (const trip of toSync) {
+      if (_interrupted) return
+      try {
+        await syncTrip(trip.id)
+      } catch (err) {
+        if (isQuotaError(err)) {
+          console.warn(`[tripSync] quota exceeded for trip ${trip.id}, clearing trip data and retrying`)
+          try {
+            await clearTripData(trip.id)
+            await syncTrip(trip.id)
+          } catch (retryErr) {
+            if (isQuotaError(retryErr)) {
+              console.warn('[tripSync] quota still exceeded — clearing blob cache and retrying')
+              await clearBlobCache()
+              try {
+                await syncTrip(trip.id)
+              } catch {
+                console.warn('[tripSync] quota still exceeded after blob eviction — clearing all IDB data')
+                await clearAll()
+                return
+              }
+            } else {
+              console.error(`[tripSync] failed for trip ${trip.id} after eviction:`, retryErr)
+            }
+          }
+        } else {
+          console.error(`[tripSync] failed for trip ${trip.id}:`, err)
+        }
+      }
+    }
+
+    if (_interrupted) return
+
+    // Cache global user data (tags + categories) — fire-and-forget
+    tagsApi.list().then(d => upsertTags(d.tags)).catch(() => {})
+    categoriesApi.list().then(d => upsertCategories(d.categories)).catch(() => {})
+
+    // Cache file blobs + map tiles for all synced trips in parallel (fire-and-forget)
+    const tileUrl = useSettingsStore.getState().settings.map_tile_url || undefined
+    const prefetchWork = toSync
+      .filter(() => !_interrupted)
+      .map(async trip => {
+        const [files, places] = await Promise.all([
+          offlineDb.tripFiles.where('trip_id').equals(trip.id).toArray(),
+          offlineDb.places.where('trip_id').equals(trip.id).toArray(),
+        ])
+        cacheFilesForTrip(files).catch(console.error)
+        prefetchTilesForTrip(trip.id, places, tileUrl).catch(console.error)
+      })
+    await Promise.allSettled(prefetchWork)
   },
 
   /**
@@ -222,5 +243,6 @@ export const tripSyncManager = {
   _resetSyncing(): void {
     _syncing = false
     _interrupted = false
+    _syncStartedAt = 0
   },
 }

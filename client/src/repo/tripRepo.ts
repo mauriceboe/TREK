@@ -36,7 +36,11 @@ export const tripRepo = {
 
     const fresh = await refresh
     if (!fresh) return { trips: [], archivedTrips: [], refresh: Promise.resolve(null) }
-    // Data came straight from network — no background re-fetch needed
+    // Await upserts on cold path so next mount reads from IDB instead of hitting network again
+    await Promise.all([
+      ...fresh.trips.map(t => upsertTrip(t)),
+      ...fresh.archivedTrips.map(t => upsertTrip(t)),
+    ]).catch(() => {})
     return { ...fresh, refresh: Promise.resolve(null) }
   },
 

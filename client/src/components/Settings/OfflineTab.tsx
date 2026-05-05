@@ -123,7 +123,12 @@ export default function OfflineTab(): React.ReactElement {
   async function handleResync() {
     setSyncing(true)
     try {
-      await tripSyncManager.syncAll()
+      const timeout = new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 120_000))
+      const result = await Promise.race([tripSyncManager.syncAll().then(() => 'done' as const), timeout])
+      if (result === 'timeout') {
+        tripSyncManager.interrupt()
+        console.warn('[OfflineTab] sync timed out after 120 s')
+      }
       await load()
     } finally {
       setSyncing(false)
