@@ -8,10 +8,11 @@ type TripRefresh = Promise<{ trip: Trip } | null>
 
 export const tripRepo = {
   async list(): Promise<{ trips: Trip[]; archivedTrips: Trip[]; refresh: TripsRefresh }> {
-    // 2-second guard: if Dexie is in a bad state (e.g. externally deleted while tab
-    // was open), toArray() may hang. Fall back to the cold/network path.
+    // Guard: if Dexie is in a bad state (e.g. externally deleted while tab was
+    // open and the versionchange close() races with this read), fall back to the
+    // cold/network path rather than throwing or hanging.
     const all = await Promise.race([
-      offlineDb.trips.toArray(),
+      offlineDb.trips.toArray().catch(() => [] as Trip[]),
       new Promise<Trip[]>(resolve => setTimeout(() => resolve([]), 2000)),
     ])
 

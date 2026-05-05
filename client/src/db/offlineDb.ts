@@ -68,6 +68,13 @@ class TrekOfflineDb extends Dexie {
   constructor() {
     super('trek-offline');
 
+    // When the database is deleted externally (e.g. DevTools "Clear site data"
+    // while the tab is open), IDB fires versionchange on the open connection.
+    // Without an explicit close() here, Dexie keeps the stale connection alive
+    // and subsequent write transactions queue behind it indefinitely. Closing
+    // forces Dexie to auto-reopen on the next operation with a fresh connection.
+    this.on('versionchange', () => { this.close() })
+
     this.version(1).stores({
       trips:        'id',
       days:         'id, trip_id',
