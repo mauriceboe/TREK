@@ -459,6 +459,8 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Ověřit',
   'login.invalidInviteLink': 'Neplatný nebo vypršelý odkaz s pozvánkou',
   'login.oidcFailed': 'Přihlášení přes OIDC se nezdařilo',
+  'login.configLoadError': 'Nepodařilo se načíst možnosti přihlášení.',
+  'login.configLoadRetry': 'Obnovit',
   'login.usernameRequired': 'Uživatelské jméno je povinné',
   'login.passwordMinLength': 'Heslo musí mít alespoň 8 znaků',
   'login.forgotPassword': 'Zapomenuté heslo?',

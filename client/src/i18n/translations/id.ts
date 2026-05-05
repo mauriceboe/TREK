@@ -521,6 +521,8 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Verifikasi',
   'login.invalidInviteLink': 'Tautan undangan tidak valid atau sudah kedaluwarsa',
   'login.oidcFailed': 'Login OIDC gagal',
+  'login.configLoadError': 'Gagal memuat opsi login.',
+  'login.configLoadRetry': 'Segarkan',
   'login.usernameRequired': 'Nama pengguna wajib diisi',
   'login.passwordMinLength': 'Kata sandi minimal 8 karakter',
   'login.forgotPassword': 'Lupa kata sandi?',

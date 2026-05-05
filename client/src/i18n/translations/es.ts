@@ -451,6 +451,8 @@ const es: Record<string, string> = {
   'login.mfaVerify': 'Verificar',
   'login.invalidInviteLink': 'Enlace de invitación inválido o expirado',
   'login.oidcFailed': 'Error de inicio de sesión OIDC',
+  'login.configLoadError': 'No se pudieron cargar las opciones de inicio de sesión.',
+  'login.configLoadRetry': 'Actualizar',
   'login.usernameRequired': 'El nombre de usuario es obligatorio',
   'login.passwordMinLength': 'La contraseña debe tener al menos 8 caracteres',
   'login.forgotPassword': '¿Olvidaste tu contraseña?',

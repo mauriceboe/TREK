@@ -511,6 +511,8 @@ const zhTw: Record<string, string> = {
   'login.mfaVerify': '驗證',
   'login.invalidInviteLink': '邀請連結無效或已過期',
   'login.oidcFailed': 'OIDC 登入失敗',
+  'login.configLoadError': '無法載入登入選項。',
+  'login.configLoadRetry': '重新整理',
   'login.usernameRequired': '使用者名稱為必填',
   'login.passwordMinLength': '密碼至少需要8個字元',
   'login.forgotPassword': '忘記密碼？',

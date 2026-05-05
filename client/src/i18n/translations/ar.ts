@@ -464,6 +464,8 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'تحقق',
   'login.invalidInviteLink': 'رابط الدعوة غير صالح أو منتهي الصلاحية',
   'login.oidcFailed': 'فشل تسجيل الدخول عبر OIDC',
+  'login.configLoadError': 'تعذّر تحميل خيارات تسجيل الدخول.',
+  'login.configLoadRetry': 'تحديث',
   'login.usernameRequired': 'اسم المستخدم مطلوب',
   'login.passwordMinLength': 'يجب أن تكون كلمة المرور 8 أحرف على الأقل',
   'login.forgotPassword': 'نسيت كلمة المرور؟',

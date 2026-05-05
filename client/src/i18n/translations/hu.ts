@@ -459,6 +459,8 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Ellenőrzés',
   'login.invalidInviteLink': 'Érvénytelen vagy lejárt meghívólink',
   'login.oidcFailed': 'OIDC bejelentkezés sikertelen',
+  'login.configLoadError': 'A bejelentkezési lehetőségek betöltése nem sikerült.',
+  'login.configLoadRetry': 'Frissítés',
   'login.usernameRequired': 'A felhasználónév kötelező',
   'login.passwordMinLength': 'A jelszónak legalább 8 karakter hosszúnak kell lennie',
   'login.forgotPassword': 'Elfelejtetted a jelszavad?',

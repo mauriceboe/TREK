@@ -426,6 +426,8 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Weryfikuj',
   'login.invalidInviteLink': 'Nieprawidłowy lub wygasły link zaproszenia',
   'login.oidcFailed': 'Logowanie OIDC nie powiodło się',
+  'login.configLoadError': 'Nie można załadować opcji logowania.',
+  'login.configLoadRetry': 'Odśwież',
   'login.usernameRequired': 'Nazwa użytkownika jest wymagana',
   'login.passwordMinLength': 'Hasło musi mieć co najmniej 8 znaków',
   'login.forgotPassword': 'Nie pamiętasz hasła?',

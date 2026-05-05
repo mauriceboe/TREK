@@ -33,6 +33,7 @@ export default function LoginPage(): React.ReactElement {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
+  const [configError, setConfigError] = useState<boolean>(false)
   const [inviteToken, setInviteToken] = useState<string>('')
   const [inviteValid, setInviteValid] = useState<boolean>(false)
   const exchangeInitiated = useRef(false)
@@ -117,15 +118,15 @@ export default function LoginPage(): React.ReactElement {
       return
     }
 
-    authApi.getAppConfig?.().catch(() => null).then((config: AppConfig | null) => {
-      if (config) {
+    authApi.getAppConfig?.()
+      .then((config: AppConfig) => {
         setAppConfig(config)
         if (!config.has_users) setMode('register')
         if (!config.password_login && config.oidc_login && config.oidc_configured && config.has_users && !invite && !noRedirect) {
           window.location.href = '/api/auth/oidc/login'
         }
-      }
-    })
+      })
+      .catch(() => setConfigError(true))
   }, [navigate, t, noRedirect])
 
   // Language detection chain (runs once on mount, only if user has no saved preference):
@@ -858,6 +859,20 @@ export default function LoginPage(): React.ReactElement {
                 {t('login.oidcSignIn', { name: appConfig.oidc_display_name })}
               </a>
             </>
+          )}
+
+          {/* Config load error — shown when /api/auth/app-config fails (e.g. ZT redirect,
+              network blip). Hides the SSO button; prompt user to refresh. */}
+          {configError && !appConfig && (
+            <div style={{ marginTop: 16, padding: '10px 14px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 12, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span>{t('login.configLoadError')}</span>
+              <button
+                onClick={() => window.location.reload()}
+                style={{ background: 'none', border: '1px solid #d97706', borderRadius: 8, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: '#92400e', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+              >
+                {t('login.configLoadRetry')}
+              </button>
+            </div>
           )}
 
           {/* Demo login button */}

@@ -459,6 +459,8 @@ const br: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Verificar',
   'login.invalidInviteLink': 'Link de convite inválido ou expirado',
   'login.oidcFailed': 'Falha no login OIDC',
+  'login.configLoadError': 'Não foi possível carregar as opções de login.',
+  'login.configLoadRetry': 'Atualizar',
   'login.usernameRequired': 'Nome de usuário é obrigatório',
   'login.passwordMinLength': 'A senha deve ter pelo menos 8 caracteres',
   'login.forgotPassword': 'Esqueceu a senha?',

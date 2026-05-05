@@ -464,6 +464,8 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Bestätigen',
   'login.invalidInviteLink': 'Ungültiger oder abgelaufener Einladungslink',
   'login.oidcFailed': 'OIDC-Anmeldung fehlgeschlagen',
+  'login.configLoadError': 'Anmeldeoptionen konnten nicht geladen werden.',
+  'login.configLoadRetry': 'Aktualisieren',
   'login.usernameRequired': 'Benutzername ist erforderlich',
   'login.passwordMinLength': 'Das Passwort muss mindestens 8 Zeichen lang sein',
   'login.forgotPassword': 'Passwort vergessen?',

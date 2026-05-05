@@ -452,6 +452,8 @@ const nl: Record<string, string> = {
   'login.mfaVerify': 'Verifiëren',
   'login.invalidInviteLink': 'Ongeldige of verlopen uitnodigingslink',
   'login.oidcFailed': 'OIDC-aanmelding mislukt',
+  'login.configLoadError': 'Kan aanmeldingsopties niet laden.',
+  'login.configLoadRetry': 'Vernieuwen',
   'login.usernameRequired': 'Gebruikersnaam is vereist',
   'login.passwordMinLength': 'Wachtwoord moet minimaal 8 tekens bevatten',
   'login.forgotPassword': 'Wachtwoord vergeten?',

@@ -452,6 +452,8 @@ const ru: Record<string, string> = {
   'login.mfaVerify': 'Подтвердить',
   'login.invalidInviteLink': 'Недействительная или истёкшая ссылка-приглашение',
   'login.oidcFailed': 'Ошибка входа через OIDC',
+  'login.configLoadError': 'Не удалось загрузить параметры входа.',
+  'login.configLoadRetry': 'Обновить',
   'login.usernameRequired': 'Имя пользователя обязательно',
   'login.passwordMinLength': 'Пароль должен содержать не менее 8 символов',
   'login.forgotPassword': 'Забыли пароль?',

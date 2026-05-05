@@ -459,6 +459,8 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Verifica',
   'login.invalidInviteLink': 'Link di invito non valido o scaduto',
   'login.oidcFailed': 'Accesso OIDC non riuscito',
+  'login.configLoadError': 'Impossibile caricare le opzioni di accesso.',
+  'login.configLoadRetry': 'Aggiorna',
   'login.usernameRequired': 'Il nome utente è obbligatorio',
   'login.passwordMinLength': 'La password deve contenere almeno 8 caratteri',
   'login.forgotPassword': 'Password dimenticata?',

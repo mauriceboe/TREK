@@ -7,7 +7,7 @@ import {
   matchPrecache,
 } from 'workbox-precaching';
 import { registerRoute, NavigationRoute } from 'workbox-routing';
-import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { NetworkFirst, CacheFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import {
@@ -134,6 +134,15 @@ function applyConfig(cfg: SwCacheConfig): void {
   cartoStrategy  = buildTilesStrategy(cfg);
   osmStrategy    = buildTilesStrategy(cfg);
 }
+
+// Apply authRedirectPlugin to the public app-config endpoint so a ZT redirect
+// surfaces as AUTH_REQUIRED (401) instead of causing a silent JSON parse failure
+// on the login page, which would hide the SSO button.
+registerRoute(
+  /\/api\/auth\/app-config$/i,
+  new NetworkOnly({ plugins: [authRedirectPlugin] }),
+  'GET',
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 registerRoute(/\/api\/(?!auth|admin|backup|settings).*/i,  { handle: (o: any) => apiStrategy.handle(o) },   'GET');

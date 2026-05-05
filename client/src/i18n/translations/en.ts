@@ -537,6 +537,8 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'login.mfaVerify': 'Verify',
   'login.invalidInviteLink': 'Invalid or expired invite link',
   'login.oidcFailed': 'OIDC login failed',
+  'login.configLoadError': 'Could not load login options.',
+  'login.configLoadRetry': 'Refresh',
   'login.usernameRequired': 'Username is required',
   'login.passwordMinLength': 'Password must be at least 8 characters',
   'login.forgotPassword': 'Forgot password?',

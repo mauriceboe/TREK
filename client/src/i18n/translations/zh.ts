@@ -452,6 +452,8 @@ const zh: Record<string, string> = {
   'login.mfaVerify': '验证',
   'login.invalidInviteLink': '邀请链接无效或已过期',
   'login.oidcFailed': 'OIDC 登录失败',
+  'login.configLoadError': '无法加载登录选项。',
+  'login.configLoadRetry': '刷新',
   'login.usernameRequired': '用户名为必填项',
   'login.passwordMinLength': '密码至少需要8个字符',
   'login.forgotPassword': '忘记密码？',
