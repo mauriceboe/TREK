@@ -57,7 +57,30 @@ export default defineConfig({
       '/mcp': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-      }
+      },
+      // OAuth 2.1 endpoints handled by backend (SDK authorize handler + token/revoke)
+      // /oauth/authorize goes to backend so the SDK can redirect to /oauth/consent
+      // /oauth/consent is served by Vite as a SPA route (no proxy entry needed)
+      '/oauth/authorize': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/oauth/token': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/oauth/register': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/oauth/revoke': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/.well-known': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     }
   }
 })

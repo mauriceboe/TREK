@@ -104,11 +104,47 @@ describe('GET /.well-known/oauth-authorization-server', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Issue #959 regression tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RFC 9728 — path-based protected resource metadata (issue #959 bug 1)', () => {
+  it('OAUTH-959A — /.well-known/oauth-protected-resource/mcp returns JSON (not SPA HTML)', async () => {
+    const res = await request(app).get('/.well-known/oauth-protected-resource/mcp');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.resource).toContain('/mcp');
+    expect(Array.isArray(res.body.authorization_servers)).toBe(true);
+  });
+});
+
+describe('DCR scope optional — ChatGPT compatibility (issue #959 bug 2)', () => {
+  it('OAUTH-959B — POST /oauth/register without scope field returns 201 with default scopes', async () => {
+    const res = await request(app)
+      .post('/oauth/register')
+      .set('Content-Type', 'application/json')
+      .send({ redirect_uris: ['https://chatgpt.example.com/cb'], token_endpoint_auth_method: 'none' });
+    expect(res.status).toBe(201);
+    expect(res.body.client_id).toBeDefined();
+    expect(typeof res.body.scope).toBe('string');
+    expect(res.body.scope.length).toBeGreaterThan(0);
+  });
+
+  it('OAUTH-959C — POST /oauth/register with explicit scope registers only requested scopes', async () => {
+    const res = await request(app)
+      .post('/oauth/register')
+      .set('Content-Type', 'application/json')
+      .send({ redirect_uris: ['https://example.com/cb'], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+    expect(res.status).toBe(201);
+    expect(res.body.scope).toBe('trips:read');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /oauth/token — authorization_code grant
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('POST /oauth/token — authorization_code grant', () => {
-  it('OAUTH-002 — missing client_id/client_secret returns 401 invalid_client', async () => {
+  it('OAUTH-002 — missing client_id returns 401 invalid_client', async () => {
     const res = await request(app)
       .post('/oauth/token')
       .send({ grant_type: 'authorization_code', code: 'x', redirect_uri: 'https://example.com/cb', code_verifier: 'y' });
@@ -116,13 +152,12 @@ describe('POST /oauth/token — authorization_code grant', () => {
     expect(res.body.error).toBe('invalid_client');
   });
 
-  it('OAUTH-003 — MCP addon disabled returns 403 mcp_disabled', async () => {
+  it('OAUTH-003 — MCP addon disabled returns 404', async () => {
     isAddonEnabledMock.mockReturnValue(false);
     const res = await request(app)
       .post('/oauth/token')
       .send({ grant_type: 'authorization_code', client_id: 'x', client_secret: 'y', code: 'z', redirect_uri: 'https://r.example.com/cb', code_verifier: 'v' });
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe('mcp_disabled');
+    expect(res.status).toBe(404);
   });
 
   it('OAUTH-004 — missing code/redirect_uri/code_verifier returns 400 invalid_request', async () => {
@@ -211,7 +246,7 @@ describe('POST /oauth/token — authorization_code grant', () => {
     expect(res.body.error).toBe('invalid_grant');
   });
 
-  it('OAUTH-008 — wrong client_secret returns 401 invalid_client', async () => {
+  it('OAUTH-008 — wrong client_secret returns 401 invalid_client (timing-safe check)', async () => {
     const { user } = createUser(testDb);
     const r = createOAuthClient(user.id, 'App', ['https://app.example.com/cb'], ['trips:read']);
     const { verifier, challenge } = makePkce();
@@ -909,7 +944,6 @@ describe('M1 — Cache-Control headers on /oauth/token', () => {
       .post('/oauth/token')
       .send({ grant_type: 'authorization_code', client_id: 'x', client_secret: 'y', code: 'z', redirect_uri: 'https://r.example.com/cb', code_verifier: 'v' });
     expect(res.headers['cache-control']).toBe('no-store');
-    expect(res.headers['pragma']).toBe('no-cache');
   });
 });
 

@@ -39,11 +39,11 @@ describe('LoginPage — OIDC redirect preservation', () => {
 
   describe('FE-PAGE-LOGIN-022: redirect param stashed in sessionStorage on mount', () => {
     it('saves decoded redirect to sessionStorage when ?redirect= is present', async () => {
-      setSearch('?redirect=%2Foauth%2Fauthorize%3Fclient_id%3Dfoo');
+      setSearch('?redirect=%2Foauth%2Fconsent%3Fclient_id%3Dfoo');
       render(<LoginPage />);
 
       await waitFor(() => {
-        expect(sessionStorage.getItem('oidc_redirect')).toBe('/oauth/authorize?client_id=foo');
+        expect(sessionStorage.getItem('oidc_redirect')).toBe('/oauth/consent?client_id=foo');
       });
     });
 
@@ -67,13 +67,13 @@ describe('LoginPage — OIDC redirect preservation', () => {
     });
 
     it('navigates to the saved sessionStorage redirect after successful OIDC exchange', async () => {
-      sessionStorage.setItem('oidc_redirect', '/oauth/authorize?client_id=foo&state=xyz');
+      sessionStorage.setItem('oidc_redirect', '/oauth/consent?client_id=foo&state=xyz');
       setSearch('?oidc_code=testcode123');
       render(<LoginPage />);
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith(
-          '/oauth/authorize?client_id=foo&state=xyz',
+          '/oauth/consent?client_id=foo&state=xyz',
           { replace: true },
         );
       });
@@ -93,7 +93,7 @@ describe('LoginPage — OIDC redirect preservation', () => {
 
   describe('FE-PAGE-LOGIN-024: OIDC error clears sessionStorage redirect', () => {
     it('removes oidc_redirect from sessionStorage on OIDC error', async () => {
-      sessionStorage.setItem('oidc_redirect', '/oauth/authorize?client_id=foo');
+      sessionStorage.setItem('oidc_redirect', '/oauth/consent?client_id=foo');
       setSearch('?oidc_error=token_failed');
       render(<LoginPage />);
 

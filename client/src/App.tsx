@@ -218,7 +218,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* OAuth 2.1 consent page — intentionally outside ProtectedRoute */}
-        <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
+        <Route path="/oauth/consent" element={<OAuthAuthorizePage />} />
         <Route
           path="/dashboard"
           element={

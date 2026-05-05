@@ -43,11 +43,18 @@ import journeyPublicRoutes from './routes/journeyPublic';
 import publicConfigRoutes from './routes/publicConfig';
 import systemNoticesRoutes from './routes/systemNotices';
 import { mcpHandler } from './mcp';
+import { trekOAuthProvider, trekClientsStore } from './mcp/oauthProvider';
 import { Addon } from './types';
 import { getPhotoProviderConfig } from './services/memories/helpersService';
 import { getCollabFeatures } from './services/adminService';
 import { isAddonEnabled } from './services/adminService';
 import { ADDON_IDS } from './addons';
+import { ALL_SCOPES } from './mcp/scopes';
+import { getAppUrl } from './services/oidcService';
+import { mcpAuthMetadataRouter } from '@modelcontextprotocol/sdk/server/auth/router';
+import { authorizationHandler } from '@modelcontextprotocol/sdk/server/auth/handlers/authorize';
+import { clientRegistrationHandler } from '@modelcontextprotocol/sdk/server/auth/handlers/register';
+import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth';
 
 export function createApp(): express.Application {
   const app = express();
@@ -89,9 +96,15 @@ export function createApp(): express.Application {
   const hstsIncludeSubdomains = process.env.HSTS_INCLUDE_SUBDOMAINS === 'true';
 
   // RFC 8414 / RFC 9728: discovery docs are world-readable — open CORS regardless of deployment config
+  // Covers both the base path and the RFC 9728 path-based variant (/.well-known/oauth-protected-resource/mcp)
   app.use(
-    ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource'],
-    cors({ origin: '*', credentials: false }),
+    (req: Request, _res: Response, next: NextFunction) => {
+      if (req.path.startsWith('/.well-known/oauth-')) {
+        cors({ origin: '*', credentials: false })(req, _res, next);
+      } else {
+        next();
+      }
+    },
   );
   app.use(cors({ origin: corsOrigin, credentials: true }));
   app.use(helmet({
@@ -340,10 +353,67 @@ export function createApp(): express.Application {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api', shareRoutes);
 
-  // OAuth 2.1 — public endpoints (/.well-known, /oauth/token, /oauth/revoke)
-  app.use('/', oauthPublicRouter);
+  // OAuth 2.1 — public endpoints
+  // Gate: 404 when MCP addon is disabled (M2 — prevents feature fingerprinting)
+  const mcpAddonGate = (_req: Request, res: Response, next: NextFunction) => {
+    if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
+    next();
+  };
+
   // OAuth 2.1 — SPA-facing authenticated endpoints (/api/oauth/*)
+  // Mounted first: per-route 403 checks inside oauthApiRouter are the gate, not mcpAddonGate
   app.use('/api/oauth', oauthApiRouter);
+
+  // SDK metadata router — built lazily on first request so getAppUrl() (which queries the DB)
+  // is not called at createApp() time, before test tables have been created.
+  // mcpAuthMetadataRouter serves:
+  //   /.well-known/oauth-authorization-server   — RFC 8414 AS metadata
+  //   /.well-known/oauth-protected-resource/mcp — RFC 9728 path-based PRM (fixes issue #959 bug 1)
+  let _sdkMetaRouter: express.Router | null = null;
+  function getMetaRouter(): express.Router {
+    if (_sdkMetaRouter) return _sdkMetaRouter;
+    const base = (getAppUrl() || 'http://localhost:3001').replace(/\/+$/, '');
+    const oauthMetadata: OAuthMetadata = {
+      issuer:                                base,
+      authorization_endpoint:                `${base}/oauth/authorize`,
+      token_endpoint:                        `${base}/oauth/token`,
+      revocation_endpoint:                   `${base}/oauth/revoke`,
+      registration_endpoint:                 `${base}/oauth/register`,
+      response_types_supported:              ['code'],
+      grant_types_supported:                 ['authorization_code', 'refresh_token'],
+      code_challenge_methods_supported:      ['S256'],
+      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      scopes_supported:                      ALL_SCOPES,
+    };
+    _sdkMetaRouter = mcpAuthMetadataRouter({
+      oauthMetadata,
+      resourceServerUrl: new URL(`${base}/mcp`),
+      scopesSupported: ALL_SCOPES as string[],
+      resourceName: 'TREK MCP',
+    });
+    return _sdkMetaRouter;
+  }
+
+  // Path-aware gate: only /.well-known/* returns 404 when disabled; other paths pass through
+  // so static files and SPA routes are unaffected when MCP is off.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const isMetadataPath =
+      req.path === '/.well-known/oauth-authorization-server' ||
+      req.path.startsWith('/.well-known/oauth-protected-resource');
+    if (isMetadataPath && !isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
+    getMetaRouter()(req, res, next);
+  });
+
+  // SDK authorize handler: validates OAuth params, calls provider.authorize() which redirects
+  // to the SPA consent page at /oauth/consent
+  app.use('/oauth/authorize', mcpAddonGate, authorizationHandler({ provider: trekOAuthProvider }));
+
+  // SDK DCR handler: accepts registrations without scope (fixes issue #959 bug 2)
+  app.use('/oauth/register', mcpAddonGate, clientRegistrationHandler({ clientsStore: trekClientsStore }));
+
+  // Token and revoke keep TREK's own handlers (timing-safe hash comparison not supported by SDK clientAuth)
+  // oauthPublicRouter has per-route isAddonEnabled checks; no blanket gate needed here
+  app.use('/', oauthPublicRouter);
 
   // MCP endpoint
   app.post('/mcp', mcpHandler);

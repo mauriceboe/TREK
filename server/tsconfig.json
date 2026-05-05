@@ -20,7 +20,15 @@
     // These paths manually redirect to the CJS dist until the SDK fixes its exports map.
     "paths": {
       "@modelcontextprotocol/sdk/server/mcp": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp"],
-      "@modelcontextprotocol/sdk/server/streamableHttp": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/streamableHttp"]
+      "@modelcontextprotocol/sdk/server/streamableHttp": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/streamableHttp"],
+      "@modelcontextprotocol/sdk/server/auth/router": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/router"],
+      "@modelcontextprotocol/sdk/server/auth/handlers/authorize": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/handlers/authorize"],
+      "@modelcontextprotocol/sdk/server/auth/handlers/register": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/handlers/register"],
+      "@modelcontextprotocol/sdk/server/auth/provider": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/provider"],
+      "@modelcontextprotocol/sdk/server/auth/clients": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/clients"],
+      "@modelcontextprotocol/sdk/server/auth/errors": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/errors"],
+      "@modelcontextprotocol/sdk/server/auth/types": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/server/auth/types"],
+      "@modelcontextprotocol/sdk/shared/auth": ["./node_modules/@modelcontextprotocol/sdk/dist/cjs/shared/auth"]
     }
   },
   "include": ["src"],
