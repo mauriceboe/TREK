@@ -154,8 +154,9 @@ sessionSweepInterval.unref();
 
 function setAuthChallenge(res: Response, error = 'invalid_token'): void {
   const base = (getAppUrl() || '').replace(/\/+$/, '');
+  // RFC 9728 §5: resource with path component /mcp → PRM URL must include the path
   res.set('WWW-Authenticate',
-    `Bearer realm="TREK MCP", resource_metadata="${base}/.well-known/oauth-protected-resource", error="${error}"`);
+    `Bearer realm="TREK MCP", resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", error="${error}"`);
 }
 
 interface VerifyTokenResult {
