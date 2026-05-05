@@ -20,6 +20,7 @@ import {
   rotateOAuthClientSecret,
   listOAuthSessions,
   revokeSession,
+  getUserByAccessToken,
   AuthorizeParams,
 } from '../services/oauthService';
 import { writeAudit, getClientIp, logWarn } from '../services/auditLog';
@@ -151,6 +152,29 @@ oauthPublicRouter.post('/oauth/token', tokenLimiter, (req: Request, res: Respons
   }
 
   return res.status(400).json({ error: 'unsupported_grant_type', error_description: `Unsupported grant_type: ${grant_type}` });
+});
+
+// OIDC UserInfo endpoint (RFC 9068 / OpenID Connect Core §5.3)
+// ChatGPT hits this after OAuth to fetch the authenticated user's email for domain claiming.
+oauthPublicRouter.get('/oauth/userinfo', (req: Request, res: Response) => {
+  if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
+    res.set('WWW-Authenticate', 'Bearer realm="TREK MCP"');
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+  const token = auth.slice(7);
+  const info = getUserByAccessToken(token);
+  if (!info) {
+    res.set('WWW-Authenticate', 'Bearer realm="TREK MCP", error="invalid_token"');
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+  return res.json({
+    sub:            String(info.user.id),
+    email:          info.user.email,
+    email_verified: true,
+    preferred_username: info.user.username,
+  });
 });
 
 // Token revocation endpoint (RFC 7009)

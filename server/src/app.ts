@@ -108,6 +108,7 @@ export function createApp(): express.Application {
         req.path.startsWith('/.well-known/') ||
         req.path === '/oauth/register' ||
         req.path === '/oauth/authorize' ||
+        req.path === '/oauth/userinfo' ||
         req.path === '/mcp'
       ) {
         cors({ origin: '*', credentials: false })(req, _res, next);
@@ -424,10 +425,15 @@ export function createApp(): express.Application {
   });
 
   // ChatGPT (and other OIDC-first clients) bootstrap OAuth discovery via
-  // /.well-known/openid-configuration. Serve the same typed AS metadata so
-  // they can find registration_endpoint, authorization_endpoint, token_endpoint.
+  // /.well-known/openid-configuration. Serve the AS metadata plus the OIDC
+  // userinfo_endpoint so ChatGPT can fetch the authenticated user's email
+  // for authorization domain claiming.
   app.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
-    res.json(getOAuthMetadata());
+    const meta = getOAuthMetadata();
+    res.json({
+      ...meta,
+      userinfo_endpoint: `${meta.issuer}/oauth/userinfo`,
+    });
   });
 
   // SDK authorize handler: validates OAuth params, calls provider.authorize() which redirects
