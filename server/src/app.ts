@@ -379,11 +379,13 @@ export function createApp(): express.Application {
   // mcpAuthMetadataRouter serves:
   //   /.well-known/oauth-authorization-server   — RFC 8414 AS metadata
   //   /.well-known/oauth-protected-resource/mcp — RFC 9728 path-based PRM (fixes issue #959 bug 1)
+  let _oauthMetadata: OAuthMetadata | null = null;
   let _sdkMetaRouter: express.Router | null = null;
-  function getMetaRouter(): express.Router {
-    if (_sdkMetaRouter) return _sdkMetaRouter;
+
+  function getOAuthMetadata(): OAuthMetadata {
+    if (_oauthMetadata) return _oauthMetadata;
     const base = (getAppUrl() || 'http://localhost:3001').replace(/\/+$/, '');
-    const oauthMetadata: OAuthMetadata = {
+    _oauthMetadata = {
       issuer:                                base,
       authorization_endpoint:                `${base}/oauth/authorize`,
       token_endpoint:                        `${base}/oauth/token`,
@@ -395,9 +397,15 @@ export function createApp(): express.Application {
       token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
       scopes_supported:                      ALL_SCOPES,
     };
+    return _oauthMetadata;
+  }
+
+  function getMetaRouter(): express.Router {
+    if (_sdkMetaRouter) return _sdkMetaRouter;
+    const metadata = getOAuthMetadata();
     _sdkMetaRouter = mcpAuthMetadataRouter({
-      oauthMetadata,
-      resourceServerUrl: new URL(`${base}/mcp`),
+      oauthMetadata: metadata,
+      resourceServerUrl: new URL(`${metadata.issuer}/mcp`),
       scopesSupported: ALL_SCOPES as string[],
       resourceName: 'TREK MCP',
     });
@@ -416,22 +424,10 @@ export function createApp(): express.Application {
   });
 
   // ChatGPT (and other OIDC-first clients) bootstrap OAuth discovery via
-  // /.well-known/openid-configuration. Serve the same AS metadata there so
-  // they can find the registration_endpoint, authorization_endpoint, etc.
+  // /.well-known/openid-configuration. Serve the same typed AS metadata so
+  // they can find registration_endpoint, authorization_endpoint, token_endpoint.
   app.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
-    const base = (getAppUrl() || 'http://localhost:3001').replace(/\/+$/, '');
-    res.json({
-      issuer:                                base,
-      authorization_endpoint:                `${base}/oauth/authorize`,
-      token_endpoint:                        `${base}/oauth/token`,
-      revocation_endpoint:                   `${base}/oauth/revoke`,
-      registration_endpoint:                 `${base}/oauth/register`,
-      response_types_supported:              ['code'],
-      grant_types_supported:                 ['authorization_code', 'refresh_token'],
-      code_challenge_methods_supported:      ['S256'],
-      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
-      scopes_supported:                      ALL_SCOPES,
-    });
+    res.json(getOAuthMetadata());
   });
 
   // SDK authorize handler: validates OAuth params, calls provider.authorize() which redirects
