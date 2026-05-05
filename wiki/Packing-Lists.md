@@ -28,12 +28,25 @@ Three filter buttons let you narrow the item view:
 
 Items are grouped into categories. Each category has a colored dot that cycles through a 10-color palette. When you create a new packing list, suggested items are pre-populated in these categories: **Documents** (Passport, Travel Insurance, Visa Documents, Flight Tickets, Hotel Bookings, Vaccination Card), **Clothing** (T-Shirts (5x), Pants (2x), Underwear (7x), Socks (7x), Jacket, Swimwear, Sport Shoes), **Toiletries** (Toothbrush, Toothpaste, Shampoo, Sunscreen, Deodorant, Razor), **Electronics** (Phone Charger, Travel Adapter, Headphones, Camera, Power Bank), **Health** (First Aid Kit, Prescription Medication, Pain Medication, Insect Repellent), and **Finances** (Cash, Credit Card).
 
-Each category header has a collapse/expand toggle and an overflow menu with these actions:
+Each category header has a collapse/expand toggle, a colored **type pill** (see below), and an overflow menu with these actions:
 
 - **Check all** — mark every item in the category as packed.
 - **Uncheck all** — unmark every item in the category.
 - **Rename** — rename the category.
+- **Make shared / personal / private** — change the category's visibility type.
 - **Delete** — delete the category and all its items.
+
+### Category types
+
+When you add a category, pick a **type** that controls who sees it and how check state is tracked:
+
+- **Shared** — visible to everyone on the trip. Checks are shared, so anyone packing an item ticks it for the whole group.
+- **Personal** — visible to everyone, but each member tracks their own checks. Useful for items everyone needs (toothbrush, charger) without forcing the group to coordinate ticks.
+- **Private** — only you can see this category and its items. Useful for surprise gifts or anything you don't want collaborators to read.
+
+Switching a shared category to personal carries your current checked state into your own per-user checks; switching back to shared discards per-user state because there is no fair way to collapse multiple members' checks into one flag.
+
+Member assignees and the public share view both apply to **shared** categories only. Trip duplication copies shared categories; personal/private stay with their owner.
 
 ### Assigning members to a category
 
@@ -75,8 +88,8 @@ To use bags:
 
 You can save and reuse packing lists across trips:
 
-- **Save as Template** — click the **Save as Template** button in the header (visible when the list has items) to save the current list's items and categories as a named template.
-- **Apply Template** — if templates exist, an **Apply Template** dropdown appears in the header. Selecting a template appends its items to the current list without removing existing items.
+- **Save as Template** — click the **Save as Template** button in the header (visible when the list has items) to save the current list's items and categories as a named template. Shared and personal categories are saved; private categories are skipped because they belong to a single user.
+- **Apply Template** — if templates exist, an **Apply Template** dropdown appears in the header. Selecting a template appends its items to the current list without removing existing items. Categories saved as personal recreate as personal owned by the applying user.
 
 Templates are managed by admins in [Admin-Packing-Templates](Admin-Packing-Templates).
 
