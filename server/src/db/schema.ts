@@ -137,14 +137,30 @@ function createTables(db: Database.Database): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS packing_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL DEFAULT 'shared' CHECK(type IN ('shared', 'personal', 'private')),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS packing_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       checked INTEGER DEFAULT 0,
-      category TEXT,
+      category_id INTEGER REFERENCES packing_categories(id) ON DELETE SET NULL,
       sort_order INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS packing_item_checks (
+      item_id INTEGER NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (item_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS photos (
@@ -414,7 +430,11 @@ function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_place_tags_tag_id ON place_tags(tag_id);
     CREATE INDEX IF NOT EXISTS idx_trip_members_trip_id ON trip_members(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_members_user_id ON trip_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_packing_categories_trip ON packing_categories(trip_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_packing_categories_shared ON packing_categories(trip_id, name) WHERE type = 'shared';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_packing_categories_owned ON packing_categories(trip_id, name, type, owner_user_id) WHERE type != 'shared';
     CREATE INDEX IF NOT EXISTS idx_packing_items_trip_id ON packing_items(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_packing_item_checks_item ON packing_item_checks(item_id);
     CREATE INDEX IF NOT EXISTS idx_budget_items_trip_id ON budget_items(trip_id);
     CREATE INDEX IF NOT EXISTS idx_reservations_trip_id ON reservations(trip_id);
     CREATE INDEX IF NOT EXISTS idx_trip_files_trip_id ON trip_files(trip_id);

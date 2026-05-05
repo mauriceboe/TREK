@@ -8,8 +8,10 @@ import ReactDOM from 'react-dom'
 import {
   CheckSquare, Square, Trash2, Plus, ChevronDown, ChevronRight,
   X, Pencil, Check, MoreHorizontal, CheckCheck, RotateCcw, Luggage, UserPlus, Package, FolderPlus, Upload,
+  Lock, Users, Globe,
 } from 'lucide-react'
-import type { PackingItem } from '../../types'
+import type { PackingItem, PackingCategory } from '../../types'
+import Tooltip from '../shared/Tooltip'
 
 const VORSCHLAEGE = [
   { name: 'Passport', category: 'Documents' },
@@ -200,7 +202,7 @@ function QuantityInput({ value, onSave }: { value: number; onSave: (qty: number)
 interface ArtikelZeileProps {
   item: PackingItem
   tripId: number
-  categories: string[]
+  categories: PackingCategory[]
   onCategoryChange: () => void
   bagTrackingEnabled?: boolean
   bags?: PackingBag[]
@@ -208,14 +210,9 @@ interface ArtikelZeileProps {
   canEdit?: boolean
 }
 
-// A category's first item is seeded with this sentinel because the server
-// rejects empty names. Treat it as a placeholder in the UI.
-const PACKING_PLACEHOLDER_NAME = '...'
-
 function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingEnabled, bags = [], onCreateBag, canEdit = true }: ArtikelZeileProps) {
-  const isPlaceholder = item.name === PACKING_PLACEHOLDER_NAME
   const [editing, setEditing] = useState(false)
-  const [editName, setEditName] = useState(isPlaceholder ? '' : item.name)
+  const [editName, setEditName] = useState(item.name)
   const [hovered, setHovered] = useState(false)
   const [showCatPicker, setShowCatPicker] = useState(false)
   const [showBagPicker, setShowBagPicker] = useState(false)
@@ -228,7 +225,7 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingE
   const handleToggle = () => togglePackingItem(tripId, item.id, !item.checked)
 
   const handleSaveName = async () => {
-    if (!editName.trim()) { setEditing(false); setEditName(isPlaceholder ? '' : item.name); return }
+    if (!editName.trim()) { setEditing(false); setEditName(item.name); return }
     try { await updatePackingItem(tripId, item.id, { name: editName.trim() }); setEditing(false) }
     catch { toast.error(t('packing.toast.saveError')) }
   }
@@ -238,10 +235,10 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingE
     catch { toast.error(t('packing.toast.deleteError')) }
   }
 
-  const handleCatChange = async (cat) => {
+  const handleCatChange = async (catId: number) => {
     setShowCatPicker(false)
-    if (cat === item.category) return
-    try { await updatePackingItem(tripId, item.id, { category: cat }) }
+    if (catId === item.category_id) return
+    try { await updatePackingItem(tripId, item.id, { category_id: catId }) }
     catch { toast.error(t('common.error')) }
   }
 
@@ -280,10 +277,9 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingE
       {editing && canEdit ? (
         <input
           type="text" value={editName} autoFocus
-          placeholder={isPlaceholder ? '...' : undefined}
           onChange={e => setEditName(e.target.value)}
           onBlur={handleSaveName}
-          onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditing(false); setEditName(isPlaceholder ? '' : item.name) } }}
+          onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditing(false); setEditName(item.name) } }}
           style={{ flex: 1, fontSize: 13.5, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border-primary)', outline: 'none', fontFamily: 'inherit' }}
         />
       ) : (
@@ -292,7 +288,7 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingE
           style={{
             flex: 1, fontSize: 13.5,
             cursor: !canEdit || item.checked ? 'default' : 'text',
-            color: isPlaceholder ? 'var(--text-faint)' : (item.checked ? 'var(--text-faint)' : 'var(--text-primary)'),
+            color: item.checked ? 'var(--text-faint)' : 'var(--text-primary)',
             transition: 'color 200ms cubic-bezier(0.23,1,0.32,1)',
             textDecoration: item.checked ? 'line-through' : 'none',
           }}
@@ -409,23 +405,25 @@ function ArtikelZeile({ item, tripId, categories, onCategoryChange, bagTrackingE
             title={t('packing.changeCategory')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', borderRadius: 6, display: 'flex', alignItems: 'center', color: 'var(--text-faint)', fontSize: 10, gap: 2 }}
           >
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: katColor(item.category || t('packing.defaultCategory'), categories), display: 'inline-block' }} />
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: katColor(item.category || t('packing.defaultCategory'), categories.map(c => c.name)), display: 'inline-block' }} />
           </button>
           {showCatPicker && (
             <div style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50, background: 'var(--bg-card)',
               border: '1px solid var(--border-primary)', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-              padding: 4, minWidth: 140,
+              padding: 4, minWidth: 160,
             }}>
               {categories.map(cat => (
-                <button key={cat} onClick={() => handleCatChange(cat)} style={{
+                <button key={cat.id} onClick={() => handleCatChange(cat.id)} style={{
                   display: 'flex', alignItems: 'center', gap: 7, width: '100%',
-                  padding: '6px 10px', background: cat === (item.category || t('packing.defaultCategory')) ? 'var(--bg-tertiary)' : 'none',
+                  padding: '6px 10px', background: cat.id === item.category_id ? 'var(--bg-tertiary)' : 'none',
                   border: 'none', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit',
                   color: 'var(--text-secondary)', borderRadius: 7, textAlign: 'left',
                 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: katColor(cat, categories), flexShrink: 0 }} />
-                  {cat}
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: katColor(cat.name, categories.map(c => c.name)), flexShrink: 0 }} />
+                  {cat.name}
+                  {cat.type === 'personal' && <Users size={10} style={{ color: 'var(--text-faint)', marginLeft: 'auto' }} />}
+                  {cat.type === 'private' && <Lock size={10} style={{ color: 'var(--text-faint)', marginLeft: 'auto' }} />}
                 </button>
               ))}
             </div>
@@ -462,23 +460,25 @@ interface CategoryAssignee {
 }
 
 interface KategorieGruppeProps {
-  kategorie: string
+  category: PackingCategory
   items: PackingItem[]
   tripId: number
-  allCategories: string[]
-  onRename: (oldName: string, newName: string) => Promise<void>
-  onDeleteAll: (items: PackingItem[]) => Promise<void>
-  onAddItem: (category: string, name: string) => Promise<void>
+  allCategories: PackingCategory[]
+  onRename: (categoryId: number, newName: string) => Promise<void>
+  onDeleteAll: (categoryId: number) => Promise<void>
+  onChangeType: (categoryId: number, type: 'shared' | 'personal' | 'private') => Promise<void>
+  onAddItem: (categoryId: number, name: string) => Promise<void>
   assignees: CategoryAssignee[]
   tripMembers: TripMember[]
-  onSetAssignees: (category: string, userIds: number[]) => Promise<void>
+  onSetAssignees: (categoryId: number, userIds: number[]) => Promise<void>
   bagTrackingEnabled?: boolean
   bags?: PackingBag[]
   onCreateBag: (name: string) => Promise<PackingBag | undefined>
   canEdit?: boolean
 }
 
-function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, onDeleteAll, onAddItem, assignees, tripMembers, onSetAssignees, bagTrackingEnabled, bags, onCreateBag, canEdit = true }: KategorieGruppeProps) {
+function KategorieGruppe({ category, items, tripId, allCategories, onRename, onDeleteAll, onChangeType, onAddItem, assignees, tripMembers, onSetAssignees, bagTrackingEnabled, bags, onCreateBag, canEdit = true }: KategorieGruppeProps) {
+  const kategorie = category.name
   const [offen, setOffen] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [editKatName, setEditKatName] = useState(kategorie)
@@ -505,12 +505,12 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
 
   const abgehakt = items.filter(i => i.checked).length
   const alleAbgehakt = abgehakt === items.length
-  const dot = katColor(kategorie, allCategories)
+  const dot = katColor(kategorie, allCategories.map(c => c.name))
 
   const handleSaveKatName = async () => {
     const neu = editKatName.trim()
     if (!neu || neu === kategorie) { setEditingName(false); setEditKatName(kategorie); return }
-    try { await onRename(kategorie, neu); setEditingName(false) }
+    try { await onRename(category.id, neu); setEditingName(false) }
     catch { toast.error(t('packing.toast.renameError')) }
   }
 
@@ -525,7 +525,7 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
     }
   }
   const handleDeleteAll = async () => {
-    await onDeleteAll(items)
+    await onDeleteAll(category.id)
     setShowMenu(false)
   }
 
@@ -552,11 +552,26 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
           </span>
         )}
 
+        {/* Type pill */}
+        <Tooltip label={t(`packing.type.${category.type}.hint`)} placement="top" align="start">
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '1px 6px', borderRadius: 99, fontSize: 10, fontWeight: 600, flexShrink: 0,
+            background: category.type === 'shared' ? 'rgba(59,130,246,0.1)' : category.type === 'personal' ? 'rgba(168,85,247,0.1)' : 'rgba(239,68,68,0.1)',
+            color: category.type === 'shared' ? '#3b82f6' : category.type === 'personal' ? '#a855f7' : '#ef4444',
+          }}>
+            {category.type === 'shared' && <Globe size={9} />}
+            {category.type === 'personal' && <Users size={9} />}
+            {category.type === 'private' && <Lock size={9} />}
+            {t(`packing.type.${category.type}`).charAt(0).toUpperCase() + t(`packing.type.${category.type}`).slice(1)}
+          </span>
+        </Tooltip>
+
         {/* Assignee chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1, minWidth: 0, marginLeft: 4 }}>
           {assignees.map(a => (
             <div key={a.user_id} style={{ position: 'relative' }}
-              onClick={e => { e.stopPropagation(); if (canEdit) onSetAssignees(kategorie, assignees.filter(x => x.user_id !== a.user_id).map(x => x.user_id)) }}
+              onClick={e => { e.stopPropagation(); if (canEdit) onSetAssignees(category.id, assignees.filter(x => x.user_id !== a.user_id).map(x => x.user_id)) }}
             >
               <div className="assignee-chip"
                 style={{
@@ -607,7 +622,7 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
                       const newIds = isAssigned
                         ? assignees.filter(a => a.user_id !== m.id).map(a => a.user_id)
                         : [...assignees.map(a => a.user_id), m.id]
-                      onSetAssignees(kategorie, newIds)
+                      onSetAssignees(category.id, newIds)
                     }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -665,6 +680,10 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
                 <MenuItem icon={<RotateCcw size={13} />} label={t('packing.menuUncheckAll')} onClick={() => { handleUncheckAll(); setShowMenu(false) }} />
                 {canEdit && <>
                 <div style={{ height: 1, background: 'var(--bg-tertiary)', margin: '4px 0' }} />
+                {category.type !== 'shared' && <MenuItem icon={<Globe size={13} />} label={t('packing.type.makeShared')} onClick={() => { onChangeType(category.id, 'shared'); setShowMenu(false) }} />}
+                {category.type !== 'personal' && <MenuItem icon={<Users size={13} />} label={t('packing.type.makePersonal')} onClick={() => { onChangeType(category.id, 'personal'); setShowMenu(false) }} />}
+                {category.type !== 'private' && <MenuItem icon={<Lock size={13} />} label={t('packing.type.makePrivate')} onClick={() => { onChangeType(category.id, 'private'); setShowMenu(false) }} />}
+                <div style={{ height: 1, background: 'var(--bg-tertiary)', margin: '4px 0' }} />
                 <MenuItem icon={<Trash2 size={13} />} label={t('packing.menuDeleteCat')} danger onClick={handleDeleteAll} />
                 </>}
               </div>
@@ -689,7 +708,7 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
                 onChange={e => setNewItemName(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && newItemName.trim()) {
-                    onAddItem(kategorie, newItemName.trim())
+                    onAddItem(category.id, newItemName.trim())
                     setNewItemName('')
                     setTimeout(() => addItemRef.current?.focus(), 30)
                   }
@@ -698,7 +717,7 @@ function KategorieGruppe({ kategorie, items, tripId, allCategories, onRename, on
                 placeholder={t('packing.addItemPlaceholder')}
                 style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)', background: 'var(--bg-input)' }}
               />
-              <button onClick={() => { if (newItemName.trim()) { onAddItem(kategorie, newItemName.trim()); setNewItemName(''); setTimeout(() => addItemRef.current?.focus(), 30) } }}
+              <button onClick={() => { if (newItemName.trim()) { onAddItem(category.id, newItemName.trim()); setNewItemName(''); setTimeout(() => addItemRef.current?.focus(), 30) } }}
                 disabled={!newItemName.trim()}
                 style={{ padding: '5px 8px', borderRadius: 8, border: 'none', background: newItemName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newItemName.trim() ? 'pointer' : 'default', display: 'flex' }}>
                 <Plus size={14} />
@@ -726,7 +745,7 @@ interface MenuItemProps {
   icon: React.ReactNode
   label: string
   onClick: () => void
-  danger: boolean
+  danger?: boolean
 }
 
 function MenuItem({ icon, label, onClick, danger }: MenuItemProps) {
@@ -759,16 +778,18 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
   const [filter, setFilter] = useState('alle') // 'alle' | 'offen' | 'erledigt'
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCatName, setNewCatName] = useState('')
-  const { addPackingItem, updatePackingItem, deletePackingItem } = useTripStore()
+  const [newCatType, setNewCatType] = useState<'shared' | 'personal' | 'private'>('shared')
+  const [categories, setCategories] = useState<PackingCategory[]>([])
+  const { addPackingItem, deletePackingItem } = useTripStore()
   const can = useCanDo()
   const trip = useTripStore((s) => s.trip)
   const canEdit = can('packing_edit', trip)
   const toast = useToast()
   const { t } = useTranslation()
 
-  // Trip members & category assignees
+  // Trip members & category assignees (keyed by category_id).
   const [tripMembers, setTripMembers] = useState<TripMember[]>([])
-  const [categoryAssignees, setCategoryAssignees] = useState<Record<string, CategoryAssignee[]>>({})
+  const [categoryAssignees, setCategoryAssignees] = useState<Record<number, CategoryAssignee[]>>({})
 
   useEffect(() => {
     tripsApi.getMembers(tripId).then(data => {
@@ -780,25 +801,47 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
     packingApi.getCategoryAssignees(tripId).then(data => {
       setCategoryAssignees(data.assignees || {})
     }).catch(() => {})
+    packingApi.listCategories(tripId).then(data => {
+      setCategories(data.categories || [])
+    }).catch(() => {})
   }, [tripId])
 
-  const handleSetAssignees = async (category: string, userIds: number[]) => {
+  // Resync when items reference categories we haven't loaded (e.g. after applyTemplate).
+  useEffect(() => {
+    const knownIds = new Set(categories.map(c => c.id))
+    const hasUnknown = items.some(i => i.category_id != null && !knownIds.has(i.category_id))
+    if (!hasUnknown) return
+    packingApi.listCategories(tripId).then(data => {
+      setCategories(data.categories || [])
+    }).catch(() => {})
+  }, [items, categories, tripId])
+
+  const handleSetAssignees = async (categoryId: number, userIds: number[]) => {
     try {
-      const data = await packingApi.setCategoryAssignees(tripId, category, userIds)
-      setCategoryAssignees(prev => ({ ...prev, [category]: data.assignees || [] }))
+      const data = await packingApi.setCategoryAssignees(tripId, categoryId, userIds)
+      setCategoryAssignees(prev => ({ ...prev, [categoryId]: data.assignees || [] }))
     } catch {
       toast.error(t('packing.toast.saveError'))
     }
   }
 
   const allCategories = useMemo(() => {
-    const seen: string[] = []
+    const map = new Map<number, PackingCategory>()
+    for (const c of categories) map.set(c.id, c)
     for (const item of items) {
-      const cat = item.category || t('packing.defaultCategory')
-      if (!seen.includes(cat)) seen.push(cat)
+      if (item.category_id && !map.has(item.category_id)) {
+        map.set(item.category_id, {
+          id: item.category_id,
+          trip_id: tripId,
+          name: item.category || t('packing.defaultCategory'),
+          type: item.category_type || 'shared',
+          owner_user_id: item.category_owner_id ?? null,
+          sort_order: 0,
+        })
+      }
     }
-    return seen
-  }, [items, t])
+    return Array.from(map.values())
+  }, [categories, items, tripId, t])
 
   const gruppiert = useMemo(() => {
     const filtered = items.filter(i => {
@@ -806,51 +849,83 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
       if (filter === 'erledigt') return i.checked
       return true
     })
-    const groups = {}
+    const groups: Record<number, { category: PackingCategory; items: PackingItem[] }> = {}
     for (const item of filtered) {
-      const kat = item.category || t('packing.defaultCategory')
-      if (!groups[kat]) groups[kat] = []
-      groups[kat].push(item)
+      const catId = item.category_id ?? 0
+      if (!groups[catId]) {
+        const cat = allCategories.find(c => c.id === catId) ?? {
+          id: catId, trip_id: tripId, name: item.category || t('packing.defaultCategory'),
+          type: (item.category_type || 'shared') as 'shared' | 'personal' | 'private',
+          owner_user_id: item.category_owner_id ?? null, sort_order: 0,
+        }
+        groups[catId] = { category: cat, items: [] }
+      }
+      groups[catId].items.push(item)
+    }
+    // Empty categories still need a row.
+    for (const cat of allCategories) {
+      if (!groups[cat.id]) groups[cat.id] = { category: cat, items: [] }
     }
     return groups
-  }, [items, filter, t])
+  }, [items, filter, allCategories, tripId, t])
 
   const abgehakt = items.filter(i => i.checked).length
   const fortschritt = items.length > 0 ? Math.round((abgehakt / items.length) * 100) : 0
 
-  const handleAddItemToCategory = async (category: string, name: string) => {
+  const handleAddItemToCategory = async (categoryId: number, name: string) => {
     try {
-      await addPackingItem(tripId, { name, category })
+      await addPackingItem(tripId, { name, category_id: categoryId })
     } catch { toast.error(t('packing.toast.addError')) }
   }
+
+
 
   const handleAddNewCategory = async () => {
     if (!newCatName.trim()) return
-    let catName = newCatName.trim()
-    // Allow duplicate display names — append invisible zero-width spaces to make unique internally
-    while (allCategories.includes(catName)) {
-      catName += '\u200B'
-    }
     try {
-      await addPackingItem(tripId, { name: '...', category: catName })
+      const data = await packingApi.createCategory(tripId, { name: newCatName.trim(), type: newCatType })
+      setCategories(prev => [...prev, data.category])
       setNewCatName('')
       setAddingCategory(false)
-    } catch { toast.error(t('packing.toast.addError')) }
-  }
-
-  const handleRenameCategory = async (oldName, newName) => {
-    const toUpdate = items.filter(i => (i.category || t('packing.defaultCategory')) === oldName)
-    for (const item of toUpdate) {
-      await updatePackingItem(tripId, item.id, { category: newName })
+      setNewCatType('shared')
+    } catch (err: any) {
+      const msg = err?.response?.status === 409 ? t('packing.categoryExists') : t('packing.toast.addError')
+      toast.error(msg)
     }
   }
 
-  const handleDeleteCategory = async (catItems) => {
-    for (const item of catItems) {
-      try { await deletePackingItem(tripId, item.id) } catch {}
-    }
+  // Upsert because categories created server-side (e.g. via applyTemplate) may not be in local state yet.
+  const upsertCategory = (cat: PackingCategory) =>
+    setCategories(prev => prev.some(c => c.id === cat.id) ? prev.map(c => c.id === cat.id ? cat : c) : [...prev, cat])
+
+  const handleRenameCategory = async (categoryId: number, newName: string) => {
+    try {
+      const data = await packingApi.updateCategory(tripId, categoryId, { name: newName })
+      upsertCategory(data.category)
+    } catch { toast.error(t('packing.toast.renameError')) }
   }
 
+  const handleDeleteCategory = async (categoryId: number) => {
+    try {
+      await packingApi.deleteCategory(tripId, categoryId)
+      setCategories(prev => prev.filter(c => c.id !== categoryId))
+      // Mirror the server-side cascade so items vanish without a refetch.
+      useTripStore.setState(s => ({ packingItems: s.packingItems.filter(i => i.category_id !== categoryId) }))
+    } catch { toast.error(t('packing.toast.deleteError')) }
+  }
+
+  const handleChangeType = async (categoryId: number, type: 'shared' | 'personal' | 'private') => {
+    try {
+      const data = await packingApi.updateCategory(tripId, categoryId, { type })
+      upsertCategory(data.category)
+      // Patch denormalised category_type/owner on items so the UI reflects the change without a refetch.
+      useTripStore.setState(s => ({
+        packingItems: s.packingItems.map(i => i.category_id === categoryId
+          ? { ...i, category_type: data.category.type, category_owner_id: data.category.owner_user_id }
+          : i),
+      }))
+    } catch { toast.error(t('common.error')) }
+  }
   const handleClearChecked = async () => {
     if (!confirm(t('packing.confirm.clearChecked', { count: abgehakt }))) return
     for (const item of items.filter(i => i.checked)) {
@@ -1061,17 +1136,22 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
           ) : <span />}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {canEdit && items.length > 0 && showSaveTemplate && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input
-                  type="text" autoFocus
-                  value={saveTemplateName}
-                  onChange={e => setSaveTemplateName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSaveAsTemplate(); if (e.key === 'Escape') { setShowSaveTemplate(false); setSaveTemplateName('') } }}
-                  placeholder={t('packing.templateName')}
-                  style={{ fontSize: 12, padding: '5px 10px', borderRadius: 99, border: '1px solid var(--border-primary)', outline: 'none', fontFamily: 'inherit', width: 140, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
-                />
-                <button onClick={handleSaveAsTemplate} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#10b981' }}><Check size={14} /></button>
-                <button onClick={() => { setShowSaveTemplate(false); setSaveTemplateName('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-faint)' }}><X size={14} /></button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="text" autoFocus
+                    value={saveTemplateName}
+                    onChange={e => setSaveTemplateName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveAsTemplate(); if (e.key === 'Escape') { setShowSaveTemplate(false); setSaveTemplateName('') } }}
+                    placeholder={t('packing.templateName')}
+                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 99, border: '1px solid var(--border-primary)', outline: 'none', fontFamily: 'inherit', width: 140, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                  />
+                  <button onClick={handleSaveAsTemplate} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#10b981' }}><Check size={14} /></button>
+                  <button onClick={() => { setShowSaveTemplate(false); setSaveTemplateName('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-faint)' }}><X size={14} /></button>
+                </div>
+                <span style={{ fontSize: 10.5, color: 'var(--text-faint)', paddingRight: 4 }}>
+                  {t('packing.saveAsTemplate.hint')}
+                </span>
               </div>
             )}
             {inlineHeader && canEdit && (
@@ -1223,22 +1303,42 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
         )}
 
         {canEdit && (addingCategory ? (
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              autoFocus
-              type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAddNewCategory(); if (e.key === 'Escape') { setAddingCategory(false); setNewCatName('') } }}
-              placeholder={t('packing.newCategoryPlaceholder')}
-              style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)' }}
-            />
-            <button onClick={handleAddNewCategory} disabled={!newCatName.trim()}
-              style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: newCatName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newCatName.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}>
-              <Check size={16} />
-            </button>
-            <button onClick={() => { setAddingCategory(false); setNewCatName('') }}
-              style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-faint)' }}>
-              <X size={16} />
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                autoFocus
+                type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddNewCategory(); if (e.key === 'Escape') { setAddingCategory(false); setNewCatName(''); setNewCatType('shared') } }}
+                placeholder={t('packing.newCategoryPlaceholder')}
+                style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', color: 'var(--text-primary)' }}
+              />
+              <button onClick={handleAddNewCategory} disabled={!newCatName.trim()}
+                style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: newCatName.trim() ? 'var(--text-primary)' : 'var(--border-primary)', color: 'var(--bg-primary)', cursor: newCatName.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center' }}>
+                <Check size={16} />
+              </button>
+              <button onClick={() => { setAddingCategory(false); setNewCatName(''); setNewCatType('shared') }}
+                style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-faint)' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['shared', 'personal', 'private'] as const).map(type => (
+                <Tooltip key={type} label={t(`packing.type.${type}.hint`)} placement="bottom" align="start">
+                  <button onClick={() => setNewCatType(type)} style={{
+                    display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8,
+                    border: `1px solid ${newCatType === type ? 'var(--text-primary)' : 'var(--border-primary)'}`,
+                    background: newCatType === type ? 'var(--text-primary)' : 'none',
+                    color: newCatType === type ? 'var(--bg-primary)' : 'var(--text-faint)',
+                    cursor: 'pointer', fontSize: 11.5, fontFamily: 'inherit', fontWeight: newCatType === type ? 600 : 400,
+                  }}>
+                    {type === 'shared' && <Globe size={11} />}
+                    {type === 'personal' && <Users size={11} />}
+                    {type === 'private' && <Lock size={11} />}
+                    {t(`packing.type.${type}`).charAt(0).toUpperCase() + t(`packing.type.${type}`).slice(1)}
+                  </button>
+                </Tooltip>
+              ))}
+            </div>
           </div>
         ) : (
           <button onClick={() => setAddingCategory(true)}
@@ -1267,29 +1367,30 @@ export default function PackingListPanel({ tripId, items, openImportSignal = 0, 
       {/* ── Liste + Bags Sidebar ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0 16px' }}>
-        {items.length === 0 ? (
+        {items.length === 0 && Object.keys(gruppiert).length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <Luggage size={40} style={{ color: 'var(--text-faint)', display: 'block', margin: '0 auto 10px' }} />
             <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>{t('packing.emptyTitle')}</p>
             <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: 0 }}>{t('packing.emptyHint')}</p>
           </div>
-        ) : Object.keys(gruppiert).length === 0 ? (
+        ) : Object.values(gruppiert).every(g => g.items.length === 0) && filter !== 'alle' ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
             <p style={{ fontSize: 13, margin: 0 }}>{t('packing.emptyFiltered')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {Object.entries(gruppiert).map(([kat, katItems]) => (
+            {Object.values(gruppiert).map(({ category: cat, items: katItems }) => (
               <KategorieGruppe
-                key={kat}
-                kategorie={kat}
+                key={cat.id}
+                category={cat}
                 items={katItems}
                 tripId={tripId}
                 allCategories={allCategories}
                 onRename={handleRenameCategory}
                 onDeleteAll={handleDeleteCategory}
+                onChangeType={handleChangeType}
                 onAddItem={handleAddItemToCategory}
-                assignees={categoryAssignees[kat] || []}
+                assignees={categoryAssignees[cat.id] || []}
                 tripMembers={tripMembers}
                 onSetAssignees={handleSetAssignees}
                 bagTrackingEnabled={bagTrackingEnabled}

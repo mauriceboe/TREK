@@ -25,8 +25,12 @@ Requires `packing:read` or `packing:write` scope.
 | `update_packing_bag` | Rename or recolor a packing bag. |
 | `delete_packing_bag` | Delete a packing bag (items are unassigned, not deleted). |
 | `set_bag_members` | Assign trip members to a packing bag. |
-| `get_packing_category_assignees` | Get which trip members are assigned to each packing category. |
-| `set_packing_category_assignees` | Assign trip members to a packing category. |
+| `get_packing_category_assignees` | Get which trip members are assigned to each packing category (shared categories only). |
+| `set_packing_category_assignees` | Assign trip members to a shared packing category (resolved by name). |
+| `list_packing_categories` | List packing categories for a trip. Other users' private categories are hidden. |
+| `create_packing_category` | Create a packing category with a visibility type (`shared`, `personal`, or `private`). |
+| `update_packing_category` | Rename a packing category or change its visibility type. |
+| `delete_packing_category` | Delete a packing category and all of its items. |
 
 ### To-Dos _(Packing addon required)_
 

@@ -327,6 +327,11 @@ export function handleRemoteEvent(set: SetState, get: GetState, event: WebSocket
         return {
           packingItems: state.packingItems.filter(i => i.id !== payload.itemId),
         }
+      case 'packing:category-deleted':
+        // Mirror the server-side cascade on packing_items.
+        return {
+          packingItems: state.packingItems.filter(i => i.category_id !== payload.catId),
+        }
 
       // Todo
       case 'todo:created':

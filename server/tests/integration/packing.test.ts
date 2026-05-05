@@ -41,7 +41,7 @@ import { createApp } from '../../src/app';
 import { createTables } from '../../src/db/schema';
 import { runMigrations } from '../../src/db/migrations';
 import { resetTestDb } from '../helpers/test-db';
-import { createUser, createTrip, createPackingItem, addTripMember } from '../helpers/factories';
+import { createUser, createTrip, createPackingItem, createPackingCategory, addTripMember } from '../helpers/factories';
 import { authCookie } from '../helpers/auth';
 import { loginAttempts, mfaAttempts } from '../../src/routes/auth';
 
@@ -336,26 +336,40 @@ describe('Bags', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Category assignees', () => {
-  it('PACK-012 — PUT /category-assignees/:category sets assignees', async () => {
+  it('PACK-012 — PUT /category-assignees/:catId sets assignees on a shared category', async () => {
     const { user } = createUser(testDb);
     const { user: member } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
     addTripMember(testDb, trip.id, member.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Clothing' });
 
     const res = await request(app)
-      .put(`/api/trips/${trip.id}/packing/category-assignees/Clothing`)
+      .put(`/api/trips/${trip.id}/packing/category-assignees/${cat.id}`)
       .set('Cookie', authCookie(user.id))
       .send({ user_ids: [user.id, member.id] });
     expect(res.status).toBe(200);
     expect(res.body.assignees).toBeDefined();
+    expect(res.body.assignees).toHaveLength(2);
   });
 
-  it('PACK-013 — GET /category-assignees returns all category assignments', async () => {
+  it('PACK-012b — PUT /category-assignees/:catId on a personal category returns 400', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
-    // Set an assignee first
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Mine', type: 'personal', ownerUserId: user.id });
+
+    const res = await request(app)
+      .put(`/api/trips/${trip.id}/packing/category-assignees/${cat.id}`)
+      .set('Cookie', authCookie(user.id))
+      .send({ user_ids: [user.id] });
+    expect(res.status).toBe(400);
+  });
+
+  it('PACK-013 — GET /category-assignees returns all assignments keyed by category_id', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Electronics' });
     await request(app)
-      .put(`/api/trips/${trip.id}/packing/category-assignees/Electronics`)
+      .put(`/api/trips/${trip.id}/packing/category-assignees/${cat.id}`)
       .set('Cookie', authCookie(user.id))
       .send({ user_ids: [user.id] });
 
@@ -364,6 +378,155 @@ describe('Category assignees', () => {
       .set('Cookie', authCookie(user.id));
     expect(res.status).toBe(200);
     expect(res.body.assignees).toBeDefined();
+    expect(res.body.assignees[cat.id]).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Categories (shared/personal/private) and per-user check state
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Packing categories', () => {
+  it('PACK-016 — POST /categories creates a shared category', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/packing/categories`)
+      .set('Cookie', authCookie(user.id))
+      .send({ name: 'Tech', type: 'shared' });
+    expect(res.status).toBe(201);
+    expect(res.body.category.name).toBe('Tech');
+    expect(res.body.category.type).toBe('shared');
+    expect(res.body.category.owner_user_id).toBeNull();
+  });
+
+  it('PACK-016b — POST /categories rejects unknown type', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/packing/categories`)
+      .set('Cookie', authCookie(user.id))
+      .send({ name: 'X', type: 'global' });
+    expect(res.status).toBe(400);
+  });
+
+  it('PACK-016c — duplicate shared category returns 409', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    createPackingCategory(testDb, trip.id, { name: 'Dup' });
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/packing/categories`)
+      .set('Cookie', authCookie(user.id))
+      .send({ name: 'Dup', type: 'shared' });
+    expect(res.status).toBe(409);
+  });
+
+  it('PACK-017 — GET /categories hides other users\' private categories', async () => {
+    const { user: owner } = createUser(testDb);
+    const { user: member } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id);
+    addTripMember(testDb, trip.id, member.id);
+    createPackingCategory(testDb, trip.id, { name: 'Open', type: 'shared' });
+    createPackingCategory(testDb, trip.id, { name: 'OwnerSecret', type: 'private', ownerUserId: owner.id });
+
+    const ownerRes = await request(app)
+      .get(`/api/trips/${trip.id}/packing/categories`)
+      .set('Cookie', authCookie(owner.id));
+    expect(ownerRes.body.categories.map((c: any) => c.name).sort()).toEqual(['Open', 'OwnerSecret']);
+
+    const memberRes = await request(app)
+      .get(`/api/trips/${trip.id}/packing/categories`)
+      .set('Cookie', authCookie(member.id));
+    expect(memberRes.body.categories.map((c: any) => c.name)).toEqual(['Open']);
+  });
+
+  it('PACK-018 — checking a personal item is per-user', async () => {
+    const { user: owner } = createUser(testDb);
+    const { user: member } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id);
+    addTripMember(testDb, trip.id, member.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Mine', type: 'personal', ownerUserId: owner.id });
+    const insertItem = testDb.prepare(
+      'INSERT INTO packing_items (trip_id, name, category_id, checked) VALUES (?, ?, ?, 0)'
+    ).run(trip.id, 'Toothbrush', cat.id);
+    const itemId = Number(insertItem.lastInsertRowid);
+
+    // Owner ticks it.
+    const tick = await request(app)
+      .put(`/api/trips/${trip.id}/packing/${itemId}`)
+      .set('Cookie', authCookie(owner.id))
+      .send({ checked: true });
+    expect(tick.status).toBe(200);
+    expect(tick.body.item.checked).toBe(1);
+
+    // Member sees the same item as unchecked (per-user state).
+    const memberList = await request(app)
+      .get(`/api/trips/${trip.id}/packing`)
+      .set('Cookie', authCookie(member.id));
+    const memberItem = memberList.body.items.find((i: any) => i.id === itemId);
+    expect(memberItem?.checked).toBe(0);
+  });
+
+  it('PACK-019 — listing hides items in other users\' private categories', async () => {
+    const { user: owner } = createUser(testDb);
+    const { user: member } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id);
+    addTripMember(testDb, trip.id, member.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Secret', type: 'private', ownerUserId: owner.id });
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id, checked) VALUES (?, ?, ?, 0)')
+      .run(trip.id, 'Hidden', cat.id);
+
+    const memberList = await request(app)
+      .get(`/api/trips/${trip.id}/packing`)
+      .set('Cookie', authCookie(member.id));
+    expect(memberList.body.items.find((i: any) => i.name === 'Hidden')).toBeUndefined();
+
+    const ownerList = await request(app)
+      .get(`/api/trips/${trip.id}/packing`)
+      .set('Cookie', authCookie(owner.id));
+    expect(ownerList.body.items.find((i: any) => i.name === 'Hidden')).toBeDefined();
+  });
+
+  it('PACK-020 — converting shared → personal carries the converting user\'s checked state', async () => {
+    const { user: owner } = createUser(testDb);
+    const trip = createTrip(testDb, owner.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Stuff' });
+    // Insert a checked shared item.
+    testDb.prepare(
+      'INSERT INTO packing_items (trip_id, name, category_id, checked) VALUES (?, ?, ?, 1)'
+    ).run(trip.id, 'Bag', cat.id);
+
+    const res = await request(app)
+      .patch(`/api/trips/${trip.id}/packing/categories/${cat.id}`)
+      .set('Cookie', authCookie(owner.id))
+      .send({ type: 'personal' });
+    expect(res.status).toBe(200);
+    expect(res.body.category.type).toBe('personal');
+    expect(res.body.category.owner_user_id).toBe(owner.id);
+
+    // The owner still sees it as checked through the per-user check row.
+    const list = await request(app)
+      .get(`/api/trips/${trip.id}/packing`)
+      .set('Cookie', authCookie(owner.id));
+    expect(list.body.items[0].checked).toBe(1);
+  });
+
+  it('PACK-021 — DELETE /categories/:catId removes the category and its items', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const cat = createPackingCategory(testDb, trip.id, { name: 'Tmp' });
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id) VALUES (?, ?, ?)')
+      .run(trip.id, 'Will be deleted', cat.id);
+
+    const del = await request(app)
+      .delete(`/api/trips/${trip.id}/packing/categories/${cat.id}`)
+      .set('Cookie', authCookie(user.id));
+    expect(del.status).toBe(200);
+
+    const list = await request(app)
+      .get(`/api/trips/${trip.id}/packing`)
+      .set('Cookie', authCookie(user.id));
+    expect(list.body.items).toHaveLength(0);
   });
 });
 
@@ -481,5 +644,71 @@ describe('Packing — apply-template, bag members, save-as-template', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeDefined();
+  });
+
+  it('PACK-017e — apply-template recreates personal categories as personal owned by the applying user', async () => {
+    const { user: author } = createUser(testDb);
+    const { user: applier } = createUser(testDb);
+    const sourceTrip = createTrip(testDb, author.id);
+    const personalCat = createPackingCategory(testDb, sourceTrip.id, { name: 'Mine', type: 'personal', ownerUserId: author.id });
+    const sharedCat = createPackingCategory(testDb, sourceTrip.id, { name: 'Common', type: 'shared' });
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id) VALUES (?, ?, ?)').run(sourceTrip.id, 'Toothbrush', personalCat.id);
+    testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id) VALUES (?, ?, ?)').run(sourceTrip.id, 'Tent', sharedCat.id);
+
+    // Author saves the template.
+    const saveRes = await request(app)
+      .post(`/api/trips/${sourceTrip.id}/packing/save-as-template`)
+      .set('Cookie', authCookie(author.id))
+      .send({ name: 'Round Trip' });
+    expect(saveRes.status).toBe(201);
+    const templateId = saveRes.body.template.id;
+
+    // A different user applies it on a fresh trip.
+    const targetTrip = createTrip(testDb, applier.id);
+    const applyRes = await request(app)
+      .post(`/api/trips/${targetTrip.id}/packing/apply-template/${templateId}`)
+      .set('Cookie', authCookie(applier.id));
+    expect(applyRes.status).toBe(200);
+
+    // Toothbrush must land in a personal category owned by the applier.
+    const cats = testDb.prepare('SELECT * FROM packing_categories WHERE trip_id = ? ORDER BY name').all(targetTrip.id) as any[];
+    const mine = cats.find(c => c.name === 'Mine');
+    const common = cats.find(c => c.name === 'Common');
+    expect(mine).toBeDefined();
+    expect(mine.type).toBe('personal');
+    expect(mine.owner_user_id).toBe(applier.id);
+    expect(common.type).toBe('shared');
+    expect(common.owner_user_id).toBeNull();
+  });
+
+  it('PACK-017d — save-as-template includes shared + personal items but skips private', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const sharedCat = createPackingCategory(testDb, trip.id, { name: 'Shared', type: 'shared' });
+    const personalCat = createPackingCategory(testDb, trip.id, { name: 'Mine', type: 'personal', ownerUserId: user.id });
+    const privateCat = createPackingCategory(testDb, trip.id, { name: 'Secret', type: 'private', ownerUserId: user.id });
+    const insertItem = testDb.prepare('INSERT INTO packing_items (trip_id, name, category_id) VALUES (?, ?, ?)');
+    insertItem.run(trip.id, 'Tent', sharedCat.id);
+    insertItem.run(trip.id, 'Toothbrush', personalCat.id);
+    insertItem.run(trip.id, 'Diary', privateCat.id);
+
+    const res = await request(app)
+      .post(`/api/trips/${trip.id}/packing/save-as-template`)
+      .set('Cookie', authCookie(user.id))
+      .send({ name: 'Mixed Trip' });
+
+    expect(res.status).toBe(201);
+    // Walk the resulting template rows to confirm only shared+personal items landed.
+    const templateId = res.body.template.id;
+    const rows = testDb.prepare(`
+      SELECT ti.name, tc.name AS category
+      FROM packing_template_items ti
+      JOIN packing_template_categories tc ON tc.id = ti.category_id
+      WHERE tc.template_id = ?
+    `).all(templateId) as Array<{ name: string; category: string }>;
+    const names = rows.map(r => r.name).sort();
+    expect(names).toEqual(['Tent', 'Toothbrush']);
+    expect(names).not.toContain('Diary');
   });
 });

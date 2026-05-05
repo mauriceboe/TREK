@@ -21,6 +21,10 @@ export const packingRepo = {
     if (!navigator.onLine) {
       const tempId = -(Date.now())
       const tempItem: PackingItem = {
+        category: null,
+        category_id: null,
+        category_type: null,
+        category_owner_id: null,
         ...(data as Partial<PackingItem>),
         id: tempId,
         trip_id: Number(tripId),

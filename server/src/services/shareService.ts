@@ -163,8 +163,14 @@ export function getSharedTripData(token: string): Record<string, any> | null {
     WHERE a.trip_id = ?
   `).all(tripId);
 
-  // Packing
-  const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY sort_order ASC').all(tripId);
+  // Public share view shows shared categories only.
+  const packing = db.prepare(`
+    SELECT i.*, c.name AS category, c.type AS category_type
+    FROM packing_items i
+    LEFT JOIN packing_categories c ON c.id = i.category_id
+    WHERE i.trip_id = ? AND (c.id IS NULL OR c.type = 'shared')
+    ORDER BY i.sort_order ASC
+  `).all(tripId);
 
   // Budget
   const budget = db.prepare('SELECT * FROM budget_items WHERE trip_id = ? ORDER BY category ASC').all(tripId);

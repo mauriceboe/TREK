@@ -247,6 +247,7 @@ function runMigrations(db: Database.Database): void {
         template_id INTEGER NOT NULL REFERENCES packing_templates(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0
+        -- type column added in migration 124
       )`);
       // Recreate items table with category_id FK (replaces old template_id-based schema)
       try { db.exec('DROP TABLE IF EXISTS packing_template_items'); } catch (err: any) {
@@ -2129,6 +2130,107 @@ function runMigrations(db: Database.Database): void {
         'CREATE INDEX IF NOT EXISTS idx_journey_entries_order ' +
         'ON journey_entries(journey_id, entry_date, sort_order)'
       );
+    },
+    // Migration 123: Personal/private packing categories — promote category
+    // text to a typed table, add per-user check state, re-key assignees by id.
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS packing_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          type TEXT NOT NULL DEFAULT 'shared' CHECK(type IN ('shared', 'personal', 'private')),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_packing_categories_shared
+          ON packing_categories(trip_id, name) WHERE type = 'shared';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_packing_categories_owned
+          ON packing_categories(trip_id, name, type, owner_user_id) WHERE type != 'shared';
+        CREATE INDEX IF NOT EXISTS idx_packing_categories_trip ON packing_categories(trip_id);
+
+        CREATE TABLE IF NOT EXISTS packing_item_checks (
+          item_id INTEGER NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          PRIMARY KEY (item_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_packing_item_checks_item ON packing_item_checks(item_id);
+      `);
+
+      // Skip backfill on fresh installs (no legacy column to migrate from).
+      const itemCols = db.prepare(`PRAGMA table_info(packing_items)`).all() as { name: string }[];
+      const hasLegacyItemCategory = itemCols.some(c => c.name === 'category');
+
+      if (hasLegacyItemCategory) {
+        const existingCats = db.prepare(
+          `SELECT DISTINCT trip_id, category FROM packing_items WHERE category IS NOT NULL`
+        ).all() as { trip_id: number; category: string }[];
+        const insCategory = db.prepare(
+          `INSERT OR IGNORE INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, 'shared', NULL, 0)`
+        );
+        for (const c of existingCats) insCategory.run(c.trip_id, c.category);
+      }
+
+      try { db.exec(`ALTER TABLE packing_items ADD COLUMN category_id INTEGER REFERENCES packing_categories(id) ON DELETE SET NULL`); }
+      catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+
+      if (hasLegacyItemCategory) {
+        db.exec(`
+          UPDATE packing_items SET category_id = (
+            SELECT id FROM packing_categories
+            WHERE trip_id = packing_items.trip_id AND name = packing_items.category AND type = 'shared'
+          )
+          WHERE category IS NOT NULL
+        `);
+      }
+
+      // Re-key packing_category_assignees from category_name to category_id.
+      const assigneeCols = db.prepare(`PRAGMA table_info(packing_category_assignees)`).all() as { name: string }[];
+      const hasLegacyAssigneeName = assigneeCols.some(c => c.name === 'category_name');
+
+      if (hasLegacyAssigneeName) {
+        try { db.exec(`ALTER TABLE packing_category_assignees ADD COLUMN category_id INTEGER REFERENCES packing_categories(id) ON DELETE CASCADE`); }
+        catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
+
+        db.exec(`
+          UPDATE packing_category_assignees SET category_id = (
+            SELECT id FROM packing_categories
+            WHERE trip_id = packing_category_assignees.trip_id
+              AND name = packing_category_assignees.category_name
+              AND type = 'shared'
+          )
+          WHERE category_name IS NOT NULL
+        `);
+
+        // Drop assignees with no resolvable category (their name was never used by an item).
+        db.exec(`DELETE FROM packing_category_assignees WHERE category_id IS NULL`);
+      }
+
+      // Swap via temp table — SQLite's ALTER can't tighten NOT NULL or change UNIQUE.
+      db.exec(`
+        CREATE TABLE packing_category_assignees_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+          category_id INTEGER NOT NULL REFERENCES packing_categories(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE(category_id, user_id)
+        );
+        INSERT INTO packing_category_assignees_new (trip_id, category_id, user_id)
+          SELECT trip_id, category_id, user_id FROM packing_category_assignees;
+        DROP TABLE packing_category_assignees;
+        ALTER TABLE packing_category_assignees_new RENAME TO packing_category_assignees;
+        CREATE INDEX IF NOT EXISTS idx_packing_category_assignees_category
+          ON packing_category_assignees(category_id);
+      `);
+
+      // Drop the now-redundant text column. Requires SQLite 3.35+ (better-sqlite3 v12 bundles 3.46).
+      try { db.exec(`ALTER TABLE packing_items DROP COLUMN category`); } catch {}
+    },
+    // Migration 124: Persist category type on packing templates so applying preserves shared/personal.
+    () => {
+      try { db.exec(`ALTER TABLE packing_template_categories ADD COLUMN type TEXT NOT NULL DEFAULT 'shared' CHECK(type IN ('shared', 'personal'))`); }
+      catch (err: any) { if (!err.message?.includes('duplicate column name')) throw err; }
     },
   ];
 

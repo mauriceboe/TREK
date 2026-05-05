@@ -146,13 +146,32 @@ export function buildDayNote(overrides: Partial<DayNote> = {}): DayNote {
   };
 }
 
+// Deterministic category_id per category name so test items with the same
+// category text land in the same group when overrides don't supply category_id.
+const _packingCategoryIds = new Map<string, number>();
+export function packingCategoryIdFor(name: string | null | undefined): number | null {
+  if (!name) return null;
+  const existing = _packingCategoryIds.get(name);
+  if (existing !== undefined) return existing;
+  const id = 10_000 + _packingCategoryIds.size;
+  _packingCategoryIds.set(name, id);
+  return id;
+}
+export function resetPackingCategoryIds() {
+  _packingCategoryIds.clear();
+}
+
 export function buildPackingItem(overrides: Partial<PackingItem> = {}): PackingItem {
   const id = next();
+  const category = overrides.category ?? null;
   return {
     id,
     trip_id: 1,
     name: `Packing item ${id}`,
-    category: null,
+    category,
+    category_id: overrides.category_id ?? packingCategoryIdFor(category),
+    category_type: 'shared',
+    category_owner_id: null,
     checked: 0,
     quantity: 1,
     ...overrides,

@@ -42,7 +42,7 @@ export function registerMcpPrompts(server: McpServer, _userId: number, isStaticT
       if (!canAccessTrip(tripId, userId)) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found or access denied.' } }] };
       }
-      const summary = getTripSummary(tripId);
+      const summary = getTripSummary(tripId, userId);
       if (!summary) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found.' } }] };
       }
@@ -78,7 +78,7 @@ ${days?.map((d: any, i: number) => `Day ${i + 1} (${d.date}): ${d.assignments?.l
       if (!canAccessTrip(tripId, userId)) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found or access denied.' } }] };
       }
-      const items = listPackingItems(tripId);
+      const items = listPackingItems(tripId, userId);
       if (!items.length) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'No packing items found for this trip.' } }] };
       }
@@ -91,7 +91,7 @@ ${days?.map((d: any, i: number) => `Day ${i + 1} (${d.date}): ${d.assignments?.l
       const lines = Object.entries(grouped).map(([cat, items]) =>
         `## ${cat}\n${(items as any[]).map((i: any) => `- [${i.checked ? 'x' : ' '}] ${i.name}`).join('\n')}`
       ).join('\n\n');
-      const { trip } = getTripSummary(tripId) || {};
+      const { trip } = getTripSummary(tripId, userId) || {};
       return {
         description: `Packing list for "${trip?.title || tripId}"`,
         messages: [{ role: 'user', content: { type: 'text', text: `# Packing List: ${trip?.title || 'Trip'}\n\n${lines}\n\n_${items.length} items across ${Object.keys(grouped).length} categories_` } }],
@@ -112,7 +112,7 @@ ${days?.map((d: any, i: number) => `Day ${i + 1} (${d.date}): ${d.assignments?.l
       if (!canAccessTrip(tripId, userId)) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found or access denied.' } }] };
       }
-      const summary = getTripSummary(tripId);
+      const summary = getTripSummary(tripId, userId);
       if (!summary) {
         return { messages: [{ role: 'user', content: { type: 'text', text: 'Trip not found.' } }] };
       }

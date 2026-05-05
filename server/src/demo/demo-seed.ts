@@ -66,7 +66,21 @@ function seedExampleTrips(db: Database.Database, adminId: number, demoId: number
   const insertDay = db.prepare('INSERT INTO days (trip_id, day_number, date) VALUES (?, ?, ?)');
   const insertPlace = db.prepare('INSERT INTO places (trip_id, name, lat, lng, address, category_id, place_time, duration_minutes, notes, image_url, google_place_id, website, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   const insertAssignment = db.prepare('INSERT INTO day_assignments (day_id, place_id, order_index) VALUES (?, ?, ?)');
-  const insertPacking = db.prepare('INSERT INTO packing_items (trip_id, name, checked, category, sort_order) VALUES (?, ?, ?, ?, ?)');
+  const insertPackingCategory = db.prepare(
+    `INSERT OR IGNORE INTO packing_categories (trip_id, name, type, owner_user_id, sort_order) VALUES (?, ?, 'shared', NULL, 0)`
+  );
+  const lookupPackingCategory = db.prepare(
+    `SELECT id FROM packing_categories WHERE trip_id = ? AND name = ? AND type = 'shared'`
+  );
+  const insertPackingRow = db.prepare('INSERT INTO packing_items (trip_id, name, checked, category_id, sort_order) VALUES (?, ?, ?, ?, ?)');
+  // Keeps the seed-data signature stable; resolves category text to a shared category_id.
+  const insertPacking = {
+    run: (tripId: number, name: string, checked: number, categoryName: string, sortOrder: number) => {
+      insertPackingCategory.run(tripId, categoryName);
+      const cat = lookupPackingCategory.get(tripId, categoryName) as { id: number };
+      insertPackingRow.run(tripId, name, checked, cat.id, sortOrder);
+    },
+  };
   const insertBudget = db.prepare('INSERT INTO budget_items (trip_id, category, name, total_price, persons, note) VALUES (?, ?, ?, ?, ?, ?)');
   const insertReservation = db.prepare('INSERT INTO reservations (trip_id, day_id, title, reservation_time, confirmation_number, status, type, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   const insertMember = db.prepare('INSERT OR IGNORE INTO trip_members (trip_id, user_id, invited_by) VALUES (?, ?, ?)');
