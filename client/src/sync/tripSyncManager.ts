@@ -195,7 +195,12 @@ export const tripSyncManager = {
       onProgress?.({ phase: 'trip', tripId: trip.id, index: i, total: toSync.length })
       let tripOk = false
       try {
-        await syncTrip(trip.id)
+        await Promise.race([
+          syncTrip(trip.id),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('syncTrip timeout')), 30_000)
+          ),
+        ])
         tripOk = true
       } catch (err) {
         if (isQuotaError(err)) {

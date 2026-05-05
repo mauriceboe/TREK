@@ -199,7 +199,46 @@ export async function clearBlobCache(): Promise<void> {
 
 /** Wipe the entire offline database (called on logout). */
 export async function clearAll(): Promise<void> {
-  await offlineDb.delete();
-  // Re-open so subsequent operations don't fail
-  await offlineDb.open();
+  // Use table.clear() instead of offlineDb.delete() to avoid triggering the
+  // versionchange handler (which calls close()), which would put Dexie into a
+  // broken write state for the remainder of the session.
+  await offlineDb.transaction(
+    'rw',
+    [
+      offlineDb.trips,
+      offlineDb.days,
+      offlineDb.places,
+      offlineDb.packingItems,
+      offlineDb.todoItems,
+      offlineDb.budgetItems,
+      offlineDb.reservations,
+      offlineDb.tripFiles,
+      offlineDb.accommodations,
+      offlineDb.tripMembers,
+      offlineDb.tags,
+      offlineDb.categories,
+      offlineDb.mutationQueue,
+      offlineDb.syncMeta,
+      offlineDb.blobCache,
+    ],
+    async () => {
+      await Promise.all([
+        offlineDb.trips.clear(),
+        offlineDb.days.clear(),
+        offlineDb.places.clear(),
+        offlineDb.packingItems.clear(),
+        offlineDb.todoItems.clear(),
+        offlineDb.budgetItems.clear(),
+        offlineDb.reservations.clear(),
+        offlineDb.tripFiles.clear(),
+        offlineDb.accommodations.clear(),
+        offlineDb.tripMembers.clear(),
+        offlineDb.tags.clear(),
+        offlineDb.categories.clear(),
+        offlineDb.mutationQueue.clear(),
+        offlineDb.syncMeta.clear(),
+        offlineDb.blobCache.clear(),
+      ])
+    },
+  )
 }

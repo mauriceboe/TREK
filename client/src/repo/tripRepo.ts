@@ -48,7 +48,10 @@ export const tripRepo = {
   },
 
   async get(tripId: number | string): Promise<{ trip: Trip; refresh: TripRefresh }> {
-    const cached = await offlineDb.trips.get(Number(tripId))
+    const cached = await Promise.race([
+      offlineDb.trips.get(Number(tripId)).catch(() => undefined),
+      new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 2000)),
+    ])
 
     const refresh: TripRefresh = (async () => {
       try {
