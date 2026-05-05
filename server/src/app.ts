@@ -95,18 +95,18 @@ export function createApp(): express.Application {
   const hstsActive = shouldForceHttps || process.env.NODE_ENV === 'production';
   const hstsIncludeSubdomains = process.env.HSTS_INCLUDE_SUBDOMAINS === 'true';
 
-  // RFC 8414 / RFC 9728 / RFC 7591: discovery docs and DCR are world-readable/writable —
-  // open CORS for external MCP clients regardless of the deployment's ALLOWED_ORIGINS config.
-  // /oauth/register and /oauth/authorize need it because browser-based clients (ChatGPT, etc.)
-  // send a CORS preflight that the global cors({ origin: false }) would answer WITHOUT
-  // Access-Control-Allow-Origin, causing the browser to reject the response before the
-  // SDK's own cors() middleware inside clientRegistrationHandler/authorizationHandler runs.
+  // RFC 8414 / RFC 9728 / RFC 7591: discovery docs and DCR are world-readable/writable.
+  // /mcp needs open CORS so external MCP clients (ChatGPT, Claude.ai, Inspector) can call it
+  // with Bearer tokens from any origin. /oauth/register and /oauth/authorize need it for
+  // browser-based DCR/authorization preflights — the global cors({ origin: false }) would
+  // answer OPTIONS without Access-Control-Allow-Origin before the SDK's own cors() runs.
   app.use(
     (req: Request, _res: Response, next: NextFunction) => {
       if (
         req.path.startsWith('/.well-known/oauth-') ||
         req.path === '/oauth/register' ||
-        req.path === '/oauth/authorize'
+        req.path === '/oauth/authorize' ||
+        req.path === '/mcp'
       ) {
         cors({ origin: '*', credentials: false })(req, _res, next);
       } else {
