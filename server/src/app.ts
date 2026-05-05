@@ -409,9 +409,29 @@ export function createApp(): express.Application {
   app.use((req: Request, res: Response, next: NextFunction) => {
     const isMetadataPath =
       req.path === '/.well-known/oauth-authorization-server' ||
+      req.path === '/.well-known/openid-configuration' ||
       req.path.startsWith('/.well-known/oauth-protected-resource');
     if (isMetadataPath && !isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
     getMetaRouter()(req, res, next);
+  });
+
+  // ChatGPT (and other OIDC-first clients) bootstrap OAuth discovery via
+  // /.well-known/openid-configuration. Serve the same AS metadata there so
+  // they can find the registration_endpoint, authorization_endpoint, etc.
+  app.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
+    const base = (getAppUrl() || 'http://localhost:3001').replace(/\/+$/, '');
+    res.json({
+      issuer:                                base,
+      authorization_endpoint:                `${base}/oauth/authorize`,
+      token_endpoint:                        `${base}/oauth/token`,
+      revocation_endpoint:                   `${base}/oauth/revoke`,
+      registration_endpoint:                 `${base}/oauth/register`,
+      response_types_supported:              ['code'],
+      grant_types_supported:                 ['authorization_code', 'refresh_token'],
+      code_challenge_methods_supported:      ['S256'],
+      token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
+      scopes_supported:                      ALL_SCOPES,
+    });
   });
 
   // SDK authorize handler: validates OAuth params, calls provider.authorize() which redirects
