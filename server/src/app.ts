@@ -100,10 +100,12 @@ export function createApp(): express.Application {
   // with Bearer tokens from any origin. /oauth/register and /oauth/authorize need it for
   // browser-based DCR/authorization preflights — the global cors({ origin: false }) would
   // answer OPTIONS without Access-Control-Allow-Origin before the SDK's own cors() runs.
+  // All /.well-known/* paths get open CORS so clients probing openid-configuration or the
+  // RFC 8414 path-suffixed AS metadata form don't get CORS-blocked (they get 404 JSON instead).
   app.use(
     (req: Request, _res: Response, next: NextFunction) => {
       if (
-        req.path.startsWith('/.well-known/oauth-') ||
+        req.path.startsWith('/.well-known/') ||
         req.path === '/oauth/register' ||
         req.path === '/oauth/authorize' ||
         req.path === '/mcp'
@@ -427,6 +429,15 @@ export function createApp(): express.Application {
   app.post('/mcp', mcpHandler);
   app.get('/mcp', mcpHandler);
   app.delete('/mcp', mcpHandler);
+
+  // Return 404 JSON for any /.well-known/* path the SDK metadata router doesn't handle.
+  // Without this, the SPA catch-all serves HTML — clients probing
+  // /.well-known/openid-configuration or the RFC 8414 path-suffixed AS metadata URL
+  // receive a 200 HTML response they can't parse as JSON, causing "does not implement OAuth".
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/.well-known/')) return res.status(404).json({ error: 'not_found' });
+    next();
+  });
 
   // Production static file serving
   if (process.env.NODE_ENV === 'production') {
