@@ -143,6 +143,7 @@ export const oauthApi = {
     state?: string
     code_challenge: string
     code_challenge_method: string
+    resource?: string
   }) => apiClient.get('/oauth/authorize/validate', { params }).then(r => r.data),
 
   /** Submit user consent (approve or deny) */
@@ -154,6 +155,7 @@ export const oauthApi = {
     code_challenge: string
     code_challenge_method: string
     approved: boolean
+    resource?: string
   }) => apiClient.post('/oauth/authorize', body).then(r => r.data),
 
   clients: {

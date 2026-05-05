@@ -34,6 +34,7 @@ export default function OAuthAuthorizePage(): React.ReactElement {
   const state          = params.get('state') || ''
   const codeChallenge  = params.get('code_challenge') || ''
   const ccMethod       = params.get('code_challenge_method') || ''
+  const resource       = params.get('resource') || undefined
 
   // Load auth state once, then validate
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function OAuthAuthorizePage(): React.ReactElement {
         code_challenge: codeChallenge,
         code_challenge_method: ccMethod,
         response_type: 'code',
+        resource,
       })
       setValidation(result)
 
@@ -99,6 +101,7 @@ export default function OAuthAuthorizePage(): React.ReactElement {
         code_challenge: codeChallenge,
         code_challenge_method: ccMethod,
         approved,
+        resource,
       })
       setPageState('done')
       window.location.href = result.redirect
