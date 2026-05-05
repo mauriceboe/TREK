@@ -27,6 +27,7 @@ import {
   upsertCategories,
   upsertSyncMeta,
   clearTripData,
+  clearAll,
 } from '../db/offlineDb'
 import { prefetchTilesForTrip } from './tilePrefetcher'
 import { useSettingsStore } from '../store/settingsStore'
@@ -67,6 +68,14 @@ function isStale(trip: Trip): boolean {
 
 function isPhoto(file: TripFile): boolean {
   return file.mime_type.startsWith('image/')
+}
+
+function isQuotaError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  if (err.name === 'QuotaExceededError') return true
+  // Dexie wraps IDB errors: AbortError with inner QuotaExceededError
+  const inner = (err as { inner?: unknown }).inner
+  return inner instanceof Error && inner.name === 'QuotaExceededError'
 }
 
 // ── Core logic ────────────────────────────────────────────────────────────────
@@ -149,7 +158,22 @@ export const tripSyncManager = {
         try {
           await syncTrip(trip.id)
         } catch (err) {
-          console.error(`[tripSync] failed for trip ${trip.id}:`, err)
+          if (isQuotaError(err)) {
+            console.warn(`[tripSync] quota exceeded for trip ${trip.id}, clearing trip data and retrying`)
+            try {
+              await clearTripData(trip.id)
+              await syncTrip(trip.id)
+            } catch (retryErr) {
+              if (isQuotaError(retryErr)) {
+                console.warn('[tripSync] quota still exceeded after eviction — clearing all IDB data')
+                await clearAll()
+                return
+              }
+              console.error(`[tripSync] failed for trip ${trip.id} after eviction:`, retryErr)
+            }
+          } else {
+            console.error(`[tripSync] failed for trip ${trip.id}:`, err)
+          }
         }
       }
 
