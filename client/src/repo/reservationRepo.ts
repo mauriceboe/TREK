@@ -11,10 +11,9 @@ export const reservationRepo = {
       .toArray()
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await reservationsApi.list(tripId)
-        upsertReservations(result.reservations)
+        await upsertReservations(result.reservations)
         return result
       } catch {
         return null
@@ -25,7 +24,7 @@ export const reservationRepo = {
 
     const fresh = await refresh
     if (!fresh) return { reservations: [], refresh: Promise.resolve(null) }
-    return { reservations: fresh.reservations, refresh: Promise.resolve(fresh) }
+    return { reservations: fresh.reservations, refresh: Promise.resolve(null) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ reservation: Reservation }> {

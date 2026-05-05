@@ -11,14 +11,15 @@ export const tripRepo = {
     const all = await offlineDb.trips.toArray()
 
     const refresh: TripsRefresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const [active, archived] = await Promise.all([
           tripsApi.list(),
           tripsApi.list({ archived: 1 }),
         ])
-        active.trips.forEach(t => upsertTrip(t))
-        archived.trips.forEach(t => upsertTrip(t))
+        await Promise.all([
+          ...active.trips.map(t => upsertTrip(t)),
+          ...archived.trips.map(t => upsertTrip(t)),
+        ])
         return { trips: active.trips, archivedTrips: archived.trips }
       } catch {
         return null
@@ -35,17 +36,17 @@ export const tripRepo = {
 
     const fresh = await refresh
     if (!fresh) return { trips: [], archivedTrips: [], refresh: Promise.resolve(null) }
-    return { ...fresh, refresh: Promise.resolve(fresh) }
+    // Data came straight from network — no background re-fetch needed
+    return { ...fresh, refresh: Promise.resolve(null) }
   },
 
   async get(tripId: number | string): Promise<{ trip: Trip; refresh: TripRefresh }> {
     const cached = await offlineDb.trips.get(Number(tripId))
 
     const refresh: TripRefresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await tripsApi.get(tripId)
-        upsertTrip(result.trip)
+        await upsertTrip(result.trip)
         return result
       } catch {
         return null
@@ -56,7 +57,7 @@ export const tripRepo = {
 
     const fresh = await refresh
     if (!fresh) throw new Error('No cached trip data available offline')
-    return { trip: fresh.trip, refresh: Promise.resolve(fresh) }
+    return { trip: fresh.trip, refresh: Promise.resolve(null) }
   },
 
   async update(tripId: number | string, data: Partial<Trip>): Promise<{ trip: Trip }> {

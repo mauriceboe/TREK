@@ -11,10 +11,9 @@ export const placeRepo = {
       .toArray()
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await placesApi.list(tripId, params)
-        upsertPlaces(result.places)
+        await upsertPlaces(result.places)
         return result
       } catch {
         return null
@@ -25,7 +24,7 @@ export const placeRepo = {
 
     const fresh = await refresh
     if (!fresh) return { places: [], refresh: Promise.resolve(null) }
-    return { places: fresh.places, refresh: Promise.resolve(fresh) }
+    return { places: fresh.places, refresh: Promise.resolve(null) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ place: Place }> {

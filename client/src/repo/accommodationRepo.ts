@@ -9,10 +9,9 @@ export const accommodationRepo = {
       .where('trip_id').equals(Number(tripId)).toArray()
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await accommodationsApi.list(tripId)
-        upsertAccommodations(result.accommodations || []).catch(() => {})
+        await upsertAccommodations(result.accommodations || [])
         return result
       } catch {
         return null
@@ -23,7 +22,7 @@ export const accommodationRepo = {
 
     const fresh = await refresh
     if (!fresh) return { accommodations: [], refresh: Promise.resolve(null) }
-    return { accommodations: fresh.accommodations, refresh: Promise.resolve(fresh) }
+    return { accommodations: fresh.accommodations, refresh: Promise.resolve(null) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ accommodation: Accommodation }> {

@@ -11,10 +11,9 @@ export const fileRepo = {
       .toArray()
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await filesApi.list(tripId)
-        upsertTripFiles(result.files)
+        await upsertTripFiles(result.files)
         return result
       } catch {
         return null
@@ -25,7 +24,7 @@ export const fileRepo = {
 
     const fresh = await refresh
     if (!fresh) return { files: [], refresh: Promise.resolve(null) }
-    return { files: fresh.files, refresh: Promise.resolve(fresh) }
+    return { files: fresh.files, refresh: Promise.resolve(null) }
   },
 
   async update(tripId: number | string, id: number, data: Record<string, unknown>): Promise<{ file: TripFile }> {

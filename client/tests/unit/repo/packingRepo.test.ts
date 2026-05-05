@@ -58,8 +58,10 @@ describe('packingRepo.list', () => {
     expect(restCalled).toBe(false);
   });
 
-  it('offline — returns empty array when nothing cached', async () => {
-    Object.defineProperty(navigator, 'onLine', { value: false });
+  it('offline — returns empty array when nothing cached and network fails', async () => {
+    server.use(
+      http.get('/api/trips/99/packing', () => HttpResponse.error()),
+    );
     const result = await packingRepo.list(99);
     expect(result.items).toHaveLength(0);
   });

@@ -11,10 +11,9 @@ export const packingRepo = {
       .toArray()
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await packingApi.list(tripId)
-        upsertPackingItems(result.items)
+        await upsertPackingItems(result.items)
         return result
       } catch {
         return null
@@ -25,7 +24,7 @@ export const packingRepo = {
 
     const fresh = await refresh
     if (!fresh) return { items: [], refresh: Promise.resolve(null) }
-    return { items: fresh.items, refresh: Promise.resolve(fresh) }
+    return { items: fresh.items, refresh: Promise.resolve(null) }
   },
 
   async create(tripId: number | string, data: Record<string, unknown>): Promise<{ item: PackingItem }> {

@@ -7,10 +7,12 @@ import { resetAllStores, seedStore } from '../../tests/helpers/store';
 import { buildUser, buildAdmin, buildTrip } from '../../tests/helpers/factories';
 import { useAuthStore } from '../store/authStore';
 import { usePermissionsStore } from '../store/permissionsStore';
+import { offlineDb } from '../db/offlineDb';
 import DashboardPage from './DashboardPage';
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   // Seed auth with authenticated user
   seedStore(useAuthStore, { isAuthenticated: true, user: buildUser() });
@@ -329,7 +331,8 @@ describe('DashboardPage', () => {
       const tokyoTrip = screen.getAllByText('Tokyo Trip')[0];
       await user.click(tokyoTrip);
 
-      expect(tokyoTrip).toBeInTheDocument();
+      // Re-query after click — background refresh may re-render the list
+      expect(screen.getAllByText('Tokyo Trip').length).toBeGreaterThan(0);
     });
   });
 

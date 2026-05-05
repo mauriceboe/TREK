@@ -11,10 +11,9 @@ export const dayRepo = {
       .sortBy('day_number' as keyof Day)) as Day[]
 
     const refresh = (async () => {
-      if (!navigator.onLine) return null
       try {
         const result = await daysApi.list(tripId)
-        upsertDays(result.days)
+        await upsertDays(result.days)
         return result
       } catch {
         return null
@@ -25,7 +24,7 @@ export const dayRepo = {
 
     const fresh = await refresh
     if (!fresh) return { days: [], refresh: Promise.resolve(null) }
-    return { days: fresh.days, refresh: Promise.resolve(fresh) }
+    return { days: fresh.days, refresh: Promise.resolve(null) }
   },
 
   async update(tripId: number | string, dayId: number | string, data: Record<string, unknown>): Promise<{ day: Day }> {
