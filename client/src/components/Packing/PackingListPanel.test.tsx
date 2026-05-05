@@ -9,8 +9,11 @@ import { useTripStore } from '../../store/tripStore';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
 import { buildUser, buildTrip, buildPackingItem } from '../../../tests/helpers/factories';
 import PackingListPanel from './PackingListPanel';
+import { offlineDb } from '../../db/offlineDb';
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   // Side-effect APIs PackingListPanel calls on mount
   server.use(

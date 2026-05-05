@@ -60,22 +60,18 @@ export const tripRepo = {
   },
 
   async update(tripId: number | string, data: Partial<Trip>): Promise<{ trip: Trip }> {
-    if (!navigator.onLine) {
-      const existing = await offlineDb.trips.get(Number(tripId))
-      const optimistic: Trip = { ...(existing ?? {} as Trip), ...(data as Partial<Trip>), id: Number(tripId) }
-      await offlineDb.trips.put(optimistic)
-      await mutationQueue.enqueue({
-        id: generateUUID(),
-        tripId: Number(tripId),
-        method: 'PUT',
-        url: `/trips/${tripId}`,
-        body: data as Record<string, unknown>,
-        resource: 'trips',
-      })
-      return { trip: optimistic }
-    }
-    const result = await tripsApi.update(tripId, data as Record<string, unknown>)
-    upsertTrip(result.trip)
-    return result
+    const existing = await offlineDb.trips.get(Number(tripId))
+    const optimistic: Trip = { ...(existing ?? {} as Trip), ...(data as Partial<Trip>), id: Number(tripId) }
+    await offlineDb.trips.put(optimistic)
+    await mutationQueue.enqueue({
+      id: generateUUID(),
+      tripId: Number(tripId),
+      method: 'PUT',
+      url: `/trips/${tripId}`,
+      body: data as Record<string, unknown>,
+      resource: 'trips',
+    })
+    mutationQueue.flush().catch(() => {})
+    return { trip: optimistic }
   },
 }

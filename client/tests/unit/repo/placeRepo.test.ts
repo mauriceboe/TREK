@@ -67,19 +67,15 @@ describe('placeRepo.list', () => {
 });
 
 describe('placeRepo.create', () => {
-  it('calls REST and caches created place in Dexie', async () => {
-    const place = buildPlace({ trip_id: 1, name: 'Eiffel Tower' });
-    server.use(
-      http.post('/api/trips/1/places', () => HttpResponse.json({ place })),
-    );
-
+  it('writes place optimistically to Dexie immediately', async () => {
     const result = await placeRepo.create(1, { name: 'Eiffel Tower' });
     expect(result.place.name).toBe('Eiffel Tower');
+    // tempId is negative (-(Date.now()))
+    expect(result.place.id).toBeLessThan(0);
 
-    await new Promise(r => setTimeout(r, 0));
-    const cached = await offlineDb.places.get(place.id);
-    expect(cached).toBeDefined();
-    expect(cached!.name).toBe('Eiffel Tower');
+    const cached = await offlineDb.places.where('trip_id').equals(1).toArray();
+    expect(cached).toHaveLength(1);
+    expect(cached[0].name).toBe('Eiffel Tower');
   });
 });
 

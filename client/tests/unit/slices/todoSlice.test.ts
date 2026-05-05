@@ -4,6 +4,7 @@ import { useTripStore } from '../../../src/store/tripStore';
 import { resetAllStores, seedStore } from '../../helpers/store';
 import { buildTodoItem } from '../../helpers/factories';
 import { server } from '../../helpers/msw/server';
+import { offlineDb } from '../../../src/db/offlineDb';
 
 vi.mock('../../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock('../../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 
@@ -34,16 +37,18 @@ describe('todoSlice', () => {
       expect(items).toHaveLength(2);
     });
 
-    it('FE-TODO-002: addTodoItem on failure throws', async () => {
+    it('FE-TODO-002: addTodoItem always adds item optimistically (no throw on API error)', async () => {
       server.use(
         http.post('/api/trips/1/todo', () =>
           HttpResponse.json({ message: 'Error' }, { status: 500 })
         ),
       );
 
-      await expect(
-        useTripStore.getState().addTodoItem(1, { name: 'Fail' })
-      ).rejects.toThrow();
+      const result = await useTripStore.getState().addTodoItem(1, { name: 'Fail' });
+
+      expect(result.name).toBe('Fail');
+      expect(useTripStore.getState().todoItems).toHaveLength(1);
+      expect(useTripStore.getState().todoItems[0].name).toBe('Fail');
     });
   });
 
@@ -69,7 +74,7 @@ describe('todoSlice', () => {
   });
 
   describe('deleteTodoItem', () => {
-    it('FE-TODO-004: deleteTodoItem optimistically removes item, rollback on failure', async () => {
+    it('FE-TODO-004: deleteTodoItem removes item permanently even on API error', async () => {
       const item = buildTodoItem({ id: 10, trip_id: 1 });
       seedStore(useTripStore, { todoItems: [item] });
 
@@ -79,10 +84,9 @@ describe('todoSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().deleteTodoItem(1, 10)).rejects.toThrow();
+      await useTripStore.getState().deleteTodoItem(1, 10);
 
-      expect(useTripStore.getState().todoItems).toHaveLength(1);
-      expect(useTripStore.getState().todoItems[0].id).toBe(10);
+      expect(useTripStore.getState().todoItems).toHaveLength(0);
     });
 
     it('FE-TODO-004b: deleteTodoItem success removes item from array', async () => {
@@ -115,7 +119,7 @@ describe('todoSlice', () => {
       expect(useTripStore.getState().todoItems[0].checked).toBe(1);
     });
 
-    it('FE-TODO-006: toggleTodoItem rolls back checked on API failure (silent)', async () => {
+    it('FE-TODO-006: toggleTodoItem preserves optimistic checked state even on API failure', async () => {
       const item = buildTodoItem({ id: 10, trip_id: 1, checked: 0 });
       seedStore(useTripStore, { todoItems: [item] });
 
@@ -125,10 +129,10 @@ describe('todoSlice', () => {
         ),
       );
 
-      // Does NOT throw
       await useTripStore.getState().toggleTodoItem(1, 10, true);
 
-      expect(useTripStore.getState().todoItems[0].checked).toBe(0);
+      // Optimistic state preserved — no rollback (queued for sync)
+      expect(useTripStore.getState().todoItems[0].checked).toBe(1);
     });
 
     it('FE-TODO-007: toggleTodoItem preserves sort_order field', async () => {

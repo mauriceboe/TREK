@@ -28,60 +28,50 @@ export const fileRepo = {
     return { files: fresh.files, refresh: Promise.resolve(fresh) }
   },
 
-  async update(tripId: number | string, id: number, data: Record<string, unknown>): Promise<unknown> {
-    if (!navigator.onLine) {
-      const existing = await offlineDb.tripFiles.get(id)
-      if (existing) await offlineDb.tripFiles.put({ ...existing, ...(data as Partial<TripFile>) })
-      await mutationQueue.enqueue({
-        id: generateUUID(),
-        tripId: Number(tripId),
-        method: 'PUT',
-        url: `/trips/${tripId}/files/${id}`,
-        body: data,
-        resource: 'tripFiles',
-      })
-      return { success: true }
-    }
-    const result = await filesApi.update(tripId, id, data)
-    const file = (result as { file?: TripFile }).file
-    if (file) offlineDb.tripFiles.put(file)
-    return result
+  async update(tripId: number | string, id: number, data: Record<string, unknown>): Promise<{ file: TripFile }> {
+    const existing = await offlineDb.tripFiles.get(id)
+    const optimistic: TripFile = { ...(existing ?? {} as TripFile), ...(data as Partial<TripFile>), id: Number(id) }
+    await offlineDb.tripFiles.put(optimistic)
+    await mutationQueue.enqueue({
+      id: generateUUID(),
+      tripId: Number(tripId),
+      method: 'PUT',
+      url: `/trips/${tripId}/files/${id}`,
+      body: data,
+      resource: 'tripFiles',
+    })
+    mutationQueue.flush().catch(() => {})
+    return { file: optimistic }
   },
 
   async toggleStar(tripId: number | string, id: number): Promise<unknown> {
-    if (!navigator.onLine) {
-      const existing = await offlineDb.tripFiles.get(id)
-      if (existing) {
-        await offlineDb.tripFiles.put({ ...existing, starred: existing.starred ? 0 : 1 })
-      }
-      await mutationQueue.enqueue({
-        id: generateUUID(),
-        tripId: Number(tripId),
-        method: 'PATCH',
-        url: `/trips/${tripId}/files/${id}/star`,
-        body: undefined,
-      })
-      return { success: true }
+    const existing = await offlineDb.tripFiles.get(id)
+    if (existing) {
+      await offlineDb.tripFiles.put({ ...existing, starred: existing.starred ? 0 : 1 })
     }
-    return filesApi.toggleStar(tripId, id)
+    await mutationQueue.enqueue({
+      id: generateUUID(),
+      tripId: Number(tripId),
+      method: 'PATCH',
+      url: `/trips/${tripId}/files/${id}/star`,
+      body: undefined,
+    })
+    mutationQueue.flush().catch(() => {})
+    return { success: true }
   },
 
   async delete(tripId: number | string, id: number): Promise<unknown> {
-    if (!navigator.onLine) {
-      await offlineDb.tripFiles.delete(id)
-      await mutationQueue.enqueue({
-        id: generateUUID(),
-        tripId: Number(tripId),
-        method: 'DELETE',
-        url: `/trips/${tripId}/files/${id}`,
-        body: undefined,
-        resource: 'tripFiles',
-        entityId: id,
-      })
-      return { success: true }
-    }
-    const result = await filesApi.delete(tripId, id)
-    offlineDb.tripFiles.delete(id)
-    return result
+    await offlineDb.tripFiles.delete(id)
+    await mutationQueue.enqueue({
+      id: generateUUID(),
+      tripId: Number(tripId),
+      method: 'DELETE',
+      url: `/trips/${tripId}/files/${id}`,
+      body: undefined,
+      resource: 'tripFiles',
+      entityId: id,
+    })
+    mutationQueue.flush().catch(() => {})
+    return { success: true }
   },
 }

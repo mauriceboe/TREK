@@ -11,6 +11,7 @@ import { usePermissionsStore } from '../../store/permissionsStore';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
 import { buildUser, buildAdmin, buildTrip, buildDay, buildPlace, buildReservation } from '../../../tests/helpers/factories';
 import DayDetailPanel from './DayDetailPanel';
+import { offlineDb } from '../../db/offlineDb';
 
 const day = buildDay({ id: 1, trip_id: 1, date: '2025-06-15', title: 'Day in Paris' });
 
@@ -28,7 +29,9 @@ const defaultProps = {
   onAccommodationChange: vi.fn(),
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   vi.clearAllMocks();
   server.use(

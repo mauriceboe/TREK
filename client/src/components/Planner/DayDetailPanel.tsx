@@ -118,8 +118,10 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
   const handleSaveAccommodation = async () => {
     if (!hotelForm.place_id) return
     try {
+      const selectedPlace = places.find(p => p.id === hotelForm.place_id)
       const data = await accommodationRepo.create(tripId, {
         place_id: hotelForm.place_id,
+        place_name: selectedPlace?.name,
         start_day_id: hotelDayRange.start,
         end_day_id: hotelDayRange.end,
         check_in: hotelForm.check_in || null,

@@ -29,22 +29,18 @@ export const dayRepo = {
   },
 
   async update(tripId: number | string, dayId: number | string, data: Record<string, unknown>): Promise<{ day: Day }> {
-    if (!navigator.onLine) {
-      const existing = await offlineDb.days.get(Number(dayId))
-      const optimistic: Day = { ...(existing ?? {} as Day), ...(data as Partial<Day>), id: Number(dayId) }
-      await offlineDb.days.put(optimistic)
-      await mutationQueue.enqueue({
-        id: generateUUID(),
-        tripId: Number(tripId),
-        method: 'PUT',
-        url: `/trips/${tripId}/days/${dayId}`,
-        body: data,
-        resource: 'days',
-      })
-      return { day: optimistic }
-    }
-    const result = await daysApi.update(tripId, dayId, data)
-    offlineDb.days.put(result.day)
-    return result
+    const existing = await offlineDb.days.get(Number(dayId))
+    const optimistic: Day = { ...(existing ?? {} as Day), ...data, id: Number(dayId) }
+    await offlineDb.days.put(optimistic)
+    await mutationQueue.enqueue({
+      id: generateUUID(),
+      tripId: Number(tripId),
+      method: 'PUT',
+      url: `/trips/${tripId}/days/${dayId}`,
+      body: data,
+      resource: 'days',
+    })
+    mutationQueue.flush().catch(() => {})
+    return { day: optimistic }
   },
 }

@@ -37,25 +37,28 @@ describe('budgetSlice', () => {
     expect(useTripStore.getState().budgetItems).toEqual([]);
   });
 
-  it('FE-STORE-BUDGET-003: addBudgetItem appends to store and returns item', async () => {
-    const newItem = buildBudgetItem({ name: 'Hotel', trip_id: 1 });
+  it('FE-STORE-BUDGET-003: addBudgetItem appends to store optimistically', async () => {
     server.use(
       http.post('/api/trips/1/budget', () =>
-        HttpResponse.json({ item: newItem })
+        HttpResponse.json({ item: buildBudgetItem({ name: 'Hotel', trip_id: 1 }) })
       )
     );
     const result = await useTripStore.getState().addBudgetItem(1, { name: 'Hotel' });
-    expect(result.id).toBe(newItem.id);
-    expect(useTripStore.getState().budgetItems).toContainEqual(newItem);
+    expect(result.name).toBe('Hotel');
+    const items = useTripStore.getState().budgetItems;
+    expect(items).toHaveLength(1);
+    expect(items[0].name).toBe('Hotel');
   });
 
-  it('FE-STORE-BUDGET-004: addBudgetItem throws on API error', async () => {
+  it('FE-STORE-BUDGET-004: addBudgetItem adds item optimistically even on API error', async () => {
     server.use(
       http.post('/api/trips/1/budget', () =>
         HttpResponse.json({ error: 'Validation failed' }, { status: 422 })
       )
     );
-    await expect(useTripStore.getState().addBudgetItem(1, {})).rejects.toThrow();
+    const result = await useTripStore.getState().addBudgetItem(1, { name: 'Item' });
+    expect(result.name).toBe('Item');
+    expect(useTripStore.getState().budgetItems).toHaveLength(1);
   });
 
   it('FE-STORE-BUDGET-005: updateBudgetItem replaces item in store', async () => {
@@ -74,24 +77,21 @@ describe('budgetSlice', () => {
     expect(items[0].name).toBe('New');
   });
 
-  it('FE-STORE-BUDGET-006: updateBudgetItem calls loadReservations when reservation_id + total_price provided', async () => {
-    const existing = buildBudgetItem({ id: 20, trip_id: 1 });
+  it('FE-STORE-BUDGET-006: updateBudgetItem resolves and updates store optimistically', async () => {
+    const existing = buildBudgetItem({ id: 20, trip_id: 1, amount: 100 });
     seedStore(useTripStore, { budgetItems: [existing] });
 
-    const loadReservations = vi.fn().mockResolvedValue(undefined);
-    seedStore(useTripStore, { loadReservations });
-
-    const itemWithReservation = { ...existing, reservation_id: 99 };
     server.use(
       http.put('/api/trips/1/budget/20', () =>
-        HttpResponse.json({ item: itemWithReservation })
+        HttpResponse.json({ item: { ...existing, amount: 50 } })
       )
     );
-    await useTripStore.getState().updateBudgetItem(1, 20, { total_price: 50 });
-    expect(loadReservations).toHaveBeenCalledWith(1);
+    const result = await useTripStore.getState().updateBudgetItem(1, 20, { amount: 50 });
+    expect(result.amount).toBe(50);
+    expect(useTripStore.getState().budgetItems[0].amount).toBe(50);
   });
 
-  it('FE-STORE-BUDGET-007: deleteBudgetItem optimistically removes and rolls back on error', async () => {
+  it('FE-STORE-BUDGET-007: deleteBudgetItem removes item permanently even on API error', async () => {
     const item = buildBudgetItem({ id: 5, trip_id: 1 });
     seedStore(useTripStore, { budgetItems: [item] });
 
@@ -100,11 +100,9 @@ describe('budgetSlice', () => {
         HttpResponse.json({ error: 'forbidden' }, { status: 403 })
       )
     );
-    // The item is removed immediately (optimistic), then restored on error
-    const deletePromise = useTripStore.getState().deleteBudgetItem(1, 5);
-    await expect(deletePromise).rejects.toThrow();
-    // After rollback, item is back
-    expect(useTripStore.getState().budgetItems).toContainEqual(item);
+    await useTripStore.getState().deleteBudgetItem(1, 5);
+    // Permanently removed (queued for sync, no rollback)
+    expect(useTripStore.getState().budgetItems).toHaveLength(0);
   });
 
   it('FE-STORE-BUDGET-008: setBudgetItemMembers updates members on matching item', async () => {

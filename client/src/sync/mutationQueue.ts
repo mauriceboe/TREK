@@ -73,12 +73,14 @@ export const mutationQueue = {
     if (_flushing || !navigator.onLine) return
     _flushing = true
     try {
-      const pending = await offlineDb.mutationQueue
-        .where('status')
-        .equals('pending')
-        .sortBy('createdAt')
+      while (true) {
+        const pending = await offlineDb.mutationQueue
+          .where('status')
+          .equals('pending')
+          .sortBy('createdAt')
+        const mutation = pending[0]
+        if (!mutation) break
 
-      for (const mutation of pending) {
         // Mark as syncing so UI can show progress
         await offlineDb.mutationQueue.update(mutation.id, { status: 'syncing' })
 

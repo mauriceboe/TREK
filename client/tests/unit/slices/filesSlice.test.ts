@@ -100,7 +100,7 @@ describe('filesSlice', () => {
       expect(files[0].id).toBe(20);
     });
 
-    it('FE-FILES-006: deleteFile on failure throws', async () => {
+    it('FE-FILES-006: deleteFile removes file permanently even on API error', async () => {
       const file = buildTripFile({ id: 10, trip_id: 1 });
       seedStore(useTripStore, { files: [file] });
 
@@ -110,10 +110,10 @@ describe('filesSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().deleteFile(1, 10)).rejects.toThrow();
+      await useTripStore.getState().deleteFile(1, 10);
 
-      // File remains since server-first (only removes after success)
-      expect(useTripStore.getState().files).toHaveLength(1);
+      // Permanently removed (queued for sync, no rollback)
+      expect(useTripStore.getState().files).toHaveLength(0);
     });
   });
 });

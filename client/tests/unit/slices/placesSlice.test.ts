@@ -38,7 +38,7 @@ describe('placesSlice', () => {
       expect(places[0].name).toBe('New Place'); // prepended
     });
 
-    it('FE-PLACES-002: addPlace on failure throws and places remain unchanged', async () => {
+    it('FE-PLACES-002: addPlace always adds place optimistically (no throw on API error)', async () => {
       const existing = buildPlace({ trip_id: 1 });
       seedStore(useTripStore, { places: [existing] });
 
@@ -48,8 +48,11 @@ describe('placesSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().addPlace(1, { name: 'Fail' })).rejects.toThrow();
-      expect(useTripStore.getState().places).toEqual([existing]);
+      const result = await useTripStore.getState().addPlace(1, { name: 'Fail' });
+
+      expect(result.name).toBe('Fail');
+      expect(useTripStore.getState().places).toHaveLength(2);
+      expect(useTripStore.getState().places[0].name).toBe('Fail');
     });
   });
 

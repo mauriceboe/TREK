@@ -4,6 +4,7 @@ import { useTripStore } from '../../../src/store/tripStore';
 import { resetAllStores, seedStore } from '../../helpers/store';
 import { buildPackingItem } from '../../helpers/factories';
 import { server } from '../../helpers/msw/server';
+import { offlineDb } from '../../../src/db/offlineDb';
 
 vi.mock('../../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock('../../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 
@@ -36,16 +39,18 @@ describe('packingSlice', () => {
       expect(items[items.length - 1].name).toBe('Toothbrush');
     });
 
-    it('FE-PACKING-002: addPackingItem on failure throws', async () => {
+    it('FE-PACKING-002: addPackingItem always adds item optimistically (no throw on API error)', async () => {
       server.use(
         http.post('/api/trips/1/packing', () =>
           HttpResponse.json({ message: 'Error' }, { status: 500 })
         ),
       );
 
-      await expect(
-        useTripStore.getState().addPackingItem(1, { name: 'Fail item' })
-      ).rejects.toThrow();
+      const result = await useTripStore.getState().addPackingItem(1, { name: 'Fail item' });
+
+      expect(result.name).toBe('Fail item');
+      expect(useTripStore.getState().packingItems).toHaveLength(1);
+      expect(useTripStore.getState().packingItems[0].name).toBe('Fail item');
     });
   });
 
@@ -69,7 +74,7 @@ describe('packingSlice', () => {
   });
 
   describe('deletePackingItem', () => {
-    it('FE-PACKING-004: deletePackingItem optimistically removes item, rollback on failure', async () => {
+    it('FE-PACKING-004: deletePackingItem removes item permanently even on API error', async () => {
       const item = buildPackingItem({ id: 10, trip_id: 1 });
       seedStore(useTripStore, { packingItems: [item] });
 
@@ -79,10 +84,9 @@ describe('packingSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().deletePackingItem(1, 10)).rejects.toThrow();
+      await useTripStore.getState().deletePackingItem(1, 10);
 
-      expect(useTripStore.getState().packingItems).toHaveLength(1);
-      expect(useTripStore.getState().packingItems[0].id).toBe(10);
+      expect(useTripStore.getState().packingItems).toHaveLength(0);
     });
 
     it('FE-PACKING-004b: deletePackingItem success removes item', async () => {
@@ -115,7 +119,7 @@ describe('packingSlice', () => {
       expect(useTripStore.getState().packingItems[0].checked).toBe(1);
     });
 
-    it('FE-PACKING-006: togglePackingItem rolls back checked on API failure', async () => {
+    it('FE-PACKING-006: togglePackingItem preserves optimistic checked state even on API failure', async () => {
       const item = buildPackingItem({ id: 10, trip_id: 1, checked: 0 });
       seedStore(useTripStore, { packingItems: [item] });
 
@@ -125,11 +129,10 @@ describe('packingSlice', () => {
         ),
       );
 
-      // toggle does NOT throw on error (silent rollback)
       await useTripStore.getState().togglePackingItem(1, 10, true);
 
-      // Should be rolled back to original value
-      expect(useTripStore.getState().packingItems[0].checked).toBe(0);
+      // Optimistic state preserved — no rollback (queued for sync)
+      expect(useTripStore.getState().packingItems[0].checked).toBe(1);
     });
   });
 });

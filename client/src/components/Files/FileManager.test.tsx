@@ -35,6 +35,7 @@ vi.mock('../../api/client', async (importOriginal) => {
 });
 
 import { filesApi } from '../../api/client';
+import { offlineDb } from '../../db/offlineDb';
 
 const buildFile = (overrides = {}) => ({
   id: 1,
@@ -66,7 +67,9 @@ const defaultProps = {
   allowedFileTypes: null,
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
   vi.clearAllMocks();
   // Seed auth as admin so useCanDo() returns true for all permissions
@@ -130,15 +133,21 @@ describe('FileManager', () => {
     expect(screen.queryByText('doc.pdf')).not.toBeInTheDocument();
   });
 
-  it('FE-COMP-FILEMANAGER-005: star button calls filesApi.toggleStar', async () => {
+  it('FE-COMP-FILEMANAGER-005: star button calls star endpoint', async () => {
+    let starCalled = false;
+    server.use(
+      http.patch('/api/trips/1/files/1/star', () => {
+        starCalled = true;
+        return HttpResponse.json({ success: true });
+      }),
+    );
     render(<FileManager {...defaultProps} files={[buildFile()]} />);
     const user = userEvent.setup();
 
-    // Find the star button by its title
     const starBtn = screen.getByTitle(/star/i);
     await user.click(starBtn);
 
-    expect(filesApi.toggleStar).toHaveBeenCalledWith(1, 1);
+    await waitFor(() => expect(starCalled).toBe(true));
   });
 
   it('FE-COMP-FILEMANAGER-006: trash toggle loads and displays trashed files', async () => {
@@ -398,39 +407,47 @@ describe('FileManager', () => {
     await screen.findByText('Hotel Paris');
   });
 
-  it('FE-COMP-FILEMANAGER-024: clicking a place in assign modal calls filesApi.update', async () => {
+  it('FE-COMP-FILEMANAGER-024: clicking a place in assign modal calls file update endpoint', async () => {
     const { buildPlace } = await import('../../../tests/helpers/factories');
     const place = buildPlace({ id: 10, name: 'Louvre Museum' });
     const file = buildFile({ id: 1 });
     const onUpdate = vi.fn().mockResolvedValue(undefined);
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/trips/1/files/1', async ({ request }) => {
+        capturedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ file: { ...file, place_id: 10 } });
+      }),
+    );
     render(<FileManager {...defaultProps} files={[file]} places={[place]} onUpdate={onUpdate} />);
     const user = userEvent.setup();
 
-    // Open assign modal
     await user.click(screen.getByTitle(/assign/i));
     await screen.findByText('Louvre Museum');
-
-    // Click on the place button to link it
     await user.click(screen.getByText('Louvre Museum'));
 
-    expect(filesApi.update).toHaveBeenCalledWith(1, 1, { place_id: 10 });
+    await waitFor(() => expect(capturedBody).toMatchObject({ place_id: 10 }));
   });
 
-  it('FE-COMP-FILEMANAGER-025: clicking a reservation in assign modal calls filesApi.update', async () => {
+  it('FE-COMP-FILEMANAGER-025: clicking a reservation in assign modal calls file update endpoint', async () => {
     const { buildReservation } = await import('../../../tests/helpers/factories');
     const reservation = buildReservation({ id: 20, name: 'Train Ticket' });
     const file = buildFile({ id: 1 });
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/trips/1/files/1', async ({ request }) => {
+        capturedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ file: { ...file, reservation_id: 20 } });
+      }),
+    );
     render(<FileManager {...defaultProps} files={[file]} reservations={[reservation]} />);
     const user = userEvent.setup();
 
-    // Open assign modal
     await user.click(screen.getByTitle(/assign/i));
     await screen.findByText('Train Ticket');
-
-    // Click on the reservation button to link it
     await user.click(screen.getByText('Train Ticket'));
 
-    expect(filesApi.update).toHaveBeenCalledWith(1, 1, { reservation_id: 20 });
+    await waitFor(() => expect(capturedBody).toMatchObject({ reservation_id: 20 }));
   });
 
   it('FE-COMP-FILEMANAGER-026: assign modal with both places and reservations shows both sections', async () => {
@@ -507,39 +524,46 @@ describe('FileManager', () => {
     await screen.findByText(/Colosseum/);
   });
 
-  it('FE-COMP-FILEMANAGER-031: unlink place from assign modal calls filesApi.update', async () => {
+  it('FE-COMP-FILEMANAGER-031: unlink place from assign modal calls file update endpoint', async () => {
     const { buildPlace } = await import('../../../tests/helpers/factories');
     const place = buildPlace({ id: 10, name: 'Venice Beach' });
-    // File already has place_id set to 10 (linked)
     const file = buildFile({ id: 1, place_id: 10 });
-
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/trips/1/files/1', async ({ request }) => {
+        capturedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ file: { ...file, place_id: null } });
+      }),
+    );
     render(<FileManager {...defaultProps} files={[file]} places={[place]} />);
     const user = userEvent.setup();
 
-    // Open assign modal
     await user.click(screen.getByTitle(/assign/i));
     await screen.findByText('Venice Beach');
-
-    // Clicking the linked place should unlink it
     await user.click(screen.getByText('Venice Beach'));
-    expect(filesApi.update).toHaveBeenCalledWith(1, 1, { place_id: null });
+
+    await waitFor(() => expect(capturedBody).toMatchObject({ place_id: null }));
   });
 
-  it('FE-COMP-FILEMANAGER-032: unlink reservation from assign modal calls filesApi.update', async () => {
+  it('FE-COMP-FILEMANAGER-032: unlink reservation from assign modal calls file update endpoint', async () => {
     const { buildReservation } = await import('../../../tests/helpers/factories');
     const reservation = buildReservation({ id: 20, name: 'Museum Pass' });
-    // File already has reservation_id set to 20
     const file = buildFile({ id: 1, reservation_id: 20 });
-
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/trips/1/files/1', async ({ request }) => {
+        capturedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ file: { ...file, reservation_id: null } });
+      }),
+    );
     render(<FileManager {...defaultProps} files={[file]} reservations={[reservation]} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByTitle(/assign/i));
     await screen.findByText('Museum Pass');
-
-    // Clicking the linked reservation should unlink it
     await user.click(screen.getByText('Museum Pass'));
-    expect(filesApi.update).toHaveBeenCalledWith(1, 1, { reservation_id: null });
+
+    await waitFor(() => expect(capturedBody).toMatchObject({ reservation_id: null }));
   });
 
   it('FE-COMP-FILEMANAGER-033: opening PDF preview and closing via backdrop', async () => {

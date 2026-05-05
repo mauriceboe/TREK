@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { useTripStore } from '../../../src/store/tripStore';
 import { resetAllStores, seedStore } from '../../helpers/store';
-import { buildBudgetItem, buildReservation } from '../../helpers/factories';
+import { buildBudgetItem } from '../../helpers/factories';
 import { server } from '../../helpers/msw/server';
+import { offlineDb } from '../../../src/db/offlineDb';
 
 vi.mock('../../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock('../../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 
@@ -49,16 +52,18 @@ describe('budgetSlice', () => {
       expect(useTripStore.getState().budgetItems).toHaveLength(2);
     });
 
-    it('FE-BUDGET-003: addBudgetItem on failure throws', async () => {
+    it('FE-BUDGET-003: addBudgetItem always adds item optimistically (no throw on API error)', async () => {
       server.use(
         http.post('/api/trips/1/budget', () =>
           HttpResponse.json({ message: 'Error' }, { status: 500 })
         ),
       );
 
-      await expect(
-        useTripStore.getState().addBudgetItem(1, { name: 'Fail' })
-      ).rejects.toThrow();
+      const result = await useTripStore.getState().addBudgetItem(1, { name: 'Fail' });
+
+      expect(result.name).toBe('Fail');
+      expect(useTripStore.getState().budgetItems).toHaveLength(1);
+      expect(useTripStore.getState().budgetItems[0].name).toBe('Fail');
     });
   });
 
@@ -80,38 +85,26 @@ describe('budgetSlice', () => {
       expect(useTripStore.getState().budgetItems[0].name).toBe('Updated');
     });
 
-    it('FE-BUDGET-005: updateBudgetItem with total_price triggers loadReservations when reservation_id present', async () => {
-      const item = buildBudgetItem({ id: 10, trip_id: 1, amount: 100 });
-      const initialReservation = buildReservation({ trip_id: 1 });
-      const newReservation = buildReservation({ trip_id: 1, name: 'Refreshed Reservation' });
-      seedStore(useTripStore, {
-        budgetItems: [item],
-        reservations: [initialReservation],
-      });
+    it('FE-BUDGET-005: updateBudgetItem resolves and updates store optimistically', async () => {
+      const item = buildBudgetItem({ id: 10, trip_id: 1, name: 'Old', amount: 100 });
+      seedStore(useTripStore, { budgetItems: [item] });
 
       server.use(
         http.put('/api/trips/1/budget/10', async ({ request }) => {
           const body = await request.json() as Record<string, unknown>;
-          // Return item with reservation_id to trigger loadReservations
           return HttpResponse.json({ item: { ...item, ...body, reservation_id: 42 } });
         }),
-        http.get('/api/trips/1/reservations', () =>
-          HttpResponse.json({ reservations: [newReservation] })
-        ),
       );
 
-      await useTripStore.getState().updateBudgetItem(1, 10, { total_price: 200 } as Record<string, unknown>);
+      const result = await useTripStore.getState().updateBudgetItem(1, 10, { amount: 200 } as Record<string, unknown>);
 
-      // Wait for the async loadReservations to complete
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      expect(useTripStore.getState().reservations).toHaveLength(1);
-      expect(useTripStore.getState().reservations[0].name).toBe('Refreshed Reservation');
+      expect(result.amount).toBe(200);
+      expect(useTripStore.getState().budgetItems[0].amount).toBe(200);
     });
   });
 
   describe('deleteBudgetItem', () => {
-    it('FE-BUDGET-006: deleteBudgetItem optimistically removes item, rolls back on failure', async () => {
+    it('FE-BUDGET-006: deleteBudgetItem removes item permanently even on API error', async () => {
       const item = buildBudgetItem({ id: 10, trip_id: 1 });
       seedStore(useTripStore, { budgetItems: [item] });
 
@@ -121,10 +114,10 @@ describe('budgetSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().deleteBudgetItem(1, 10)).rejects.toThrow();
+      await useTripStore.getState().deleteBudgetItem(1, 10);
 
-      expect(useTripStore.getState().budgetItems).toHaveLength(1);
-      expect(useTripStore.getState().budgetItems[0].id).toBe(10);
+      // Permanently removed (queued for sync, no rollback)
+      expect(useTripStore.getState().budgetItems).toHaveLength(0);
     });
 
     it('FE-BUDGET-006b: deleteBudgetItem success removes item', async () => {

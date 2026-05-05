@@ -66,38 +66,28 @@ describe('packingRepo.list', () => {
 });
 
 describe('packingRepo.create', () => {
-  it('calls REST and caches created item in Dexie', async () => {
-    const item = buildPackingItem({ trip_id: 1, name: 'Sunscreen' });
-    server.use(
-      http.post('/api/trips/1/packing', () => HttpResponse.json({ item })),
-    );
-
+  it('writes item optimistically to Dexie immediately', async () => {
     const result = await packingRepo.create(1, { name: 'Sunscreen' });
     expect(result.item.name).toBe('Sunscreen');
+    // tempId is negative (-(Date.now()))
+    expect(result.item.id).toBeLessThan(0);
 
-    await new Promise(r => setTimeout(r, 0));
-    const cached = await offlineDb.packingItems.get(item.id);
-    expect(cached).toBeDefined();
-    expect(cached!.name).toBe('Sunscreen');
+    const cached = await offlineDb.packingItems.where('trip_id').equals(1).toArray();
+    expect(cached).toHaveLength(1);
+    expect(cached[0].name).toBe('Sunscreen');
   });
 });
 
 describe('packingRepo.update', () => {
-  it('calls REST and updates Dexie cache', async () => {
+  it('writes optimistic update to Dexie immediately', async () => {
     const original = buildPackingItem({ trip_id: 1, name: 'Jacket', checked: 0 });
     await offlineDb.packingItems.put(original);
 
-    const updated = { ...original, checked: 1 };
-    server.use(
-      http.put(`/api/trips/1/packing/${original.id}`, () => HttpResponse.json({ item: updated })),
-    );
-
     const result = await packingRepo.update(1, original.id, { checked: true });
-    expect(result.item.checked).toBe(1);
+    expect(result.item.checked).toBeTruthy();
 
-    await new Promise(r => setTimeout(r, 0));
     const cached = await offlineDb.packingItems.get(original.id);
-    expect(cached!.checked).toBe(1);
+    expect(cached!.checked).toBeTruthy();
   });
 });
 

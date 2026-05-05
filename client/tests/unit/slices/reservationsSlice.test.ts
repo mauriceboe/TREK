@@ -4,6 +4,7 @@ import { useTripStore } from '../../../src/store/tripStore';
 import { resetAllStores, seedStore } from '../../helpers/store';
 import { buildReservation } from '../../helpers/factories';
 import { server } from '../../helpers/msw/server';
+import { offlineDb } from '../../../src/db/offlineDb';
 
 vi.mock('../../../src/api/websocket', () => ({
   connect: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock('../../../src/api/websocket', () => ({
   setPreReconnectHook: vi.fn(),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await Promise.all(offlineDb.tables.map(t => t.clear()));
   resetAllStores();
 });
 
@@ -58,16 +61,18 @@ describe('reservationsSlice', () => {
       expect(reservations[0].name).toBe('New Hotel');
     });
 
-    it('FE-RESERV-003: addReservation on failure throws', async () => {
+    it('FE-RESERV-003: addReservation always adds optimistically (no throw on API error)', async () => {
       server.use(
         http.post('/api/trips/1/reservations', () =>
           HttpResponse.json({ message: 'Error' }, { status: 500 })
         ),
       );
 
-      await expect(
-        useTripStore.getState().addReservation(1, { name: 'Fail' })
-      ).rejects.toThrow();
+      const result = await useTripStore.getState().addReservation(1, { name: 'Fail' });
+
+      expect(result.name).toBe('Fail');
+      expect(useTripStore.getState().reservations).toHaveLength(1);
+      expect(useTripStore.getState().reservations[0].name).toBe('Fail');
     });
   });
 
@@ -123,7 +128,7 @@ describe('reservationsSlice', () => {
       expect(useTripStore.getState().reservations[0].status).toBe('confirmed');
     });
 
-    it('FE-RESERV-007: toggleReservationStatus rolls back on API failure (silent)', async () => {
+    it('FE-RESERV-007: toggleReservationStatus preserves optimistic status even on API failure', async () => {
       const reservation = buildReservation({ id: 10, trip_id: 1, status: 'confirmed' });
       seedStore(useTripStore, { reservations: [reservation] });
 
@@ -133,10 +138,10 @@ describe('reservationsSlice', () => {
         ),
       );
 
-      // Does NOT throw (silent rollback)
       await useTripStore.getState().toggleReservationStatus(1, 10);
 
-      expect(useTripStore.getState().reservations[0].status).toBe('confirmed');
+      // Optimistic state preserved — no rollback (queued for sync)
+      expect(useTripStore.getState().reservations[0].status).toBe('pending');
     });
 
     it('FE-RESERV-008: toggleReservationStatus does nothing if reservation not found', async () => {
@@ -162,7 +167,7 @@ describe('reservationsSlice', () => {
       expect(reservations[0].id).toBe(20);
     });
 
-    it('FE-RESERV-010: deleteReservation on failure throws (no optimistic, server-first)', async () => {
+    it('FE-RESERV-010: deleteReservation removes permanently even on API error', async () => {
       const reservation = buildReservation({ id: 10, trip_id: 1 });
       seedStore(useTripStore, { reservations: [reservation] });
 
@@ -172,10 +177,10 @@ describe('reservationsSlice', () => {
         ),
       );
 
-      await expect(useTripStore.getState().deleteReservation(1, 10)).rejects.toThrow();
+      await useTripStore.getState().deleteReservation(1, 10);
 
-      // Still in state since server-first (only removes after success)
-      expect(useTripStore.getState().reservations).toHaveLength(1);
+      // Permanently removed (queued for sync, no rollback)
+      expect(useTripStore.getState().reservations).toHaveLength(0);
     });
   });
 });

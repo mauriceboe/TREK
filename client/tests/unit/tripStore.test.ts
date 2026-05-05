@@ -219,8 +219,8 @@ describe('tripStore', () => {
 
       const result = await useTripStore.getState().updateTrip(1, { name: 'Updated Trip' });
 
-      expect(result).toEqual(updatedTrip);
-      expect(useTripStore.getState().trip).toEqual(updatedTrip);
+      expect(result.name).toBe('Updated Trip');
+      expect(useTripStore.getState().trip?.name).toBe('Updated Trip');
     });
   });
 
