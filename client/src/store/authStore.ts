@@ -4,7 +4,6 @@ import { authApi } from '../api/client'
 import { connect, disconnect } from '../api/websocket'
 import type { User } from '../types'
 import { getApiErrorMessage } from '../types'
-import { tripSyncManager } from '../sync/tripSyncManager'
 import { clearAll } from '../db/offlineDb'
 import { useSystemNoticeStore } from './systemNoticeStore.js'
 
@@ -100,7 +99,6 @@ export const useAuthStore = create<AuthState>()(
         error: null,
       })
       connect()
-      tripSyncManager.syncAll().catch(console.error)
       if (!data.user?.must_change_password) {
         useSystemNoticeStore.getState().fetch()
       }
@@ -124,7 +122,6 @@ export const useAuthStore = create<AuthState>()(
         error: null,
       })
       connect()
-      tripSyncManager.syncAll().catch(console.error)
       if (!data.user?.must_change_password) {
         useSystemNoticeStore.getState().fetch()
       }
@@ -148,7 +145,6 @@ export const useAuthStore = create<AuthState>()(
         error: null,
       })
       connect()
-      tripSyncManager.syncAll().catch(console.error)
       useSystemNoticeStore.getState().fetch()
       return data
     } catch (err: unknown) {

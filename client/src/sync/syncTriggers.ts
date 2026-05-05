@@ -1,19 +1,19 @@
 /**
  * Sync triggers — register event listeners that flush the mutation queue
- * and/or run a full trip sync based on the connectivity trigger source.
+ * based on the connectivity trigger source.
  *
  * Trigger matrix:
- *   window 'online'          → flush mutations + full syncAll (network truly back)
+ *   window 'online'          → flush mutations (network truly back)
  *   visibilitychange visible → flush mutations only (avoid hammering server on tab switch)
  *   periodic 30s             → flush mutations only
- *   WS reconnect             → flush mutations only (no syncAll — avoids rate-limiter
- *                              on server restart / socket timeout while already online)
+ *   WS reconnect             → flush mutations only
+ *
+ * Full trip sync (syncAll) is manual-only via the Offline settings tab.
  *
  * Call `registerSyncTriggers()` once on app mount.
  * Call `unregisterSyncTriggers()` on unmount / logout.
  */
 import { mutationQueue } from './mutationQueue'
-import { tripSyncManager } from './tripSyncManager'
 import { setPreReconnectHook } from '../api/websocket'
 
 const PERIODIC_MS = 30_000
@@ -21,10 +21,9 @@ const PERIODIC_MS = 30_000
 let _intervalId: ReturnType<typeof setInterval> | null = null
 let _registered = false
 
-/** Network came back — flush mutations AND re-seed Dexie for all cacheable trips. */
+/** Network came back — flush any pending mutations. */
 function onOnline() {
   mutationQueue.flush().catch(console.error)
-  tripSyncManager.syncAll().catch(console.error)
 }
 
 /** Tab became visible — flush only; don't trigger a potentially expensive syncAll. */
