@@ -240,6 +240,37 @@ Restart the container after adding the variable. Once set, clicking **Connect** 
 
 ---
 
+## ChatGPT MCP connector: "Dynamic client registration failed" / 403
+
+**Cause:** ChatGPT's MCP backend runs on OpenAI's datacenter IPs and uses a Python HTTP client (`aiohttp`). Cloudflare's **Bot Fight Mode** identifies the TLS fingerprint of this client as bot traffic and blocks the request at the edge — before it ever reaches your server. Because the request is dropped by Cloudflare, nothing appears in TREK's logs.
+
+This affects the OAuth Dynamic Client Registration (`/oauth/register`), the `/mcp` endpoint, and the OAuth metadata endpoints (`/.well-known/*`).
+
+**Fix — Cloudflare free plan:**
+
+Disable Bot Fight Mode entirely:
+
+**Security → Bots → Bot Fight Mode → Off**
+
+The free plan does not support path-based exceptions, so the feature must be turned off globally. Your TREK data remains protected by its own authentication — Bot Fight Mode is not a substitute for application-level auth.
+
+**Fix — Cloudflare Pro and above (Super Bot Fight Mode):**
+
+Create a WAF custom rule at **position #1** (rules fire in order — it must be first):
+
+```
+Expression:
+  (http.request.uri.path contains "/oauth/") or
+  (http.request.uri.path contains "/.well-known/") or
+  (http.request.uri.path eq "/mcp")
+
+Action: Skip → All remaining custom rules + Bot Fight Mode
+```
+
+Ensure the **"Bot Fight Mode"** checkbox in the Skip action is checked, not just "All remaining custom rules."
+
+---
+
 ## MCP integration: "Too many requests" or "Session limit reached"
 
 **Cause:** Each user is limited to 300 MCP requests per minute and 20 concurrent sessions by default. Exceeding either limit returns a `429` response.

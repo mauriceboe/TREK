@@ -41,6 +41,16 @@ Claude Desktop connects via `mcp-remote`. After creating an OAuth client using t
 
 When the client starts it opens your browser to the TREK consent screen to complete the OAuth flow.
 
+### ChatGPT
+
+ChatGPT's custom MCP connector supports Dynamic Client Registration (DCR) — no pre-created client is required:
+
+1. In ChatGPT, open **Settings → Connected Apps → Add a custom app**.
+2. Set the **MCP Server URL** to `https://<your-trek-instance>/mcp`.
+3. ChatGPT will automatically discover TREK's OAuth metadata, register itself, and redirect you to the TREK consent screen to approve access.
+
+> **Cloudflare users:** If your TREK instance is behind Cloudflare and you are on the **free plan**, you must disable **Bot Fight Mode** (`Security → Bots → Bot Fight Mode → Off`). ChatGPT's backend uses a Python HTTP client (`aiohttp`) whose TLS fingerprint is classified as a bot by Cloudflare. Because the free plan does not support path-based bot exceptions, the feature must be disabled globally. On **Pro and above**, create a WAF custom rule (position #1) that skips Bot Fight Mode for paths `/oauth/*`, `/.well-known/*`, and `/mcp`.
+
 ### Cursor, VS Code, Windsurf, and Zed
 
 Clients that support `mcp-remote` can connect in one of two ways.
