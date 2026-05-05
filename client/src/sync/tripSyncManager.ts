@@ -34,6 +34,11 @@ import type { Trip, Day, Place, PackingItem, TodoItem, BudgetItem, Reservation, 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type SyncProgress =
+  | { phase: 'start'; total: number }
+  | { phase: 'trip'; tripId: number; index: number; total: number }
+  | { phase: 'done'; ok: number; failed: number }
+
 interface TripBundle {
   trip: Trip
   days: Day[]
@@ -146,7 +151,7 @@ export const tripSyncManager = {
    * Evicts stale trips. Caches file blobs in the background.
    * No-ops when offline or already syncing (unless stale flag).
    */
-  async syncAll(): Promise<void> {
+  async syncAll(opts?: { onProgress?: (p: SyncProgress) => void }): Promise<void> {
     // Treat a _syncing flag that's been set for >2 minutes as stale (e.g. page unload mid-sync)
     if (_syncing && Date.now() - _syncStartedAt < SYNC_STALE_MS) return
     if (!navigator.onLine) return
@@ -159,7 +164,7 @@ export const tripSyncManager = {
     )
 
     try {
-      await Promise.race([this._doSync(), timeout])
+      await Promise.race([this._doSync(opts?.onProgress), timeout])
     } catch (err) {
       if (err instanceof Error && err.message === 'syncAll timeout') {
         console.warn('[tripSync] syncAll timed out after 90 s — interrupting')
@@ -170,7 +175,7 @@ export const tripSyncManager = {
     }
   },
 
-  async _doSync(): Promise<void> {
+  async _doSync(onProgress?: (p: SyncProgress) => void): Promise<void> {
     const { trips } = await tripsApi.list() as { trips: Trip[] }
 
     // Evict stale trips first
@@ -179,25 +184,37 @@ export const tripSyncManager = {
 
     // Sync eligible trips — stop early if interrupted (e.g. user navigated to a trip page)
     const toSync = trips.filter(shouldCache)
-    for (const trip of toSync) {
+    onProgress?.({ phase: 'start', total: toSync.length })
+
+    let ok = 0
+    let failed = 0
+
+    for (let i = 0; i < toSync.length; i++) {
+      const trip = toSync[i]
       if (_interrupted) return
+      onProgress?.({ phase: 'trip', tripId: trip.id, index: i, total: toSync.length })
+      let tripOk = false
       try {
         await syncTrip(trip.id)
+        tripOk = true
       } catch (err) {
         if (isQuotaError(err)) {
           console.warn(`[tripSync] quota exceeded for trip ${trip.id}, clearing trip data and retrying`)
           try {
             await clearTripData(trip.id)
             await syncTrip(trip.id)
+            tripOk = true
           } catch (retryErr) {
             if (isQuotaError(retryErr)) {
               console.warn('[tripSync] quota still exceeded — clearing blob cache and retrying')
               await clearBlobCache()
               try {
                 await syncTrip(trip.id)
+                tripOk = true
               } catch {
                 console.warn('[tripSync] quota still exceeded after blob eviction — clearing all IDB data')
                 await clearAll()
+                onProgress?.({ phase: 'done', ok, failed: failed + 1 })
                 return
               }
             } else {
@@ -208,6 +225,7 @@ export const tripSyncManager = {
           console.error(`[tripSync] failed for trip ${trip.id}:`, err)
         }
       }
+      if (tripOk) ok++; else failed++
     }
 
     if (_interrupted) return
@@ -229,6 +247,8 @@ export const tripSyncManager = {
         prefetchTilesForTrip(trip.id, places, tileUrl).catch(console.error)
       })
     await Promise.allSettled(prefetchWork)
+
+    onProgress?.({ phase: 'done', ok, failed })
   },
 
   /**

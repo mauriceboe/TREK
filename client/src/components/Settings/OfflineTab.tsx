@@ -7,6 +7,7 @@ import { Wifi, RefreshCw, Trash2, Database, Settings2, RotateCcw, CheckCircle } 
 import Section from './Section'
 import { offlineDb, clearAll } from '../../db/offlineDb'
 import { tripSyncManager } from '../../sync/tripSyncManager'
+import type { SyncProgress } from '../../sync/tripSyncManager'
 import { mutationQueue } from '../../sync/mutationQueue'
 import {
   DEFAULT_SW_CONFIG,
@@ -30,6 +31,9 @@ export default function OfflineTab(): React.ReactElement {
   const [rows, setRows] = useState<CachedTripRow[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null)
+  const [syncResult, setSyncResult] = useState<{ ok: number; failed: number } | null>(null)
+  const syncResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [clearing, setClearing] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -89,6 +93,10 @@ export default function OfflineTab(): React.ReactElement {
     }
   }, [])
 
+  useEffect(() => {
+    return () => { if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current) }
+  }, [])
+
   async function handleSaveConfig() {
     const validated = validateSwConfig(cacheConfig)
     setCacheConfig(validated)
@@ -122,9 +130,26 @@ export default function OfflineTab(): React.ReactElement {
 
   async function handleResync() {
     setSyncing(true)
+    setSyncProgress(null)
+    setSyncResult(null)
+    if (syncResultTimerRef.current) clearTimeout(syncResultTimerRef.current)
+
+    function handleProgress(p: SyncProgress) {
+      if (p.phase === 'trip') {
+        setSyncProgress({ current: p.index + 1, total: p.total })
+      } else if (p.phase === 'done') {
+        setSyncProgress(null)
+        setSyncResult({ ok: p.ok, failed: p.failed })
+        syncResultTimerRef.current = setTimeout(() => setSyncResult(null), 5000)
+      }
+    }
+
     try {
       const timeout = new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 120_000))
-      const result = await Promise.race([tripSyncManager.syncAll().then(() => 'done' as const), timeout])
+      const result = await Promise.race([
+        tripSyncManager.syncAll({ onProgress: handleProgress }).then(() => 'done' as const),
+        timeout,
+      ])
       if (result === 'timeout') {
         tripSyncManager.interrupt()
         console.warn('[OfflineTab] sync timed out after 120 s')
@@ -173,7 +198,11 @@ export default function OfflineTab(): React.ReactElement {
             }}
           >
             <RefreshCw size={14} style={syncing ? { animation: 'spin 1s linear infinite' } : {}} />
-            {syncing ? 'Syncing…' : 'Re-sync now'}
+            {syncing
+              ? syncProgress
+                ? `Syncing ${syncProgress.current}/${syncProgress.total}…`
+                : 'Syncing…'
+              : 'Re-sync now'}
           </button>
 
           <button
@@ -191,6 +220,16 @@ export default function OfflineTab(): React.ReactElement {
             Clear cache
           </button>
         </div>
+
+        {/* Sync result */}
+        {syncResult && (
+          <span style={{ fontSize: 12, color: syncResult.failed > 0 ? '#ef4444' : '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle size={12} />
+            {syncResult.failed > 0
+              ? `Synced ${syncResult.ok} trip${syncResult.ok !== 1 ? 's' : ''} · ${syncResult.failed} failed`
+              : `Synced ${syncResult.ok} trip${syncResult.ok !== 1 ? 's' : ''}`}
+          </span>
+        )}
 
         {/* Cache configuration */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
