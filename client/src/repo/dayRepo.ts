@@ -13,7 +13,7 @@ export const dayRepo = {
     const refresh = (async () => {
       try {
         const result = await daysApi.list(tripId)
-        await upsertDays(result.days)
+        upsertDays(result.days).catch(() => {})
         return result
       } catch {
         return null

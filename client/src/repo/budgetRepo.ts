@@ -13,7 +13,7 @@ export const budgetRepo = {
     const refresh = (async () => {
       try {
         const result = await budgetApi.list(tripId)
-        await upsertBudgetItems(result.items)
+        upsertBudgetItems(result.items).catch(() => {})
         return result
       } catch {
         return null

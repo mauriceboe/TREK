@@ -13,7 +13,7 @@ export const reservationRepo = {
     const refresh = (async () => {
       try {
         const result = await reservationsApi.list(tripId)
-        await upsertReservations(result.reservations)
+        upsertReservations(result.reservations).catch(() => {})
         return result
       } catch {
         return null

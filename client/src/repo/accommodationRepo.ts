@@ -11,7 +11,7 @@ export const accommodationRepo = {
     const refresh = (async () => {
       try {
         const result = await accommodationsApi.list(tripId)
-        await upsertAccommodations(result.accommodations || [])
+        upsertAccommodations(result.accommodations || []).catch(() => {})
         return result
       } catch {
         return null

@@ -13,7 +13,7 @@ export const packingRepo = {
     const refresh = (async () => {
       try {
         const result = await packingApi.list(tripId)
-        await upsertPackingItems(result.items)
+        upsertPackingItems(result.items).catch(() => {})
         return result
       } catch {
         return null

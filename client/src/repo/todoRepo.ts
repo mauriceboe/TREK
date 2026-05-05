@@ -13,7 +13,7 @@ export const todoRepo = {
     const refresh = (async () => {
       try {
         const result = await todoApi.list(tripId)
-        await upsertTodoItems(result.items)
+        upsertTodoItems(result.items).catch(() => {})
         return result
       } catch {
         return null

@@ -13,7 +13,7 @@ export const placeRepo = {
     const refresh = (async () => {
       try {
         const result = await placesApi.list(tripId, params)
-        await upsertPlaces(result.places)
+        upsertPlaces(result.places).catch(() => {})
         return result
       } catch {
         return null

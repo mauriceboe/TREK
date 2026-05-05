@@ -13,7 +13,7 @@ export const fileRepo = {
     const refresh = (async () => {
       try {
         const result = await filesApi.list(tripId)
-        await upsertTripFiles(result.files)
+        upsertTripFiles(result.files).catch(() => {})
         return result
       } catch {
         return null

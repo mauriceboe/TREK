@@ -16,10 +16,10 @@ export const tripRepo = {
           tripsApi.list(),
           tripsApi.list({ archived: 1 }),
         ])
-        await Promise.all([
+        Promise.all([
           ...active.trips.map(t => upsertTrip(t)),
           ...archived.trips.map(t => upsertTrip(t)),
-        ])
+        ]).catch(() => {})
         return { trips: active.trips, archivedTrips: archived.trips }
       } catch {
         return null
@@ -46,7 +46,7 @@ export const tripRepo = {
     const refresh: TripRefresh = (async () => {
       try {
         const result = await tripsApi.get(tripId)
-        await upsertTrip(result.trip)
+        upsertTrip(result.trip).catch(() => {})
         return result
       } catch {
         return null
