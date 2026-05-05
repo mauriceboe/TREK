@@ -744,7 +744,11 @@ export default function DashboardPage(): React.ReactElement {
   const loadTrips = async () => {
     setIsLoading(true)
     try {
-      const { trips, archivedTrips, refresh } = await tripRepo.list()
+      const listOrTimeout = Promise.race([
+        tripRepo.list(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('trips-load-timeout')), 5_000)),
+      ])
+      const { trips, archivedTrips, refresh } = await listOrTimeout
       setTrips(sortTrips(trips))
       setArchivedTrips(sortTrips(archivedTrips))
       setIsLoading(false)

@@ -8,7 +8,12 @@ type TripRefresh = Promise<{ trip: Trip } | null>
 
 export const tripRepo = {
   async list(): Promise<{ trips: Trip[]; archivedTrips: Trip[]; refresh: TripsRefresh }> {
-    const all = await offlineDb.trips.toArray()
+    // 2-second guard: if Dexie is in a bad state (e.g. externally deleted while tab
+    // was open), toArray() may hang. Fall back to the cold/network path.
+    const all = await Promise.race([
+      offlineDb.trips.toArray(),
+      new Promise<Trip[]>(resolve => setTimeout(() => resolve([]), 2000)),
+    ])
 
     const refresh: TripsRefresh = (async () => {
       try {
@@ -16,6 +21,8 @@ export const tripRepo = {
           tripsApi.list(),
           tripsApi.list({ archived: 1 }),
         ])
+        // Fire-and-forget IDB writes: returning data immediately unblocks the cold
+        // path even when Dexie write transactions stall after an external DB clear.
         Promise.all([
           ...active.trips.map(t => upsertTrip(t)),
           ...archived.trips.map(t => upsertTrip(t)),
@@ -36,11 +43,6 @@ export const tripRepo = {
 
     const fresh = await refresh
     if (!fresh) return { trips: [], archivedTrips: [], refresh: Promise.resolve(null) }
-    // Await upserts on cold path so next mount reads from IDB instead of hitting network again
-    await Promise.all([
-      ...fresh.trips.map(t => upsertTrip(t)),
-      ...fresh.archivedTrips.map(t => upsertTrip(t)),
-    ]).catch(() => {})
     return { ...fresh, refresh: Promise.resolve(null) }
   },
 
