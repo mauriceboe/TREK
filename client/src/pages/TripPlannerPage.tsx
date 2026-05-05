@@ -31,6 +31,7 @@ import { useTranslation } from '../i18n'
 import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, mapsApi } from '../api/client'
 import { accommodationRepo } from '../repo/accommodationRepo'
 import { offlineDb } from '../db/offlineDb'
+import { tripSyncManager } from '../sync/tripSyncManager'
 import { useAuthStore } from '../store/authStore'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { useResizablePanels } from '../hooks/useResizablePanels'
@@ -328,6 +329,8 @@ export default function TripPlannerPage(): React.ReactElement | null {
   // Load trip + files (needed for place inspector file section)
   useEffect(() => {
     if (tripId) {
+      // Stop background sync so its bundle requests don't compete with loadTrip
+      tripSyncManager.interrupt()
       tripActions.loadTrip(tripId).catch(() => { toast.error(t('trip.toast.loadError')); navigate('/dashboard') })
       tripActions.loadFiles(tripId)
       loadAccommodations()
@@ -726,12 +729,18 @@ export default function TripPlannerPage(): React.ReactElement | null {
 
   // Splash screen — show for initial load + a brief moment for photos to start loading
   const [splashDone, setSplashDone] = useState(false)
+  const [slowLoad, setSlowLoad] = useState(false)
   useEffect(() => {
     if (!isLoading && trip) {
       const timer = setTimeout(() => setSplashDone(true), 1500)
       return () => clearTimeout(timer)
     }
   }, [isLoading, trip])
+  // Show escape hatch after 12 seconds on splash (covers slow first-load scenarios)
+  useEffect(() => {
+    const timer = setTimeout(() => setSlowLoad(true), 12000)
+    return () => clearTimeout(timer)
+  }, [])
 
   if (isLoading || !splashDone) {
     return (
@@ -771,6 +780,18 @@ export default function TripPlannerPage(): React.ReactElement | null {
             }} />
           ))}
         </div>
+        {slowLoad && (
+          <button
+            onClick={() => navigate('/dashboard')}
+            style={{
+              marginTop: 24, appearance: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'inherit', background: 'transparent',
+              color: 'var(--text-faint)', fontSize: 13, textDecoration: 'underline',
+            }}
+          >
+            {t('trip.splash.goBack')}
+          </button>
+        )}
       </div>
     )
   }

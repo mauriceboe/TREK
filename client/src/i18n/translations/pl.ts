@@ -1764,6 +1764,7 @@ const pl: Record<string, string | { name: string; category: string }[]> = {
   'login.setNewPassword': 'Ustaw nowe hasło',
   'login.setNewPasswordHint': 'Musisz zmienić hasło.',
   'atlas.searchCountry': 'Szukaj kraju...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Ładowanie zdjęć...',
   'places.importNaverList': 'Lista Naver',
   'places.importList': 'Import listy',

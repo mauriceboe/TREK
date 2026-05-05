@@ -937,6 +937,7 @@ const it: Record<string, string | { name: string; category: string }[]> = {
   'trip.confirm.deletePlace': 'Sei sicuro di voler eliminare questo luogo?',
   'trip.confirm.deletePlaces': 'Eliminare {count} luoghi?',
   'trip.toast.placesDeleted': '{count} luoghi eliminati',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Caricamento foto dei luoghi...',
 
   // Day Plan Sidebar

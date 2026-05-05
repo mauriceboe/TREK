@@ -928,6 +928,7 @@ const de: Record<string, string | { name: string; category: string }[]> = {
   'trip.tabs.budget': 'Budget',
   'trip.tabs.files': 'Dateien',
   'trip.loading': 'Reise wird geladen...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Fotos der Orte werden geladen...',
   'trip.mobilePlan': 'Planung',
   'trip.mobilePlaces': 'Orte',

@@ -923,6 +923,7 @@ const cs: Record<string, string | { name: string; category: string }[]> = {
   'trip.tabs.budget': 'Rozpočet',
   'trip.tabs.files': 'Soubory',
   'trip.loading': 'Načítání cesty...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Načítání fotek míst...',
   'trip.mobilePlan': 'Plán',
   'trip.mobilePlaces': 'Místa',

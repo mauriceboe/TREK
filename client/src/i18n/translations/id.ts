@@ -983,6 +983,7 @@ const id: Record<string, string | { name: string; category: string }[]> = {
   'trip.tabs.budget': 'Anggaran',
   'trip.tabs.files': 'File',
   'trip.loading': 'Memuat perjalanan...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Memuat foto tempat...',
   'trip.mobilePlan': 'Rencana',
   'trip.mobilePlaces': 'Tempat',

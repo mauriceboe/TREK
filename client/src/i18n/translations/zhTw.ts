@@ -982,6 +982,7 @@ const zhTw: Record<string, string> = {
   'trip.tabs.budget': '預算',
   'trip.tabs.files': '檔案',
   'trip.loading': '載入旅行中...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': '正在載入地點照片...',
   'trip.mobilePlan': '計劃',
   'trip.mobilePlaces': '地點',

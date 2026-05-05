@@ -27,6 +27,7 @@ import {
   upsertCategories,
   upsertSyncMeta,
   clearTripData,
+  clearBlobCache,
   clearAll,
 } from '../db/offlineDb'
 import { prefetchTilesForTrip } from './tilePrefetcher'
@@ -135,6 +136,7 @@ async function cacheFilesForTrip(files: TripFile[]): Promise<void> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 let _syncing = false
+let _interrupted = false
 
 export const tripSyncManager = {
   /**
@@ -145,6 +147,7 @@ export const tripSyncManager = {
   async syncAll(): Promise<void> {
     if (_syncing || !navigator.onLine) return
     _syncing = true
+    _interrupted = false
     try {
       const { trips } = await tripsApi.list() as { trips: Trip[] }
 
@@ -152,9 +155,10 @@ export const tripSyncManager = {
       const stale = trips.filter(isStale)
       await Promise.all(stale.map(t => clearTripData(t.id).catch(console.error)))
 
-      // Sync eligible trips
+      // Sync eligible trips — stop early if interrupted (e.g. user navigated to a trip page)
       const toSync = trips.filter(shouldCache)
       for (const trip of toSync) {
+        if (_interrupted) break
         try {
           await syncTrip(trip.id)
         } catch (err) {
@@ -165,17 +169,27 @@ export const tripSyncManager = {
               await syncTrip(trip.id)
             } catch (retryErr) {
               if (isQuotaError(retryErr)) {
-                console.warn('[tripSync] quota still exceeded after eviction — clearing all IDB data')
-                await clearAll()
-                return
+                // Trip data + blob cache — free largest storage first before nuking everything
+                console.warn('[tripSync] quota still exceeded — clearing blob cache and retrying')
+                await clearBlobCache()
+                try {
+                  await syncTrip(trip.id)
+                } catch {
+                  console.warn('[tripSync] quota still exceeded after blob eviction — clearing all IDB data')
+                  await clearAll()
+                  return
+                }
+              } else {
+                console.error(`[tripSync] failed for trip ${trip.id} after eviction:`, retryErr)
               }
-              console.error(`[tripSync] failed for trip ${trip.id} after eviction:`, retryErr)
             }
           } else {
             console.error(`[tripSync] failed for trip ${trip.id}:`, err)
           }
         }
       }
+
+      if (_interrupted) return
 
       // Cache global user data (tags + categories) — fire-and-forget
       tagsApi.list().then(d => upsertTags(d.tags)).catch(() => {})
@@ -184,6 +198,7 @@ export const tripSyncManager = {
       // Cache file blobs + map tiles in background (don't block syncAll)
       const tileUrl = useSettingsStore.getState().settings.map_tile_url || undefined
       for (const trip of toSync) {
+        if (_interrupted) break
         const files = await offlineDb.tripFiles.where('trip_id').equals(trip.id).toArray()
         cacheFilesForTrip(files).catch(console.error)
 
@@ -195,8 +210,17 @@ export const tripSyncManager = {
     }
   },
 
+  /**
+   * Signal syncAll to stop after the current in-flight bundle request.
+   * Call when the user navigates to a trip page so loadTrip gets priority.
+   */
+  interrupt(): void {
+    _interrupted = true
+  },
+
   /** Reset syncing flag — useful in tests. */
   _resetSyncing(): void {
     _syncing = false
+    _interrupted = false
   },
 }

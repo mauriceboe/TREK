@@ -185,6 +185,11 @@ export async function clearTripData(tripId: number): Promise<void> {
   await offlineDb.trips.delete(tripId);
 }
 
+/** Clear cached file blobs only — frees significant quota without losing trip data. */
+export async function clearBlobCache(): Promise<void> {
+  await offlineDb.blobCache.clear();
+}
+
 /** Wipe the entire offline database (called on logout). */
 export async function clearAll(): Promise<void> {
   await offlineDb.delete();

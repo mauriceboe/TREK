@@ -1000,6 +1000,7 @@ const en: Record<string, string | { name: string; category: string }[]> = {
   'trip.tabs.files': 'Files',
   'trip.loading': 'Loading trip...',
   'trip.loadingPhotos': 'Loading place photos...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.mobilePlan': 'Plan',
   'trip.mobilePlaces': 'Places',
   'trip.toast.placeUpdated': 'Place updated',

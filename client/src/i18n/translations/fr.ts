@@ -922,6 +922,7 @@ const fr: Record<string, string> = {
   'trip.tabs.budget': 'Budget',
   'trip.tabs.files': 'Fichiers',
   'trip.loading': 'Chargement du voyage…',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Chargement des photos des lieux...',
   'trip.mobilePlan': 'Plan',
   'trip.mobilePlaces': 'Lieux',

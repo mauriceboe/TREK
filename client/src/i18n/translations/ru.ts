@@ -922,6 +922,7 @@ const ru: Record<string, string> = {
   'trip.tabs.budget': 'Бюджет',
   'trip.tabs.files': 'Файлы',
   'trip.loading': 'Загрузка поездки...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Загрузка фото мест...',
   'trip.mobilePlan': 'План',
   'trip.mobilePlaces': 'Места',

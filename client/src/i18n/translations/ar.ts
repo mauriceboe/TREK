@@ -925,6 +925,7 @@ const ar: Record<string, string | { name: string; category: string }[]> = {
   'trip.tabs.budget': 'الميزانية',
   'trip.tabs.files': 'الملفات',
   'trip.loading': 'جارٍ تحميل الرحلة...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'جارٍ تحميل صور الأماكن...',
   'trip.mobilePlan': 'الخطة',
   'trip.mobilePlaces': 'الأماكن',

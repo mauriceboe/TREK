@@ -922,6 +922,7 @@ const nl: Record<string, string> = {
   'trip.tabs.budget': 'Budget',
   'trip.tabs.files': 'Bestanden',
   'trip.loading': 'Reis laden...',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Plaatsfoto laden...',
   'trip.mobilePlan': 'Plan',
   'trip.mobilePlaces': 'Plaatsen',

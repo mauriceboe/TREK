@@ -937,6 +937,7 @@ const hu: Record<string, string | { name: string; category: string }[]> = {
   'trip.confirm.deletePlace': 'Biztosan törölni szeretnéd ezt a helyet?',
   'trip.confirm.deletePlaces': '{count} helyet töröl?',
   'trip.toast.placesDeleted': '{count} hely törölve',
+  'trip.splash.goBack': 'Taking too long? Go back to dashboard',
   'trip.loadingPhotos': 'Helyek fotóinak betöltése...',
 
   // Napi terv oldalsáv
