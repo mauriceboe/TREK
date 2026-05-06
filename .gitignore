@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 client/dist/
+server/public/*
+!server/public/.gitkeep
 
 # Generated PWA icons (built from SVG via prebuild)
 client/public/icons/*.png
