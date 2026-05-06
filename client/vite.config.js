@@ -46,7 +46,7 @@ export default defineConfig({
           {
             // API calls — prefer network, fall back to cache
             // Exclude sensitive endpoints (auth, admin, backup, settings)
-            urlPattern: /\/api\/(?!auth|admin|backup|settings).*/i,
+            urlPattern: /\/api\/(?!auth|admin|backup|settings|health).*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-data',

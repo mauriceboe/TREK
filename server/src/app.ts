@@ -276,7 +276,10 @@ export function createApp(): express.Application {
   app.use('/api/trips/:tripId/collab', collabRoutes);
   app.use('/api/trips/:tripId/reservations', reservationsRoutes);
   app.use('/api/trips/:tripId/days/:dayId/notes', dayNotesRoutes);
-  app.get('/api/health', (_req: Request, res: Response) => res.json({ status: 'ok' }));
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store, must-revalidate')
+    res.json({ status: 'ok' })
+  });
   app.use('/api/config', publicConfigRoutes);
   app.use('/api', assignmentsRoutes);
   app.use('/api/tags', tagsRoutes);

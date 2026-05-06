@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { getSocketId } from './websocket'
+import { isReachable, probeNow } from '../sync/connectivity'
 import en from '../i18n/translations/en'
 import br from '../i18n/translations/br'
 import de from '../i18n/translations/de'
@@ -69,10 +70,48 @@ export function isAuthPublicPath(pathname: string): boolean {
   return publicPaths.includes(pathname) || publicPrefixes.some((p) => pathname.startsWith(p))
 }
 
-// Response interceptor - handle 401, 403 MFA, 429 rate limit
+// Response interceptor - handle 401, 403 MFA, 429 rate limit, proxy auth challenges
 apiClient.interceptors.response.use(
-    (response) => response,
-    (error) => {
+    (response) => {
+      sessionStorage.removeItem('proxy_reauth_attempted')
+      return response
+    },
+    async (error) => {
+      // CF Access / Pangolin / similar: cross-origin redirect from /api/* surfaces
+      // as a CORS error with no response object. Probe the health endpoint to
+      // distinguish a proxy auth challenge from a genuine outage. If the server
+      // is reachable, a top-level reload lets the edge proxy run its auth flow.
+      if (!error.response && navigator.onLine) {
+        await probeNow()
+        // Both the original request and the health probe failed while the device
+        // has a network interface. This matches the proxy-auth-challenge pattern
+        // (CF Access / Pangolin intercept all requests and CORS-block XHR).
+        // A top-level reload lets the edge proxy intercept the navigation and
+        // run its auth flow. Guard with sessionStorage to prevent reload loops
+        // (server genuinely down would also land here, but only reloads once).
+        if (!isReachable()) {
+          const { pathname } = window.location
+          if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
+            sessionStorage.setItem('proxy_reauth_attempted', '1')
+            window.location.reload()
+            return Promise.reject(error)
+          }
+        }
+      }
+      // Pangolin header-auth extended compatibility mode: returns 401 with an
+      // HTML body (a JS redirect page) instead of a 302. TREK's own 401s are
+      // always application/json, so checking for text/html is unambiguous.
+      if (error.response?.status === 401) {
+        const ct = (error.response.headers?.['content-type'] as string | undefined) ?? ''
+        if (ct.includes('text/html')) {
+          const { pathname } = window.location
+          if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
+            sessionStorage.setItem('proxy_reauth_attempted', '1')
+            window.location.reload()
+            return Promise.reject(error)
+          }
+        }
+      }
       if (error.response?.status === 401 && (error.response?.data as { code?: string } | undefined)?.code === 'AUTH_REQUIRED') {
         const { pathname } = window.location
         if (!isAuthPublicPath(pathname)) {
