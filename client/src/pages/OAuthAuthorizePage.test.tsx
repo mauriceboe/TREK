@@ -12,7 +12,7 @@ import OAuthAuthorizePage from './OAuthAuthorizePage';
 const DEFAULT_SEARCH = '?client_id=test-client&redirect_uri=http%3A%2F%2Flocalhost%3A4000%2Fcallback&scope=trips%3Aread&state=abc&code_challenge=challenge&code_challenge_method=S256';
 
 function setSearchParams(search: string) {
-  window.history.pushState({}, '', '/oauth/authorize' + search);
+  window.history.pushState({}, '', '/oauth/consent' + search);
 }
 
 const VALIDATE_OK = {
