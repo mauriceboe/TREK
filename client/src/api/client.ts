@@ -70,6 +70,17 @@ export function isAuthPublicPath(pathname: string): boolean {
   return publicPaths.includes(pathname) || publicPrefixes.some((p) => pathname.startsWith(p))
 }
 
+// Unregisters the SW before reloading so the navigation reaches the network.
+// Without this, WorkBox's NavigationRoute serves the cached SPA shell and the
+// upstream proxy (CF Access / Pangolin) never gets to challenge the user.
+async function unregisterSWAndReload(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration()
+    if (reg) await reg.unregister()
+  } catch { /* ignore */ }
+  window.location.reload()
+}
+
 // Response interceptor - handle 401, 403 MFA, 429 rate limit, proxy auth challenges
 apiClient.interceptors.response.use(
     (response) => {
@@ -86,14 +97,13 @@ apiClient.interceptors.response.use(
         // Both the original request and the health probe failed while the device
         // has a network interface. This matches the proxy-auth-challenge pattern
         // (CF Access / Pangolin intercept all requests and CORS-block XHR).
-        // A top-level reload lets the edge proxy intercept the navigation and
-        // run its auth flow. Guard with sessionStorage to prevent reload loops
-        // (server genuinely down would also land here, but only reloads once).
+        // Guard with sessionStorage to prevent reload loops (server genuinely
+        // down would also land here, but only reloads once).
         if (!isReachable()) {
           const { pathname } = window.location
           if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
             sessionStorage.setItem('proxy_reauth_attempted', '1')
-            window.location.reload()
+            await unregisterSWAndReload()
             return Promise.reject(error)
           }
         }
@@ -107,7 +117,7 @@ apiClient.interceptors.response.use(
           const { pathname } = window.location
           if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
             sessionStorage.setItem('proxy_reauth_attempted', '1')
-            window.location.reload()
+            await unregisterSWAndReload()
             return Promise.reject(error)
           }
         }
