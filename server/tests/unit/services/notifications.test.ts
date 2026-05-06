@@ -455,4 +455,27 @@ describe('sendNtfy', () => {
     expect(calledOpts.headers['Priority']).toBe('3');
     expect(calledOpts.headers['Tags']).toBeUndefined(); // empty tags = no header
   });
+
+  it('NTFY-009 — title with non-Latin-1 chars is RFC 2047 encoded', async () => {
+    const mockFetch = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({ ok: true, text: async () => '' } as never);
+
+    await sendNtfy(ntfyUrl, null, { ...payload, title: 'Buy →€ ticket' });
+
+    const [, calledOpts] = mockFetch.mock.calls[0];
+    const encoded = calledOpts.headers['Title'] as string;
+    expect(encoded).toMatch(/^=\?UTF-8\?B\?/);
+    const b64 = encoded.replace(/^=\?UTF-8\?B\?/, '').replace(/\?=$/, '');
+    expect(Buffer.from(b64, 'base64').toString('utf8')).toBe('Buy →€ ticket');
+  });
+
+  it('NTFY-010 — ASCII-only title is passed through verbatim', async () => {
+    const mockFetch = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValueOnce({ ok: true, text: async () => '' } as never);
+
+    await sendNtfy(ntfyUrl, null, { ...payload, title: 'Simple ASCII title' });
+
+    const [, calledOpts] = mockFetch.mock.calls[0];
+    expect(calledOpts.headers['Title']).toBe('Simple ASCII title');
+  });
 });
