@@ -436,6 +436,23 @@ export function createApp(): express.Application {
     });
   });
 
+  // RFC 9728 flat well-known URL — served alongside the path-based form the SDK already provides.
+  // Clients like ChatGPT probe /.well-known/oauth-protected-resource (no path suffix) on every
+  // fresh discovery. Without this, they get 404, fall back to the issuer URL as the resource
+  // parameter, and the authorize handler rejects them with invalid_target — showing the user
+  // the TREK home page instead of the consent form.
+  app.get('/.well-known/oauth-protected-resource', (_req: Request, res: Response) => {
+    if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
+    const meta = getOAuthMetadata();
+    res.json({
+      resource:                 `${meta.issuer}/mcp`,
+      authorization_servers:    [meta.issuer],
+      bearer_methods_supported: ['header'],
+      scopes_supported:         ALL_SCOPES,
+      resource_name:            'TREK MCP',
+    });
+  });
+
   // SDK authorize handler: validates OAuth params, calls provider.authorize() which redirects
   // to the SPA consent page at /oauth/consent
   app.use('/oauth/authorize', mcpAddonGate, authorizationHandler({ provider: trekOAuthProvider }));
