@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+CLIENT_DIR="$REPO_ROOT/client"
+SERVER_DIR="$REPO_ROOT/server"
+PUBLIC_DIR="$REPO_ROOT/server/public"
+
+echo "==> Installing client dependencies"
+cd "$CLIENT_DIR"
+npm ci
+
+echo "==> Building client"
+npm run build
+
+echo "==> Installing server dependencies"
+cd "$SERVER_DIR"
+npm ci
+
+echo "==> Populating server/public"
+find "$PUBLIC_DIR" -mindepth 1 ! -name '.gitkeep' -delete
+cp -r "$CLIENT_DIR/dist/." "$PUBLIC_DIR/"
+cp -r "$CLIENT_DIR/public/fonts" "$PUBLIC_DIR/fonts"
+
+echo "==> Done — server/public is ready"

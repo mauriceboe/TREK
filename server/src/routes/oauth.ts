@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { authenticate, requireCookieAuth, optionalAuth } from '../middleware/auth';
 import { AuthRequest, OptionalAuthRequest } from '../types';
 import { isAddonEnabled } from '../services/adminService';
-import { ALL_SCOPES, SCOPE_INFO } from '../mcp/scopes';
+import { ALL_SCOPES } from '../mcp/scopes';
 import { ADDON_IDS } from '../addons';
 import {
   validateAuthorizeRequest,
@@ -14,16 +14,15 @@ import {
   revokeToken,
   verifyPKCE,
   authenticateClient,
-  isValidRedirectUri,
   listOAuthClients,
   createOAuthClient,
   deleteOAuthClient,
   rotateOAuthClientSecret,
   listOAuthSessions,
   revokeSession,
+  getUserByAccessToken,
   AuthorizeParams,
 } from '../services/oauthService';
-import { getAppUrl } from '../services/oidcService';
 import { writeAudit, getClientIp, logWarn } from '../services/auditLog';
 
 // ---------------------------------------------------------------------------
@@ -59,53 +58,18 @@ function makeRateLimiter(maxAttempts: number, windowMs: number, keyFn: (req: Req
 const tokenLimiter    = makeRateLimiter(30, 60_000, (req) => `${req.ip}|${req.body?.client_id ?? ''}`);
 const validateLimiter = makeRateLimiter(30, 60_000, (req) => req.ip ?? 'unknown');
 const revokeLimiter   = makeRateLimiter(10, 60_000, (req) => req.ip ?? 'unknown');
-const dcrLimiter      = makeRateLimiter(10, 60_000, (req) => req.ip ?? 'unknown');
 
 // ---------------------------------------------------------------------------
-// Public router: /.well-known, /oauth/token, /oauth/revoke
+// Public router: /oauth/token and /oauth/revoke
+// (/.well-known and /oauth/register are now handled by SDK in app.ts)
 // ---------------------------------------------------------------------------
 
 export const oauthPublicRouter = express.Router();
 
-// RFC 8414 discovery document
-oauthPublicRouter.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
-  // M2: return 404 (not 403) so feature presence isn't fingerprinted
-  if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
-
-  const base = (getAppUrl() || '').replace(/\/+$/, '');
-  res.json({
-    issuer:                                base,
-    authorization_endpoint:                `${base}/oauth/authorize`,
-    token_endpoint:                        `${base}/oauth/token`,
-    revocation_endpoint:                   `${base}/oauth/revoke`,
-    registration_endpoint:                 `${base}/oauth/register`,
-    response_types_supported:              ['code'],
-    grant_types_supported:                 ['authorization_code', 'refresh_token'],
-    code_challenge_methods_supported:      ['S256'],
-    token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
-    scopes_supported:                      ALL_SCOPES,
-    scope_descriptions:                    Object.fromEntries(
-      ALL_SCOPES.map(s => [s, SCOPE_INFO[s].label])
-    ),
-    resource_parameter_supported:          true,
-  });
-});
-
-// RFC 9728 Protected Resource Metadata
-oauthPublicRouter.get('/.well-known/oauth-protected-resource', (_req: Request, res: Response) => {
-  if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
-  const base = (getAppUrl() || '').replace(/\/+$/, '');
-  res.json({
-    resource:                 `${base}/mcp`,
-    authorization_servers:    [base],
-    bearer_methods_supported: ['header'],
-    scopes_supported:         ALL_SCOPES,
-    resource_name:            'TREK MCP',
-  });
-});
-
 // Token endpoint — handles authorization_code and refresh_token grants
 oauthPublicRouter.post('/oauth/token', tokenLimiter, (req: Request, res: Response) => {
+  if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
+
   // M1: RFC 6749 §5.1 — token responses must not be cached
   res.set('Cache-Control', 'no-store');
   res.set('Pragma', 'no-cache');
@@ -114,10 +78,6 @@ oauthPublicRouter.post('/oauth/token', tokenLimiter, (req: Request, res: Respons
   const body: Record<string, string> = typeof req.body === 'object' ? req.body : {};
   const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token, resource } = body;
   const ip = getClientIp(req);
-
-  if (!isAddonEnabled(ADDON_IDS.MCP)) {
-    return res.status(403).json({ error: 'mcp_disabled', error_description: 'MCP is not enabled' });
-  }
 
   if (!client_id) {
     return res.status(401).json({ error: 'invalid_client', error_description: 'client_id is required' });
@@ -194,96 +154,32 @@ oauthPublicRouter.post('/oauth/token', tokenLimiter, (req: Request, res: Respons
   return res.status(400).json({ error: 'unsupported_grant_type', error_description: `Unsupported grant_type: ${grant_type}` });
 });
 
-// RFC 7591 Dynamic Client Registration endpoint
-oauthPublicRouter.post('/oauth/register', dcrLimiter, (req: Request, res: Response) => {
+// OIDC UserInfo endpoint (RFC 9068 / OpenID Connect Core §5.3)
+// ChatGPT hits this after OAuth to fetch the authenticated user's email for domain claiming.
+oauthPublicRouter.get('/oauth/userinfo', (req: Request, res: Response) => {
   if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
-
-  const body: Record<string, unknown> = typeof req.body === 'object' && req.body !== null ? req.body : {};
-  const ip = getClientIp(req);
-
-  const redirectUris: string[] = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === 'string') : [];
-  if (redirectUris.length === 0) {
-    return res.status(400).json({ error: 'invalid_redirect_uri', error_description: 'redirect_uris is required and must be a non-empty array' });
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
+    res.set('WWW-Authenticate', 'Bearer realm="TREK MCP"');
+    return res.status(401).json({ error: 'invalid_token' });
   }
-  // OAuth 2.1 + RFC 8252: confidential web apps need HTTPS; public
-  // clients (MCP, native) are limited to loopback or a reverse-DNS
-  // private-use scheme. This rejects `http://evil.example` DCR payloads
-  // that today would otherwise be accepted since we previously only
-  // checked shape. Dangerous URL schemes (`javascript:`, `data:` etc.)
-  // are explicitly rejected — the authorize flow later 302s the
-  // browser to this URI, which with `javascript:` would execute
-  // attacker-controlled script under our redirect origin's context.
-  const DANGEROUS_SCHEMES = new Set([
-    'javascript:', 'data:', 'vbscript:', 'file:', 'blob:', 'about:', 'chrome:', 'chrome-extension:',
-  ]);
-  const allowed = redirectUris.every((u) => {
-    try {
-      const url = new URL(u);
-      if (DANGEROUS_SCHEMES.has(url.protocol)) return false;
-      if (url.protocol === 'https:') return true;
-      if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]')) return true;
-      // RFC 8252 §7.1 private-use scheme: must be a reverse-DNS name
-      // (e.g. `com.example.myapp:/callback`). Requiring a dot in the
-      // scheme is a cheap heuristic that rules out bare `myapp:` and
-      // `x:` one-off schemes the spec explicitly discourages.
-      const schemeBody = url.protocol.slice(0, -1);
-      if (/^[a-z][a-z0-9+.-]*$/i.test(schemeBody) && schemeBody.includes('.')) return true;
-      return false;
-    } catch {
-      return false;
-    }
-  });
-  if (!allowed) {
-    return res.status(400).json({ error: 'invalid_redirect_uri', error_description: 'redirect_uris must be HTTPS, loopback HTTP, or a private custom scheme' });
+  const token = auth.slice(7);
+  const info = getUserByAccessToken(token);
+  if (!info) {
+    res.set('WWW-Authenticate', 'Bearer realm="TREK MCP", error="invalid_token"');
+    return res.status(401).json({ error: 'invalid_token' });
   }
-
-  const rawName = typeof body.client_name === 'string' ? body.client_name.trim().slice(0, 100) : '';
-  const clientName = rawName || 'MCP Client';
-
-  // Determine if the client wants to be public (no secret) — MCP clients typically use PKCE only
-  const authMethod = typeof body.token_endpoint_auth_method === 'string' ? body.token_endpoint_auth_method : 'client_secret_post';
-  const isPublic = authMethod === 'none';
-
-  // Resolve requested scopes — scope is required; no implicit full-access grant
-  if (typeof body.scope !== 'string' || body.scope.trim() === '') {
-    return res.status(400).json({ error: 'invalid_client_metadata', error_description: 'scope is required' });
-  }
-  const rawScope = body.scope;
-  const requestedScopes = rawScope.split(' ').filter(s => (ALL_SCOPES as string[]).includes(s));
-  if (requestedScopes.length === 0) {
-    return res.status(400).json({ error: 'invalid_client_metadata', error_description: 'No valid scopes requested' });
-  }
-
-  const result = createOAuthClient(null, clientName, redirectUris, requestedScopes, ip, {
-    isPublic,
-    createdVia: 'dcr',
-  });
-
-  if (result.error) {
-    return res.status(result.status || 400).json({ error: 'invalid_client_metadata', error_description: result.error });
-  }
-
-  const client = result.client!;
-  const now = Math.floor(Date.now() / 1000);
-
-  return res.status(201).json({
-    client_id:                     client.client_id,
-    ...(client.client_secret      ? { client_secret: client.client_secret, client_secret_expires_at: 0 } : {}),
-    client_id_issued_at:           now,
-    redirect_uris:                 client.redirect_uris,
-    grant_types:                   ['authorization_code', 'refresh_token'],
-    response_types:                ['code'],
-    scope:                         (client.allowed_scopes as string[]).join(' '),
-    client_name:                   client.name,
-    token_endpoint_auth_method:    isPublic ? 'none' : 'client_secret_post',
+  return res.json({
+    sub:            String(info.user.id),
+    email:          info.user.email,
+    email_verified: true,
+    preferred_username: info.user.username,
   });
 });
 
 // Token revocation endpoint (RFC 7009)
 oauthPublicRouter.post('/oauth/revoke', revokeLimiter, (req: Request, res: Response) => {
-  // M2: return 404 when MCP is disabled
   if (!isAddonEnabled(ADDON_IDS.MCP)) return res.status(404).end();
-
   const body: Record<string, string> = typeof req.body === 'object' ? req.body : {};
   const { token, client_id, client_secret } = body;
   const ip = getClientIp(req);
@@ -318,17 +214,17 @@ oauthApiRouter.get('/authorize/validate', validateLimiter, optionalAuth, (req: R
   const userId = (req as OptionalAuthRequest).user?.id ?? null;
 
   const result = validateAuthorizeRequest(
-    {
-      response_type:          params.response_type || '',
-      client_id:              params.client_id || '',
-      redirect_uri:           params.redirect_uri || '',
-      scope:                  params.scope || '',
-      state:                  params.state,
-      code_challenge:         params.code_challenge || '',
-      code_challenge_method:  params.code_challenge_method || '',
-      resource:               typeof params.resource === 'string' ? params.resource : undefined,
-    },
-    userId,
+      {
+        response_type:          params.response_type || '',
+        client_id:              params.client_id || '',
+        redirect_uri:           params.redirect_uri || '',
+        scope:                  params.scope || '',
+        state:                  params.state,
+        code_challenge:         params.code_challenge || '',
+        code_challenge_method:  params.code_challenge_method || '',
+        resource:               typeof params.resource === 'string' ? params.resource : undefined,
+      },
+      userId,
   );
 
   // H3: when caller is unauthenticated, strip client name / allowed_scopes from the response

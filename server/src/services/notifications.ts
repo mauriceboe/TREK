@@ -621,6 +621,15 @@ export function isNtfyConfiguredAdmin(): boolean {
   return !!(getAppSetting('admin_ntfy_topic'));
 }
 
+function encodeHeaderValue(value: string): string {
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) > 0xFF) {
+      return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+    }
+  }
+  return value;
+}
+
 export async function sendNtfy(
   url: string,
   token: string | null,
@@ -638,11 +647,11 @@ export async function sendNtfy(
 
   // ntfy header-based API: POST to topic URL, body = plain text message, metadata in headers
   const headers: Record<string, string> = {
-    'Title': payload.title,
+    'Title': encodeHeaderValue(payload.title),
     'Priority': String(meta.priority),
   };
   if (meta.tags.length > 0) headers['Tags'] = meta.tags.join(',');
-  if (payload.link) headers['Click'] = payload.link;
+  if (payload.link) headers['Click'] = encodeHeaderValue(payload.link);
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   try {

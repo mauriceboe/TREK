@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { getSocketId } from './websocket'
+import { isReachable, probeNow } from '../sync/connectivity'
 import en from '../i18n/translations/en'
 import br from '../i18n/translations/br'
 import de from '../i18n/translations/de'
@@ -33,6 +34,7 @@ function translateRateLimit(): string {
 export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: 8000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -42,24 +44,24 @@ const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
 // Request interceptor - add socket ID + idempotency key for mutating requests
 apiClient.interceptors.request.use(
-  (config) => {
-    const sid = getSocketId()
-    if (sid) {
-      config.headers['X-Socket-Id'] = sid
-    }
-    // Attach a per-request idempotency key to all write operations so the
-    // server can deduplicate retried requests (e.g. network blips).
-    // The mutation queue sets its own pre-generated key; skip if already set.
-    const method = (config.method ?? '').toLowerCase()
-    if (MUTATING_METHODS.has(method) && !config.headers['X-Idempotency-Key']) {
-      const key = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2)
-      config.headers['X-Idempotency-Key'] = key
-    }
-    return config
-  },
-  (error) => Promise.reject(error)
+    (config) => {
+      const sid = getSocketId()
+      if (sid) {
+        config.headers['X-Socket-Id'] = sid
+      }
+      // Attach a per-request idempotency key to all write operations so the
+      // server can deduplicate retried requests (e.g. network blips).
+      // The mutation queue sets its own pre-generated key; skip if already set.
+      const method = (config.method ?? '').toLowerCase()
+      if (MUTATING_METHODS.has(method) && !config.headers['X-Idempotency-Key']) {
+        const key = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(2)
+        config.headers['X-Idempotency-Key'] = key
+      }
+      return config
+    },
+    (error) => Promise.reject(error)
 )
 
 export function isAuthPublicPath(pathname: string): boolean {
@@ -68,36 +70,84 @@ export function isAuthPublicPath(pathname: string): boolean {
   return publicPaths.includes(pathname) || publicPrefixes.some((p) => pathname.startsWith(p))
 }
 
-// Response interceptor - handle 401, 403 MFA, 429 rate limit
+// Unregisters the SW before reloading so the navigation reaches the network.
+// Without this, WorkBox's NavigationRoute serves the cached SPA shell and the
+// upstream proxy (CF Access / Pangolin) never gets to challenge the user.
+async function unregisterSWAndReload(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration()
+    if (reg) await reg.unregister()
+  } catch { /* ignore */ }
+  window.location.reload()
+}
+
+// Response interceptor - handle 401, 403 MFA, 429 rate limit, proxy auth challenges
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401 && (error.response?.data as { code?: string } | undefined)?.code === 'AUTH_REQUIRED') {
-      const { pathname } = window.location
-      if (!isAuthPublicPath(pathname)) {
-        const currentPath = pathname + window.location.search + window.location.hash
-        window.location.href = '/login?redirect=' + encodeURIComponent(currentPath)
+    (response) => {
+      sessionStorage.removeItem('proxy_reauth_attempted')
+      return response
+    },
+    async (error) => {
+      // CF Access / Pangolin / similar: cross-origin redirect from /api/* surfaces
+      // as a CORS error with no response object. Probe the health endpoint to
+      // distinguish a proxy auth challenge from a genuine outage. If the server
+      // is reachable, a top-level reload lets the edge proxy run its auth flow.
+      if (!error.response && navigator.onLine) {
+        await probeNow()
+        // Both the original request and the health probe failed while the device
+        // has a network interface. This matches the proxy-auth-challenge pattern
+        // (CF Access / Pangolin intercept all requests and CORS-block XHR).
+        // Guard with sessionStorage to prevent reload loops (server genuinely
+        // down would also land here, but only reloads once).
+        if (!isReachable()) {
+          const { pathname } = window.location
+          if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
+            sessionStorage.setItem('proxy_reauth_attempted', '1')
+            await unregisterSWAndReload()
+            return Promise.reject(error)
+          }
+        }
       }
-    }
-    if (
-      error.response?.status === 403 &&
-      (error.response?.data as { code?: string } | undefined)?.code === 'MFA_REQUIRED' &&
-      !window.location.pathname.startsWith('/settings')
-    ) {
-      window.location.href = '/settings?mfa=required'
-    }
-    if (error.response?.status === 429) {
-      const translated = translateRateLimit()
-      const data = error.response.data as { error?: string } | undefined
-      if (data && typeof data === 'object') {
-        data.error = translated
-      } else {
-        error.response.data = { error: translated }
+      // Pangolin header-auth extended compatibility mode: returns 401 with an
+      // HTML body (a JS redirect page) instead of a 302. TREK's own 401s are
+      // always application/json, so checking for text/html is unambiguous.
+      if (error.response?.status === 401) {
+        const ct = (error.response.headers?.['content-type'] as string | undefined) ?? ''
+        if (ct.includes('text/html')) {
+          const { pathname } = window.location
+          if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
+            sessionStorage.setItem('proxy_reauth_attempted', '1')
+            await unregisterSWAndReload()
+            return Promise.reject(error)
+          }
+        }
       }
-      error.message = translated
+      if (error.response?.status === 401 && (error.response?.data as { code?: string } | undefined)?.code === 'AUTH_REQUIRED') {
+        const { pathname } = window.location
+        if (!isAuthPublicPath(pathname)) {
+          const currentPath = pathname + window.location.search + window.location.hash
+          window.location.href = '/login?redirect=' + encodeURIComponent(currentPath)
+        }
+      }
+      if (
+          error.response?.status === 403 &&
+          (error.response?.data as { code?: string } | undefined)?.code === 'MFA_REQUIRED' &&
+          !window.location.pathname.startsWith('/settings')
+      ) {
+        window.location.href = '/settings?mfa=required'
+      }
+      if (error.response?.status === 429) {
+        const translated = translateRateLimit()
+        const data = error.response.data as { error?: string } | undefined
+        if (data && typeof data === 'object') {
+          data.error = translated
+        } else {
+          error.response.data = { error: translated }
+        }
+        error.message = translated
+      }
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
-  }
 )
 
 export const authApi = {
@@ -142,6 +192,7 @@ export const oauthApi = {
     state?: string
     code_challenge: string
     code_challenge_method: string
+    resource?: string
   }) => apiClient.get('/oauth/authorize/validate', { params }).then(r => r.data),
 
   /** Submit user consent (approve or deny) */
@@ -153,12 +204,13 @@ export const oauthApi = {
     code_challenge: string
     code_challenge_method: string
     approved: boolean
+    resource?: string
   }) => apiClient.post('/oauth/authorize', body).then(r => r.data),
 
   clients: {
     list: () => apiClient.get('/oauth/clients').then(r => r.data),
     create: (data: { name: string; redirect_uris: string[]; allowed_scopes: string[] }) =>
-      apiClient.post('/oauth/clients', data).then(r => r.data),
+        apiClient.post('/oauth/clients', data).then(r => r.data),
     rotate: (id: string) => apiClient.post(`/oauth/clients/${id}/rotate`).then(r => r.data),
     delete: (id: string) => apiClient.delete(`/oauth/clients/${id}`).then(r => r.data),
   },
@@ -215,11 +267,11 @@ export const placesApi = {
     return apiClient.post(`/trips/${tripId}/places/import/map`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
   },
   importGoogleList: (tripId: number | string, url: string) =>
-    apiClient.post(`/trips/${tripId}/places/import/google-list`, { url }).then(r => r.data),
+      apiClient.post(`/trips/${tripId}/places/import/google-list`, { url }).then(r => r.data),
   importNaverList: (tripId: number | string, url: string) =>
-    apiClient.post(`/trips/${tripId}/places/import/naver-list`, { url }).then(r => r.data),
+      apiClient.post(`/trips/${tripId}/places/import/naver-list`, { url }).then(r => r.data),
   bulkDelete: (tripId: number | string, ids: number[]) =>
-    apiClient.post(`/trips/${tripId}/places/bulk-delete`, { ids }).then(r => r.data),
+      apiClient.post(`/trips/${tripId}/places/bulk-delete`, { ids }).then(r => r.data),
 }
 
 export const assignmentsApi = {
@@ -313,7 +365,7 @@ export const adminApi = {
   createInvite: (data: { max_uses: number; expires_in_days?: number }) => apiClient.post('/admin/invites', data).then(r => r.data),
   deleteInvite: (id: number) => apiClient.delete(`/admin/invites/${id}`).then(r => r.data),
   auditLog: (params?: { limit?: number; offset?: number }) =>
-    apiClient.get('/admin/audit-log', { params }).then(r => r.data),
+      apiClient.get('/admin/audit-log', { params }).then(r => r.data),
   mcpTokens: () => apiClient.get('/admin/mcp-tokens').then(r => r.data),
   deleteMcpToken: (id: number) => apiClient.delete(`/admin/mcp-tokens/${id}`).then(r => r.data),
   oauthSessions: () => apiClient.get('/admin/oauth-sessions').then(r => r.data),
@@ -322,7 +374,7 @@ export const adminApi = {
   updatePermissions: (permissions: Record<string, string>) => apiClient.put('/admin/permissions', { permissions }).then(r => r.data),
   rotateJwtSecret: () => apiClient.post('/admin/rotate-jwt-secret').then(r => r.data),
   sendTestNotification: (data: Record<string, unknown>) =>
-    apiClient.post('/admin/dev/test-notification', data).then(r => r.data),
+      apiClient.post('/admin/dev/test-notification', data).then(r => r.data),
   getNotificationPreferences: () => apiClient.get('/admin/notification-preferences').then(r => r.data),
   updateNotificationPreferences: (prefs: Record<string, Record<string, boolean>>) => apiClient.put('/admin/notification-preferences', prefs).then(r => r.data),
   getDefaultUserSettings: () => apiClient.get('/admin/default-user-settings').then(r => r.data),
@@ -387,7 +439,7 @@ export const journeyApi = {
 export const mapsApi = {
   search: (query: string, lang?: string) => apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => r.data),
   autocomplete: (input: string, lang?: string, locationBias?: { low: { lat: number; lng: number }; high: { lat: number; lng: number } }, signal?: AbortSignal) =>
-    apiClient.post('/maps/autocomplete', { input, lang, locationBias }, { signal }).then(r => r.data),
+      apiClient.post('/maps/autocomplete', { input, lang, locationBias }, { signal }).then(r => r.data),
   details: (placeId: string, lang?: string) => apiClient.get(`/maps/details/${encodeURIComponent(placeId)}`, { params: { lang } }).then(r => r.data),
   placePhoto: (placeId: string, lat?: number, lng?: number, name?: string) => apiClient.get(`/maps/place-photo/${encodeURIComponent(placeId)}`, { params: { lat, lng, name } }).then(r => r.data),
   reverse: (lat: number, lng: number, lang?: string) => apiClient.get('/maps/reverse', { params: { lat, lng, lang } }).then(r => r.data),
@@ -443,7 +495,7 @@ export const weatherApi = {
 
 export const configApi = {
   getPublicConfig: (): Promise<{ defaultLanguage: string }> =>
-    apiClient.get('/config').then(r => r.data),
+      apiClient.get('/config').then(r => r.data),
 }
 
 export const settingsApi = {
@@ -529,21 +581,21 @@ export const notificationsApi = {
 
 export const inAppNotificationsApi = {
   list: (params?: { limit?: number; offset?: number; unread_only?: boolean }) =>
-    apiClient.get('/notifications/in-app', { params }).then(r => r.data),
+      apiClient.get('/notifications/in-app', { params }).then(r => r.data),
   unreadCount: () =>
-    apiClient.get('/notifications/in-app/unread-count').then(r => r.data),
+      apiClient.get('/notifications/in-app/unread-count').then(r => r.data),
   markRead: (id: number) =>
-    apiClient.put(`/notifications/in-app/${id}/read`).then(r => r.data),
+      apiClient.put(`/notifications/in-app/${id}/read`).then(r => r.data),
   markUnread: (id: number) =>
-    apiClient.put(`/notifications/in-app/${id}/unread`).then(r => r.data),
+      apiClient.put(`/notifications/in-app/${id}/unread`).then(r => r.data),
   markAllRead: () =>
-    apiClient.put('/notifications/in-app/read-all').then(r => r.data),
+      apiClient.put('/notifications/in-app/read-all').then(r => r.data),
   delete: (id: number) =>
-    apiClient.delete(`/notifications/in-app/${id}`).then(r => r.data),
+      apiClient.delete(`/notifications/in-app/${id}`).then(r => r.data),
   deleteAll: () =>
-    apiClient.delete('/notifications/in-app/all').then(r => r.data),
+      apiClient.delete('/notifications/in-app/all').then(r => r.data),
   respond: (id: number, response: 'positive' | 'negative') =>
-    apiClient.post(`/notifications/in-app/${id}/respond`, { response }).then(r => r.data),
+      apiClient.post(`/notifications/in-app/${id}/respond`, { response }).then(r => r.data),
 }
 
 export default apiClient
