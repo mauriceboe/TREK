@@ -6,6 +6,8 @@ This page explains how to connect an AI assistant to your TREK instance. TREK su
 
 ![MCP Setup](assets/MCPConfig.png)
 
+> **Cloudflare users:** If your TREK instance is proxied through Cloudflare, Bot Fight Mode and Super Bot Fight Mode will block MCP requests from ChatGPT. Claude.ai is not affected. See [Troubleshooting → MCP requests blocked by Cloudflare WAF](#mcp-requests-blocked-by-cloudflare-waf-bot-fight-mode) for the fix.
+
 ## Option A: OAuth 2.1 (recommended)
 
 OAuth 2.1 is the preferred connection method. You grant specific scopes during the consent step and no token management is required afterward — TREK issues short-lived access tokens and automatically rotates refresh tokens.
