@@ -478,6 +478,12 @@ export function createApp(): express.Application {
     next();
   });
 
+  // Helmet's COOP: same-origin isolates the consent popup from its cross-origin opener (ChatGPT etc.), making window.opener null and breaking the OAuth flow.
+  app.use('/oauth/consent', (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    next();
+  });
+
   // Production static file serving
   if (process.env.NODE_ENV === 'production') {
     const publicPath = path.join(__dirname, '../public');
