@@ -719,8 +719,8 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', flexShrink: 0 }}>
             {t('budget.title')}
           </h2>
-          <div className="hidden md:flex" style={{ alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
-            <div style={{ width: 150 }}>
+          <div className="flex flex-wrap max-md:!w-full max-md:!mt-2" style={{ alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+            <div className="max-md:!w-full" style={{ width: 150 }}>
               <CustomSelect
                 value={currency}
                 onChange={setCurrency}
@@ -730,7 +730,7 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
               />
             </div>
             {canEdit && (
-              <div style={{ display: 'flex', gap: 6, width: 260 }}>
+              <div className="max-md:!w-full" style={{ display: 'flex', gap: 6, width: 260 }}>
                 <input
                   value={newCategoryName}
                   onChange={e => setNewCategoryName(e.target.value)}
@@ -763,7 +763,7 @@ export default function BudgetPanel({ tripId, tripMembers = [] }: BudgetPanelPro
               onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
-              <Download size={14} strokeWidth={2.5} /> CSV
+              <Download size={14} strokeWidth={2.5} /> <span className="hidden sm:inline">CSV</span>
             </button>
           </div>
         </div>
