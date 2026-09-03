@@ -1,6 +1,6 @@
 {
   "name": "@trek/shared",
-  "version": "4.1.1",
+  "version": "4.2.0",
   "private": true,
   "description": "Shared API contracts (Zod schemas) — single source of truth for TREK server and client.",
   "type": "module",
