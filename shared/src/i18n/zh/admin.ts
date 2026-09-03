@@ -452,6 +452,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': '需要 TREK {range}——此服务器运行的是 {host}',
   'admin.plugins.dep.trekUnknown': '未声明支持的 TREK 版本',
   'admin.plugins.installCompatible': '安装 {version}',
+  'admin.plugins.installAnyway': '仍然安装',
+  'admin.plugins.rangeBypass.pill': '版本检查已关闭',
+  'admin.plugins.rangeBypass.pillHint':
+    '已设置 TREK_PLUGINS_IGNORE_TREK_RANGE — 插件可在作者声明的 TREK 版本范围之外安装和运行',
+  'admin.plugins.rangeBypass.title': '超出支持的 TREK 版本',
+  'admin.plugins.rangeBypass.noticeTitle': '已安装在支持的 TREK 版本之外',
+  'admin.plugins.rangeBypass.body':
+    '“{name}”声明支持 TREK {range}，而此服务器运行的是 {host}。仅因为设置了 TREK_PLUGINS_IGNORE_TREK_RANGE，TREK 才放行。作者尚未为此 TREK 更新插件的版本范围，因此无法保证它能正常工作——在极少数情况下，不匹配的插件可能损坏 TREK 数据。只有在接受该风险时才继续。',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}”未声明支持哪些 TREK 版本；此服务器运行的是 {host}。仅因为设置了 TREK_PLUGINS_IGNORE_TREK_RANGE，TREK 才放行。没有迹象表明作者在此 TREK 上测试过它，因此无法保证它能正常工作——在极少数情况下，不匹配的插件可能损坏 TREK 数据。只有在接受该风险时才继续。',
+  'admin.plugins.dep.trekBypassed': '超出其 TREK 范围（{range}）— 版本检查已关闭',
+  'admin.plugins.dep.trekBypassedUnknown': '未声明 TREK 范围 — 版本检查已关闭',
   'admin.plugins.incompatible': '不兼容',
   'admin.plugins.accessTitle': '可访问的内容',
   'admin.plugins.connectsTitle': '连接到',

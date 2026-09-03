@@ -105,16 +105,16 @@ describe('signature refusal codes survive to the client', () => {
 // must install exactly that one — the compat gate stays server-side in selectVersion.
 describe('POST :id/update — explicit version', () => {
   it('forwards the requested version to the runtime', async () => {
-    vi.mocked(runtime.update).mockResolvedValue({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [] });
+    vi.mocked(runtime.update).mockResolvedValue({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [], trekRangeBypassed: null });
 
     const res = await controller.update('flight-tracker', { version: '1.2.0' });
 
     expect(vi.mocked(runtime.update).mock.calls[0]).toEqual(['flight-tracker', { version: '1.2.0' }]);
-    expect(res).toEqual({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [] });
+    expect(res).toEqual({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [], trekRangeBypassed: null });
   });
 
   it('an omitted body keeps the default newest-compatible resolution', async () => {
-    vi.mocked(runtime.update).mockResolvedValue({ version: '2.0.0', activated: true, newPermissions: [], newEgress: [] });
+    vi.mocked(runtime.update).mockResolvedValue({ version: '2.0.0', activated: true, newPermissions: [], newEgress: [], trekRangeBypassed: null });
 
     await controller.update('flight-tracker');
 
@@ -128,7 +128,7 @@ describe('POST :id/update — explicit version', () => {
 // must not touch it.
 describe('update hold wiring', () => {
   it('an explicit-version update recomputes the hold as deliberate', async () => {
-    vi.mocked(runtime.update).mockResolvedValue({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [] });
+    vi.mocked(runtime.update).mockResolvedValue({ version: '1.2.0', activated: true, newPermissions: [], newEgress: [], trekRangeBypassed: null });
 
     await controller.update('flight-tracker', { version: '1.2.0' });
 
@@ -136,7 +136,7 @@ describe('update hold wiring', () => {
   });
 
   it('a default update recomputes as non-deliberate (clears a stale hold)', async () => {
-    vi.mocked(runtime.update).mockResolvedValue({ version: '2.0.0', activated: true, newPermissions: [], newEgress: [] });
+    vi.mocked(runtime.update).mockResolvedValue({ version: '2.0.0', activated: true, newPermissions: [], newEgress: [], trekRangeBypassed: null });
 
     await controller.update('flight-tracker');
 
@@ -144,7 +144,7 @@ describe('update hold wiring', () => {
   });
 
   it('an explicit-version install recomputes the hold as deliberate', async () => {
-    vi.mocked(registry.install).mockResolvedValue({ id: 'flight-tracker', version: '1.2.0' });
+    vi.mocked(registry.install).mockResolvedValue({ id: 'flight-tracker', version: '1.2.0', trekRangeBypassed: null });
 
     await controller.install({ id: 'flight-tracker', version: '1.2.0' });
 
@@ -152,7 +152,7 @@ describe('update hold wiring', () => {
   });
 
   it('a dependency-resolution install does NOT touch the hold', async () => {
-    vi.mocked(registry.installWithDependencies).mockResolvedValue({ installed: ['flight-tracker'], requiredAddons: [] });
+    vi.mocked(registry.installWithDependencies).mockResolvedValue({ installed: ['flight-tracker'], requiredAddons: [], trekRangeBypassed: null });
 
     await controller.install({ id: 'flight-tracker', withDependencies: true });
 

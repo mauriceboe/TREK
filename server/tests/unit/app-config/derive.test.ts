@@ -188,6 +188,14 @@ describe('derivePlugins', () => {
     expect(derivePlugins({}).permissionsOff).toBe(false);
   });
 
+  it('ignoreTrekRange is off unless explicitly truthy — the version gate must never bypass by accident', () => {
+    expect(derivePlugins({}).ignoreTrekRange).toBe(false);
+    expect(derivePlugins({ TREK_PLUGINS_IGNORE_TREK_RANGE: '' }).ignoreTrekRange).toBe(false);
+    expect(derivePlugins({ TREK_PLUGINS_IGNORE_TREK_RANGE: 'off' }).ignoreTrekRange).toBe(false);
+    expect(derivePlugins({ TREK_PLUGINS_IGNORE_TREK_RANGE: '1' }).ignoreTrekRange).toBe(true);
+    expect(derivePlugins({ TREK_PLUGINS_IGNORE_TREK_RANGE: 'TRUE' }).ignoreTrekRange).toBe(true);
+  });
+
   it('allowPrivateEgress is a bool (supervisor normalizes it to the literal "on" for the child)', () => {
     expect(derivePlugins({ TREK_PLUGIN_ALLOW_PRIVATE_EGRESS: 'on' }).allowPrivateEgress).toBe(true);
     expect(derivePlugins({ TREK_PLUGIN_ALLOW_PRIVATE_EGRESS: 'true' }).allowPrivateEgress).toBe(true);

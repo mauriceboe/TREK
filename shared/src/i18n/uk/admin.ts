@@ -496,6 +496,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Потрібен TREK {range} — на цьому сервері {host}',
   'admin.plugins.dep.trekUnknown': 'Не вказано, які версії TREK підтримуються',
   'admin.plugins.installCompatible': 'Встановити {version}',
+  'admin.plugins.installAnyway': 'Усе одно встановити',
+  'admin.plugins.rangeBypass.pill': 'Перевірки версії вимкнено',
+  'admin.plugins.rangeBypass.pillHint':
+    'Задано TREK_PLUGINS_IGNORE_TREK_RANGE — плагіни можна встановлювати та запускати поза версіями TREK, вказаними їхніми авторами',
+  'admin.plugins.rangeBypass.title': 'Поза підтримуваними версіями TREK',
+  'admin.plugins.rangeBypass.noticeTitle': 'Встановлено поза підтримуваними версіями TREK',
+  'admin.plugins.rangeBypass.body':
+    '«{name}» заявляє підтримку TREK {range}, а цей сервер працює на {host}. TREK пропускає його лише тому, що задано TREK_PLUGINS_IGNORE_TREK_RANGE. Автор не оновив діапазон версій плагіна для цього TREK, тож працездатність не гарантується — а в рідкісних випадках несумісний плагін може пошкодити дані TREK. Продовжуйте, лише якщо приймаєте цей ризик.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '«{name}» не вказує, які версії TREK він підтримує; цей сервер працює на {host}. TREK пропускає його лише тому, що задано TREK_PLUGINS_IGNORE_TREK_RANGE. Ніщо не свідчить, що автор тестував його на цьому TREK, тож працездатність не гарантується — а в рідкісних випадках несумісний плагін може пошкодити дані TREK. Продовжуйте, лише якщо приймаєте цей ризик.',
+  'admin.plugins.dep.trekBypassed':
+    'Поза своїм діапазоном TREK ({range}) — перевірки версії вимкнено',
+  'admin.plugins.dep.trekBypassedUnknown': 'Діапазон TREK не вказано — перевірки версії вимкнено',
   'admin.plugins.incompatible': 'Несумісно',
   'admin.plugins.accessTitle': 'До чого має доступ',
   'admin.plugins.connectsTitle': 'Підключається до',

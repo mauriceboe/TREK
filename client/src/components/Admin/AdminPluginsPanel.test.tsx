@@ -2459,3 +2459,85 @@ describe('AdminPluginsPanel — instance settings', () => {
     expect(save.className).not.toContain('text-white')
   })
 })
+
+/**
+ * TREK_PLUGINS_IGNORE_TREK_RANGE. The server turns its version gates into warnings; the
+ * panel's job is to make sure the admin actually SEES the warning — before a registry
+ * install, after a sideload/link that could not be asked first, and on the row for as
+ * long as the plugin keeps running outside the range its author vouched for.
+ */
+describe('AdminPluginsPanel — TREK-range bypass (TREK_PLUGINS_IGNORE_TREK_RANGE)', () => {
+  function bypassPanel(plugins: Record<string, unknown>[], entry: Record<string, unknown> | null) {
+    server.use(
+      http.get('*/api/admin/plugins', () => HttpResponse.json({ enabled: true, devLink: false, ignoreTrekRange: true, plugins })),
+      http.get('*/api/admin/plugins/registry', () => HttpResponse.json(entry ? [entry] : [])),
+    )
+  }
+  const incompatibleEntry = () => registryEntry({ trek: '>=4.0.0', hostVersion: '3.3.0', compatible: false, latestCompatible: null })
+
+  it('FE-PLG-BYPASS-001: says so in the header', async () => {
+    bypassPanel([plugin()], null)
+    render(<AdminPluginsPanel />)
+    expect(await screen.findByText('Version checks off')).toBeInTheDocument()
+  })
+
+  it('FE-PLG-BYPASS-002: offers "Install anyway" for an incompatible entry and asks before installing', async () => {
+    let posted: unknown = null
+    bypassPanel([plugin({ id: 'something-else' })], incompatibleEntry())
+    server.use(http.post('*/api/admin/plugins/install', async ({ request }) => {
+      posted = await request.json()
+      return HttpResponse.json({ id: 'trek-gotify', version: '2.0.0', trekRangeBypassed: { trekRange: '>=4.0.0', hostVersion: '3.3.0' } })
+    }))
+    withToast()
+    fireEvent.click(await screen.findByText('Discover'))
+
+    const btn = await screen.findByRole('button', { name: /^install anyway$/i })
+    expect(btn).toBeEnabled()
+    fireEvent.click(btn)
+
+    const dialog = await screen.findByRole('dialog', { name: /outside its supported trek versions/i })
+    expect(within(dialog).getByText(/no guarantee/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/corrupt trek data/i)).toBeInTheDocument()
+    expect(posted).toBeNull() // nothing sent until the admin accepts the risk
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /^install anyway$/i }))
+    await waitFor(() => expect(posted).toEqual({ id: 'trek-gotify' }))
+  })
+
+  it('FE-PLG-BYPASS-003: cancelling the warning installs nothing', async () => {
+    let posted = false
+    bypassPanel([plugin({ id: 'something-else' })], incompatibleEntry())
+    server.use(http.post('*/api/admin/plugins/install', () => { posted = true; return HttpResponse.json({ id: 'trek-gotify', version: '2.0.0', trekRangeBypassed: null }) }))
+    withToast()
+    fireEvent.click(await screen.findByText('Discover'))
+    fireEvent.click(await screen.findByRole('button', { name: /^install anyway$/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /outside its supported trek versions/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /outside its supported trek versions/i })).not.toBeInTheDocument())
+    expect(posted).toBe(false)
+  })
+
+  it('FE-PLG-BYPASS-004: a sideload that landed outside its range is warned about afterwards', async () => {
+    bypassPanel([plugin()], null)
+    server.use(http.post('*/api/admin/plugins/upload', () =>
+      HttpResponse.json({ id: 'trek-new', version: '1.0.0', replaced: false, trekRangeBypassed: { trekRange: null, hostVersion: '3.3.0' } })))
+    const { container } = withToast()
+    await screen.findByText('Gotify')
+
+    await userEvent.upload(container.querySelector('input[type="file"]') as HTMLInputElement, new File(['zip'], 'plugin.zip', { type: 'application/zip' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /installed outside its supported trek versions/i })
+    expect(within(dialog).getByText(/no guarantee/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/trek-new/)).toBeInTheDocument()
+  })
+
+  it('FE-PLG-BYPASS-005: a plugin running outside its range keeps a warning chip on its row', async () => {
+    bypassPanel([plugin({
+      dependencyStatus: 'ok', trekRange: '>=3.2.0 <4.0.0', hostVersion: '4.0.0',
+      trekRangeBypassed: { trekRange: '>=3.2.0 <4.0.0', hostVersion: '4.0.0' },
+    })], null)
+    render(<AdminPluginsPanel />)
+    expect(await screen.findByText(/outside its trek range \(>=3\.2\.0 <4\.0\.0\)/i)).toBeInTheDocument()
+  })
+})

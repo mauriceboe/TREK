@@ -3,7 +3,7 @@
  * HTTP route works through the host→child invoke path, using its own isolated
  * db. Proves the full activate → route → deactivate loop.
  */
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -712,6 +712,36 @@ describe('TREK host-version gating', () => {
     cleanup('boot-broken');
   });
 
+  describe('with TREK_PLUGINS_IGNORE_TREK_RANGE set', () => {
+    beforeEach(() => { process.env.TREK_PLUGINS_IGNORE_TREK_RANGE = '1'; });
+    afterEach(() => { delete process.env.TREK_PLUGINS_IGNORE_TREK_RANGE; });
+
+    it('activates a plugin this TREK has outgrown, warning in the log instead of refusing', async () => {
+      process.env.APP_VERSION = '4.0.0';
+      seedRanged('outgrown-ok', '>=3.2.0 <4.0.0');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const rt = createPluginRuntime(new DatabaseService(dbConn));
+      await rt.activate('outgrown-ok');
+      expect(rt.isActive('outgrown-ok')).toBe(true);
+      expect(warn.mock.calls.some((c) => /outgrown-ok.*>=3\.2\.0 <4\.0\.0.*4\.0\.0/.test(String(c[0])))).toBe(true);
+      warn.mockRestore();
+      await rt.deactivate('outgrown-ok');
+      cleanup('outgrown-ok');
+    });
+
+    it('activates a plugin that never declared a range', async () => {
+      process.env.APP_VERSION = '3.3.0';
+      seedRanged('undeclared-ok', null);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const rt = createPluginRuntime(new DatabaseService(dbConn));
+      await rt.activate('undeclared-ok');
+      expect(rt.isActive('undeclared-ok')).toBe(true);
+      warn.mockRestore();
+      await rt.deactivate('undeclared-ok');
+      cleanup('undeclared-ok');
+    });
+  });
+
   it('checks the version BEFORE permissions — an unrunnable plugin gets no consent dialog', async () => {
     // Consenting to permissions would not make it start, so offering the dialog is a lie.
     process.env.APP_VERSION = '4.0.0';
@@ -747,6 +777,17 @@ describe('plugin-API version gating', () => {
     expect(err).toMatchObject({ code: 'API_VERSION_INCOMPATIBLE' });
     expect(err.message).toBe('plugin requires plugin-API v2; this TREK supports v1');
     cleanup('future-api');
+  });
+
+  it('still refuses a newer apiVersion when the TREK-range bypass is on — it is not a range problem', async () => {
+    process.env.TREK_PLUGINS_IGNORE_TREK_RANGE = '1';
+    try {
+      seedApi('future-api-bypass', 2);
+      await expect(createPluginRuntime(new DatabaseService(dbConn)).activate('future-api-bypass')).rejects.toMatchObject({ code: 'API_VERSION_INCOMPATIBLE' });
+    } finally {
+      delete process.env.TREK_PLUGINS_IGNORE_TREK_RANGE;
+      cleanup('future-api-bypass');
+    }
   });
 
   it('activates normally when apiVersion is within what this TREK supports', async () => {

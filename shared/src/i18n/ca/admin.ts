@@ -626,6 +626,20 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Necessita TREK {range} — aquest servidor executa {host}',
   'admin.plugins.dep.trekUnknown': 'No indica quines versions de TREK admet',
   'admin.plugins.installCompatible': 'Instal·la {version}',
+  'admin.plugins.installAnyway': 'Instal·la igualment',
+  'admin.plugins.rangeBypass.pill': 'Comprovacions de versió desactivades',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE està definit — els connectors es poden instal·lar i executar fora de les versions de TREK declarades pels seus autors',
+  'admin.plugins.rangeBypass.title': 'Fora de les versions de TREK compatibles',
+  'admin.plugins.rangeBypass.noticeTitle': 'Instal·lat fora de les versions de TREK compatibles',
+  'admin.plugins.rangeBypass.body':
+    '«{name}» declara compatibilitat amb TREK {range}, i aquest servidor executa {host}. TREK el deixa passar només perquè TREK_PLUGINS_IGNORE_TREK_RANGE està definit. L’autor no ha actualitzat el rang de versions del connector per a aquest TREK, així que no hi ha cap garantia que funcioni — i en casos rars un connector incompatible pot corrompre les dades de TREK. Continua només si acceptes aquest risc.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '«{name}» no declara quines versions de TREK admet; aquest servidor executa {host}. TREK el deixa passar només perquè TREK_PLUGINS_IGNORE_TREK_RANGE està definit. Res no indica que l’autor l’hagi provat en aquest TREK, així que no hi ha cap garantia que funcioni — i en casos rars un connector incompatible pot corrompre les dades de TREK. Continua només si acceptes aquest risc.',
+  'admin.plugins.dep.trekBypassed':
+    'Fora del seu rang de TREK ({range}) — comprovacions de versió desactivades',
+  'admin.plugins.dep.trekBypassedUnknown':
+    'No declara cap rang de TREK — comprovacions de versió desactivades',
   'admin.plugins.incompatible': 'Incompatible',
   'admin.plugins.accessTitle': 'A què pot accedir',
   'admin.plugins.connectsTitle': 'Es connecta a',

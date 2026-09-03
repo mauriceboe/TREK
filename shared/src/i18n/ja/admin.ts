@@ -510,6 +510,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'TREK {range} が必要です — このサーバーは {host} です',
   'admin.plugins.dep.trekUnknown': '対応する TREK バージョンが宣言されていません',
   'admin.plugins.installCompatible': '{version} をインストール',
+  'admin.plugins.installAnyway': 'それでもインストール',
+  'admin.plugins.rangeBypass.pill': 'バージョンチェック無効',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE が設定されています — プラグインは作者が宣言した TREK バージョンの範囲外でもインストール・実行できます',
+  'admin.plugins.rangeBypass.title': 'サポート対象の TREK バージョン外',
+  'admin.plugins.rangeBypass.noticeTitle': 'サポート対象の TREK バージョン外にインストールされました',
+  'admin.plugins.rangeBypass.body':
+    '「{name}」は TREK {range} をサポートすると宣言していますが、このサーバーは {host} で動作しています。TREK_PLUGINS_IGNORE_TREK_RANGE が設定されているため TREK はこれを許可します。作者はこの TREK 向けにプラグインのバージョン範囲を更新していないため、動作する保証はなく、まれに不適合なプラグインが TREK のデータを破損することがあります。このリスクを受け入れる場合のみ続行してください。',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '「{name}」はサポートする TREK バージョンを宣言していません。このサーバーは {host} で動作しています。TREK_PLUGINS_IGNORE_TREK_RANGE が設定されているため TREK はこれを許可します。作者がこの TREK で検証した形跡はなく、動作する保証はありません。まれに不適合なプラグインが TREK のデータを破損することがあります。このリスクを受け入れる場合のみ続行してください。',
+  'admin.plugins.dep.trekBypassed': 'TREK 範囲外（{range}）— バージョンチェック無効',
+  'admin.plugins.dep.trekBypassedUnknown': 'TREK 範囲の宣言なし — バージョンチェック無効',
   'admin.plugins.incompatible': '非対応',
   'admin.plugins.accessTitle': 'アクセスできるもの',
   'admin.plugins.connectsTitle': '接続先',

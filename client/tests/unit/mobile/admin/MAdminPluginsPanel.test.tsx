@@ -1724,3 +1724,78 @@ describe('MAdminPluginsPanel — instance settings', () => {
     expect(screen.getByText('Activate the plugin to run its actions')).toBeInTheDocument();
   });
 });
+
+/**
+ * TREK_PLUGINS_IGNORE_TREK_RANGE on the phone shell — the same three surfaces as the
+ * desktop panel: the header pill, the confirm-before-install sheet, and the notice after a
+ * sideload that could not ask first, plus the persistent warning chip on the row.
+ */
+describe('MAdminPluginsPanel — TREK-range bypass (TREK_PLUGINS_IGNORE_TREK_RANGE)', () => {
+  const incompatibleEntry = () => registryEntry({ trek: '>=4.0.0', hostVersion: '3.3.0', compatible: false, latestCompatible: null });
+
+  it('FE-MOB-PLUGP-BYPASS-001: says so in the header', async () => {
+    mockPanel([plugin()], [], { ignoreTrekRange: true });
+    render(<MAdminPluginsPanel />);
+    expect(await screen.findByText('Version checks off')).toBeInTheDocument();
+  });
+
+  it('FE-MOB-PLUGP-BYPASS-002: offers "Install anyway" and asks before installing', async () => {
+    let body: unknown = null;
+    mockPanel([], [incompatibleEntry()], { ignoreTrekRange: true });
+    server.use(http.post('*/api/admin/plugins/install', async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ id: 'trek-gotify', version: '2.0.0', trekRangeBypassed: { trekRange: '>=4.0.0', hostVersion: '3.3.0' } });
+    }));
+    render(<MAdminPluginsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Discover/ }));
+
+    const btn = await screen.findByRole('button', { name: 'Install anyway' });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+
+    const sheet = await screen.findByRole('dialog', { name: 'Outside its supported TREK versions' });
+    expect(within(sheet).getByText(/no guarantee/i)).toBeInTheDocument();
+    expect(body).toBeNull();
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Install anyway' }));
+    await waitFor(() => expect(body).toEqual({ id: 'trek-gotify' }));
+  });
+
+  it('FE-MOB-PLUGP-BYPASS-003: cancelling the warning installs nothing', async () => {
+    let posted = false;
+    mockPanel([], [incompatibleEntry()], { ignoreTrekRange: true });
+    server.use(http.post('*/api/admin/plugins/install', () => { posted = true; return HttpResponse.json({ id: 'trek-gotify', version: '2.0.0', trekRangeBypassed: null }); }));
+    render(<MAdminPluginsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Discover/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Install anyway' }));
+
+    const sheet = await screen.findByRole('dialog', { name: 'Outside its supported TREK versions' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Outside its supported TREK versions' })).not.toBeInTheDocument());
+    expect(posted).toBe(false);
+  });
+
+  it('FE-MOB-PLUGP-BYPASS-004: a sideload that landed outside its range is warned about afterwards', async () => {
+    mockPanel([plugin()], [], { ignoreTrekRange: true });
+    server.use(http.post('*/api/admin/plugins/upload', () =>
+      HttpResponse.json({ id: 'trek-new', version: '1.0.0', replaced: false, trekRangeBypassed: { trekRange: null, hostVersion: '3.3.0' } })));
+    const { container } = render(<MAdminPluginsPanel />);
+    await screen.findByText('Gotify');
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['zip'], 'plugin.zip', { type: 'application/zip' })] } });
+
+    const sheet = await screen.findByRole('dialog', { name: 'Installed outside its supported TREK versions' });
+    expect(within(sheet).getByText(/no guarantee/i)).toBeInTheDocument();
+    expect(within(sheet).getByText(/trek-new/)).toBeInTheDocument();
+  });
+
+  it('FE-MOB-PLUGP-BYPASS-005: a plugin running outside its range keeps a warning chip on its row', async () => {
+    mockPanel([plugin({
+      dependencyStatus: 'ok', trekRange: '>=3.2.0 <4.0.0', hostVersion: '4.0.0',
+      trekRangeBypassed: { trekRange: '>=3.2.0 <4.0.0', hostVersion: '4.0.0' },
+    })], [], { ignoreTrekRange: true });
+    render(<MAdminPluginsPanel />);
+    expect(await screen.findByText('Outside its TREK range (>=3.2.0 <4.0.0) — version checks off')).toBeInTheDocument();
+  });
+});

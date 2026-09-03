@@ -499,6 +499,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Требуется TREK {range} — на этом сервере {host}',
   'admin.plugins.dep.trekUnknown': 'Не указано, какие версии TREK поддерживаются',
   'admin.plugins.installCompatible': 'Установить {version}',
+  'admin.plugins.installAnyway': 'Всё равно установить',
+  'admin.plugins.rangeBypass.pill': 'Проверки версии отключены',
+  'admin.plugins.rangeBypass.pillHint':
+    'Задано TREK_PLUGINS_IGNORE_TREK_RANGE — плагины можно устанавливать и запускать вне версий TREK, указанных их авторами',
+  'admin.plugins.rangeBypass.title': 'Вне поддерживаемых версий TREK',
+  'admin.plugins.rangeBypass.noticeTitle': 'Установлен вне поддерживаемых версий TREK',
+  'admin.plugins.rangeBypass.body':
+    '«{name}» заявляет поддержку TREK {range}, а этот сервер работает на {host}. TREK пропускает его только потому, что задано TREK_PLUGINS_IGNORE_TREK_RANGE. Автор не обновил диапазон версий плагина для этого TREK, так что работоспособность не гарантируется — а в редких случаях несовместимый плагин может повредить данные TREK. Продолжайте, только если принимаете этот риск.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '«{name}» не указывает, какие версии TREK он поддерживает; этот сервер работает на {host}. TREK пропускает его только потому, что задано TREK_PLUGINS_IGNORE_TREK_RANGE. Ничто не говорит о том, что автор тестировал его на этом TREK, так что работоспособность не гарантируется — а в редких случаях несовместимый плагин может повредить данные TREK. Продолжайте, только если принимаете этот риск.',
+  'admin.plugins.dep.trekBypassed':
+    'Вне своего диапазона TREK ({range}) — проверки версии отключены',
+  'admin.plugins.dep.trekBypassedUnknown': 'Диапазон TREK не указан — проверки версии отключены',
   'admin.plugins.incompatible': 'Несовместимо',
   'admin.plugins.accessTitle': 'К чему есть доступ',
   'admin.plugins.connectsTitle': 'Подключается к',

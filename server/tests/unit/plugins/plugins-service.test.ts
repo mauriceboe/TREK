@@ -48,6 +48,47 @@ describe('PluginsService.list', () => {
     expect(out.plugins[0]).toMatchObject({ id: 'flight', name: 'Flight', status: 'inactive' });
   });
 
+  describe('TREK-range bypass', () => {
+    const APP_VERSION = process.env.APP_VERSION;
+    afterEach(() => {
+      delete process.env.TREK_PLUGINS_IGNORE_TREK_RANGE;
+      if (APP_VERSION === undefined) delete process.env.APP_VERSION;
+      else process.env.APP_VERSION = APP_VERSION;
+    });
+    const seed = () =>
+      testDb
+        .prepare("INSERT INTO plugins (id, name, type, status, version, trek_range) VALUES ('old','Old','widget','inactive','1.0.0','>=3.0.0 <4.0.0')")
+        .run();
+
+    it('reports the switch off and an outgrown plugin as hostIncompatible by default', () => {
+      process.env.APP_VERSION = '4.1.0';
+      seed();
+      const out = new PluginsService(new DatabaseService(dbConn), new AddonsService(new DatabaseService(dbConn))).list();
+      expect(out.ignoreTrekRange).toBe(false);
+      expect(out.plugins[0]).toMatchObject({ dependencyStatus: 'hostIncompatible', trekRangeBypassed: null });
+    });
+
+    it('with the switch on, the plugin may activate but the row still says it is outside its range', () => {
+      process.env.APP_VERSION = '4.1.0';
+      process.env.TREK_PLUGINS_IGNORE_TREK_RANGE = '1';
+      seed();
+      const out = new PluginsService(new DatabaseService(dbConn), new AddonsService(new DatabaseService(dbConn))).list();
+      expect(out.ignoreTrekRange).toBe(true);
+      expect(out.plugins[0]).toMatchObject({
+        dependencyStatus: 'ok',
+        trekRangeBypassed: { trekRange: '>=3.0.0 <4.0.0', hostVersion: '4.1.0' },
+      });
+    });
+
+    it('a plugin inside its range carries no marker even with the switch on', () => {
+      process.env.APP_VERSION = '3.5.0';
+      process.env.TREK_PLUGINS_IGNORE_TREK_RANGE = '1';
+      seed();
+      const out = new PluginsService(new DatabaseService(dbConn), new AddonsService(new DatabaseService(dbConn))).list();
+      expect(out.plugins[0]).toMatchObject({ dependencyStatus: 'ok', trekRangeBypassed: null });
+    });
+  });
+
   it('surfaces updateHold as a boolean (held plugins leave the update banner)', () => {
     testDb
       .prepare("INSERT INTO plugins (id, name, type, status, version, update_hold) VALUES ('held','Held','widget','inactive','1.0.0',1)")

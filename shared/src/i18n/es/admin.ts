@@ -500,6 +500,20 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Necesita TREK {range} — este servidor ejecuta {host}',
   'admin.plugins.dep.trekUnknown': 'No indica qué versiones de TREK admite',
   'admin.plugins.installCompatible': 'Instalar {version}',
+  'admin.plugins.installAnyway': 'Instalar de todos modos',
+  'admin.plugins.rangeBypass.pill': 'Comprobaciones de versión desactivadas',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE está definido — los plugins pueden instalarse y ejecutarse fuera de las versiones de TREK declaradas por sus autores',
+  'admin.plugins.rangeBypass.title': 'Fuera de las versiones de TREK compatibles',
+  'admin.plugins.rangeBypass.noticeTitle': 'Instalado fuera de las versiones de TREK compatibles',
+  'admin.plugins.rangeBypass.body':
+    '«{name}» declara compatibilidad con TREK {range}, y este servidor ejecuta {host}. TREK lo deja pasar solo porque TREK_PLUGINS_IGNORE_TREK_RANGE está definido. Su autor no ha actualizado el rango de versiones del plugin para este TREK, así que no hay garantía de que funcione — y en casos raros un plugin incompatible puede corromper los datos de TREK. Continúa solo si aceptas ese riesgo.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '«{name}» no declara qué versiones de TREK admite; este servidor ejecuta {host}. TREK lo deja pasar solo porque TREK_PLUGINS_IGNORE_TREK_RANGE está definido. Nada indica que su autor lo haya probado en este TREK, así que no hay garantía de que funcione — y en casos raros un plugin incompatible puede corromper los datos de TREK. Continúa solo si aceptas ese riesgo.',
+  'admin.plugins.dep.trekBypassed':
+    'Fuera de su rango de TREK ({range}) — comprobaciones de versión desactivadas',
+  'admin.plugins.dep.trekBypassedUnknown':
+    'No declara ningún rango de TREK — comprobaciones de versión desactivadas',
   'admin.plugins.incompatible': 'Incompatible',
   'admin.plugins.accessTitle': 'A qué puede acceder',
   'admin.plugins.connectsTitle': 'Se conecta a',

@@ -76,6 +76,8 @@ Installed plugins run **untrusted third-party code**. TREK contains a plugin in 
 - [ ] Review the **capability audit** if you grant plugins broad data access. Every host-mediated core-data read and broadcast a plugin makes is recorded at the RPC boundary against the real acting user (not a value the plugin supplies) in a per-plugin, hash-chained, tamper-evident log. Admins see it per plugin; each user can see "what have plugins done in my name?". Retention is capped per plugin (default 20 000 rows, `TREK_PLUGIN_AUDIT_MAX_ROWS`).
 
 > The developer **dev-link** feature (`TREK_PLUGINS_DEV_LINK=1`) loads unsigned local code and, under `npm run dev`, runs with the OS jail off — keep it off on any instance that isn't a throwaway dev box you control. See [Plugins](Plugins) and [Plugin Permissions](Plugin-Permissions).
+>
+> Likewise leave `TREK_PLUGINS_IGNORE_TREK_RANGE` unset. It turns the plugin TREK-version gate into a warning so a plugin whose author has not updated its `trek` range can still be installed and activated — the admin panel warns at every step, but a plugin running on a TREK it was never tested against can misbehave and, in rare cases, corrupt data. Set it only for a specific plugin you need, and remove it once the author ships a release that admits your TREK.
 
 ## Backups
 

@@ -545,6 +545,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Membutuhkan TREK {range} — server ini menjalankan {host}',
   'admin.plugins.dep.trekUnknown': 'Tidak menyatakan versi TREK mana yang didukung',
   'admin.plugins.installCompatible': 'Instal {version}',
+  'admin.plugins.installAnyway': 'Tetap pasang',
+  'admin.plugins.rangeBypass.pill': 'Pemeriksaan versi nonaktif',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE disetel — plugin dapat dipasang dan dijalankan di luar versi TREK yang dinyatakan penulisnya',
+  'admin.plugins.rangeBypass.title': 'Di luar versi TREK yang didukung',
+  'admin.plugins.rangeBypass.noticeTitle': 'Dipasang di luar versi TREK yang didukung',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” menyatakan dukungan untuk TREK {range}, sedangkan server ini menjalankan {host}. TREK meloloskannya hanya karena TREK_PLUGINS_IGNORE_TREK_RANGE disetel. Penulisnya belum memperbarui rentang versi plugin untuk TREK ini, jadi tidak ada jaminan plugin ini berfungsi — dan dalam kasus yang jarang, plugin yang tidak cocok dapat merusak data TREK. Lanjutkan hanya jika Anda menerima risiko itu.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” tidak menyatakan versi TREK mana yang didukungnya; server ini menjalankan {host}. TREK meloloskannya hanya karena TREK_PLUGINS_IGNORE_TREK_RANGE disetel. Tidak ada tanda bahwa penulisnya mengujinya di TREK ini, jadi tidak ada jaminan plugin ini berfungsi — dan dalam kasus yang jarang, plugin yang tidak cocok dapat merusak data TREK. Lanjutkan hanya jika Anda menerima risiko itu.',
+  'admin.plugins.dep.trekBypassed':
+    'Di luar rentang TREK-nya ({range}) — pemeriksaan versi nonaktif',
+  'admin.plugins.dep.trekBypassedUnknown': 'Tidak menyatakan rentang TREK — pemeriksaan versi nonaktif',
   'admin.plugins.incompatible': 'Tidak kompatibel',
   'admin.plugins.accessTitle': 'Yang bisa diaksesnya',
   'admin.plugins.connectsTitle': 'Terhubung ke',

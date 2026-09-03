@@ -103,6 +103,26 @@ describe('PluginRuntimeService dev-link', () => {
     await expect(runtime.link(writeSource('nativeplug', { native: true }))).rejects.toThrow(/native/);
   });
 
+  it('links a dir outside its TREK range when TREK_PLUGINS_IGNORE_TREK_RANGE is set, and says so', async () => {
+    process.env.APP_VERSION = '3.3.0';
+    process.env.TREK_PLUGINS_IGNORE_TREK_RANGE = '1';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await expect(runtime.link(writeSource('oldplug-bypass', { trek: '>=2.0.0 <3.0.0' }))).resolves.toMatchObject({
+        id: 'oldplug-bypass', trekRangeBypassed: { trekRange: '>=2.0.0 <3.0.0', hostVersion: '3.3.0' },
+      });
+      await expect(runtime.link(writeSource('rangeless-bypass', { trek: '' }))).resolves.toMatchObject({
+        id: 'rangeless-bypass', trekRangeBypassed: { trekRange: null, hostVersion: '3.3.0' },
+      });
+      // A dir that fits is a plain link — no marker to alarm anyone with.
+      await expect(runtime.link(writeSource('fits-bypass'))).resolves.toMatchObject({ trekRangeBypassed: null });
+    } finally {
+      warn.mockRestore();
+      delete process.env.APP_VERSION;
+      delete process.env.TREK_PLUGINS_IGNORE_TREK_RANGE;
+    }
+  });
+
   it('rejects a local dir whose TREK range this server does not satisfy', async () => {
     // Dev-link is the third install front door, and it hands TREK code to RUN against real
     // data — the fact that the author is standing right there is not a reason to skip the

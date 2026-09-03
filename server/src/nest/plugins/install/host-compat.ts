@@ -105,3 +105,46 @@ export function hostSatisfies(range: string | null | undefined, host: string | n
   if (!isValidTrekRange(range)) return false;
   return semver.satisfies(release, range);
 }
+
+/**
+ * Whether TREK_PLUGINS_IGNORE_TREK_RANGE is set: the operator's explicit "install it
+ * anyway" for a plugin whose author has not updated its `trek` range. While it is on,
+ * every TREK-version gate (registry picker, post-extraction re-check, sideload, dev-link,
+ * activation) WARNS instead of refusing. Nothing else changes — {@link hostSatisfies}
+ * keeps telling the truth, so the admin UI can still say the plugin is running outside
+ * the range its author vouched for. Read live, like the other plugin switches.
+ */
+export function trekRangeBypassed(): boolean {
+  return readEnv().plugins.ignoreTrekRange;
+}
+
+/** What a bypassed gate reports back to the admin: the range that was ignored and the host it was ignored on. */
+export interface TrekRangeBypass {
+  /** The plugin's declared range, or null when it declared none at all. */
+  trekRange: string | null;
+  hostVersion: string;
+}
+
+/**
+ * Non-null exactly when `range` would have been refused and only the bypass lets it
+ * through: the marker that makes an install/activate response say "this worked, but
+ * only because you told TREK to ignore the version check". Null for a normal install
+ * (the range fits) and null when the bypass is off (the gate refuses instead).
+ */
+export function bypassedRange(range: string | null | undefined): TrekRangeBypass | null {
+  if (hostSatisfies(range)) return null;
+  if (!trekRangeBypassed()) return null;
+  return { trekRange: range ?? null, hostVersion: hostVersion() };
+}
+
+/**
+ * The one log line every bypassed gate writes. It names the plugin, the range that was
+ * ignored and the host it was ignored on, so an operator reading the log after a plugin
+ * misbehaves can connect the two without the UI.
+ */
+export function warnRangeBypass(id: string, b: TrekRangeBypass): void {
+  const declared = b.trekRange ? `declares TREK ${b.trekRange}` : 'declares no TREK version range';
+  console.warn(
+    `[plugins] ${id} ${declared} — this is TREK ${b.hostVersion}; continuing because TREK_PLUGINS_IGNORE_TREK_RANGE is set. The author has not verified it on this version: it may not work, and it could corrupt TREK data.`,
+  );
+}

@@ -503,6 +503,20 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Nécessite TREK {range} — ce serveur exécute {host}',
   'admin.plugins.dep.trekUnknown': 'N’indique pas quelles versions de TREK sont prises en charge',
   'admin.plugins.installCompatible': 'Installer {version}',
+  'admin.plugins.installAnyway': 'Installer quand même',
+  'admin.plugins.rangeBypass.pill': 'Contrôles de version désactivés',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE est défini — les plugins peuvent s’installer et s’exécuter en dehors des versions de TREK déclarées par leurs auteurs',
+  'admin.plugins.rangeBypass.title': 'Hors des versions de TREK prises en charge',
+  'admin.plugins.rangeBypass.noticeTitle': 'Installé hors des versions de TREK prises en charge',
+  'admin.plugins.rangeBypass.body':
+    '« {name} » déclare prendre en charge TREK {range}, et ce serveur exécute {host}. TREK le laisse passer uniquement parce que TREK_PLUGINS_IGNORE_TREK_RANGE est défini. Son auteur n’a pas mis à jour la plage de versions du plugin pour ce TREK : rien ne garantit qu’il fonctionne — et dans de rares cas, un plugin incompatible peut corrompre les données de TREK. Ne continuez que si vous acceptez ce risque.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '« {name} » n’indique pas quelles versions de TREK il prend en charge ; ce serveur exécute {host}. TREK le laisse passer uniquement parce que TREK_PLUGINS_IGNORE_TREK_RANGE est défini. Rien n’indique que son auteur l’a testé sur ce TREK : rien ne garantit qu’il fonctionne — et dans de rares cas, un plugin incompatible peut corrompre les données de TREK. Ne continuez que si vous acceptez ce risque.',
+  'admin.plugins.dep.trekBypassed':
+    'Hors de sa plage TREK ({range}) — contrôles de version désactivés',
+  'admin.plugins.dep.trekBypassedUnknown':
+    'Ne déclare aucune plage TREK — contrôles de version désactivés',
   'admin.plugins.incompatible': 'Incompatible',
   'admin.plugins.accessTitle': 'Ce à quoi il peut accéder',
   'admin.plugins.connectsTitle': 'Se connecte à',

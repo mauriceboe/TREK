@@ -1427,9 +1427,17 @@ The `trek` range is a **hard contract**, enforced in both directions:
   declared `<4.0.0` it now refuses to start. It stays installed and listed,
   switched off, with the reason shown (`TREK_VERSION_INCOMPATIBLE`; a plugin that
   declares no range at all reports `TREK_VERSION_UNKNOWN`).
-- **No admin override.** The range is the author's own statement that the plugin
-  does not work there — unlike a rotated signing key, there is nothing an operator
-  could verify out-of-band and wave through.
+- **One operator escape hatch, loudly.** The range is the author's own statement
+  that the plugin does not work there, so there is no per-install override in the
+  UI. An operator who is stuck on a plugin whose author has not yet updated its
+  range can set `TREK_PLUGINS_IGNORE_TREK_RANGE=1` on the server: every gate above
+  then warns instead of refusing (a missing range is tolerated too), "install
+  latest" takes the newest published version, each bypass is logged, the response
+  carries a `trekRangeBypassed` marker, and the admin sees a warning dialog plus a
+  persistent chip on the row. Nothing guarantees the plugin works there, and a
+  mismatched plugin can in rare cases corrupt TREK data — so ship the range bump
+  rather than telling your users to flip the switch. The plugin-API version gate
+  (`apiVersion`) is never bypassed.
 
 Two behaviours follow. "Install latest" resolves to the newest version *this* TREK
 can run rather than the newest published, so shipping a 2.0.0 that needs TREK 4

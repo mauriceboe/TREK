@@ -502,6 +502,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'يتطلب TREK {range} — يعمل هذا الخادم بالإصدار {host}',
   'admin.plugins.dep.trekUnknown': 'لا يحدد إصدارات TREK المدعومة',
   'admin.plugins.installCompatible': 'تثبيت {version}',
+  'admin.plugins.installAnyway': 'التثبيت على أي حال',
+  'admin.plugins.rangeBypass.pill': 'فحوصات الإصدار متوقفة',
+  'admin.plugins.rangeBypass.pillHint':
+    'تم ضبط TREK_PLUGINS_IGNORE_TREK_RANGE — يمكن تثبيت الإضافات وتشغيلها خارج إصدارات TREK التي أعلنها مطوروها',
+  'admin.plugins.rangeBypass.title': 'خارج إصدارات TREK المدعومة',
+  'admin.plugins.rangeBypass.noticeTitle': 'تم التثبيت خارج إصدارات TREK المدعومة',
+  'admin.plugins.rangeBypass.body':
+    'تعلن «{name}» دعم TREK {range}، بينما يعمل هذا الخادم بالإصدار {host}. يسمح TREK بذلك فقط لأن TREK_PLUGINS_IGNORE_TREK_RANGE مضبوط. لم يحدّث المطوّر نطاق إصدارات الإضافة لهذا الإصدار من TREK، لذا لا يوجد ضمان أنها ستعمل — وفي حالات نادرة قد تُتلف إضافة غير متوافقة بيانات TREK. تابع فقط إذا كنت تقبل هذه المخاطرة.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    'لا تعلن «{name}» أي إصدارات TREK تدعمها؛ يعمل هذا الخادم بالإصدار {host}. يسمح TREK بذلك فقط لأن TREK_PLUGINS_IGNORE_TREK_RANGE مضبوط. لا شيء يدل على أن المطوّر اختبرها على هذا الإصدار من TREK، لذا لا يوجد ضمان أنها ستعمل — وفي حالات نادرة قد تُتلف إضافة غير متوافقة بيانات TREK. تابع فقط إذا كنت تقبل هذه المخاطرة.',
+  'admin.plugins.dep.trekBypassed': 'خارج نطاق TREK الخاص بها ({range}) — فحوصات الإصدار متوقفة',
+  'admin.plugins.dep.trekBypassedUnknown': 'لا تعلن أي نطاق TREK — فحوصات الإصدار متوقفة',
   'admin.plugins.incompatible': 'غير متوافق',
   'admin.plugins.accessTitle': 'ما الذي يمكنها الوصول إليه',
   'admin.plugins.connectsTitle': 'يتصل بـ',

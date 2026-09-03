@@ -1,7 +1,8 @@
 import { readEnv } from '../../../app-config';
 import { DatabaseService } from '../../database/database.service';
 import { discoverPlugins } from '../install/discovery';
-import { hostSatisfies, hostVersion, normalizedHost } from '../install/host-compat';
+import { bypassedRange, hostSatisfies, hostVersion, normalizedHost, trekRangeBypassed, warnRangeBypass } from '../install/host-compat';
+import type { TrekRangeBypass } from '../install/host-compat';
 import type { PluginDependency } from '../install/manifest';
 import { parseJsonText, parseManifest } from '../install/manifest';
 import { scanForNativeBinaries } from '../install/native-scan';
@@ -257,7 +258,9 @@ export class PluginRegistryService {
   private hostCompat(entry: RegistryEntry): HostCompat {
     const latest = entry.versions[0] ?? null;
     const compatible = latest ? hostCompatible(latest, normalizedHost()) : false;
-    const fallback = compatible ? null : this.latestCompatible(entry);
+    // The verdict is the TRUTH, so it asks the strict predicate even when the picker is
+    // bypassed: "latest compatible" must keep naming a version the author vouched for.
+    const fallback = compatible ? null : this.latestCompatible(entry, undefined, hostCompatible);
     return {
       trek: latest?.trek ?? null,
       hostVersion: hostVersion(),
@@ -358,12 +361,20 @@ export class PluginRegistryService {
     return v;
   }
 
-  /** The newest version of `entry` that satisfies `constraint` AND admits the running TREK. */
-  private latestCompatible(entry: RegistryEntry, constraint?: string): RegistryVersion | null {
+  /**
+   * The newest version of `entry` that satisfies `constraint` AND admits the running TREK.
+   * `admits` defaults to the picker's rule (which honours TREK_PLUGINS_IGNORE_TREK_RANGE);
+   * the UI verdict passes the strict {@link hostCompatible} instead.
+   */
+  private latestCompatible(
+    entry: RegistryEntry,
+    constraint?: string,
+    admits: (v: RegistryVersion, host: string | null) => boolean = installable,
+  ): RegistryVersion | null {
     const host = normalizedHost();
     const candidates = entry.versions.filter((v) => {
       if (constraint && !semver.satisfies(v.version, constraint, { includePrerelease: true })) return false;
-      return hostCompatible(v, host);
+      return admits(v, host);
     });
     if (!candidates.length) return null;
     return [...candidates].sort((a, b) => semver.rcompare(a.version, b.version))[0];
@@ -380,7 +391,7 @@ export class PluginRegistryService {
     if (opts?.version) {
       const ver = entry.versions.find((v) => v.version === opts.version);
       if (!ver) throw new RegistryError(`version ${opts.version} not found for ${entry.id}`);
-      if (!hostCompatible(ver, normalizedHost())) {
+      if (!installable(ver, normalizedHost())) {
         throw new RegistryError(
           `${entry.id} ${ver.version} requires TREK ${trekRequirement(ver)} — this is TREK ${hostVersion()}`,
           'TREK_VERSION_INCOMPATIBLE',
@@ -419,7 +430,7 @@ export class PluginRegistryService {
   async install(
     id: string,
     opts?: { version?: string; constraint?: string; retrustKey?: string },
-  ): Promise<{ id: string; version: string }> {
+  ): Promise<{ id: string; version: string; trekRangeBypassed: TrekRangeBypass | null }> {
     const reg = await this.fetchRegistry();
     const entry = reg.plugins.find((p) => p.id === id);
     if (!entry) throw new RegistryError(`plugin ${id} not in registry`);
@@ -459,7 +470,7 @@ export class PluginRegistryService {
       // published entries usually carry a lower bound and no upper one at all, so a
       // plugin that declares "<4.0.0" passes the pre-download filter on TREK 4 and is
       // caught only here.
-      assertHostCompatible(manifest.trekRange, id);
+      const trekRangeBypassed = assertHostCompatible(manifest.trekRange, id);
       if (scanForNativeBinaries(pluginRoot).length) throw new RegistryError('artifact contains native binaries');
 
       // 6. atomic move into place
@@ -487,7 +498,7 @@ export class PluginRegistryService {
       // The plugin is now on new code that passed every check — whatever refusal was
       // recorded before no longer describes reality.
       clearUpdateBlock(this.dbs.connection, id);
-      return { id, version: ver.version };
+      return { id, version: ver.version, trekRangeBypassed };
     } finally {
       fs.rmSync(staging, { recursive: true, force: true });
     }
@@ -503,7 +514,8 @@ export class PluginRegistryService {
   async installWithDependencies(
     id: string,
     constraint?: string,
-  ): Promise<{ installed: string[]; requiredAddons: string[] }> {
+  ): Promise<{ installed: string[]; requiredAddons: string[]; trekRangeBypassed: TrekRangeBypass | null }> {
+    let trekRangeBypassed: TrekRangeBypass | null = null;
     const installedNow = new Set(
       (this.db.prepare('SELECT id FROM plugins').all() as Array<{ id: string }>).map((r) => r.id),
     );
@@ -519,7 +531,10 @@ export class PluginRegistryService {
         // Install the version we just RESOLVED. Passing the range back (or nothing, for
         // the root) made install() re-pick on its own and land on entry.versions[0] —
         // so the compatible version resolveVersion had chosen was computed and discarded.
-        await this.install(pid, { version: ver.version });
+        const res = await this.install(pid, { version: ver.version });
+        // The admin asked for the root; that is the bypass they are warned about (a
+        // dependency's own bypass still lands in the log).
+        if (pid === id) trekRangeBypassed = res.trekRangeBypassed;
         installed.push(pid);
         installedNow.add(pid);
       }
@@ -528,7 +543,7 @@ export class PluginRegistryService {
       for (const dep of ver.pluginDependencies ?? []) await visit(dep.id, dep.version, [...stack, pid]);
     };
     await visit(id, constraint, []);
-    return { installed, requiredAddons: [...requiredAddons] };
+    return { installed, requiredAddons: [...requiredAddons], trekRangeBypassed };
   }
 
   /**
@@ -563,7 +578,7 @@ export class PluginRegistryService {
    * binaries) — only the registry sha256/signature checks are absent, because a
    * sideload has no registry entry. Throws (and self-cleans staging) on failure.
    */
-  stageUpload(bytes: Buffer): { id: string; version: string; root: string; stagingDir: string } {
+  stageUpload(bytes: Buffer): { id: string; version: string; root: string; stagingDir: string; trekRangeBypassed: TrekRangeBypass | null } {
     if (bytes.length > MAX_UPLOAD_BYTES) throw new RegistryError('archive exceeds the 50MB limit');
     const stagingDir = path.join(pluginsDataRoot(), '.staging', `upload-${Date.now()}`);
     try {
@@ -573,9 +588,9 @@ export class PluginRegistryService {
       const manifest = parseManifest(parseJsonText(fs.readFileSync(path.join(root, 'trek-plugin.json'), 'utf8')), {
         requireTrek: true,
       });
-      assertHostCompatible(manifest.trekRange, manifest.id);
+      const trekRangeBypassed = assertHostCompatible(manifest.trekRange, manifest.id);
       if (scanForNativeBinaries(root).length) throw new RegistryError('artifact contains native binaries');
-      return { id: manifest.id, version: manifest.version, root, stagingDir };
+      return { id: manifest.id, version: manifest.version, root, stagingDir, trekRangeBypassed };
     } catch (e) {
       fs.rmSync(stagingDir, { recursive: true, force: true });
       throw e;
@@ -747,12 +762,31 @@ function hostCompatible(v: RegistryVersion, host: string | null): boolean {
 }
 
 /**
+ * Whether the registry picker may offer `v`: it fits the host, or the operator set
+ * TREK_PLUGINS_IGNORE_TREK_RANGE and asked for the newest published version regardless.
+ * Only the PICKER uses this — the compat verdict the UI shows (hostCompat/detail) stays
+ * on {@link hostCompatible}, so a bypassed install is still labelled as outside its range.
+ */
+function installable(v: RegistryVersion, host: string | null): boolean {
+  return trekRangeBypassed() || hostCompatible(v, host);
+}
+
+/**
  * Refuse an artifact whose declared TREK range doesn't admit the running host. Shared by
  * every install front door (registry, sideload, dev-link) so they all fail the same way,
  * with a code the admin UI can act on rather than prose it would have to string-match.
+ *
+ * Under TREK_PLUGINS_IGNORE_TREK_RANGE the refusal becomes a log warning, and the
+ * returned marker is what the front door hands back so the admin is told too. Null
+ * means the range fits and nothing was bypassed.
  */
-export function assertHostCompatible(range: string | null, id: string): void {
-  if (hostSatisfies(range)) return;
+export function assertHostCompatible(range: string | null, id: string): TrekRangeBypass | null {
+  if (hostSatisfies(range)) return null;
+  const bypass = bypassedRange(range);
+  if (bypass) {
+    warnRangeBypass(id, bypass);
+    return bypass;
+  }
   throw new RegistryError(`${id} requires TREK ${range} — this is TREK ${hostVersion()}`, 'TREK_VERSION_INCOMPATIBLE');
 }
 

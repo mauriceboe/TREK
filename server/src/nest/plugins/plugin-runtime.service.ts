@@ -26,7 +26,8 @@ import { scanForNativeBinaries } from './install/native-scan';
 import { devLinkEnabled, DEV_LINK_SOURCE } from './dev-link';
 import { pluginCodeDir, pluginDataDir } from './paths';
 import { assertHostCompatible, PluginRegistryService, RegistryError } from './registry/registry.service';
-import { hostSatisfies, hostVersion } from './install/host-compat';
+import { hostSatisfies, hostVersion, bypassedRange, warnRangeBypass } from './install/host-compat';
+import type { TrekRangeBypass } from './install/host-compat';
 import { keyFingerprint } from './signature-status';
 import { AuditService } from '../audit/audit.service';
 import { AddonsService } from '../addons/addons.service';
@@ -504,14 +505,18 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
     // it would not make the plugin start. It is also the gate that catches the case
     // install can't — TREK was upgraded PAST the plugin's declared upper bound, so code
     // that was legitimately installed no longer supports the host it's sitting on.
-    if (!row.trek_range) {
+    const bypass = bypassedRange(row.trek_range);
+    if (bypass) {
+      // TREK_PLUGINS_IGNORE_TREK_RANGE: the operator chose to run it anyway. Say so in the
+      // log every time it starts — the plugin list carries the same marker for the UI.
+      warnRangeBypass(id, bypass);
+    } else if (!row.trek_range) {
       throw new PluginDependencyError(
         `plugin ${id} does not declare which TREK versions it supports`,
         'TREK_VERSION_UNKNOWN',
         { trekRange: null, hostVersion: hostVersion() },
       );
-    }
-    if (!hostSatisfies(row.trek_range)) {
+    } else if (!hostSatisfies(row.trek_range)) {
       throw new PluginDependencyError(
         `plugin ${id} requires TREK ${row.trek_range} — this is TREK ${hostVersion()}`,
         'TREK_VERSION_INCOMPATIBLE',
@@ -679,7 +684,10 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
    * Install runs first so a failed download/signature/integrity check leaves the
    * currently-running child untouched (it keeps serving the old code from memory).
    */
-  async update(id: string, opts?: { version?: string; retrustKey?: string }): Promise<{ version: string; activated: boolean; newPermissions: string[]; newEgress: string[] }> {
+  async update(
+    id: string,
+    opts?: { version?: string; retrustKey?: string },
+  ): Promise<{ version: string; activated: boolean; newPermissions: string[]; newEgress: string[]; trekRangeBypassed: TrekRangeBypass | null }> {
     const before = this.db.prepare('SELECT enabled, granted_permissions, version FROM plugins WHERE id = ?').get(id) as
       | { enabled: number; granted_permissions: string; version: string | null }
       | undefined;
@@ -708,11 +716,11 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
     if (wasEnabled) await this.deactivate(id); // stop the old child now that new code is in place
     if (newGrants.length === 0 && wasEnabled) {
       await this.activate(id); // no wider rights → transparent restart on the new code
-      return { version: res.version, activated: true, newPermissions, newEgress };
+      return { version: res.version, activated: true, newPermissions, newEgress, trekRangeBypassed: res.trekRangeBypassed };
     }
     // New rights requested (or it was already disabled): leave it inactive until
     // an admin explicitly consents by activating it.
-    return { version: res.version, activated: false, newPermissions, newEgress };
+    return { version: res.version, activated: false, newPermissions, newEgress, trekRangeBypassed: res.trekRangeBypassed };
   }
 
   /**
@@ -788,7 +796,7 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
    * commits it as an INACTIVE sideloaded plugin. Never auto-activates — the admin
    * re-activates (and re-consents to permissions) explicitly.
    */
-  async sideload(bytes: Buffer): Promise<{ id: string; version: string; replaced: boolean }> {
+  async sideload(bytes: Buffer): Promise<{ id: string; version: string; replaced: boolean; trekRangeBypassed: TrekRangeBypass | null }> {
     if (!this.registry) throw new Error('registry service unavailable');
     const staged = this.registry.stageUpload(bytes);
     try {
@@ -800,7 +808,7 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
       // a plugin that isn't running.
       if (replaced) await this.deactivate(staged.id);
       this.registry.commitUpload(staged); // moves code + registers INACTIVE, then clears staging
-      return { id: staged.id, version: staged.version, replaced };
+      return { id: staged.id, version: staged.version, replaced, trekRangeBypassed: staged.trekRangeBypassed };
     } catch (e) {
       // A failure before commitUpload leaves staging behind — clean it up.
       try { fs.rmSync(staged.stagingDir, { recursive: true, force: true }); } catch {}
@@ -816,13 +824,13 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
    * and starts an fs.watch that re-forks on rebuild. Gated behind TREK_PLUGINS_DEV_LINK
    * on top of the controller's admin + kill-switch gates — see dev-link.ts for why.
    */
-  async link(sourceDir: string): Promise<{ id: string; version: string; replaced: boolean }> {
+  async link(sourceDir: string): Promise<{ id: string; version: string; replaced: boolean; trekRangeBypassed: TrekRangeBypass | null }> {
     if (!devLinkEnabled()) throw new Error('dev-link is disabled (set TREK_PLUGINS_DEV_LINK=1)');
     if (!path.isAbsolute(sourceDir)) throw new Error('the dev-link path must be absolute');
     const manifestPath = path.join(sourceDir, 'trek-plugin.json');
     if (!fs.existsSync(manifestPath)) throw new Error(`no trek-plugin.json at ${sourceDir}`);
     const manifest = parseManifest(parseJsonText(fs.readFileSync(manifestPath, 'utf8')), { requireTrek: true });
-    assertHostCompatible(manifest.trekRange, manifest.id);
+    const trekRangeBypassed = assertHostCompatible(manifest.trekRange, manifest.id);
     if (!fs.existsSync(path.join(sourceDir, 'server', 'index.js'))) {
       throw new Error('no built server/index.js — build the plugin first (the loader runs the compiled artifact, not TS source)');
     }
@@ -852,7 +860,7 @@ export class PluginRuntimeService implements OnApplicationBootstrap, OnModuleDes
        WHERE id = ?`,
     ).run(DEV_LINK_SOURCE, id);
     this.watchLinked(id, sourceDir);
-    return { id, version: manifest.version, replaced };
+    return { id, version: manifest.version, replaced, trekRangeBypassed };
   }
 
   /**

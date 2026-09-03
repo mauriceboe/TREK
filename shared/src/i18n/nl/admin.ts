@@ -497,6 +497,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Vereist TREK {range} — deze server draait {host}',
   'admin.plugins.dep.trekUnknown': 'Geeft niet aan welke TREK-versies worden ondersteund',
   'admin.plugins.installCompatible': '{version} installeren',
+  'admin.plugins.installAnyway': 'Toch installeren',
+  'admin.plugins.rangeBypass.pill': 'Versiecontroles uit',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE is ingesteld — plugins mogen worden geïnstalleerd en uitgevoerd buiten de TREK-versies die hun auteurs opgeven',
+  'admin.plugins.rangeBypass.title': 'Buiten de ondersteunde TREK-versies',
+  'admin.plugins.rangeBypass.noticeTitle': 'Geïnstalleerd buiten de ondersteunde TREK-versies',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” geeft ondersteuning op voor TREK {range}, en deze server draait {host}. TREK laat het alleen door omdat TREK_PLUGINS_IGNORE_TREK_RANGE is ingesteld. De auteur heeft het versiebereik van de plugin niet bijgewerkt voor deze TREK, dus er is geen garantie dat het werkt — en in zeldzame gevallen kan een niet-passende plugin TREK-gegevens beschadigen. Ga alleen verder als je dat risico accepteert.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” geeft niet op welke TREK-versies het ondersteunt; deze server draait {host}. TREK laat het alleen door omdat TREK_PLUGINS_IGNORE_TREK_RANGE is ingesteld. Niets wijst erop dat de auteur het op deze TREK heeft getest, dus er is geen garantie dat het werkt — en in zeldzame gevallen kan een niet-passende plugin TREK-gegevens beschadigen. Ga alleen verder als je dat risico accepteert.',
+  'admin.plugins.dep.trekBypassed': 'Buiten zijn TREK-bereik ({range}) — versiecontroles uit',
+  'admin.plugins.dep.trekBypassedUnknown': 'Geeft geen TREK-bereik op — versiecontroles uit',
   'admin.plugins.incompatible': 'Niet compatibel',
   'admin.plugins.accessTitle': 'Waartoe hij toegang heeft',
   'admin.plugins.connectsTitle': 'Maakt verbinding met',

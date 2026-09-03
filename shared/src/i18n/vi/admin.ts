@@ -498,6 +498,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Cần TREK {range} — máy chủ này đang chạy {host}',
   'admin.plugins.dep.trekUnknown': 'Không nêu rõ hỗ trợ những phiên bản TREK nào',
   'admin.plugins.installCompatible': 'Cài đặt {version}',
+  'admin.plugins.installAnyway': 'Vẫn cài đặt',
+  'admin.plugins.rangeBypass.pill': 'Đã tắt kiểm tra phiên bản',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE đã được đặt — plugin có thể được cài đặt và chạy ngoài các phiên bản TREK mà tác giả đã khai báo',
+  'admin.plugins.rangeBypass.title': 'Ngoài các phiên bản TREK được hỗ trợ',
+  'admin.plugins.rangeBypass.noticeTitle': 'Đã cài đặt ngoài các phiên bản TREK được hỗ trợ',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” khai báo hỗ trợ TREK {range}, còn máy chủ này đang chạy {host}. TREK chỉ cho phép vì TREK_PLUGINS_IGNORE_TREK_RANGE đã được đặt. Tác giả chưa cập nhật phạm vi phiên bản của plugin cho TREK này, nên không có gì đảm bảo nó hoạt động — và trong một số ít trường hợp, plugin không tương thích có thể làm hỏng dữ liệu TREK. Chỉ tiếp tục nếu bạn chấp nhận rủi ro đó.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” không khai báo hỗ trợ phiên bản TREK nào; máy chủ này đang chạy {host}. TREK chỉ cho phép vì TREK_PLUGINS_IGNORE_TREK_RANGE đã được đặt. Không có dấu hiệu nào cho thấy tác giả đã thử nghiệm trên TREK này, nên không có gì đảm bảo nó hoạt động — và trong một số ít trường hợp, plugin không tương thích có thể làm hỏng dữ liệu TREK. Chỉ tiếp tục nếu bạn chấp nhận rủi ro đó.',
+  'admin.plugins.dep.trekBypassed':
+    'Ngoài phạm vi TREK của nó ({range}) — đã tắt kiểm tra phiên bản',
+  'admin.plugins.dep.trekBypassedUnknown': 'Không khai báo phạm vi TREK — đã tắt kiểm tra phiên bản',
   'admin.plugins.incompatible': 'Không tương thích',
   'admin.plugins.accessTitle': 'Những gì có thể truy cập',
   'admin.plugins.connectsTitle': 'Kết nối tới',

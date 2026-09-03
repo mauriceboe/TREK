@@ -556,6 +556,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Kräver TREK {range} — den här servern kör {host}',
   'admin.plugins.dep.trekUnknown': 'Anger inte vilka TREK-versioner som stöds',
   'admin.plugins.installCompatible': 'Installera {version}',
+  'admin.plugins.installAnyway': 'Installera ändå',
+  'admin.plugins.rangeBypass.pill': 'Versionskontroller av',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE är satt — plugin kan installeras och köras utanför de TREK-versioner deras upphovspersoner angett',
+  'admin.plugins.rangeBypass.title': 'Utanför de TREK-versioner som stöds',
+  'admin.plugins.rangeBypass.noticeTitle': 'Installerat utanför de TREK-versioner som stöds',
+  'admin.plugins.rangeBypass.body':
+    '”{name}” anger stöd för TREK {range}, och den här servern kör {host}. TREK släpper igenom det bara för att TREK_PLUGINS_IGNORE_TREK_RANGE är satt. Upphovspersonen har inte uppdaterat pluginets versionsintervall för den här TREK-versionen, så det finns ingen garanti att det fungerar — och i sällsynta fall kan ett plugin som inte passar skada TREK-data. Fortsätt bara om du accepterar den risken.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '”{name}” anger inte vilka TREK-versioner det stöder; den här servern kör {host}. TREK släpper igenom det bara för att TREK_PLUGINS_IGNORE_TREK_RANGE är satt. Inget tyder på att upphovspersonen har testat det på den här TREK-versionen, så det finns ingen garanti att det fungerar — och i sällsynta fall kan ett plugin som inte passar skada TREK-data. Fortsätt bara om du accepterar den risken.',
+  'admin.plugins.dep.trekBypassed':
+    'Utanför sitt TREK-intervall ({range}) — versionskontroller av',
+  'admin.plugins.dep.trekBypassedUnknown': 'Anger inget TREK-intervall — versionskontroller av',
   'admin.plugins.incompatible': 'Inkompatibel',
   'admin.plugins.accessTitle': 'Vad det har åtkomst till',
   'admin.plugins.connectsTitle': 'Ansluter till',

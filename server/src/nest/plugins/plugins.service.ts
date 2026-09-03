@@ -10,7 +10,8 @@ import { safeParseConfig as safeParse } from './plugin-config-parse';
 import { isFilled, parseDefaultValue, settingDefaults } from './settings-defaults';
 import { AddonsService } from '../addons/addons.service';
 import { parseDependencies, disabledRequiredAddons, resolveDependencyState, type PluginDepRow, type PluginDependencies, type VersionMismatch } from './dependencies';
-import { hostSatisfies, hostVersion } from './install/host-compat';
+import { bypassedRange, hostSatisfies, hostVersion, trekRangeBypassed } from './install/host-compat';
+import type { TrekRangeBypass } from './install/host-compat';
 import type { PluginDependency } from './install/manifest';
 import type { PluginSettingsField } from '@trek/shared';
 
@@ -90,6 +91,12 @@ export interface PluginListItem {
   trekRange: string | null;
   /** The running TREK, so the UI can say "needs X, you have Y" without doing semver. */
   hostVersion: string;
+  /**
+   * Non-null when the plugin is outside its declared range (or declared none) and only
+   * TREK_PLUGINS_IGNORE_TREK_RANGE lets it activate. The card shows it as a warning
+   * rather than a blocker: the admin chose this, but must keep seeing what they chose.
+   */
+  trekRangeBypassed: TrekRangeBypass | null;
   /** The concrete blockers, so the UI can render chips + the resolve dialog. */
   dependencyIssues: { disabledAddons: string[]; missing: PluginDependency[]; versionMismatch: VersionMismatch[] };
   /**
@@ -149,7 +156,7 @@ export class PluginsService {
     }
   }
 
-  list(): { enabled: boolean; devLink: boolean; plugins: PluginListItem[] } {
+  list(): { enabled: boolean; devLink: boolean; ignoreTrekRange: boolean; plugins: PluginListItem[] } {
     const rows = this.db
       .prepare(
         `SELECT id, name, description, type, icon, version, status, enabled, last_error, reviewed_at, source_repo,
@@ -168,7 +175,8 @@ export class PluginsService {
       const state = resolveDependencyState(deps, installed);
       // Mirrors the order of assertActivatable's gate, so the card explains the same
       // blocker the activate call would hit rather than a second, lesser one.
-      const dependencyStatus: PluginDependencyStatus = !hostSatisfies(r.trek_range)
+      const trekBypass = bypassedRange(r.trek_range);
+      const dependencyStatus: PluginDependencyStatus = !hostSatisfies(r.trek_range) && !trekBypass
         ? 'hostIncompatible'
         : disabledAddons.length
           ? 'addonDisabled'
@@ -196,6 +204,7 @@ export class PluginsService {
         dependencyStatus,
         trekRange: trek_range,
         hostVersion: hostVersion(),
+        trekRangeBypassed: trekBypass,
         dependencyIssues: { disabledAddons, missing: state.missing, versionMismatch: state.versionMismatch },
         signed: !!author_pubkey,
         keyFingerprint: keyFingerprint(author_pubkey),
@@ -205,7 +214,7 @@ export class PluginsService {
         updateHold: update_hold === 1,
       };
     });
-    return { enabled: pluginsEnabled(), devLink: devLinkEnabled(), plugins };
+    return { enabled: pluginsEnabled(), devLink: devLinkEnabled(), ignoreTrekRange: trekRangeBypassed(), plugins };
   }
 
   /**

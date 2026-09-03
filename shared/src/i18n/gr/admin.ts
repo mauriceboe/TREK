@@ -551,6 +551,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Απαιτεί TREK {range} — αυτός ο διακομιστής εκτελεί {host}',
   'admin.plugins.dep.trekUnknown': 'Δεν δηλώνει ποιες εκδόσεις TREK υποστηρίζει',
   'admin.plugins.installCompatible': 'Εγκατάσταση {version}',
+  'admin.plugins.installAnyway': 'Εγκατάσταση ούτως ή άλλως',
+  'admin.plugins.rangeBypass.pill': 'Έλεγχοι έκδοσης απενεργοποιημένοι',
+  'admin.plugins.rangeBypass.pillHint':
+    'Το TREK_PLUGINS_IGNORE_TREK_RANGE είναι ορισμένο — τα πρόσθετα μπορούν να εγκατασταθούν και να εκτελεστούν εκτός των εκδόσεων TREK που δηλώνουν οι δημιουργοί τους',
+  'admin.plugins.rangeBypass.title': 'Εκτός των υποστηριζόμενων εκδόσεων TREK',
+  'admin.plugins.rangeBypass.noticeTitle': 'Εγκαταστάθηκε εκτός των υποστηριζόμενων εκδόσεων TREK',
+  'admin.plugins.rangeBypass.body':
+    'Το «{name}» δηλώνει υποστήριξη για TREK {range}, ενώ αυτός ο διακομιστής εκτελεί {host}. Το TREK το επιτρέπει μόνο επειδή είναι ορισμένο το TREK_PLUGINS_IGNORE_TREK_RANGE. Ο δημιουργός δεν έχει ενημερώσει το εύρος εκδόσεων του πρόσθετου για αυτό το TREK, οπότε δεν υπάρχει εγγύηση ότι λειτουργεί — και σε σπάνιες περιπτώσεις ένα ασύμβατο πρόσθετο μπορεί να καταστρέψει δεδομένα του TREK. Συνεχίστε μόνο αν αποδέχεστε αυτόν τον κίνδυνο.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    'Το «{name}» δεν δηλώνει ποιες εκδόσεις TREK υποστηρίζει· αυτός ο διακομιστής εκτελεί {host}. Το TREK το επιτρέπει μόνο επειδή είναι ορισμένο το TREK_PLUGINS_IGNORE_TREK_RANGE. Τίποτα δεν δείχνει ότι ο δημιουργός το δοκίμασε σε αυτό το TREK, οπότε δεν υπάρχει εγγύηση ότι λειτουργεί — και σε σπάνιες περιπτώσεις ένα ασύμβατο πρόσθετο μπορεί να καταστρέψει δεδομένα του TREK. Συνεχίστε μόνο αν αποδέχεστε αυτόν τον κίνδυνο.',
+  'admin.plugins.dep.trekBypassed':
+    'Εκτός του εύρους TREK του ({range}) — έλεγχοι έκδοσης απενεργοποιημένοι',
+  'admin.plugins.dep.trekBypassedUnknown': 'Δεν δηλώνει εύρος TREK — έλεγχοι έκδοσης απενεργοποιημένοι',
   'admin.plugins.incompatible': 'Μη συμβατό',
   'admin.plugins.accessTitle': 'Σε τι έχει πρόσβαση',
   'admin.plugins.connectsTitle': 'Συνδέεται σε',

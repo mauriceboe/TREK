@@ -150,6 +150,7 @@ export const envSchema = z.object({
   TREK_API_DOCS_ENABLED: boolStr,
   TREK_PLUGINS_ENABLED: boolStr,
   TREK_PLUGINS_DEV_LINK: boolStr,
+  TREK_PLUGINS_IGNORE_TREK_RANGE: boolStr,
   TREK_PLUGINS_DIR: anyString,
   TREK_PLUGINS_DATA_DIR: anyString,
   TREK_PLUGIN_PERMISSIONS: boolStr,

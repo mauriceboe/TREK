@@ -492,6 +492,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': '需要 TREK {range}——此伺服器執行的是 {host}',
   'admin.plugins.dep.trekUnknown': '未宣告支援的 TREK 版本',
   'admin.plugins.installCompatible': '安裝 {version}',
+  'admin.plugins.installAnyway': '仍然安裝',
+  'admin.plugins.rangeBypass.pill': '版本檢查已關閉',
+  'admin.plugins.rangeBypass.pillHint':
+    '已設定 TREK_PLUGINS_IGNORE_TREK_RANGE — 外掛可在作者宣告的 TREK 版本範圍之外安裝與執行',
+  'admin.plugins.rangeBypass.title': '超出支援的 TREK 版本',
+  'admin.plugins.rangeBypass.noticeTitle': '已安裝在支援的 TREK 版本之外',
+  'admin.plugins.rangeBypass.body':
+    '「{name}」宣告支援 TREK {range}，而此伺服器執行的是 {host}。僅因為設定了 TREK_PLUGINS_IGNORE_TREK_RANGE，TREK 才放行。作者尚未為此 TREK 更新外掛的版本範圍，因此無法保證它能正常運作——在極少數情況下，不相容的外掛可能損毀 TREK 資料。只有在接受該風險時才繼續。',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '「{name}」未宣告支援哪些 TREK 版本；此伺服器執行的是 {host}。僅因為設定了 TREK_PLUGINS_IGNORE_TREK_RANGE，TREK 才放行。沒有跡象顯示作者在此 TREK 上測試過它，因此無法保證它能正常運作——在極少數情況下，不相容的外掛可能損毀 TREK 資料。只有在接受該風險時才繼續。',
+  'admin.plugins.dep.trekBypassed': '超出其 TREK 範圍（{range}）— 版本檢查已關閉',
+  'admin.plugins.dep.trekBypassedUnknown': '未宣告 TREK 範圍 — 版本檢查已關閉',
   'admin.plugins.incompatible': '不相容',
   'admin.plugins.accessTitle': '可存取的內容',
   'admin.plugins.connectsTitle': '連線至',

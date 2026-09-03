@@ -510,6 +510,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'TREK {range}이(가) 필요합니다 — 이 서버는 {host}입니다',
   'admin.plugins.dep.trekUnknown': '지원하는 TREK 버전을 명시하지 않았습니다',
   'admin.plugins.installCompatible': '{version} 설치',
+  'admin.plugins.installAnyway': '그래도 설치',
+  'admin.plugins.rangeBypass.pill': '버전 검사 꺼짐',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE가 설정되어 있습니다 — 플러그인이 작성자가 선언한 TREK 버전 범위 밖에서도 설치·실행될 수 있습니다',
+  'admin.plugins.rangeBypass.title': '지원되는 TREK 버전 범위 밖',
+  'admin.plugins.rangeBypass.noticeTitle': '지원되는 TREK 버전 범위 밖에 설치됨',
+  'admin.plugins.rangeBypass.body':
+    '“{name}”은(는) TREK {range} 지원을 선언했지만 이 서버는 {host}을(를) 실행 중입니다. TREK_PLUGINS_IGNORE_TREK_RANGE가 설정되어 있기 때문에만 TREK가 이를 허용합니다. 작성자가 이 TREK에 맞게 플러그인의 버전 범위를 갱신하지 않았으므로 정상 동작을 보장할 수 없으며, 드물게 호환되지 않는 플러그인이 TREK 데이터를 손상시킬 수 있습니다. 이 위험을 감수하는 경우에만 계속하세요.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}”은(는) 지원하는 TREK 버전을 선언하지 않았습니다. 이 서버는 {host}을(를) 실행 중입니다. TREK_PLUGINS_IGNORE_TREK_RANGE가 설정되어 있기 때문에만 TREK가 이를 허용합니다. 작성자가 이 TREK에서 테스트했다는 근거가 없으므로 정상 동작을 보장할 수 없으며, 드물게 호환되지 않는 플러그인이 TREK 데이터를 손상시킬 수 있습니다. 이 위험을 감수하는 경우에만 계속하세요.',
+  'admin.plugins.dep.trekBypassed': 'TREK 범위 밖 ({range}) — 버전 검사 꺼짐',
+  'admin.plugins.dep.trekBypassedUnknown': 'TREK 범위 선언 없음 — 버전 검사 꺼짐',
   'admin.plugins.incompatible': '호환되지 않음',
   'admin.plugins.accessTitle': '접근할 수 있는 항목',
   'admin.plugins.connectsTitle': '연결 대상',

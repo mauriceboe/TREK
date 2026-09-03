@@ -489,6 +489,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Vyžaduje TREK {range} — tento server běží na {host}',
   'admin.plugins.dep.trekUnknown': 'Neuvádí, které verze TREK podporuje',
   'admin.plugins.installCompatible': 'Nainstalovat {version}',
+  'admin.plugins.installAnyway': 'Přesto nainstalovat',
+  'admin.plugins.rangeBypass.pill': 'Kontroly verzí vypnuty',
+  'admin.plugins.rangeBypass.pillHint':
+    'Je nastaveno TREK_PLUGINS_IGNORE_TREK_RANGE — pluginy se mohou instalovat a spouštět mimo verze TREKu, které jejich autoři deklarovali',
+  'admin.plugins.rangeBypass.title': 'Mimo podporované verze TREKu',
+  'admin.plugins.rangeBypass.noticeTitle': 'Nainstalováno mimo podporované verze TREKu',
+  'admin.plugins.rangeBypass.body':
+    '„{name}“ deklaruje podporu TREKu {range} a tento server běží na {host}. TREK ho propouští jen proto, že je nastaveno TREK_PLUGINS_IGNORE_TREK_RANGE. Autor neaktualizoval rozsah verzí pluginu pro tento TREK, takže není zaručeno, že bude fungovat — a ve vzácných případech může nekompatibilní plugin poškodit data TREKu. Pokračujte jen tehdy, pokud toto riziko přijímáte.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '„{name}“ neuvádí, které verze TREKu podporuje; tento server běží na {host}. TREK ho propouští jen proto, že je nastaveno TREK_PLUGINS_IGNORE_TREK_RANGE. Nic nenasvědčuje tomu, že ho autor na tomto TREKu testoval, takže není zaručeno, že bude fungovat — a ve vzácných případech může nekompatibilní plugin poškodit data TREKu. Pokračujte jen tehdy, pokud toto riziko přijímáte.',
+  'admin.plugins.dep.trekBypassed': 'Mimo svůj rozsah TREKu ({range}) — kontroly verzí vypnuty',
+  'admin.plugins.dep.trekBypassedUnknown': 'Neuvádí žádný rozsah TREKu — kontroly verzí vypnuty',
   'admin.plugins.incompatible': 'Nekompatibilní',
   'admin.plugins.accessTitle': 'K čemu má přístup',
   'admin.plugins.connectsTitle': 'Připojuje se k',

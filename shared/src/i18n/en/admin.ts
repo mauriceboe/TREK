@@ -536,6 +536,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Needs TREK {range} — this server runs {host}',
   'admin.plugins.dep.trekUnknown': 'Does not say which TREK versions it supports',
   'admin.plugins.installCompatible': 'Install {version}',
+  'admin.plugins.installAnyway': 'Install anyway',
+  'admin.plugins.rangeBypass.pill': 'Version checks off',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE is set — plugins may install and run outside the TREK versions their authors declared',
+  'admin.plugins.rangeBypass.title': 'Outside its supported TREK versions',
+  'admin.plugins.rangeBypass.noticeTitle': 'Installed outside its supported TREK versions',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” declares support for TREK {range}, and this server runs {host}. TREK lets it through only because TREK_PLUGINS_IGNORE_TREK_RANGE is set. Its author has not updated the plugin’s version range for this TREK, so there is no guarantee it works — and in rare cases a mismatched plugin can corrupt TREK data. Continue only if you accept that risk.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” does not declare which TREK versions it supports; this server runs {host}. TREK lets it through only because TREK_PLUGINS_IGNORE_TREK_RANGE is set. Nothing says its author tested it on this TREK, so there is no guarantee it works — and in rare cases a mismatched plugin can corrupt TREK data. Continue only if you accept that risk.',
+  'admin.plugins.dep.trekBypassed': 'Outside its TREK range ({range}) — version checks off',
+  'admin.plugins.dep.trekBypassedUnknown': 'Declares no TREK range — version checks off',
   'admin.plugins.incompatible': 'Incompatible',
   'admin.plugins.accessTitle': 'What it can access',
   'admin.plugins.connectsTitle': 'Connects to',

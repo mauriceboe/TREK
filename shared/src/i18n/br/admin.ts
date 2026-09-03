@@ -491,6 +491,20 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Requer TREK {range} — este servidor executa {host}',
   'admin.plugins.dep.trekUnknown': 'Não informa quais versões do TREK são compatíveis',
   'admin.plugins.installCompatible': 'Instalar {version}',
+  'admin.plugins.installAnyway': 'Instalar mesmo assim',
+  'admin.plugins.rangeBypass.pill': 'Verificações de versão desligadas',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE está definido — plugins podem ser instalados e executados fora das versões do TREK declaradas por seus autores',
+  'admin.plugins.rangeBypass.title': 'Fora das versões do TREK suportadas',
+  'admin.plugins.rangeBypass.noticeTitle': 'Instalado fora das versões do TREK suportadas',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” declara suporte ao TREK {range}, e este servidor executa {host}. O TREK só o deixa passar porque TREK_PLUGINS_IGNORE_TREK_RANGE está definido. O autor não atualizou o intervalo de versões do plugin para este TREK, então não há garantia de que funcione — e, em casos raros, um plugin incompatível pode corromper os dados do TREK. Continue apenas se aceitar esse risco.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” não declara quais versões do TREK suporta; este servidor executa {host}. O TREK só o deixa passar porque TREK_PLUGINS_IGNORE_TREK_RANGE está definido. Nada indica que o autor o tenha testado neste TREK, então não há garantia de que funcione — e, em casos raros, um plugin incompatível pode corromper os dados do TREK. Continue apenas se aceitar esse risco.',
+  'admin.plugins.dep.trekBypassed':
+    'Fora do seu intervalo TREK ({range}) — verificações de versão desligadas',
+  'admin.plugins.dep.trekBypassedUnknown':
+    'Não declara nenhum intervalo TREK — verificações de versão desligadas',
   'admin.plugins.incompatible': 'Incompatível',
   'admin.plugins.accessTitle': 'O que ele pode acessar',
   'admin.plugins.connectsTitle': 'Conecta-se a',

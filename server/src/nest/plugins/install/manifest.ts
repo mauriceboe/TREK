@@ -1,6 +1,6 @@
 import semver from 'semver';
 import { isKnownPermission, PLUGIN_API_VERSION } from '../protocol/envelope';
-import { isValidTrekRange, minTrekOf } from './host-compat';
+import { isValidTrekRange, minTrekOf, trekRangeBypassed } from './host-compat';
 import {
   MCP_TOOLS_MAX,
   McpToolSchemaError,
@@ -252,7 +252,9 @@ export function parseManifest(raw: unknown, opts?: { requireTrek?: boolean }): P
 
   const trek = optStr(m.trek);
   const trekRange = isValidTrekRange(trek) ? trek : null;
-  if (opts?.requireTrek && !trekRange) {
+  // Under TREK_PLUGINS_IGNORE_TREK_RANGE a missing range is the same author oversight as a
+  // stale one, so it is reported by the gate (as a null range) instead of refused here.
+  if (opts?.requireTrek && !trekRange && !trekRangeBypassed()) {
     throw new ManifestError(
       trek
         ? `invalid "trek" version range "${trek}" (expected a satisfiable semver range, e.g. ">=3.2.0 <4.0.0")`

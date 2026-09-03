@@ -542,6 +542,18 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'TREK {range} gerektiriyor — bu sunucu {host} çalıştırıyor',
   'admin.plugins.dep.trekUnknown': 'Hangi TREK sürümlerini desteklediğini belirtmiyor',
   'admin.plugins.installCompatible': '{version} sürümünü yükle',
+  'admin.plugins.installAnyway': 'Yine de yükle',
+  'admin.plugins.rangeBypass.pill': 'Sürüm denetimleri kapalı',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE ayarlı — eklentiler, yazarlarının belirttiği TREK sürümlerinin dışında yüklenip çalıştırılabilir',
+  'admin.plugins.rangeBypass.title': 'Desteklenen TREK sürümlerinin dışında',
+  'admin.plugins.rangeBypass.noticeTitle': 'Desteklenen TREK sürümlerinin dışında yüklendi',
+  'admin.plugins.rangeBypass.body':
+    '“{name}” TREK {range} desteği bildiriyor, bu sunucu ise {host} çalıştırıyor. TREK yalnızca TREK_PLUGINS_IGNORE_TREK_RANGE ayarlı olduğu için izin veriyor. Yazarı eklentinin sürüm aralığını bu TREK için güncellemedi, dolayısıyla çalışacağının garantisi yok — ve nadir durumlarda uyumsuz bir eklenti TREK verilerini bozabilir. Yalnızca bu riski kabul ediyorsanız devam edin.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '“{name}” hangi TREK sürümlerini desteklediğini bildirmiyor; bu sunucu {host} çalıştırıyor. TREK yalnızca TREK_PLUGINS_IGNORE_TREK_RANGE ayarlı olduğu için izin veriyor. Yazarının bu TREK üzerinde test ettiğine dair bir işaret yok, dolayısıyla çalışacağının garantisi yok — ve nadir durumlarda uyumsuz bir eklenti TREK verilerini bozabilir. Yalnızca bu riski kabul ediyorsanız devam edin.',
+  'admin.plugins.dep.trekBypassed': 'TREK aralığının dışında ({range}) — sürüm denetimleri kapalı',
+  'admin.plugins.dep.trekBypassedUnknown': 'TREK aralığı bildirmiyor — sürüm denetimleri kapalı',
   'admin.plugins.incompatible': 'Uyumsuz',
   'admin.plugins.accessTitle': 'Neye erişebilir',
   'admin.plugins.connectsTitle': 'Şuraya bağlanır',

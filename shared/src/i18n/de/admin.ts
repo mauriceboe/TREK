@@ -498,6 +498,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Benötigt TREK {range} — auf diesem Server läuft {host}',
   'admin.plugins.dep.trekUnknown': 'Gibt nicht an, welche TREK-Versionen unterstützt werden',
   'admin.plugins.installCompatible': '{version} installieren',
+  'admin.plugins.installAnyway': 'Trotzdem installieren',
+  'admin.plugins.rangeBypass.pill': 'Versionsprüfung aus',
+  'admin.plugins.rangeBypass.pillHint':
+    'TREK_PLUGINS_IGNORE_TREK_RANGE ist gesetzt — Plugins dürfen außerhalb der von ihren Autoren angegebenen TREK-Versionen installiert und ausgeführt werden',
+  'admin.plugins.rangeBypass.title': 'Außerhalb der unterstützten TREK-Versionen',
+  'admin.plugins.rangeBypass.noticeTitle': 'Außerhalb der unterstützten TREK-Versionen installiert',
+  'admin.plugins.rangeBypass.body':
+    '„{name}“ gibt Unterstützung für TREK {range} an, dieser Server läuft mit {host}. TREK lässt es nur durch, weil TREK_PLUGINS_IGNORE_TREK_RANGE gesetzt ist. Der Autor hat den Versionsbereich des Plugins für dieses TREK nicht aktualisiert, es gibt also keine Garantie, dass es funktioniert — und in seltenen Fällen kann ein unpassendes Plugin TREK-Daten beschädigen. Fahre nur fort, wenn du dieses Risiko akzeptierst.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '„{name}“ gibt nicht an, welche TREK-Versionen es unterstützt; dieser Server läuft mit {host}. TREK lässt es nur durch, weil TREK_PLUGINS_IGNORE_TREK_RANGE gesetzt ist. Nichts belegt, dass der Autor es auf diesem TREK getestet hat, es gibt also keine Garantie, dass es funktioniert — und in seltenen Fällen kann ein unpassendes Plugin TREK-Daten beschädigen. Fahre nur fort, wenn du dieses Risiko akzeptierst.',
+  'admin.plugins.dep.trekBypassed':
+    'Außerhalb seines TREK-Bereichs ({range}) — Versionsprüfung aus',
+  'admin.plugins.dep.trekBypassedUnknown': 'Gibt keinen TREK-Bereich an — Versionsprüfung aus',
   'admin.plugins.incompatible': 'Nicht kompatibel',
   'admin.plugins.accessTitle': 'Worauf es zugreift',
   'admin.plugins.connectsTitle': 'Verbindet sich mit',

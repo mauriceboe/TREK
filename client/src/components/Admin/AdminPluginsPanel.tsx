@@ -12,6 +12,7 @@ import {
 import PluginIcon from '../shared/PluginIcon'
 import { adminApi } from '../../api/client'
 import { useInstanceSettings } from './useInstanceSettings'
+import { bypassChip, bypassOffer, useRangeBypass, type RangeWarning, type TrekRangeBypass } from './useRangeBypass'
 import { usePluginStore } from '../../store/pluginStore'
 import { useTranslation } from '../../i18n'
 import { useToast } from '../shared/Toast'
@@ -64,6 +65,8 @@ interface PluginRow {
   trekRange?: string | null
   /** The TREK this server is running — the server does the semver, the client just shows it. */
   hostVersion?: string
+  /** Non-null while the plugin runs outside its declared range on the operator's say-so. */
+  trekRangeBypassed?: TrekRangeBypass | null
   /** The author's signature was verified and their key pinned at install. False means the
    * bytes matched the registry's sha256 and nothing more — one fewer guarantee. */
   signed?: boolean
@@ -273,7 +276,7 @@ function deriveCaps(perms: string[], caps: { widget?: { slot?: string }; tripPag
   return out
 }
 
-interface DepChip { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; blocked: boolean }
+interface DepChip { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; blocked: boolean; warn?: boolean }
 
 // A plugin's declared dependencies as chips — a required addon (amber when that
 // addon is disabled), a plugin dependency (amber when missing / version-mismatched),
@@ -291,6 +294,8 @@ function deriveDeps(p: PluginRow, t: T): DepChip[] {
       blocked: true,
     })
   }
+  const bypassed = bypassChip(p.trekRangeBypassed, t) // TREK_PLUGINS_IGNORE_TREK_RANGE: a warning, not a blocker
+  if (bypassed) out.push(bypassed)
   for (const a of p.dependencies?.requiredAddons ?? []) {
     out.push({ icon: Blocks, label: t('admin.plugins.cap.requiresAddon', { addon: a }), blocked: !!issues?.disabledAddons.includes(a) })
   }
@@ -310,11 +315,12 @@ function deriveDeps(p: PluginRow, t: T): DepChip[] {
  * has outrun this TREK but an older one still fits, offer THAT version rather than a dead
  * grey button. The plugin is perfectly usable, just not at its newest.
  */
-function installOffer(item: RegistryItem, t: T): { blocked: boolean; version?: string; label: string; title?: string } {
+function installOffer(item: RegistryItem, t: T, ignoreTrekRange = false): { blocked: boolean; version?: string; label: string; title?: string; warn?: RangeWarning } {
   if (item.compatible !== false) return { blocked: false, label: t('admin.plugins.install') }
   const title = item.trek
     ? t('admin.plugins.dep.trekIncompatible', { range: item.trek, host: item.hostVersion ?? '?' })
     : t('admin.plugins.dep.trekUnknown')
+  if (ignoreTrekRange) return bypassOffer(item, t, title) // TREK_PLUGINS_IGNORE_TREK_RANGE: "Install anyway"
   if (item.latestCompatible) {
     return { blocked: false, version: item.latestCompatible, label: t('admin.plugins.installCompatible', { version: item.latestCompatible }), title }
   }
@@ -398,6 +404,8 @@ export default function AdminPluginsPanel() {
   const toast = useToast()
   const [runtimeOn, setRuntimeOn] = useState(false)
   const [devLink, setDevLink] = useState(false) // dev-link enabled server-side (TREK_PLUGINS_DEV_LINK)
+  const [ignoreTrekRange, setIgnoreTrekRange] = useState(false) // TREK_PLUGINS_IGNORE_TREK_RANGE set server-side
+  const bypass = useRangeBypass() // its warning dialog/sheet state — shared with the other shell
   const [linkPath, setLinkPath] = useState('')
   const [plugins, setPlugins] = useState<PluginRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -472,9 +480,10 @@ export default function AdminPluginsPanel() {
     // (e.g. the dashboard) reflect an activate/deactivate without a full reload (F5).
     void usePluginStore.getState().loadPlugins()
     adminApi.plugins()
-      .then((d: { enabled: boolean; devLink?: boolean; plugins: PluginRow[] }) => {
+      .then((d: { enabled: boolean; devLink?: boolean; ignoreTrekRange?: boolean; plugins: PluginRow[] }) => {
         setRuntimeOn(!!d.enabled)
         setDevLink(!!d.devLink)
+        setIgnoreTrekRange(!!d.ignoreTrekRange)
         setPlugins(d.plugins || [])
         if ((d.plugins || []).length) {
           adminApi.pluginBrowse().then(indexRegistry).catch(() => {})
@@ -540,6 +549,7 @@ export default function AdminPluginsPanel() {
       const res = await adminApi.pluginUpload(file)
       setView('installed')
       toast.success(t('admin.plugins.uploaded', { name: res.id }))
+      bypass.notice(res.id, res.trekRangeBypassed)
     } catch (e) {
       toast.error((e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('admin.plugins.actionError'))
     } finally {
@@ -610,7 +620,11 @@ export default function AdminPluginsPanel() {
     const range = reg.trek ?? (reg.minTrekVersion ? `>=${reg.minTrekVersion}` : null)
     return range ? { version: reg.latest, range } : null
   }
-  const install = (id: string, version?: string) => act(id, () => adminApi.pluginInstall(id, version ? { version } : undefined), t('admin.plugins.installed'))
+  // `warn` is the pre-install confirm for an entry the registry already flagged as
+  // incompatible; an artifact whose OWN manifest turns out to be out of range (the index
+  // was only a pre-download filter) is caught by the marker on the response instead.
+  const install = (id: string, version?: string, warn?: RangeWarning) => bypass.guard(warn, () =>
+    act(id, () => adminApi.pluginInstall(id, version ? { version } : undefined).then(r => { if (!warn) bypass.notice(id, r?.trekRangeBypassed) }), t('admin.plugins.installed')))
   const restart = (id: string) => act(id, async () => { await adminApi.pluginDeactivate(id); await adminApi.pluginActivate(id) }, t('admin.plugins.restarted'))
   // Dev-link: register a plugin from a local built directory (dev only). Reuses the
   // same busy/toast/refresh loop as uploadPlugin; the server gates it.
@@ -623,6 +637,7 @@ export default function AdminPluginsPanel() {
       setView('installed')
       setLinkPath('')
       toast.success(t('admin.plugins.devLinkLinked', { id: res.id }))
+      bypass.notice(res.id, res.trekRangeBypassed)
     } catch (e) {
       toast.error((e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('admin.plugins.actionError'))
     } finally {
@@ -682,9 +697,10 @@ export default function AdminPluginsPanel() {
     if (busy === parent.id) return
     setBusy(parent.id)
     adminApi.pluginInstall(depId, { constraint, withDependencies: true })
-      .then((r: { installed?: string[]; requiredAddons?: string[] }) => {
+      .then((r: { installed?: string[]; requiredAddons?: string[]; trekRangeBypassed?: TrekRangeBypass | null }) => {
         toast.success(t('admin.plugins.dep.downloaded', { id: depId }))
         if (r?.requiredAddons?.length) toast.error(t('admin.plugins.dep.addonDisabledToast', { addons: r.requiredAddons.join(', ') }))
+        bypass.notice(depId, r?.trekRangeBypassed)
         return attemptActivate(parent)
       })
       // The DEPENDENCY is what's being downloaded, so a signature refusal here is about the
@@ -702,9 +718,10 @@ export default function AdminPluginsPanel() {
   const runUpdate = (p: PluginRow, version?: string) => {
     setBusy(p.id); setMenu(null)
     return adminApi.pluginUpdate(p.id, version)
-      .then((r: { version: string; activated: boolean; newPermissions: string[]; newEgress: string[] }) => {
+      .then((r: { version: string; activated: boolean; newPermissions: string[]; newEgress: string[]; trekRangeBypassed?: TrekRangeBypass | null }) => {
         if (r.activated || (r.newPermissions.length === 0 && r.newEgress.length === 0)) toast.success(t('admin.plugins.updated'))
         else setConsentQueue(qq => [...qq, { plugin: p, version: r.version, newPermissions: r.newPermissions, newEgress: r.newEgress }])
+        bypass.notice(p.name, r.trekRangeBypassed)
       })
       .catch(e => {
         const { error, code } = errBody(e)
@@ -828,11 +845,19 @@ export default function AdminPluginsPanel() {
             <h2 className="text-lg font-semibold tracking-tight text-content">{t('admin.plugins.title')}</h2>
             <p className="text-xs mt-1 text-content-muted max-w-xl">{t('admin.plugins.subtitle')}</p>
           </div>
-          {runtimeOn && (
-            <span className="inline-flex items-center gap-2 shrink-0 text-[11px] font-semibold text-success bg-success-soft px-2.5 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" /> {t('admin.plugins.runtimeOn')}
-            </span>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {runtimeOn && ignoreTrekRange && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-warning bg-warning-soft px-2.5 py-1.5 rounded-full"
+                title={t('admin.plugins.rangeBypass.pillHint')}>
+                <AlertTriangle size={12} /> {t('admin.plugins.rangeBypass.pill')}
+              </span>
+            )}
+            {runtimeOn && (
+              <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-success bg-success-soft px-2.5 py-1.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" /> {t('admin.plugins.runtimeOn')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -942,7 +967,7 @@ export default function AdminPluginsPanel() {
         ) : error ? (
           <div className="py-14 text-center text-sm text-danger">{t('admin.plugins.loadError')}</div>
         ) : !runtimeOn ? null : view === 'discover' ? (
-          <RegistryGrid items={shownRegistry} busy={busy} t={t} installedIds={installedIds}
+          <RegistryGrid items={shownRegistry} busy={busy} t={t} installedIds={installedIds} ignoreTrekRange={ignoreTrekRange}
             onInstall={install} onOpenDetail={setDetailFor} filtered={anyFilter} />
         ) : plugins.length === 0 ? (
           <EmptyState t={t} onDiscover={openDiscover} />
@@ -988,9 +1013,11 @@ export default function AdminPluginsPanel() {
 
       {/* Registry detail dialog */}
       {detailFor && (
-        <PluginDetailModal item={detailFor} t={t} locale={locale} busy={busy}
+        <PluginDetailModal item={detailFor} t={t} locale={locale} busy={busy} ignoreTrekRange={ignoreTrekRange}
           installed={installedIds.has(detailFor.id)} onInstall={install} onClose={() => setDetailFor(null)} />
       )}
+
+      {bypass.copy && <RangeBypassDialog copy={bypass.copy} t={t} onConfirm={bypass.confirm} onClose={bypass.dismiss} />}
 
       {/* Error-log modal */}
       {errorsFor && (
@@ -1424,8 +1451,8 @@ function InstalledRow({ p, t, busy, menu, setMenu, hasUpdate, latestVer, newerIn
           <div className="hidden sm:flex items-center gap-1.5 flex-wrap mt-1.5">
             {deps.map((d, i) => (
               <span key={i} className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-[3px] rounded-md border ${
-                d.blocked ? 'text-warning border-warning/30 bg-warning-soft' : 'text-content-secondary border-edge-secondary bg-surface-tertiary'}`}>
-                <d.icon size={12} className={d.blocked ? 'text-warning' : 'text-content-muted'} />{d.label}
+                d.blocked || d.warn ? 'text-warning border-warning/30 bg-warning-soft' : 'text-content-secondary border-edge-secondary bg-surface-tertiary'}`}>
+                <d.icon size={12} className={d.blocked || d.warn ? 'text-warning' : 'text-content-muted'} />{d.label}
               </span>
             ))}
           </div>
@@ -1535,14 +1562,15 @@ function Screenshot({ url, className, iconSize = 28 }: { url: string | null; cla
   )
 }
 
-function RegistryGrid({ items, onInstall, onOpenDetail, busy, t, installedIds, filtered }: {
+function RegistryGrid({ items, onInstall, onOpenDetail, busy, t, installedIds, filtered, ignoreTrekRange }: {
   items: RegistryItem[] | null
-  onInstall: (id: string, version?: string) => void
+  onInstall: (id: string, version?: string, warn?: RangeWarning) => void
   onOpenDetail: (item: RegistryItem) => void
   busy: string | null
   t: T
   installedIds: Set<string>
   filtered: boolean
+  ignoreTrekRange: boolean
 }) {
   if (!items) return <div className="py-14 text-center text-sm text-content-faint">{t('common.loading')}</div>
   if (items.length === 0) return (
@@ -1555,7 +1583,7 @@ function RegistryGrid({ items, onInstall, onOpenDetail, busy, t, installedIds, f
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 px-4 sm:px-6 pb-5 pt-1">
       {items.map(item => {
         const installed = installedIds.has(item.id)
-        const offer = installOffer(item, t)
+        const offer = installOffer(item, t, ignoreTrekRange)
         return (
           <div key={item.id} role="button" tabIndex={0} onClick={() => onOpenDetail(item)}
             // No press-scale on the card: shrinking it mid-click slides the Install
@@ -1590,7 +1618,7 @@ function RegistryGrid({ items, onInstall, onOpenDetail, busy, t, installedIds, f
                     <Download size={11} /> {formatCompactCount(item.downloadCount)}
                   </span>
                 )}
-                <button type="button" onClick={e => { e.stopPropagation(); onInstall(item.id, offer.version) }}
+                <button type="button" onClick={e => { e.stopPropagation(); onInstall(item.id, offer.version, offer.warn) }}
                   disabled={busy === item.id || installed || offer.blocked}
                   title={installed ? undefined : offer.title}
                   className="ml-auto text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-50 disabled:bg-surface-tertiary disabled:text-content-faint transition-colors">
@@ -1620,9 +1648,54 @@ function PermLabel({ perm, t }: { perm: string; t: T }) {
     : <code className="font-mono text-[11px] bg-surface-tertiary px-1.5 py-0.5 rounded">{perm}</code>
 }
 
-function PluginDetailModal({ item, installed, busy, onInstall, onClose, t, locale }: {
-  item: RegistryItem; installed: boolean; busy: string | null
-  onInstall: (id: string, version?: string) => void; onClose: () => void; t: T; locale: string
+/**
+ * The TREK_PLUGINS_IGNORE_TREK_RANGE warning (copy and modes from useRangeBypass). Its own
+ * component rather than ConfirmDialog because the notice mode has no cancel button.
+ */
+function RangeBypassDialog({ copy: { title, body, confirm }, onConfirm, onClose, t }: {
+  copy: { title: string; body: string; confirm: boolean }; onConfirm: () => void; onClose: () => void; t: T
+}) {
+  return createPortal(
+    <div role="presentation" className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className="bg-surface-card border border-edge rounded-2xl w-full max-w-md p-6 shadow-modal" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-4">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-warning-soft grid place-items-center">
+            <AlertTriangle size={20} className="text-warning" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-content">{title}</h3>
+            <p className="mt-1.5 text-sm text-content-secondary leading-relaxed">{body}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          {confirm ? (
+            <>
+              <button type="button" onClick={onClose}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-content-secondary border border-edge-secondary transition-colors">
+                {t('common.cancel')}
+              </button>
+              <button type="button" onClick={onConfirm}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-warning text-white hover:opacity-90 transition-opacity">
+                {t('admin.plugins.installAnyway')}
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-text hover:bg-accent-hover transition-colors">
+              {t('common.ok')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function PluginDetailModal({ item, installed, busy, onInstall, onClose, t, locale, ignoreTrekRange }: {
+  item: RegistryItem; installed: boolean; busy: string | null; ignoreTrekRange: boolean
+  onInstall: (id: string, version?: string, warn?: RangeWarning) => void; onClose: () => void; t: T; locale: string
 }) {
   const [detail, setDetail] = useState<RegistryDetail | null>(null)
   const [failed, setFailed] = useState(false)
@@ -1645,7 +1718,7 @@ function PluginDetailModal({ item, installed, busy, onInstall, onClose, t, local
   const sizeKb = detail?.size ? Math.max(1, Math.round(detail.size / 1024)) : null
   // The detail fetch carries the same compat verdict as the browse list; prefer it once
   // it lands (it is keyed to the same entry) and fall back to the grid item until then.
-  const offer = installOffer(detail ?? item, t)
+  const offer = installOffer(detail ?? item, t, ignoreTrekRange)
 
   return (
     <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -1667,7 +1740,7 @@ function PluginDetailModal({ item, installed, busy, onInstall, onClose, t, local
             </div>
             <p className="text-[12.5px] text-content-faint mt-0.5">{item.author}{item.latest ? ` · v${item.latest}` : ''}</p>
           </div>
-          <button type="button" onClick={() => onInstall(item.id, offer.version)}
+          <button type="button" onClick={() => onInstall(item.id, offer.version, offer.warn)}
             disabled={busy === item.id || installed || offer.blocked}
             title={installed ? undefined : offer.title}
             className="self-end text-[13px] font-semibold px-3 sm:px-4 py-2 rounded-lg bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-50 disabled:bg-surface-tertiary disabled:text-content-faint transition-colors shrink-0">

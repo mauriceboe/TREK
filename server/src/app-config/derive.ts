@@ -200,6 +200,12 @@ export function derivePlugins(raw: RawEnv) {
     /** Kill-switch is default-on: only an explicit falsy value disables (plugins/kill-switch.ts). */
     enabled: parseBool(raw.TREK_PLUGINS_ENABLED) !== false,
     devLink: parseBool(raw.TREK_PLUGINS_DEV_LINK) === true,
+    /**
+     * Range bypass is default-OFF: only an explicit truthy value turns the TREK-version
+     * gates into warnings (plugins/install/host-compat.ts). Never inferred from any
+     * other switch — an admin has to ask for "install it anyway" by name.
+     */
+    ignoreTrekRange: parseBool(raw.TREK_PLUGINS_IGNORE_TREK_RANGE) === true,
     dir: raw.TREK_PLUGINS_DIR,
     dataDir: raw.TREK_PLUGINS_DATA_DIR,
     /** Permission jail is default-on: only an explicit falsy value turns it off. */

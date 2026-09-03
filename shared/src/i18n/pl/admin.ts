@@ -495,6 +495,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'Wymaga TREK {range} — ten serwer działa na {host}',
   'admin.plugins.dep.trekUnknown': 'Nie określa, które wersje TREK obsługuje',
   'admin.plugins.installCompatible': 'Zainstaluj {version}',
+  'admin.plugins.installAnyway': 'Zainstaluj mimo to',
+  'admin.plugins.rangeBypass.pill': 'Kontrola wersji wyłączona',
+  'admin.plugins.rangeBypass.pillHint':
+    'Ustawiono TREK_PLUGINS_IGNORE_TREK_RANGE — wtyczki mogą być instalowane i uruchamiane poza wersjami TREK zadeklarowanymi przez ich autorów',
+  'admin.plugins.rangeBypass.title': 'Poza obsługiwanymi wersjami TREK',
+  'admin.plugins.rangeBypass.noticeTitle': 'Zainstalowano poza obsługiwanymi wersjami TREK',
+  'admin.plugins.rangeBypass.body':
+    '„{name}” deklaruje obsługę TREK {range}, a ten serwer działa na {host}. TREK przepuszcza ją tylko dlatego, że ustawiono TREK_PLUGINS_IGNORE_TREK_RANGE. Autor nie zaktualizował zakresu wersji wtyczki dla tego TREK, więc nie ma gwarancji, że zadziała — a w rzadkich przypadkach niedopasowana wtyczka może uszkodzić dane TREK. Kontynuuj tylko, jeśli akceptujesz to ryzyko.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    '„{name}” nie deklaruje, które wersje TREK obsługuje; ten serwer działa na {host}. TREK przepuszcza ją tylko dlatego, że ustawiono TREK_PLUGINS_IGNORE_TREK_RANGE. Nic nie wskazuje, że autor testował ją na tym TREK, więc nie ma gwarancji, że zadziała — a w rzadkich przypadkach niedopasowana wtyczka może uszkodzić dane TREK. Kontynuuj tylko, jeśli akceptujesz to ryzyko.',
+  'admin.plugins.dep.trekBypassed':
+    'Poza swoim zakresem TREK ({range}) — kontrola wersji wyłączona',
+  'admin.plugins.dep.trekBypassedUnknown': 'Nie deklaruje zakresu TREK — kontrola wersji wyłączona',
   'admin.plugins.incompatible': 'Niezgodny',
   'admin.plugins.accessTitle': 'Do czego ma dostęp',
   'admin.plugins.connectsTitle': 'Łączy się z',

@@ -503,6 +503,19 @@ const admin: TranslationStrings = {
   'admin.plugins.dep.trekIncompatible': 'TREK {range} szükséges — ez a kiszolgáló {host} verziót futtat',
   'admin.plugins.dep.trekUnknown': 'Nem adja meg, mely TREK-verziókat támogatja',
   'admin.plugins.installCompatible': '{version} telepítése',
+  'admin.plugins.installAnyway': 'Telepítés mindenképp',
+  'admin.plugins.rangeBypass.pill': 'Verzióellenőrzés kikapcsolva',
+  'admin.plugins.rangeBypass.pillHint':
+    'A TREK_PLUGINS_IGNORE_TREK_RANGE be van állítva — a bővítmények a szerzőik által megadott TREK-verziókon kívül is telepíthetők és futtathatók',
+  'admin.plugins.rangeBypass.title': 'A támogatott TREK-verziókon kívül',
+  'admin.plugins.rangeBypass.noticeTitle': 'A támogatott TREK-verziókon kívül telepítve',
+  'admin.plugins.rangeBypass.body':
+    'A(z) „{name}” a TREK {range} verzióihoz készült, ez a szerver pedig {host}-t futtat. A TREK csak azért engedi át, mert a TREK_PLUGINS_IGNORE_TREK_RANGE be van állítva. A szerző nem frissítette a bővítmény verziótartományát ehhez a TREK-hez, így nincs garancia, hogy működik — és ritka esetben egy nem illeszkedő bővítmény megsértheti a TREK adatait. Csak akkor folytasd, ha vállalod ezt a kockázatot.',
+  'admin.plugins.rangeBypass.bodyUnknown':
+    'A(z) „{name}” nem adja meg, mely TREK-verziókat támogatja; ez a szerver {host}-t futtat. A TREK csak azért engedi át, mert a TREK_PLUGINS_IGNORE_TREK_RANGE be van állítva. Semmi sem jelzi, hogy a szerző ezen a TREK-en tesztelte volna, így nincs garancia, hogy működik — és ritka esetben egy nem illeszkedő bővítmény megsértheti a TREK adatait. Csak akkor folytasd, ha vállalod ezt a kockázatot.',
+  'admin.plugins.dep.trekBypassed':
+    'A TREK-tartományán kívül ({range}) — verzióellenőrzés kikapcsolva',
+  'admin.plugins.dep.trekBypassedUnknown': 'Nem ad meg TREK-tartományt — verzióellenőrzés kikapcsolva',
   'admin.plugins.incompatible': 'Nem kompatibilis',
   'admin.plugins.accessTitle': 'Mihez fér hozzá',
   'admin.plugins.connectsTitle': 'Kapcsolódik ehhez',
