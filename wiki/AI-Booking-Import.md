@@ -90,8 +90,8 @@ The model is asked to capture the full booking — including **every leg of a mu
 
 ## Good to know
 
-- **No new environment variables and no manual migration** — the addon is configured entirely in the UI.
-- **Local inference can be slow.** On a CPU-only host a single booking can take tens of seconds to a couple of minutes; TREK allows local models up to 5 minutes per document. Uploads are parsed **one at a time** per user, so several files queue rather than run in parallel.
+- **No manual migration**, and the addon is configured in the UI. The one environment variable it reads is `LLM_TIMEOUT_MS` (see [Environment-Variables](Environment-Variables)).
+- **Local inference can be slow.** On a CPU-only host a single booking can take tens of seconds to a couple of minutes; TREK allows a model 15 minutes per document by default, which `LLM_TIMEOUT_MS` raises or lowers. Uploads are parsed **one at a time** per user, so several files queue rather than run in parallel.
 - **Parse jobs are kept for about 10 minutes** after they finish. Start the review within that window.
 - **Privacy** — with the Local provider nothing leaves your network. With OpenAI or Anthropic, the document's text (or, for Anthropic, the PDF itself) is sent to that provider for extraction.
 - **API keys are never returned in plaintext** — they are encrypted at rest and only ever shown masked.

@@ -274,7 +274,7 @@ Ubuntu 25.04+) or download the static binary directly and place it anywhere on `
 the Reservations panel is hidden only when **neither** extractor is available — an instance running the AI Parsing
 addon still offers it with `bookingImport: false`.
 
-Booking import can also fall back to an AI model for documents KDE Itinerary can't read. That feature (the **AI Parsing** addon) is configured entirely in the UI and needs no environment variables — see [AI-Booking-Import](AI-Booking-Import).
+Booking import can also fall back to an AI model for documents KDE Itinerary can't read. That feature (the **AI Parsing** addon) is configured in the UI; the only environment variable it reads is `LLM_TIMEOUT_MS` below. See [AI-Booking-Import](AI-Booking-Import).
 
 ---
 
