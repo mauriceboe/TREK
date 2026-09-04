@@ -159,7 +159,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Átirányítási URI-k',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Soronként egy URI. HTTPS szükséges (localhost kivételével). Pontos egyezés szükséges.',
+    'Soronként egy URI. HTTPS, loopback HTTP vagy saját alkalmazásséma (myapp://). Pontos egyezés, kivéve a loopback URI portját.',
   'settings.oauth.modal.scopes': 'Engedélyezett jogosultságok',
   'settings.oauth.modal.scopesHint':
     'A list_trips és get_trip_summary mindig elérhető — jogosultság nélkül. Segítenek az AI-nak megtalálni az utazás azonosítókat.',

@@ -181,7 +181,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientNamePlaceholder': '例：Claude Web',
   'settings.oauth.modal.redirectUris': 'リダイレクトURI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback',
-  'settings.oauth.modal.redirectUrisHint': '1行につき1つ。HTTPS必須。',
+  'settings.oauth.modal.redirectUrisHint':
+    '1行につき1つ。HTTPS、ループバックHTTP、または独自のアプリスキーム（myapp://）が使えます。ループバックURIのポート番号を除き、完全一致が必要です。',
   'settings.oauth.modal.scopes': '許可スコープ',
   'settings.oauth.modal.scopesHint': 'list_trips と get_trip_summary は常に利用可能です。',
   'settings.oauth.modal.selectAll': 'すべて選択',

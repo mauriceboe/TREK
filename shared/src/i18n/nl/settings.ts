@@ -158,7 +158,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': "Redirect-URI's",
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Eén URI per regel. HTTPS vereist (localhost uitgezonderd). Exacte overeenkomst vereist.',
+    'Eén URI per regel. HTTPS, loopback-HTTP of een eigen app-schema (myapp://). Exacte overeenkomst, behalve de poort van een loopback-URI.',
   'settings.oauth.modal.scopes': 'Toegestane rechten',
   'settings.oauth.modal.scopesHint':
     "list_trips en get_trip_summary zijn altijd beschikbaar — geen recht vereist. Ze helpen de AI trip-ID's te ontdekken.",

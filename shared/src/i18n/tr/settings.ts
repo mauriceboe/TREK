@@ -195,7 +195,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': "URI'leri Yönlendir",
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://uygulamaniz.com/callback\\nhttps://uygulamaniz.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Satır başına bir URI. HTTPS gerekli (yerel ana bilgisayar hariç). Tam eşleşme uygulandı.',
+    'Satır başına bir URI. HTTPS, geri döngü HTTP veya kendi uygulama şeması (myapp://). Geri döngü URI portu dışında tam eşleşme gerekir.',
   'settings.oauth.modal.scopes': 'İzin Verilen Kapsamlar',
   'settings.oauth.modal.scopesHint':
     'list_trips ve get_trip_summary her zaman kullanılabilir; kapsam gerektirmez. Yapay zekanın başka herhangi bir aracı kullanmak için gereken yolculuk kimliklerini keşfetmesine olanak tanıyorlar.',

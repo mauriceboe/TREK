@@ -20,10 +20,12 @@ import {
   CODE_VERIFIER_RE,
   REFRESH_ROTATION_GRACE_MS,
   REFRESH_TOKEN_TTL_MS,
+  classifyRedirectUri,
   generateAccessToken,
   generateRefreshToken,
   hashToken,
   parseSqliteUtc,
+  redirectUriMatches,
   timingSafeEqualHex,
   type OAuthClientRow,
   type OAuthTokenRow,
@@ -118,16 +120,15 @@ export class OauthService {
     if (!isMachineClient && (!redirectUris || redirectUris.length === 0)) return { error: 'At least one redirect URI is required', status: 400 };
     if (redirectUris.length > 10) return { error: 'Maximum 10 redirect URIs per client', status: 400 };
 
+    // Same policy as the DCR path (#2227). This used to exempt any host named
+    // localhost or 127.0.0.1 regardless of scheme, which let the settings UI
+    // register javascript://localhost/…, and the consent flow then assigns that
+    // stored URI to window.location.href.
     for (const uri of redirectUris) {
-      let parsed: URL;
-      try {
-        parsed = new URL(uri);
-      } catch {
-        return { error: `Invalid redirect URI: ${uri}`, status: 400 };
-      }
-      if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
-        return { error: `Redirect URI must use HTTPS (localhost exempt): ${uri}`, status: 400 };
-      }
+      const verdict = classifyRedirectUri(uri);
+      if (verdict === 'malformed') return { error: `Invalid redirect URI: ${uri}`, status: 400 };
+      if (verdict === 'dangerous') return { error: `Dangerous redirect URI scheme: ${uri}`, status: 400 };
+      if (verdict === 'not_allowed') return { error: `Redirect URI must use HTTPS, loopback HTTP, or a private custom scheme: ${uri}`, status: 400 };
     }
 
     if (!allowedScopes || allowedScopes.length === 0) return { error: 'At least one scope is required', status: 400 };
@@ -615,7 +616,12 @@ export class OauthService {
     }
 
     const allowedUris: string[] = JSON.parse(client.redirect_uris);
-    if (!params.redirect_uri || !allowedUris.includes(params.redirect_uri)) {
+    // Exact match except for the loopback port, which RFC 8252 §7.3 leaves to
+    // the OS, and which the SDK's authorize handler already relaxes, so a
+    // native client got a 302 to consent and an invalid_redirect_uri from this
+    // route for one and the same request (#2227).
+    const requestedUri = params.redirect_uri;
+    if (!requestedUri || !allowedUris.some(allowed => redirectUriMatches(allowed, requestedUri))) {
       return { valid: false, error: 'invalid_redirect_uri', error_description: 'redirect_uri does not match any registered URI' };
     }
 

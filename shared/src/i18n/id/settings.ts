@@ -192,7 +192,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Redirect URI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://aplikasiku.com/callback\nhttps://aplikasiku.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Satu URI per baris. HTTPS wajib (localhost dikecualikan). Kecocokan tepat diberlakukan.',
+    'Satu URI per baris. HTTPS, HTTP loopback, atau skema aplikasi pribadi (myapp://). Kecocokan tepat, kecuali port pada URI loopback.',
   'settings.oauth.modal.scopes': 'Cakupan yang Diizinkan',
   'settings.oauth.modal.scopesHint':
     'list_trips dan get_trip_summary selalu tersedia — tidak perlu cakupan. Keduanya memungkinkan AI menemukan ID perjalanan yang diperlukan untuk menggunakan alat lainnya.',

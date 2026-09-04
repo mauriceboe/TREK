@@ -147,7 +147,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientNamePlaceholder': '例如 Claude Web、我的 MCP 应用',
   'settings.oauth.modal.redirectUris': '重定向 URI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
-  'settings.oauth.modal.redirectUrisHint': '每行一个 URI。需要 HTTPS（localhost 除外）。要求精确匹配。',
+  'settings.oauth.modal.redirectUrisHint':
+    '每行一个 URI。支持 HTTPS、回环 HTTP 或自定义应用协议（myapp://）。要求精确匹配，回环 URI 的端口除外。',
   'settings.oauth.modal.scopes': '允许的权限范围',
   'settings.oauth.modal.scopesHint':
     'list_trips 和 get_trip_summary 始终可用——无需权限范围。它们帮助 AI 发现所需的行程 ID。',

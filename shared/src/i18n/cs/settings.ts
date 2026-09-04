@@ -156,7 +156,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Přesměrovací URI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Jedno URI na řádek. Vyžadováno HTTPS (localhost vyjmuto). Vyžadována přesná shoda.',
+    'Jedno URI na řádek. HTTPS, HTTP na loopbacku nebo vlastní schéma aplikace (myapp://). Přesná shoda, kromě portu u loopback URI.',
   'settings.oauth.modal.scopes': 'Povolená oprávnění',
   'settings.oauth.modal.scopesHint':
     'list_trips a get_trip_summary jsou vždy dostupné — bez požadovaného oprávnění. Umožňují AI zjistit potřebná ID výletů.',

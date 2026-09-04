@@ -154,7 +154,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'URI przekierowania',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Jeden URI na linię. Wymagane HTTPS (localhost zwolniony). Wymagana dokładna zgodność.',
+    'Jeden URI na linię. HTTPS, HTTP na loopbacku lub własny schemat aplikacji (myapp://). Dokładna zgodność, z wyjątkiem portu w URI loopback.',
   'settings.oauth.modal.scopes': 'Dozwolone uprawnienia',
   'settings.oauth.modal.scopesHint':
     'list_trips i get_trip_summary są zawsze dostępne — bez wymaganych uprawnień. Umożliwiają AI odkrycie potrzebnych ID podróży.',

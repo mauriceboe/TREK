@@ -201,7 +201,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'URI chuyển hướng',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Một URI trên mỗi dòng. Yêu cầu HTTPS (miễn trừ localhost). Đối sánh chính xác được thực thi.',
+    'Một URI trên mỗi dòng. HTTPS, HTTP loopback hoặc lược đồ ứng dụng riêng (myapp://). Đối sánh chính xác, ngoại trừ cổng của URI loopback.',
   'settings.oauth.modal.scopes': 'Phạm vi được phép',
   'settings.oauth.modal.scopesHint':
     'list_trips và get_trip_summary luôn có sẵn — không yêu cầu phạm vi. Họ cho phép AI khám phá ID chuyến đi cần thiết để sử dụng bất kỳ công cụ nào khác.',

@@ -161,6 +161,27 @@ describe('GET /oauth/authorize — SDK authorizationHandler over trekOAuthProvid
         expect(loc.searchParams.get('state')).toBeNull();
     });
 
+    it('AUTHZ-002B: a private-use scheme registers and authorizes with the byte-identical URI (#2227)', async () => {
+        const redirectUri = 'workbuddy://workbuddy/mcp/connector%3A/oauth/callback';
+        const clientId = await registerClient(redirectUri);
+        const { challenge } = makePkce();
+
+        const res = await request(app).get('/oauth/authorize').query({
+            response_type: 'code',
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            scope: 'trips:read',
+            code_challenge: challenge,
+            code_challenge_method: 'S256',
+        });
+
+        expect(res.status).toBe(302);
+        const loc = new URL(res.headers.location);
+        expect(`${loc.origin}${loc.pathname}`).toBe('https://trek.example.com/oauth/consent');
+        // Forwarded unchanged: the %3A must survive to the token exchange.
+        expect(loc.searchParams.get('redirect_uri')).toBe(redirectUri);
+    });
+
     it('AUTHZ-003 — wrong resource 302-redirects back to the client with invalid_target', async () => {
         const clientId = await registerClient();
         const { challenge } = makePkce();

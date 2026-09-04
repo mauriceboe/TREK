@@ -160,7 +160,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Redirect-URIs',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Eine URI pro Zeile. HTTPS erforderlich (localhost ausgenommen). Exakte Übereinstimmung erforderlich.',
+    'Eine URI pro Zeile. HTTPS, Loopback-HTTP oder ein eigenes App-Schema (myapp://). Exakte Übereinstimmung, außer beim Port einer Loopback-URI.',
   'settings.oauth.modal.scopes': 'Erlaubte Berechtigungen',
   'settings.oauth.modal.scopesHint':
     'list_trips und get_trip_summary sind immer verfügbar — keine Berechtigung nötig. Sie helfen der KI, Trip-IDs zu ermitteln.',

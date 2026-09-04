@@ -157,7 +157,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'URI перенаправления',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Один URI на строку. Требуется HTTPS (localhost исключён). Требуется точное совпадение.',
+    'Один URI на строку. HTTPS, локальный HTTP или собственная схема приложения (myapp://). Требуется точное совпадение, кроме порта локального URI.',
   'settings.oauth.modal.scopes': 'Разрешённые области доступа',
   'settings.oauth.modal.scopesHint':
     'list_trips и get_trip_summary всегда доступны — область не требуется. Они помогают ИИ находить нужные ID поездок.',

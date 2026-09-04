@@ -159,7 +159,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'URI di reindirizzamento',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Un URI per riga. HTTPS richiesto (localhost esente). Corrispondenza esatta richiesta.',
+    'Un URI per riga. HTTPS, HTTP di loopback o uno schema privato come myapp://. Corrispondenza esatta, tranne la porta di loopback.',
   'settings.oauth.modal.scopes': 'Ambiti consentiti',
   'settings.oauth.modal.scopesHint':
     "list_trips e get_trip_summary sono sempre disponibili — nessun ambito richiesto. Permettono all'IA di scoprire gli ID viaggio necessari.",

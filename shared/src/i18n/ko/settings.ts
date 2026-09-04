@@ -192,7 +192,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientNamePlaceholder': '예: Claude Web, My MCP App',
   'settings.oauth.modal.redirectUris': '리디렉션 URI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
-  'settings.oauth.modal.redirectUrisHint': '한 줄에 URI 하나. HTTPS 필수 (localhost 예외). 정확히 일치해야 합니다.',
+  'settings.oauth.modal.redirectUrisHint':
+    '한 줄에 URI 하나. HTTPS, 루프백 HTTP 또는 앱 전용 스킴(myapp://)을 쓸 수 있습니다. 루프백 URI의 포트를 빼고 정확히 일치해야 합니다.',
   'settings.oauth.modal.scopes': '허용 권한 범위',
   'settings.oauth.modal.scopesHint':
     'list_trips 및 get_trip_summary는 항상 사용 가능합니다 — 권한 범위 불필요. AI가 다른 도구를 사용하는 데 필요한 여행 ID를 찾을 수 있습니다.',

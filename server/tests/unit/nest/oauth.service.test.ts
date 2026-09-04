@@ -207,6 +207,41 @@ describe('createOAuthClient', () => {
     expect(result.client).toBeDefined();
   });
 
+  it('allows the http://[::1] loopback redirect URI (#2227)', () => {
+    const { user } = createUser(testDb);
+    const result = createOAuthClient(user.id, 'Test', ['http://[::1]:8080/callback'], ['trips:read']);
+    expect(result.error).toBeUndefined();
+    expect(result.client).toBeDefined();
+  });
+
+  it('allows a private-use custom scheme (#2227)', () => {
+    const { user } = createUser(testDb);
+    const uri = 'workbuddy://workbuddy/mcp/connector%3A/oauth/callback';
+    const result = createOAuthClient(user.id, 'Test', [uri], ['trips:read']);
+    expect(result.error).toBeUndefined();
+    // The stored value must round-trip untouched: the whole authorize/token
+    // chain compares it byte for byte.
+    expect(result.client!.redirect_uris).toEqual([uri]);
+  });
+
+  it('rejects dangerous schemes that a localhost host used to smuggle through (#2227)', () => {
+    const { user } = createUser(testDb);
+    for (const uri of ['javascript://localhost/%0aalert(1)', 'blob://localhost/x', 'about://localhost/x']) {
+      const result = createOAuthClient(user.id, 'Test', [uri], ['trips:read']);
+      expect(result.status).toBe(400);
+      expect(result.error).toContain('Dangerous');
+    }
+  });
+
+  it('rejects non-navigable schemes on a localhost host (#2227)', () => {
+    const { user } = createUser(testDb);
+    for (const uri of ['ftp://localhost/x', 'wss://localhost/x']) {
+      const result = createOAuthClient(user.id, 'Test', [uri], ['trips:read']);
+      expect(result.status).toBe(400);
+      expect(result.error).toContain('HTTPS');
+    }
+  });
+
   it('returns 400 error if no scopes provided', () => {
     const { user } = createUser(testDb);
     const result = createOAuthClient(user.id, 'Test', ['https://example.com/cb'], []);
@@ -617,6 +652,31 @@ describe('validateAuthorizeRequest', () => {
 
     const result = validateAuthorizeRequest(
       makeParams({ client_id: clientId, redirect_uri: 'https://evil.com/callback' }),
+      user.id
+    );
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('invalid_redirect_uri');
+  });
+
+  it('accepts a loopback redirect on the port the OS handed the client (#2227)', () => {
+    const { user } = createUser(testDb);
+    const created = makeClient(user.id, { redirectUris: ['http://[::1]:8080/oauth/callback'] });
+    const clientId = created.client!.client_id as string;
+
+    const result = validateAuthorizeRequest(
+      makeParams({ client_id: clientId, redirect_uri: 'http://[::1]:54321/oauth/callback' }),
+      user.id
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('relaxes only the port of a loopback redirect, never the path (#2227)', () => {
+    const { user } = createUser(testDb);
+    const created = makeClient(user.id, { redirectUris: ['http://127.0.0.1:8080/oauth/callback'] });
+    const clientId = created.client!.client_id as string;
+
+    const result = validateAuthorizeRequest(
+      makeParams({ client_id: clientId, redirect_uri: 'http://127.0.0.1:54321/stolen' }),
       user.id
     );
     expect(result.valid).toBe(false);

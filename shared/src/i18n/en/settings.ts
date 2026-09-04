@@ -204,7 +204,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientNamePlaceholder': 'e.g. Claude Web, My MCP App',
   'settings.oauth.modal.redirectUris': 'Redirect URIs',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
-  'settings.oauth.modal.redirectUrisHint': 'One URI per line. HTTPS required (localhost exempt). Exact match enforced.',
+  'settings.oauth.modal.redirectUrisHint':
+    'One URI per line. HTTPS, loopback HTTP, or a private app scheme (myapp://). Matched exactly, except for the port of a loopback URI.',
   'settings.oauth.modal.scopes': 'Allowed Scopes',
   'settings.oauth.modal.scopesHint':
     'list_trips and get_trip_summary are always available — no scope required. They let the AI discover trip IDs needed to use any other tool.',

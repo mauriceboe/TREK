@@ -141,23 +141,38 @@ describe('TrekClientsStore.registerClient', () => {
   it('SDKP-011: rejects dangerous schemes', async () => {
     await expect(store().registerClient({ redirect_uris: ['javascript:alert(1)'] } as never))
       .rejects.toThrowError(new InvalidClientMetadataError('Dangerous redirect URI scheme: javascript:alert(1)'));
+    // A host named localhost does not make the scheme safe (#2227).
+    for (const uri of ['javascript://localhost/%0aalert(1)', 'blob://localhost/x', 'about://localhost/x']) {
+      await expect(store().registerClient({ redirect_uris: [uri] } as never))
+        .rejects.toThrowError(new InvalidClientMetadataError(`Dangerous redirect URI scheme: ${uri}`));
+    }
   });
 
-  it('SDKP-012: rejects plain-http non-loopback and dot-less custom schemes', async () => {
+  it('SDKP-012: rejects plain-http non-loopback and non-navigable schemes', async () => {
     const msg = 'redirect_uris must be HTTPS, loopback HTTP, or a private custom scheme';
-    await expect(store().registerClient({ redirect_uris: ['http://evil.example.com/cb'] } as never))
-      .rejects.toThrowError(new InvalidClientMetadataError(msg));
-    await expect(store().registerClient({ redirect_uris: ['myapp://cb'] } as never))
-      .rejects.toThrowError(new InvalidClientMetadataError(msg));
+    for (const uri of ['http://evil.example.com/cb', 'ws://localhost/cb']) {
+      await expect(store().registerClient({ redirect_uris: [uri] } as never))
+        .rejects.toThrowError(new InvalidClientMetadataError(msg));
+    }
+    // These were only ever refused as a side effect of the old dot rule.
+    for (const uri of ['view-source:https://x', 'moz-extension://a/b']) {
+      await expect(store().registerClient({ redirect_uris: [uri] } as never))
+        .rejects.toThrowError(new InvalidClientMetadataError(`Dangerous redirect URI scheme: ${uri}`));
+    }
   });
 
-  it('SDKP-013: accepts https, loopback http, and reverse-DNS custom schemes', async () => {
+  it('SDKP-013: accepts https, loopback http, and private-use custom schemes', async () => {
     for (const uri of [
       'https://a.example.com/cb',
       'http://localhost:8080/cb',
       'http://127.0.0.1/cb',
       'http://[::1]/cb',
       'com.example.app:/oauth',
+      // #2227: single-label private-use schemes are legal (RFC 8252 §7.1 only
+      // SHOULDs the reverse-domain form) and were rejected outright.
+      'workbuddy://workbuddy/mcp/connector%3A/oauth/callback',
+      'myapp://cb',
+      'msauth://com.x.y/abc',
     ]) {
       const oauth = makeOauth();
       await new TrekClientsStore(oauth).registerClient({

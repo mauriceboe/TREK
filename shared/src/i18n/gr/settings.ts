@@ -204,7 +204,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Redirect URIs',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Ένα URI ανά γραμμή. Απαιτείται HTTPS (το localhost εξαιρείται). Επιβάλλεται ακριβής αντιστοίχιση.',
+    'Ένα URI ανά γραμμή. HTTPS, HTTP σε loopback ή ιδιωτικό σχήμα εφαρμογής (myapp://). Ακριβής αντιστοίχιση, εκτός από τη θύρα σε loopback URI.',
   'settings.oauth.modal.scopes': 'Επιτρεπόμενα Scopes',
   'settings.oauth.modal.scopesHint':
     'Τα list_trips και get_trip_summary είναι πάντα διαθέσιμα — δεν απαιτείται scope. Επιτρέπουν στο AI να εντοπίζει τα trip IDs που χρειάζονται για τη χρήση οποιουδήποτε άλλου εργαλείου.',

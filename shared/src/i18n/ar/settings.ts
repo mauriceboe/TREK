@@ -172,7 +172,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientName': 'اسم التطبيق',
   'settings.oauth.modal.clientNamePlaceholder': 'مثال: Claude Web، تطبيق MCP الخاص بي',
   'settings.oauth.modal.redirectUris': 'عناوين URI لإعادة التوجيه',
-  'settings.oauth.modal.redirectUrisHint': 'عنوان URI واحد لكل سطر. يُطلب HTTPS (localhost مستثنى). يُطبق تطابق دقيق.',
+  'settings.oauth.modal.redirectUrisHint':
+    'عنوان URI واحد لكل سطر. يُسمح بـ HTTPS أو HTTP محلي أو مخطط تطبيق خاص (myapp://). يُطبق تطابق دقيق، باستثناء منفذ العنوان المحلي.',
   'settings.oauth.modal.scopes': 'النطاقات المسموح بها',
   'settings.oauth.modal.scopesHint':
     'list_trips وget_trip_summary متاحان دائماً — لا يُطلب نطاق. يساعدان الذكاء الاصطناعي في اكتشاف معرّفات الرحلات.',

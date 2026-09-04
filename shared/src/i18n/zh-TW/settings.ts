@@ -182,7 +182,8 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.clientNamePlaceholder': '例如 Claude Web、我的 MCP 應用程式',
   'settings.oauth.modal.redirectUris': '重新導向 URI',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
-  'settings.oauth.modal.redirectUrisHint': '每行一個 URI。需要 HTTPS（localhost 除外）。需要完全符合。',
+  'settings.oauth.modal.redirectUrisHint':
+    '每行一個 URI。支援 HTTPS、回送 HTTP 或自訂應用程式協定（myapp://）。需要完全符合，回送 URI 的連接埠除外。',
   'settings.oauth.modal.scopes': '允許的授權範圍',
   'settings.oauth.modal.scopesHint':
     'list_trips 和 get_trip_summary 始終可用——不需要授權範圍。它們可幫助 AI 找到所需的行程 ID。',

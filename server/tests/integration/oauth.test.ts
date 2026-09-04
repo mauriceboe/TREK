@@ -165,6 +165,43 @@ describe('DCR scope optional — ChatGPT compatibility (issue #959 bug 2)', () =
     });
 });
 
+// DCR runs two validators in sequence: the clients store's own check and
+// createOAuthClient's. Every unit test of the first one stubs the second away,
+// which is how both of these shipped rejected (#2227).
+describe('DCR redirect URI policy (issue #2227)', () => {
+    it('OAUTH-2227A: POST /oauth/register accepts the [::1] loopback URI', async () => {
+        const res = await request(app)
+            .post('/oauth/register')
+            .set('Content-Type', 'application/json')
+            .send({ redirect_uris: ['http://[::1]:8080/oauth/callback'], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+        expect(res.status).toBe(201);
+        expect(res.body.redirect_uris).toEqual(['http://[::1]:8080/oauth/callback']);
+    });
+
+    it('OAUTH-2227B: POST /oauth/register accepts a single-label private-use scheme, unmodified', async () => {
+        const uri = 'workbuddy://workbuddy/mcp/connector%3A/oauth/callback';
+        const res = await request(app)
+            .post('/oauth/register')
+            .set('Content-Type', 'application/json')
+            .send({ redirect_uris: [uri], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+        expect(res.status).toBe(201);
+        // Stored verbatim: the authorize and token endpoints compare it byte for byte.
+        expect(res.body.redirect_uris).toEqual([uri]);
+    });
+
+    // The SDK's own metadata schema only blocks javascript:, data: and vbscript:,
+    // so these two are TREK's to refuse, one per verdict branch.
+    it('OAUTH-2227C: POST /oauth/register still refuses dangerous and non-navigable schemes on a loopback host', async () => {
+        for (const uri of ['blob://localhost/x', 'ws://localhost/cb']) {
+            const res = await request(app)
+                .post('/oauth/register')
+                .set('Content-Type', 'application/json')
+                .send({ redirect_uris: [uri], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+            expect(res.status).toBe(400);
+        }
+    });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform/discovery parity pins — byte-level oracles for the MCP/OAuth mount
 // migration (these must pass identically before AND after the routes move
@@ -639,6 +676,60 @@ describe('GET /api/oauth/authorize/validate', () => {
         expect(res.status).toBe(200);
         expect(res.body.valid).toBe(false);
         expect(res.body.error).toBe('unsupported_response_type');
+    });
+
+    it('OAUTH-2227D: a loopback client that registered a placeholder port validates on the port the OS gave it', async () => {
+        // The reporter's shape end to end: register http://[::1]:8080/oauth/callback,
+        // then authorize from the ephemeral port the OS actually handed the client.
+        // Before #2227 registration refused the URI outright; once it was accepted,
+        // this route still answered invalid_redirect_uri because it compared byte
+        // for byte while RFC 8252 §7.3 frees the port for loopback redirects.
+        const { user } = createUser(testDb);
+        const { challenge } = makePkce();
+        const reg = await request(app)
+            .post('/oauth/register')
+            .set('Content-Type', 'application/json')
+            .send({ redirect_uris: ['http://[::1]:8080/oauth/callback'], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+        expect(reg.status).toBe(201);
+
+        const res = await request(app)
+            .get('/api/oauth/authorize/validate')
+            .set('Cookie', authCookie(user.id))
+            .query({
+                response_type: 'code',
+                client_id: reg.body.client_id,
+                redirect_uri: 'http://[::1]:54321/oauth/callback',
+                scope: 'trips:read',
+                code_challenge: challenge,
+                code_challenge_method: 'S256',
+            });
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(true);
+    });
+
+    it('OAUTH-2227E: the port is all that is free, so a different callback path is still refused', async () => {
+        const { user } = createUser(testDb);
+        const { challenge } = makePkce();
+        const reg = await request(app)
+            .post('/oauth/register')
+            .set('Content-Type', 'application/json')
+            .send({ redirect_uris: ['http://127.0.0.1:8080/oauth/callback'], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+        expect(reg.status).toBe(201);
+
+        const res = await request(app)
+            .get('/api/oauth/authorize/validate')
+            .set('Cookie', authCookie(user.id))
+            .query({
+                response_type: 'code',
+                client_id: reg.body.client_id,
+                redirect_uri: 'http://127.0.0.1:54321/stolen',
+                scope: 'trips:read',
+                code_challenge: challenge,
+                code_challenge_method: 'S256',
+            });
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.error).toBe('invalid_redirect_uri');
     });
 
     it('OAUTH-021 — returns 200 with valid:false for missing PKCE', async () => {

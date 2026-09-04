@@ -142,7 +142,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'URIs de redirecció',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://your-app.com/callback\nhttps://your-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'Un URI per línia. HTTPS obligatori (localhost exempt). Coincidència exacta.',
+    'Un URI per línia. HTTPS, HTTP en bucle local o un esquema propi com myapp://. Coincidència exacta, excepte el port en bucle local.',
   'settings.oauth.modal.scopes': 'Àmbits permesos',
   'settings.oauth.modal.scopesHint':
     'list_trips i get_trip_summary sempre estan disponibles — sense àmbit requerit. Permeten a la IA descobrir els IDs de viatge necessaris.',

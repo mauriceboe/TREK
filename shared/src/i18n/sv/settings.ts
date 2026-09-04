@@ -200,7 +200,7 @@ const settings: TranslationStrings = {
   'settings.oauth.modal.redirectUris': 'Omdirigerings-URI:er',
   'settings.oauth.modal.redirectUrisPlaceholder': 'https://din-app.com/callback\nhttps://din-app.com/auth',
   'settings.oauth.modal.redirectUrisHint':
-    'En URI per rad. HTTPS krävs (med undantag för localhost). Exakt matchning krävs.',
+    'En URI per rad. HTTPS, loopback-HTTP eller ett eget app-schema (myapp://). Exakt matchning, utom porten i en loopback-URI.',
   'settings.oauth.modal.scopes': 'Tillåtna tillämpningsområden',
   'settings.oauth.modal.scopesHint':
     'list_trips och get_trip_summary är alltid tillgängliga – inget tillämpningsområden krävs. De gör det möjligt för AI:n att hämta de res-ID:n som behövs för att använda andra verktyg.',
