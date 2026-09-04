@@ -6,6 +6,13 @@ import { server } from '../../tests/helpers/msw/server';
 import { resetAllStores } from '../../tests/helpers/store';
 import LoginPage from './LoginPage';
 
+// The takeoff overlay renders the animated dot world, which starts three
+// requestAnimationFrame loops the moment it mounts. Nothing here asserts on the
+// animation (LoginWorld has its own tests), but under the load of the full suite
+// those loops pushed the overlay assertions past waitFor's default timeout and
+// made FE-PAGE-LOGIN-014 fail intermittently in CI while passing in isolation.
+vi.mock('./login/LoginWorld', () => ({ default: () => null }));
+
 // LoginPage uses inline styles for labels (no htmlFor/id pairing).
 // We find inputs by placeholder text.
 const EMAIL_PLACEHOLDER = 'your@email.com';
