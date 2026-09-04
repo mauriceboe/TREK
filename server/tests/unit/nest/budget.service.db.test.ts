@@ -314,8 +314,9 @@ function seedIssue1543Trip(tripCurrency: string) {
   testDb.prepare('UPDATE trips SET currency = ? WHERE id = ?').run(tripCurrency, trip.id);
   const members = [{ user_id: me.id }, { user_id: danil.id }, { user_id: serega.id }];
 
-  // 9 000 ₽ nobody has paid yet, 9 000 ₽ paid by me, and $100 paid by me. The USD row
-  // carries the rate frozen at entry time: units of USD per 1 RUB.
+  // 9 000 ₽ nobody has paid yet (outstanding, settled by nobody, #2225), 9 000 ₽ paid
+  // by me, and $100 paid by me. The USD row carries the rate frozen at entry time:
+  // units of USD per 1 RUB.
   budget.createBudgetItem(trip.id, { name: 'Проезд обратно', total_price: 9000, currency: 'RUB', members });
   budget.createBudgetItem(trip.id, { name: 'Проезд туда', currency: 'RUB', payers: [{ user_id: me.id, amount: 9000 }], members });
   budget.createBudgetItem(trip.id, {
@@ -332,18 +333,20 @@ describe('calculateSettlement with a foreign-currency expense (#1543)', () => {
     const result = budget.calculateSettlement(trip.id, { base: 'RUB', tripCurrency: 'RUB', rates: RATES.RUB });
     const balanceOf = (id: number) => result.balances.find(b => b.user_id === id)!.balance;
 
-    // Total spend is 9 000 + 9 000 + $100 (≈7 668 ₽), so each of the three owes a third
-    // of it and I am owed back everything I fronted beyond my own share. The bug divided
-    // the RUB shares by the USD rate and reported +451 092 / −230 080 / −230 012 instead.
-    // Tolerance is a rouble: the cent-rotation in splitEqualShares moves the odd cent of
-    // the $100 between members, which the USD rate magnifies ~77x.
-    const totalSpend = 18000 + 100 / RATES.RUB.USD;
-    const share = totalSpend / 3;
-    expect(balanceOf(me.id)).toBeCloseTo(9000 + 100 / RATES.RUB.USD - share, -1);
+    // What actually settles is 9 000 ₽ + $100 (≈7 668 ₽): the third expense is the
+    // 9 000 ₽ nobody has paid, which is outstanding rather than owed (#2225). Each of
+    // the three owes a third of that, and I am owed back everything I fronted beyond my
+    // own share. The bug divided the RUB shares by the USD rate and reported +451 092 /
+    // −230 080 / −230 012 instead. Tolerance is a rouble: the cent-rotation in
+    // splitEqualShares moves the odd cent of the $100 between members, which the USD
+    // rate magnifies ~77x.
+    const settledSpend = 9000 + 100 / RATES.RUB.USD;
+    const share = settledSpend / 3;
+    expect(balanceOf(me.id)).toBeCloseTo(settledSpend - share, -1);
     expect(balanceOf(danil.id)).toBeCloseTo(-share, -1);
     expect(balanceOf(serega.id)).toBeCloseTo(-share, -1);
-    // The 9 000 ₽ expense nobody paid is the only imbalance in the trip.
-    expect(result.balances.reduce((a, b) => a + b.balance, 0)).toBeCloseTo(-9000, 1);
+    // Nothing is left over: every rouble owed is a rouble somebody is owed.
+    expect(result.balances.reduce((a, b) => a + Math.round(b.balance * 100), 0)).toBe(0);
   });
 
   it('BUDGET-SVC-DB-005: reports the same balances when the display currency differs from the trip currency', () => {
@@ -353,7 +356,7 @@ describe('calculateSettlement with a foreign-currency expense (#1543)', () => {
     const inEur = budget.calculateSettlement(trip.id, { base: 'EUR', tripCurrency: 'RUB', rates: RATES.EUR });
     const danilEur = inEur.balances.find(b => b.user_id === danil.id)!.balance;
 
-    const shareRub = (18000 + 100 / RATES.RUB.USD) / 3;
+    const shareRub = (9000 + 100 / RATES.RUB.USD) / 3;
     expect(danilEur).toBeCloseTo(-shareRub / RATES.EUR.RUB, 0);
   });
 });
@@ -674,6 +677,50 @@ describe('negative amounts persist end-to-end (#2176)', () => {
     expect(result.flows).toEqual([
       expect.objectContaining({ amount: 30, from: expect.objectContaining({ user_id: bob.id }), to: expect.objectContaining({ user_id: alice.id }) }),
     ]);
+  });
+});
+
+describe('an expense nobody paid stays out of the ledger (#2225)', () => {
+  it('BUDGET-SVC-DB-037: an unpaid expense moves neither the balances nor the offered flows', () => {
+    const { user: alice } = createUser(testDb, { username: 'alice' });
+    const { user: bob } = createUser(testDb, { username: 'bob' });
+    const { user: carol } = createUser(testDb, { username: 'carol' });
+    const trip = createTrip(testDb, alice.id, { title: 'Trip' });
+    addTripMember(testDb, trip.id, bob.id);
+    addTripMember(testDb, trip.id, carol.id);
+
+    budget.createBudgetItem(trip.id, {
+      name: 'Dinner', payers: [{ user_id: alice.id, amount: 120 }],
+      member_ids: [alice.id, bob.id, carol.id],
+    });
+    const before = budget.calculateSettlement(trip.id);
+
+    // The row from the issue: a recorded total left on "No one paid yet", split
+    // between the two people who were actually there.
+    const unpaid = budget.createBudgetItem(trip.id, {
+      name: 'Taxi', total_price: 161.57, payers: [], member_ids: [bob.id, carol.id],
+    }) as { id: number; payers: unknown[]; total_price: number };
+    expect(unpaid.payers).toEqual([]);
+    expect(unpaid.total_price).toBe(161.57);
+
+    // Re-saving it from the edit modal (payers cleared, total re-sent) must not
+    // let writeItemPayers derive the total back down to 0.
+    const resaved = budget.updateBudgetItem(unpaid.id, trip.id, {
+      total_price: 161.57, payers: [], member_ids: [bob.id, carol.id],
+    }) as { payers: unknown[]; total_price: number };
+    expect(resaved.payers).toEqual([]);
+    expect(resaved.total_price).toBe(161.57);
+    const payerRows = testDb
+      .prepare('SELECT count(*) AS cnt FROM budget_item_payers WHERE budget_item_id = ?')
+      .get(unpaid.id) as { cnt: number };
+    expect(payerRows.cnt).toBe(0);
+
+    // 161.57 with no credit behind it used to push bob and carol 80.79/80.78 further
+    // into the red and hand the whole of it to alice, who never fronted a rouble of it.
+    const after = budget.calculateSettlement(trip.id);
+    expect(after.balances).toEqual(before.balances);
+    expect(after.flows).toEqual(before.flows);
+    expect(after.balances.reduce((a, b) => a + Math.round(b.balance * 100), 0)).toBe(0);
   });
 });
 

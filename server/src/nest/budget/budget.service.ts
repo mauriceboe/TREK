@@ -765,6 +765,24 @@ export class BudgetService {
       const payers = allPayers.filter(p => p.budget_item_id === item.id);
       if (members.length === 0) continue; // planning-only entry → doesn't affect balances
 
+      // An expense nobody has paid stays out of the ledger (#2225), which is what
+      // both cost panels already promise by flagging the row "Unfinished" (the
+      // hint beside it reads: total only, not settled yet) and counting it into
+      // the Outstanding card instead (CostsPanel/costsModel.isUnfinished). The
+      // panels additionally require a non-zero total to paint that label; the
+      // ledger deliberately does not, or PUT /budget/:id/payers with an empty
+      // array (which zeroes total_price and does not re-apply it) would leave a
+      // custom split debiting its members against no credit at all.
+      // Charging its split members regardless, as #1382/#2176/#1543 left in
+      // place below, debits a share with no credit behind it: Σ(balances) drifts
+      // off zero by the unpaid total, and the greedy simplifier at the end of this
+      // method has no memory of which expense made which debt, so it pairs the
+      // inflated debtor with a creditor from some unrelated expense and offers a
+      // payment between two people who never shared a bill. Booking every flow it
+      // offered then left someone short: "everyone square" beside a balance that
+      // is not zero.
+      if (!payers.some(p => p.amount !== 0)) continue;
+
       // Payers are credited what they actually paid (converted to trip currency with
       // the item's stored exchange rate). A negative payer — the recipient of a
       // refund (#2176) — is debited by the same arithmetic: their credit is negative.
@@ -781,14 +799,12 @@ export class BudgetService {
       // total_price: the two are the same figure (the write path derives the total
       // from the payer sum), but converting the total separately would round to a
       // different cent on a foreign-currency expense and leave the item off by one.
-      // With nobody down as a payer there is nothing to divide, so the recorded total
-      // stands in and an unpaid bill keeps reading as money owed. Negative credits
-      // (a refund, #2176) divide the same way — only exactly zero falls back.
+      // Negative credits (a refund, #2176) divide the same way. Nothing falls back
+      // to total_price any more: an item with no payer behind it never reaches
+      // here since #2225. An item whose payers net to exactly zero still does, and
+      // divides zero, which is what it is worth.
       const hasCustomSplit = members.some(m => m.amount !== null && m.amount !== undefined);
-      const splitCents = creditCents !== 0
-        ? creditCents
-        : toTripCents(item.total_price, item.currency, item.exchange_rate);
-      const equalShares = !hasCustomSplit ? this.splitEqualShares(splitCents, members, item.id) : {};
+      const equalShares = !hasCustomSplit ? this.splitEqualShares(creditCents, members, item.id) : {};
       for (const m of members) {
         const memberShare = hasCustomSplit && m.amount !== null && m.amount !== undefined
           ? toTripCents(m.amount, item.currency, item.exchange_rate)

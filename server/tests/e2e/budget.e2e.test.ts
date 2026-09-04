@@ -190,6 +190,44 @@ describe('Budget e2e (real auth guard + temp SQLite, real budget SQL)', () => {
     }
   });
 
+  it('an expense with no payer creates no debt and no flow (#2225)', async () => {
+    // The shape from the report: one bill user 1 fronted for both, plus a row
+    // saved with "No one paid yet" that only user 2 is on. The taxi used to be
+    // debited with no credit behind it and its whole 60 offered to user 1.
+    const dinner = await request(server)
+      .post(`/api/trips/${tripId}/budget`)
+      .set('Cookie', sessionCookie(1))
+      .send({ name: 'Dinner', payers: [{ user_id: 1, amount: 100 }], member_ids: [1, 2] });
+    expect(dinner.status).toBe(201);
+
+    const unpaid = await request(server)
+      .post(`/api/trips/${tripId}/budget`)
+      .set('Cookie', sessionCookie(1))
+      .send({ name: 'Taxi', total_price: 60, payers: [], member_ids: [2] });
+    expect(unpaid.status).toBe(201);
+    expect(unpaid.body.item).toMatchObject({ total_price: 60, payers: [] });
+
+    const settlement = await request(server)
+      .get(`/api/trips/${tripId}/budget/settlement`)
+      .set('Cookie', sessionCookie(1));
+    expect(settlement.status).toBe(200);
+    const balances = settlement.body.balances as { user_id: number; balance: number }[];
+    const balance = (uid: number) => balances.find(b => b.user_id === uid)!.balance;
+    // Only the dinner settles: user 2 owes half of it and not a cent of the taxi.
+    expect(balance(1)).toBe(50);
+    expect(balance(2)).toBe(-50);
+    expect(balances.reduce((a, b) => a + Math.round(b.balance * 100), 0)).toBe(0);
+    expect(settlement.body.flows).toEqual([
+      expect.objectContaining({ amount: 50, from: expect.objectContaining({ user_id: 2 }), to: expect.objectContaining({ user_id: 1 }) }),
+    ]);
+
+    // Clean up so the ledger tests below start from an empty trip.
+    for (const id of [dinner.body.item.id, unpaid.body.item.id]) {
+      const del = await request(server).delete(`/api/trips/${tripId}/budget/${id}`).set('Cookie', sessionCookie(1));
+      expect(del.status).toBe(200);
+    }
+  });
+
   it('200 on settlement update with permission, persisting the new amount', async () => {
     const created = await request(server)
       .post(`/api/trips/${tripId}/budget/settlements`)

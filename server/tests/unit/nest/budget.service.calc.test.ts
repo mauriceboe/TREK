@@ -155,6 +155,9 @@ describe('calculateSettlement', () => {
     );
     const result = budget.calculateSettlement(1);
     expect(result.flows).toEqual([]);
+    // "No flows" on its own said nothing about the balances behind them: they
+    // were -50/-50 here until #2225, an offer of nothing next to money owed.
+    expect(centSum(result.balances.map(b => b.balance))).toBe(0);
   });
 
   it('2 members, 1 payer: payer is owed half, non-payer owes half', () => {
@@ -484,9 +487,10 @@ describe('calculateSettlement — negative amounts (#2176)', () => {
     expect(centSum(result.balances.map(b => b.balance))).toBe(0);
   });
 
-  it('a payer-less negative total still reads as money owed back (fallback path)', () => {
-    // Nobody is recorded as the refund's recipient yet — the recorded total
-    // stands in, mirroring the positive unpaid-bill fallback.
+  it('a payer-less refund owes nobody anything until its recipient is named (#2225)', () => {
+    // Nobody is recorded as having received the refund, so there is no credit to
+    // hand back: the row is outstanding, not a debt the trip owes its members.
+    // It used to credit all three 30 € out of thin air.
     setupDb(
       [makeItem(1, -90)],
       [makeMember(1, 1, 'alice'), makeMember(1, 2, 'bob'), makeMember(1, 3, 'carol')],
@@ -494,7 +498,8 @@ describe('calculateSettlement — negative amounts (#2176)', () => {
     );
     const result = budget.calculateSettlement(1);
 
-    expect(result.balances.map(b => b.balance)).toEqual([30, 30, 30]);
+    expect(result.balances).toEqual([]);
+    expect(result.flows).toEqual([]);
   });
 });
 
@@ -621,10 +626,10 @@ describe('calculateSettlement — cent-exact settle-up (#1382)', () => {
     }
   });
 
-  it('#1382 an unpaid bill still reads as money owed', () => {
-    // Nobody is down as a payer, so there is nothing to divide between the payers —
-    // the recorded total stands in, and the expense keeps showing up as outstanding
-    // rather than quietly netting to zero.
+  it('#2225 an unpaid bill owes nobody anything', () => {
+    // Nobody is down as a payer, so nobody is out of pocket and there is nothing
+    // to pay back. It used to debit all three 30 € against no credit at all,
+    // leaving Σ(balances) at -90 with no flow able to clear it.
     setupDb(
       [makeItem(1, 90)],
       [makeMember(1, 1, 'alice'), makeMember(1, 2, 'bob'), makeMember(1, 3, 'carol')],
@@ -632,7 +637,94 @@ describe('calculateSettlement — cent-exact settle-up (#1382)', () => {
     );
     const result = budget.calculateSettlement(1);
 
-    expect(result.balances.map(b => b.balance)).toEqual([-30, -30, -30]);
+    expect(result.balances).toEqual([]);
+    expect(result.flows).toEqual([]);
+  });
+});
+
+// ── Unpaid expenses stay out of the ledger (#2225) ────────────────────────
+
+describe('calculateSettlement: unpaid expenses (#2225)', () => {
+  it('an unpaid expense does not turn its members into debtors of an unrelated payer', () => {
+    // The shape from the issue: a 300 € bill Alice fronted for all four, plus a
+    // 60 € row nobody has paid that only Bob and Carol are on. The 60 € used to
+    // be debited with no credit behind it, and the simplifier (which knows
+    // nothing about which expense made which debt) handed the extra 60 € to
+    // Alice, who was never owed it.
+    setupDb(
+      [makeItem(1, 300), makeItem(2, 60)],
+      [
+        makeMember(1, 1, 'alice'), makeMember(1, 2, 'bob'), makeMember(1, 3, 'carol'), makeMember(1, 4, 'dave'),
+        makeMember(2, 2, 'bob'), makeMember(2, 3, 'carol'),
+      ],
+      [makePayer(1, 1, 300, 'alice')],
+    );
+    const result = budget.calculateSettlement(1);
+    const balance = (uid: number) => result.balances.find(b => b.user_id === uid)!.balance;
+
+    expect(centSum(result.balances.map(b => b.balance))).toBe(0);
+    // Being on the unpaid row costs Bob and Carol nothing over Dave, who is not.
+    expect(balance(2)).toBe(balance(4));
+    expect(balance(3)).toBe(balance(4));
+    expect(balance(1)).toBe(225);
+    expect(centSum(result.flows.map(f => f.amount))).toBe(Math.round(balance(1) * 100));
+    for (const f of result.flows) expect(f.to.user_id).toBe(1);
+  });
+
+  it('an unpaid expense with a custom split is skipped too', () => {
+    // The custom branch had the same hole and no coverage: 100 € split 70/30 by
+    // agreement, with nobody recorded as having paid it.
+    setupDb(
+      [makeItem(1, 90), makeItem(2, 100)],
+      [
+        makeMember(1, 1, 'alice'), makeMember(1, 2, 'bob'), makeMember(1, 3, 'carol'),
+        { ...makeMember(2, 2, 'bob'), amount: 70 },
+        { ...makeMember(2, 3, 'carol'), amount: 30 },
+      ],
+      [makePayer(1, 1, 90, 'alice')],
+    );
+    const result = budget.calculateSettlement(1);
+    const balance = (uid: number) => result.balances.find(b => b.user_id === uid)!.balance;
+
+    expect(balance(1)).toBe(60);
+    expect(balance(2)).toBe(-30);
+    expect(balance(3)).toBe(-30);
+    expect(centSum(result.balances.map(b => b.balance))).toBe(0);
+  });
+
+  it('a zero-total item with no payer contributes nothing and no rows', () => {
+    // Payer-less is payer-less regardless of the total: it contributes 0 either
+    // way, and both panels synthesise a missing member's 0.00 row from the trip
+    // roster (CostsPanel.tsx:853, MCostsTab.tsx:273), so dropping the row costs
+    // the UI nothing.
+    setupDb(
+      [makeItem(1, 0)],
+      [makeMember(1, 1, 'alice'), makeMember(1, 2, 'bob')],
+      [],
+    );
+    const result = budget.calculateSettlement(1);
+
+    expect(result.balances).toEqual([]);
+    expect(result.flows).toEqual([]);
+  });
+
+  it('a custom split left with no payer and a zeroed total creates no debt', () => {
+    // PUT /budget/:id/payers with an empty array zeroes total_price via
+    // writeItemPayers and, unlike updateBudgetItem, never re-applies it, so the
+    // row survives as custom per-member amounts with no credit behind them. A
+    // guard that also required a non-zero total would let exactly this shape
+    // through and rebuild the #2225 phantom debt from a first-party endpoint.
+    setupDb(
+      [makeItem(1, 0)],
+      [
+        { ...makeMember(1, 2, 'bob'), amount: 40 },
+        { ...makeMember(1, 3, 'cara'), amount: 60 },
+      ],
+      [],
+    );
+    const result = budget.calculateSettlement(1);
+
+    expect(result.balances).toEqual([]);
     expect(result.flows).toEqual([]);
   });
 });

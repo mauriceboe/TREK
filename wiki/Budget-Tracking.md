@@ -67,9 +67,9 @@ Deleting the booking or the place deletes its linked expense with it. Removing t
 
 - **One person paid** — pick a member from the dropdown. This is the default.
 - **Multiple people paid** — switch with the link beside the label, include each payer and type what each of them put in. The amounts have to add up to the total; until they do, the dialog reads *Payer amounts must add up to …* and refuses to save.
-- **No one paid yet** — the first entry in the single-payer dropdown, for an expense you are only planning. The amount still counts toward **Total trip spend**, and everyone on its split is still charged their share in **Balances** — what is missing is the credit side, so nobody is recorded as having covered it.
+- **No one paid yet**: the first entry in the single-payer dropdown, for an expense you are only planning. The amount still counts toward **Total trip spend**, but it creates no debt: with nobody out of pocket for it there is nothing to pay anyone back, so it stays out of **Balances** and out of the settle-up suggestions until you fill in who paid.
 
-An expense with no payer is flagged **Unfinished** on its row and counted into the **Outstanding amount** card, which is where to look when the balances show money owed that nobody is down as having paid.
+An expense with no payer is flagged **Unfinished** on its row and counted into the **Outstanding amount** card, which is where to look for the spending that is recorded but not yet settled between anyone.
 
 ## Splitting costs
 
