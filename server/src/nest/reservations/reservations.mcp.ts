@@ -785,7 +785,7 @@ export class ReservationsMcp {
       confirmation_number: z.string().max(100).optional(),
       url: urlField,
       notes: z.string().max(1000).optional(),
-      metadata: z.record(z.string(), z.string()).optional().describe('Type-specific metadata: flights → { airline, flight_number, departure_airport, arrival_airport }; trains → { train_number, platform, seat }. Replaces the stored metadata wholesale. Values are plain strings, so per-segment detail belongs in legs[], not here.'),
+      metadata: z.record(z.string(), z.string()).optional().describe('Type-specific metadata: flights → { airline, flight_number, departure_airport, arrival_airport }; trains → { train_number, platform, seat }. Replaces the stored metadata wholesale, except that a price mirrored from a linked expense survives unless you name the price key yourself. Values are plain strings, so per-segment detail belongs in legs[], not here.'),
       endpoints: endpointSchema,
       legs: legsSchema,
       needs_review: z.boolean().optional(),

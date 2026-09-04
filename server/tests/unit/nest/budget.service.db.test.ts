@@ -680,6 +680,37 @@ describe('negative amounts persist end-to-end (#2176)', () => {
   });
 });
 
+describe('deleting an expense takes its price off the booking (#2233)', () => {
+  it('BUDGET-SVC-DB-040: the mirrored price and currency are cleared, the rest of the metadata stays', () => {
+    // The reservation update path keeps metadata.price across booking edits, so
+    // the expense side has to remove it when the expense itself goes away.
+    // Without this the card would show a price with nothing behind it, for good.
+    const { user } = createUser(testDb, { username: 'owner' });
+    const trip = createTrip(testDb, user.id, { title: 'Trip' });
+    const res = testDb.prepare(
+      "INSERT INTO reservations (trip_id, title, type, metadata) VALUES (?, 'Flight', 'flight', ?)",
+    ).run(trip.id, JSON.stringify({ airline: 'CZ', seat: '12A', price: '2040', priceCurrency: 'CNY' }));
+    const reservationId = Number(res.lastInsertRowid);
+
+    const item = budget.createBudgetItem(trip.id, { name: 'Flight', total_price: 2040 });
+    testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(reservationId, item.id);
+
+    expect(budget.deleteBudgetItem(item.id, trip.id)).toBe(true);
+
+    const after = testDb.prepare('SELECT metadata FROM reservations WHERE id = ?').get(reservationId) as { metadata: string };
+    expect(JSON.parse(after.metadata)).toEqual({ airline: 'CZ', seat: '12A' });
+  });
+
+  it('BUDGET-SVC-DB-041: an expense that was never linked to a booking deletes as before', () => {
+    const { user } = createUser(testDb, { username: 'owner' });
+    const trip = createTrip(testDb, user.id, { title: 'Trip' });
+    const item = budget.createBudgetItem(trip.id, { name: 'Coffee', total_price: 4 });
+
+    expect(budget.deleteBudgetItem(item.id, trip.id)).toBe(true);
+    expect(testDb.prepare('SELECT id FROM budget_items WHERE id = ?').get(item.id)).toBeUndefined();
+  });
+});
+
 describe('an expense nobody paid stays out of the ledger (#2225)', () => {
   it('BUDGET-SVC-DB-037: an unpaid expense moves neither the balances nor the offered flows', () => {
     const { user: alice } = createUser(testDb, { username: 'alice' });

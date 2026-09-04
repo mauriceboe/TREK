@@ -546,10 +546,42 @@ export class BudgetService {
   }
 
   deleteBudgetItem(id: string | number, tripId: string | number): boolean {
-    const item = this.db.get('SELECT id FROM budget_items WHERE id = ? AND trip_id = ?', id, tripId);
+    const item = this.db.get<{ id: number; reservation_id: number | null }>(
+      'SELECT id, reservation_id FROM budget_items WHERE id = ? AND trip_id = ?', id, tripId,
+    );
     if (!item) return false;
-    this.db.run('DELETE FROM budget_items WHERE id = ?', id);
-    return true;
+    return this.db.transaction(() => {
+      this.db.run('DELETE FROM budget_items WHERE id = ?', id);
+      // The booking keeps a copy of this expense's total in its metadata, and
+      // the reservation update path preserves that copy across edits. With the
+      // expense gone there is nothing left to mirror, so drop it here rather
+      // than leave a price on the card that no longer has anything behind it.
+      if (item.reservation_id) this.clearReservationPrice(tripId, item.reservation_id);
+      return true;
+    });
+  }
+
+  /**
+   * The counterpart to syncReservationPrice: take the mirrored total back off
+   * the booking. Non-fatal, exactly like the writer.
+   */
+  private clearReservationPrice(tripId: string | number, reservationId: number): void {
+    try {
+      const reservation = this.db.get<{ id: number; metadata: string | null }>(
+        'SELECT id, metadata FROM reservations WHERE id = ? AND trip_id = ?',
+        reservationId, tripId,
+      );
+      if (!reservation?.metadata) return;
+      const meta = JSON.parse(reservation.metadata);
+      if (!meta || typeof meta !== 'object' || meta.price === undefined) return;
+      delete meta.price;
+      delete meta.priceCurrency;
+      this.db.run('UPDATE reservations SET metadata = ? WHERE id = ?', JSON.stringify(meta), reservation.id);
+      const updatedRes = this.db.get('SELECT * FROM reservations WHERE id = ?', reservation.id);
+      this.realtime.broadcast(String(tripId), 'reservation:updated', { reservation: updatedRes }, undefined);
+    } catch (err) {
+      console.error('[budget] Failed to clear the mirrored price from the reservation:', err);
+    }
   }
 
   // -------------------------------------------------------------------------

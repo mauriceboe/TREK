@@ -213,21 +213,37 @@ describe('ReservationsService (DI-native, real SQL)', () => {
       expect(JSON.parse(reservation.metadata as string)).toEqual({ airline: 'CZ', seat: '12A', price: '2040', priceCurrency: 'CNY' });
     });
 
-    it('RESV-SVC-034: a payload that sets `price` itself, or a booking with no linked expense, is stored as sent', () => {
+    it('RESV-SVC-034: a payload that names `price` is taken at face value, set or cleared', () => {
       const { trip } = ownerTrip();
-      const linkedRes = createReservation(testDb, trip.id, { title: 'Linked', type: 'flight' });
+      const res = createReservation(testDb, trip.id, { title: 'Linked', type: 'flight' });
       const item = createBudgetItem(testDb, trip.id, { name: 'Linked', total_price: 100 });
-      testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(linkedRes.id, item.id);
-      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '100' }), linkedRes.id);
-      let current = svc.getReservation(String(linkedRes.id), String(trip.id))!;
-      let { reservation } = svc.update(String(linkedRes.id), String(trip.id), { metadata: { price: '150' } }, current);
+      testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(res.id, item.id);
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '100' }), res.id);
+
+      let current = svc.getReservation(String(res.id), String(trip.id))!;
+      let { reservation } = svc.update(String(res.id), String(trip.id), { metadata: { price: '150' } }, current);
       expect(JSON.parse(reservation.metadata as string)).toEqual({ price: '150' });
 
-      const orphanRes = createReservation(testDb, trip.id, { title: 'Orphan', type: 'flight' });
-      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '999' }), orphanRes.id);
-      current = svc.getReservation(String(orphanRes.id), String(trip.id))!;
-      ({ reservation } = svc.update(String(orphanRes.id), String(trip.id), { metadata: { seat: '1A' } }, current));
-      expect(JSON.parse(reservation.metadata as string)).toEqual({ seat: '1A' });
+      // Naming the key with a null is how a caller removes the price on purpose;
+      // it must not be read as "the form did not mention it".
+      current = svc.getReservation(String(res.id), String(trip.id))!;
+      ({ reservation } = svc.update(String(res.id), String(trip.id), { metadata: { price: null, seat: '1A' } }, current));
+      expect(JSON.parse(reservation.metadata as string)).toEqual({ price: null, seat: '1A' });
+    });
+
+    it('RESV-SVC-036: a price with no linked expense is kept too, because the importer stamps one either way', () => {
+      // booking-import writes metadata.price unconditionally but only creates the
+      // linked cost when the Costs addon is on and the price is above zero, so an
+      // instance with that addon off has bookings carrying a price and no budget
+      // row at all. Keying the carry-over on a linked item would drop those.
+      const { trip } = ownerTrip();
+      const res = createReservation(testDb, trip.id, { title: 'Imported', type: 'flight' });
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?')
+        .run(JSON.stringify({ price: '999', priceCurrency: 'EUR' }), res.id);
+      const current = svc.getReservation(String(res.id), String(trip.id))!;
+
+      const { reservation } = svc.update(String(res.id), String(trip.id), { metadata: { seat: '1A' } }, current);
+      expect(JSON.parse(reservation.metadata as string)).toEqual({ seat: '1A', price: '999', priceCurrency: 'EUR' });
     });
 
     it('RESV-SVC-035: metadata null still clears the stored metadata, linked expense or not', () => {
