@@ -10,6 +10,7 @@ vi.mock('../../../../src/utils/ssrfGuard', () => ({ safeFetchLlm: safeFetchLlmMo
 import { OpenAiCompatibleClient } from '../../../../src/nest/llm-parse/clients/openai-compatible.client';
 import { AnthropicClient } from '../../../../src/nest/llm-parse/clients/anthropic.client';
 import type { LlmExtractionInput } from '../../../../src/nest/llm-parse/llm-provider.interface';
+import { readEnv } from '../../../../src/app-config';
 
 const baseInput: LlmExtractionInput = {
   prompt: 'system',
@@ -255,5 +256,34 @@ describe('AnthropicClient', () => {
     const body = JSON.parse((fetchFn.mock.calls[0][1] as RequestInit).body as string);
     const blocks = body.messages[0].content;
     expect(blocks.some((b: any) => b.type === 'document' && b.source.type === 'base64')).toBe(true);
+  });
+});
+
+/**
+ * The three per-client constants are gone; what replaced them is a config read.
+ * Nothing else in the suite would notice if one of them came back as a literal,
+ * so pin the seam itself: the abort deadline has to come from LLM_TIMEOUT_MS.
+ */
+describe('the abort deadline comes from the configured ceiling (#2230)', () => {
+  const setTimeoutSpy = () => vi.spyOn(globalThis, 'setTimeout');
+
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('AnthropicClient arms its AbortController with the configured value', async () => {
+    const spy = setTimeoutSpy();
+    mockFetch(() => jsonResponse({ content: [{ type: 'tool_use', name: 'emit_reservations', input: { reservations: [] } }] }));
+
+    await new AnthropicClient().extract(baseInput);
+
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), readEnv().integrations.llmTimeoutMs);
+  });
+
+  it('OpenAiCompatibleClient arms its AbortController with the configured value', async () => {
+    const spy = setTimeoutSpy();
+    mockFetch(() => jsonResponse({ choices: [{ message: { content: '{"reservations":[]}' } }] }));
+
+    await new OpenAiCompatibleClient().extract({ ...baseInput, baseUrl: 'http://ollama.local:11434/v1' });
+
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), readEnv().integrations.llmTimeoutMs);
   });
 });
