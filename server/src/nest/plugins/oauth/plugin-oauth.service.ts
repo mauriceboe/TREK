@@ -5,7 +5,7 @@ import { encrypt_api_key, decrypt_api_key } from '../../common/crypto/apiKeyCryp
 import { applySettingDefaults, settingDefaults } from '../settings-defaults';
 import { getAppUrl } from '../../../app-config';
 import { isPrivateIp } from '../install/safe-fetch';
-import { safeFetchLlm } from '../../../utils/ssrfGuard';
+import { safeFetchAdminConfigured } from '../../../utils/ssrfGuard';
 
 /**
  * Host-brokered outbound OAuth (#plugins). A plugin becomes an OAuth *client* of a
@@ -201,7 +201,7 @@ export class PluginOAuthService {
     // pinning the connection to the resolved IP, so a token_url that is a DNS name
     // (or IPv6 literal) pointing at metadata can't reach it and can't DNS-rebind.
     // Loopback/LAN stay reachable so a self-hosted internal IdP keeps working.
-    const resp = await safeFetchLlm(cfg.tokenUrl, {
+    const resp = await safeFetchAdminConfigured(cfg.tokenUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body: body.toString(),

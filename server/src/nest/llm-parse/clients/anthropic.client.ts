@@ -1,8 +1,8 @@
 import type { LlmExtractionClient, LlmExtractionInput } from '../llm-provider.interface';
 import { safeFetchLlm } from '../../../utils/ssrfGuard';
+import { readEnv } from '../../../app-config';
 import { toReservationList } from '../lenient-json';
 
-const TIMEOUT_MS = 120_000;
 const MAX_TOKENS = 8192;
 const ANTHROPIC_VERSION = '2023-06-01';
 const TOOL_NAME = 'emit_reservations';
@@ -51,7 +51,7 @@ export class AnthropicClient implements LlmExtractionClient {
     };
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), readEnv().integrations.llmTimeoutMs);
     let res: Response;
     try {
       // baseUrl is user-configurable — guard it against pointing at the cloud

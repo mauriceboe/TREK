@@ -112,6 +112,7 @@ export const envSchema = z.object({
   // non-http(s) entries today — left unvalidated to keep that behavior.
   OVERPASS_URL: anyString,
   OVERPASS_TIMEOUT_MS: positiveNumber,
+  LLM_TIMEOUT_MS: positiveNumber,
   KITINERARY_EXTRACTOR_PATH: anyString,
   // The OS search path. Not configuration anybody sets for TREK — it is here so
   // the kitinerary probe can resolve its binary to an absolute path itself

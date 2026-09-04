@@ -218,6 +218,12 @@ describe('deriveIntegrations', () => {
     expect(deriveIntegrations({}).overpassTimeoutMs).toBe(12000);
     expect(deriveIntegrations({ OVERPASS_TIMEOUT_MS: '-1' }).overpassTimeoutMs).toBe(12000);
   });
+
+  it('floors the LLM ceiling to a whole number — undici rejects a fractional headersTimeout', () => {
+    expect(deriveIntegrations({}).llmTimeoutMs).toBe(900_000);
+    expect(deriveIntegrations({ LLM_TIMEOUT_MS: '-1' }).llmTimeoutMs).toBe(900_000);
+    expect(deriveIntegrations({ LLM_TIMEOUT_MS: '60000.5' }).llmTimeoutMs).toBe(60_000);
+  });
 });
 
 describe('deriveBackup', () => {

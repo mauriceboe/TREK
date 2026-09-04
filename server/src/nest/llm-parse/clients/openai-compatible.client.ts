@@ -2,10 +2,8 @@ import type { LlmExtractionClient, LlmExtractionInput } from '../llm-provider.in
 import { isNuExtractModel, buildNuExtractUserText, nuExtractToKiReservations } from './nuextract';
 import { parseLenientJson, toReservationList } from '../lenient-json';
 import { safeFetchLlm } from '../../../utils/ssrfGuard';
+import { readEnv } from '../../../app-config';
 
-// Generous: a local CPU model (Ollama, no GPU) may cold-load several GB and then
-// take a few minutes on a longer document before the first token.
-const TIMEOUT_MS = 300_000;
 const MAX_TOKENS = 4096;
 
 /**
@@ -110,7 +108,7 @@ export class OpenAiCompatibleClient implements LlmExtractionClient {
 
   private async send(url: string, body: unknown, apiKey?: string): Promise<Response> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), readEnv().integrations.llmTimeoutMs);
     try {
       // baseUrl is user-configurable — guard it against pointing at the cloud
       // metadata endpoint, while still allowing a local/LAN Ollama.

@@ -178,8 +178,17 @@ function isLinkLocal(ip: string): boolean {
  * safeFetchFollow) means each hop is re-resolved, re-checked against isLinkLocal,
  * and re-pinned. An http→https upgrade or a proxy redirect between LAN hosts still
  * works because the check re-runs per hop rather than locking to the first IP.
+ *
+ * `responseTimeoutMs` raises undici's own five-minute ceiling for callers that
+ * legitimately wait longer (see safeFetchLlm). Left unset it keeps undici's
+ * default, which is what every other admin-configured endpoint wants.
  */
-export async function safeFetchAdminConfigured(url: string, init?: RequestInit, maxRedirects = 5): Promise<Response> {
+export async function safeFetchAdminConfigured(
+  url: string,
+  init?: RequestInit,
+  maxRedirects = 5,
+  responseTimeoutMs?: number,
+): Promise<Response> {
   let currentUrl = url;
 
   for (let hop = 0; ; hop++) {
@@ -203,7 +212,7 @@ export async function safeFetchAdminConfigured(url: string, init?: RequestInit, 
       throw new SsrfBlockedError('Requests to link-local / cloud-metadata addresses are not allowed');
     }
 
-    const dispatcher = createPinnedDispatcher(resolvedIp, true);
+    const dispatcher = createPinnedDispatcher(resolvedIp, true, responseTimeoutMs);
     const response = await fetch(currentUrl, { ...init, redirect: 'manual', dispatcher } as any);
 
     // Only a 3xx WITH a Location header is a redirect we follow; anything else
@@ -230,12 +239,19 @@ export async function safeFetchAdminConfigured(url: string, init?: RequestInit, 
 }
 
 /**
- * The original name. Kept so no LLM call site has to change, and because the
- * shape of the problem is identical: an endpoint an admin configured, which may
+ * The original name, now the model lane specifically: the same guard as
+ * safeFetchAdminConfigured — an endpoint an admin configured, which may
  * legitimately live on loopback or the LAN, and must still never reach
- * link-local or a cloud metadata service.
+ * link-local or a cloud metadata service — with LLM_TIMEOUT_MS as the response
+ * ceiling instead of undici's five minutes, so one setting governs the whole
+ * call rather than being overruled by a default nobody chose.
+ *
+ * The ceiling is read once per call rather than per hop, so a redirect chain is
+ * measured against one value even if the variable changes mid-chain.
  */
-export const safeFetchLlm = safeFetchAdminConfigured;
+export function safeFetchLlm(url: string, init?: RequestInit, maxRedirects = 5): Promise<Response> {
+  return safeFetchAdminConfigured(url, init, maxRedirects, readEnv().integrations.llmTimeoutMs);
+}
 
 /**
  * Thrown by safeFetch() when the URL is blocked by the SSRF guard.
@@ -353,8 +369,14 @@ export async function safeFetchFollow(
  * IP. This prevents DNS rebinding (TOCTOU) by ensuring the outbound connection
  * goes to the IP we checked, not a re-resolved one.
  */
-export function createPinnedDispatcher(resolvedIp: string, rejectUnauthorized = true): Agent {
+export function createPinnedDispatcher(resolvedIp: string, rejectUnauthorized = true, responseTimeoutMs?: number): Agent {
   return new Agent({
+    // undici caps the wait for response headers at 5 minutes by default, and
+    // that cap is invisible from the call site: an AbortController set to
+    // fifteen still dies at five.
+    ...(responseTimeoutMs
+      ? { headersTimeout: responseTimeoutMs, bodyTimeout: responseTimeoutMs }
+      : {}),
     connect: {
       rejectUnauthorized,
       lookup: (_hostname: string, opts: Record<string, unknown>, callback: Function) => {
