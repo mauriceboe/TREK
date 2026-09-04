@@ -37,6 +37,7 @@
     "@fontsource/museomoderno": "^5.3.0",
     "@fontsource/playfair-display": "^5.3.0",
     "@fontsource/poppins": "^5.2.7",
+    "@mapbox/mapbox-gl-rtl-text": "^0.4.0",
     "@maplibre/maplibre-gl-leaflet": "0.1.4",
     "@simplewebauthn/browser": "^13.1.2",
     "@trek/shared": "*",

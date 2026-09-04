@@ -1,9 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { rtlTextAlias } from './rtlTextAlias.js';
 
 export default defineConfig({
   plugins: [react()],
   test: {
+    alias: [rtlTextAlias],
     root: '.',
     globals: true,
     environment: './tests/environment/jsdom-native-abort.ts',
