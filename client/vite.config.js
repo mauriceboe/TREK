@@ -47,8 +47,14 @@ export default defineConfig(({ mode }) => ({
         // Every route chunk is precached alongside the shell, deliberately: for an
         // offline-first travel planner a route the user never opened before losing
         // signal still has to work. The trade is that splitting buys first paint and
-        // not install size — 107 entries / 17,795 KiB before any of it, 220 /
-        // 17,855 KiB now.
+        // not install size: 107 entries / 17,795 KiB before any of it, 463 /
+        // 23,292 KiB now (measured, not estimated).
+        //
+        // Keep this figure honest. #2228 traced PWA boot failures to the browser
+        // evicting this origin's whole bucket, precached shell included, and this
+        // comment is the only record of what the install actually costs. Anything
+        // matching the globs below is fetched at service-worker install by every
+        // user, whether or not they ever reach the code.
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,ttf}'],
         // build:analyze drops a treemap next to the app; it must never end up in a
         // precache manifest if someone ships that build by accident.
