@@ -200,6 +200,47 @@ describe('ReservationsService (DI-native, real SQL)', () => {
       expect(reservation.accommodation_id).toBeNull();
     });
 
+    it('RESV-SVC-033: a metadata payload without `price` keeps the linked expense price (and currency) from the stored metadata', () => {
+      const { trip } = ownerTrip();
+      const res = createReservation(testDb, trip.id, { title: 'Flight', type: 'flight' });
+      const item = createBudgetItem(testDb, trip.id, { name: 'Flight', total_price: 2040 });
+      testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(res.id, item.id);
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?')
+        .run(JSON.stringify({ airline: 'CZ', seat: '72K', price: '2040', priceCurrency: 'CNY' }), res.id);
+      const current = svc.getReservation(String(res.id), String(trip.id))!;
+      // What the booking form sends back: rebuilt from its fields, price not among them.
+      const { reservation } = svc.update(String(res.id), String(trip.id), { metadata: { airline: 'CZ', seat: '12A' } }, current);
+      expect(JSON.parse(reservation.metadata as string)).toEqual({ airline: 'CZ', seat: '12A', price: '2040', priceCurrency: 'CNY' });
+    });
+
+    it('RESV-SVC-034: a payload that sets `price` itself, or a booking with no linked expense, is stored as sent', () => {
+      const { trip } = ownerTrip();
+      const linkedRes = createReservation(testDb, trip.id, { title: 'Linked', type: 'flight' });
+      const item = createBudgetItem(testDb, trip.id, { name: 'Linked', total_price: 100 });
+      testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(linkedRes.id, item.id);
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '100' }), linkedRes.id);
+      let current = svc.getReservation(String(linkedRes.id), String(trip.id))!;
+      let { reservation } = svc.update(String(linkedRes.id), String(trip.id), { metadata: { price: '150' } }, current);
+      expect(JSON.parse(reservation.metadata as string)).toEqual({ price: '150' });
+
+      const orphanRes = createReservation(testDb, trip.id, { title: 'Orphan', type: 'flight' });
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '999' }), orphanRes.id);
+      current = svc.getReservation(String(orphanRes.id), String(trip.id))!;
+      ({ reservation } = svc.update(String(orphanRes.id), String(trip.id), { metadata: { seat: '1A' } }, current));
+      expect(JSON.parse(reservation.metadata as string)).toEqual({ seat: '1A' });
+    });
+
+    it('RESV-SVC-035: metadata null still clears the stored metadata, linked expense or not', () => {
+      const { trip } = ownerTrip();
+      const res = createReservation(testDb, trip.id, { title: 'Flight', type: 'flight' });
+      const item = createBudgetItem(testDb, trip.id, { name: 'Flight', total_price: 50 });
+      testDb.prepare('UPDATE budget_items SET reservation_id = ? WHERE id = ?').run(res.id, item.id);
+      testDb.prepare('UPDATE reservations SET metadata = ? WHERE id = ?').run(JSON.stringify({ price: '50' }), res.id);
+      const current = svc.getReservation(String(res.id), String(trip.id))!;
+      const { reservation } = svc.update(String(res.id), String(trip.id), { metadata: null }, current);
+      expect(reservation.metadata).toBeNull();
+    });
+
     it('RESV-SVC-010: endpoints [] wipes stored endpoints; an absent field leaves them alone', () => {
       const { trip } = ownerTrip();
       const res = createReservation(testDb, trip.id, { title: 'Bus' });

@@ -720,6 +720,15 @@ export class ReservationsService {
       }
     }
 
+    // metadata.price / priceCurrency are owned by the linked expense
+    // (BudgetService.syncReservationPrice writes them), not by the booking form:
+    // the client rebuilds metadata from the form on every save and only carries
+    // transit / airtrail_ids over, so a plain edit used to wipe the price off the
+    // card until the expense was re-saved. Keep them while a linked item exists;
+    // a payload that sets them itself, or a booking without a linked expense,
+    // is left untouched.
+    const nextMetadata = this.keepLinkedExpensePrice(id, tripId, metadata, current.metadata);
+
     const resolvedType = (type ?? current.type) || 'other';
     const nextReservationTime = resolvedType === 'hotel'
       ? null
@@ -790,7 +799,7 @@ export class ReservationsService {
       status || null,
       type || null,
       resolvedAccId,
-      metadata !== undefined ? (metadata ? JSON.stringify(metadata) : null) : current.metadata,
+      nextMetadata !== undefined ? (nextMetadata ? JSON.stringify(nextMetadata) : null) : current.metadata,
       needs_review === undefined ? null : (needs_review ? 1 : 0),
       id
     );
@@ -800,7 +809,7 @@ export class ReservationsService {
     }
 
     // Sync check-in/out to accommodation if linked
-    const resolvedMeta = metadata !== undefined ? metadata : (current.metadata ? JSON.parse(current.metadata as string) : null);
+    const resolvedMeta = nextMetadata !== undefined ? nextMetadata : (current.metadata ? JSON.parse(current.metadata as string) : null);
     if (resolvedAccId && resolvedMeta) {
       const meta = (typeof resolvedMeta === 'string' ? JSON.parse(resolvedMeta) : resolvedMeta) as AccommodationTimesMeta;
       if (meta.check_in_time || meta.check_in_end_time || meta.check_out_time) {
@@ -822,6 +831,32 @@ export class ReservationsService {
     // miss (legacy typed this any).
     const reservation = this.getReservationWithJoins(id)!;
     return { reservation, accommodationChanged };
+  }
+
+  /**
+   * Carry `price` / `priceCurrency` from the stored metadata into an incoming
+   * metadata object that doesn't set them, as long as a budget item is still
+   * linked to the booking. Returns the incoming value untouched otherwise —
+   * `undefined` (field absent) and `null` (explicit clear) pass straight through.
+   */
+  private keepLinkedExpensePrice(id: string | number, tripId: string | number, incoming: unknown, stored: string | null | undefined): unknown {
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming) || !stored) return incoming;
+    const next = incoming as Record<string, unknown>;
+    if (next.price !== undefined) return incoming;
+    let prev: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') return incoming;
+      prev = parsed as Record<string, unknown>;
+    } catch {
+      return incoming;
+    }
+    if (prev.price === undefined) return incoming;
+    const linked = this.db.get('SELECT id FROM budget_items WHERE trip_id = ? AND reservation_id = ?', tripId, id);
+    if (!linked) return incoming;
+    const kept: Record<string, unknown> = { ...next, price: prev.price };
+    if (prev.priceCurrency !== undefined && next.priceCurrency === undefined) kept.priceCurrency = prev.priceCurrency;
+    return kept;
   }
 
   /** The accommodation + budget-item + reservation deletes are one logical
