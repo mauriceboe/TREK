@@ -26,6 +26,7 @@
 import type { Place } from '../types'
 import { offlineDb, upsertSyncMeta } from '../db/offlineDb'
 import { isAuthed } from './authGate'
+import { isStoragePersisted } from './persistentStorage'
 import { isVectorStyle, normalizeTileUrl, resolveTileUrl, withTileApiKey } from '../utils/tileUrl'
 import { OFM_POSITRON } from '../constants/mapDefaults'
 import { clearVectorCache, prefetchVectorForPlaces } from './glPrefetcher'
@@ -53,6 +54,13 @@ export const MAX_TILES = Math.floor((180 * 1024) / AVG_TILE_KB) // = 12288
  * IndexedDB queue (Workbox writes an expiration record per cached tile).
  */
 export const TILE_CONCURRENCY = 6
+
+/**
+ * Deepest zoom prefetched when the browser refused persistent storage. Keeps the
+ * padded quota cost of one trip in the low hundreds of megabytes rather than the
+ * tens of gigabytes a full z16 run bills (#2228).
+ */
+export const UNPERSISTED_MAX_ZOOM = 12
 
 /** Name of the Workbox runtime cache holding map tiles (see vite.config.js). */
 const TILE_CACHE = 'map-tiles'
@@ -430,7 +438,16 @@ export async function prefetchTilesForTrip(
   // tile providers that don't send CORS headers. To stop the browser evicting
   // these tiles under the inflated quota, we request persistent storage at app
   // init instead (sync/persistentStorage.ts).
-  const fetched = await prefetchTiles(bbox, template, 0, 16, cartoKey)
+  //
+  // When that request was refused, the padding stops being an accounting detail:
+  // a full run bills this origin tens of gigabytes it is not exempt from, and
+  // the browser answers by evicting the whole bucket, including the precached
+  // app shell, which then never comes back on its own. So cap the depth instead.
+  // The shallow zooms are the ones the trip map actually opens at and cost a few
+  // dozen tiles (#2180); the deep ones are the volume, and they are what the
+  // user loses rather than the ability to start the app at all (#2228).
+  const maxZoom = isStoragePersisted() ? 16 : UNPERSISTED_MAX_ZOOM
+  const fetched = await prefetchTiles(bbox, template, 0, maxZoom, cartoKey)
 
   // Update syncMeta with bbox and tile count
   const meta = await offlineDb.syncMeta.get(tripId)

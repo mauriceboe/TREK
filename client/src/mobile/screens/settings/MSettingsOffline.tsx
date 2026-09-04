@@ -3,34 +3,19 @@
  * components/Settings/OfflineTab. Same logic (force-offline switch, prepare /
  * resync, conflict resolver, per-trip storage, cache stats + clear), rebuilt on
  * the MSet* card system with MToggle switches and an MConfirmSheet for clear.
+ *
+ * The logic itself lives in the shared `useOfflineSettings` hook; only the
+ * markup differs between the two shells.
  */
-import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon } from 'lucide-react'
-import { offlineDb, clearAll, clearTripData } from '../../../db/offlineDb'
-import { tripsApi } from '../../../api/client'
-import { tripSyncManager, type PrepareProgress } from '../../../sync/tripSyncManager'
-import { mutationQueue } from '../../../sync/mutationQueue'
-import { clearTileCache } from '../../../sync/tilePrefetcher'
-import { isEffectivelyOffline } from '../../../sync/networkMode'
-import {
-  getOfflinePrefs, setCacheTiles, setConflictStrategy,
-  isTripOfflineEnabled, setTripOfflineEnabled, onOfflinePrefsChange,
-  type ConflictStrategy,
-} from '../../../sync/offlinePrefs'
-import { useNetworkMode } from '../../../hooks/useNetworkMode'
+import { useState } from 'react'
+import { RefreshCw, Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon, AlertTriangle } from 'lucide-react'
+import { useOfflineSettings, offlineNoticeKey, isOfflineNoticeWarning } from '../../../components/Settings/useOfflineSettings'
 import { useTranslation } from '../../../i18n'
-import type { SyncMeta, QueuedMutation } from '../../../db/offlineDb'
-import type { Trip } from '../../../types'
+import type { ConflictStrategy } from '../../../sync/offlinePrefs'
+import type { QueuedMutation } from '../../../db/offlineDb'
 import { MSetCard, MSetEyebrow, MSetRow, MSetSegments, MSetButton } from './MSettingsUi'
 import MToggle from '../../components/MToggle'
 import MConfirmSheet from './MConfirmSheet'
-
-interface CachedTripRow {
-  trip: Trip
-  meta: SyncMeta
-  placeCount: number
-  fileCount: number
-}
 
 function conflictName(m: QueuedMutation): string {
   const body = (m.body ?? {}) as { name?: unknown }
@@ -42,132 +27,19 @@ function conflictName(m: QueuedMutation): string {
 
 export default function MSettingsOffline() {
   const { t } = useTranslation()
-  const { offline, forced, setForced } = useNetworkMode()
-  const [rows, setRows] = useState<CachedTripRow[]>([])
-  const [allTrips, setAllTrips] = useState<Trip[]>([])
-  const [pendingCount, setPendingCount] = useState(0)
-  const [failedCount, setFailedCount] = useState(0)
-  const [conflicts, setConflicts] = useState<QueuedMutation[]>([])
-  const [syncing, setSyncing] = useState(false)
-  const [clearing, setClearing] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [preparing, setPreparing] = useState(false)
-  const [progress, setProgress] = useState<PrepareProgress | null>(null)
-  const [prefs, setPrefs] = useState(getOfflinePrefs())
-
-  useEffect(() => onOfflinePrefsChange(() => setPrefs(getOfflinePrefs())), [])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [metas, pending, failed, conflictList] = await Promise.all([
-        offlineDb.syncMeta.toArray(),
-        mutationQueue.pendingCount(),
-        mutationQueue.failedCount(),
-        mutationQueue.conflicts(),
-      ])
-      setPendingCount(pending)
-      setFailedCount(failed)
-      setConflicts(conflictList)
-
-      const result: CachedTripRow[] = []
-      for (const meta of metas) {
-        const trip = await offlineDb.trips.get(meta.tripId)
-        if (!trip) continue
-        const [placeCount, fileCount] = await Promise.all([
-          offlineDb.places.where('trip_id').equals(meta.tripId).count(),
-          offlineDb.tripFiles.where('trip_id').equals(meta.tripId).count(),
-        ])
-        result.push({ trip, meta, placeCount, fileCount })
-      }
-      result.sort((a, b) => (a.trip.start_date ?? '').localeCompare(b.trip.start_date ?? ''))
-      setRows(result)
-
-      // Per-trip storage toggles are driven by the FULL trip list, not just the
-      // cached ones, so a trip turned off stays visible and re-enableable.
-      try {
-        const trips = isEffectivelyOffline()
-          ? await offlineDb.trips.toArray()
-          : await tripsApi.list().then(r => (r as { trips: Trip[] }).trips).catch(() => offlineDb.trips.toArray())
-        trips.sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''))
-        setAllTrips(trips)
-      } catch {
-        setAllTrips([])
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const runPrepare = useCallback(async () => {
-    setPreparing(true)
-    setProgress(null)
-    try {
-      await tripSyncManager.prepareForOffline(p => setProgress(p))
-      await load()
-    } finally {
-      setPreparing(false)
-    }
-  }, [load])
-
-  async function handleToggleForce() {
-    if (!forced) {
-      // Turning offline mode on: download everything first (while still online),
-      // then engage so the app has all it needs before the network drops.
-      if (navigator.onLine) await runPrepare()
-      setForced(true)
-    } else {
-      // Back online: lifting the switch flushes the queue + re-syncs.
-      setForced(false)
-    }
-  }
-
-  async function handleResync() {
-    setSyncing(true)
-    try {
-      await tripSyncManager.syncAll()
-      await load()
-    } finally {
-      setSyncing(false)
-    }
-  }
+  const {
+    offline, forced,
+    rows, allTrips, pendingCount, failedCount, conflicts,
+    syncing, clearing, loading, preparing, progress, notice, prefs, canClear,
+    runPrepare, handleToggleForce, handleResync, handleClear,
+    handleToggleTiles, tripStorageState, handleToggleTrip, resolveConflict,
+    handleConflictStrategy,
+  } = useOfflineSettings()
 
   async function doClear() {
-    setClearing(true)
-    try {
-      await clearAll()
-      await load()
-      setShowClearConfirm(false)
-    } finally {
-      setClearing(false)
-    }
-  }
-
-  async function handleToggleTiles() {
-    const next = !prefs.cacheTiles
-    setCacheTiles(next)
-    // Turning tiles off reclaims the bulk tile storage straight away.
-    if (!next) await clearTileCache()
-  }
-
-  async function handleToggleTrip(tripId: number) {
-    const next = !isTripOfflineEnabled(tripId)
-    setTripOfflineEnabled(tripId, next)
-    if (!next) {
-      await clearTripData(tripId)
-      await load()
-    } else if (navigator.onLine) {
-      tripSyncManager.syncAll().then(load).catch(() => {})
-    }
-  }
-
-  async function resolveConflict(id: string, keepMine: boolean) {
-    if (keepMine) await mutationQueue.resolveKeepMine(id)
-    else await mutationQueue.resolveKeepServer(id)
-    await load()
+    await handleClear()
+    setShowClearConfirm(false)
   }
 
   const formatDate = (d: string | null | undefined) =>
@@ -229,9 +101,10 @@ export default function MSettingsOffline() {
               </div>
             </div>
           )}
-          {!preparing && progress?.phase === 'done' && (
-            <div className="mt-[10px] flex items-center gap-[6px] font-geist text-[0.6875rem] text-[color:var(--m-st-confirmed)]">
-              <Check size={14} /> {t('settings.offline.prepare.done')}
+          {!preparing && notice && notice.kind !== 'load-failed' && (
+            <div className={`mt-[10px] flex items-center gap-[6px] font-geist text-[0.6875rem] ${isOfflineNoticeWarning(notice) ? 'text-[color:var(--m-st-pending)]' : 'text-[color:var(--m-st-confirmed)]'}`}>
+              {isOfflineNoticeWarning(notice) ? <AlertTriangle size={14} /> : <Check size={14} />}
+              {t(offlineNoticeKey(notice), notice.kind === 'stored' ? { count: notice.trips } : undefined)}
             </div>
           )}
         </div>
@@ -275,7 +148,7 @@ export default function MSettingsOffline() {
             <MSetEyebrow className="mb-[5px]">{t('settings.offline.conflicts.strategyTitle')}</MSetEyebrow>
             <MSetSegments<ConflictStrategy>
               value={prefs.conflictStrategy}
-              onChange={setConflictStrategy}
+              onChange={handleConflictStrategy}
               options={strategyOptions}
             />
           </div>
@@ -297,14 +170,15 @@ export default function MSettingsOffline() {
             <div className="mb-1 text-[0.78125rem] font-bold text-m-ink">{t('settings.offline.storage.tripsTitle')}</div>
             <div>
               {allTrips.map((trip, i) => {
-                const on = isTripOfflineEnabled(trip.id)
+                const { on, dateEligible } = tripStorageState(trip)
+                const sub = on ? t('settings.offline.storage.tripOn') : t('settings.offline.storage.tripOff')
                 return (
                   <MSetRow
                     key={trip.id}
                     first={i === 0}
                     label={<span className="block truncate">{trip.title}</span>}
-                    sub={on ? t('settings.offline.storage.tripOn') : t('settings.offline.storage.tripOff')}
-                    trailing={<MToggle checked={on} onChange={() => handleToggleTrip(trip.id)} ariaLabel={trip.title} />}
+                    sub={dateEligible ? sub : `${sub} · ${t('settings.offline.storage.tripFinished')}`}
+                    trailing={<MToggle checked={on} onChange={() => handleToggleTrip(trip)} ariaLabel={trip.title} />}
                   />
                 )
               })}
@@ -323,7 +197,7 @@ export default function MSettingsOffline() {
         </div>
 
         <div className="mt-3">
-          <MSetButton variant="danger" disabled={clearing || rows.length === 0} onClick={() => setShowClearConfirm(true)}>
+          <MSetButton variant="danger" disabled={clearing || !canClear} onClick={() => setShowClearConfirm(true)}>
             <Trash2 size={14} />
             {t('settings.offline.clear')}
           </MSetButton>
@@ -332,7 +206,9 @@ export default function MSettingsOffline() {
         {loading ? (
           <p className="mt-3 font-geist text-[0.71875rem] text-m-muted">{t('settings.offline.loading')}</p>
         ) : rows.length === 0 ? (
-          <p className="mt-3 font-geist text-[0.71875rem] text-m-muted">{t('settings.offline.empty')}</p>
+          <p className="mt-3 font-geist text-[0.71875rem] text-m-muted">
+            {t(notice?.kind === 'load-failed' ? 'settings.offline.notice.loadFailed' : 'settings.offline.empty')}
+          </p>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {rows.map(({ trip, meta, placeCount, fileCount }) => (

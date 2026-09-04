@@ -1,10 +1,11 @@
 /**
  * offlinePrefs unit tests — device-local "what to store offline" + conflict strategy.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   getOfflinePrefs, setCacheTiles, setConflictStrategy,
-  isTripOfflineEnabled, setTripOfflineEnabled, onOfflinePrefsChange, _resetOfflinePrefs,
+  isTripOfflineEnabled, setTripOfflineEnabled, isTripPinned, setTripPinned,
+  onOfflinePrefsChange, _resetOfflinePrefs,
 } from '../../../src/sync/offlinePrefs'
 
 beforeEach(() => {
@@ -41,6 +42,34 @@ describe('offlinePrefs', () => {
     setTripOfflineEnabled(3, false)
     setTripOfflineEnabled(3, false)
     expect(getOfflinePrefs().disabledTripIds.filter(id => id === 3)).toHaveLength(1)
+  })
+
+  it('#2228: a trip can be pinned so the date rule cannot skip or evict it', () => {
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([])
+    setTripPinned(5, true)
+    expect(isTripPinned(5)).toBe(true)
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([5])
+  })
+
+  it('#2228: pinning is idempotent and releasing removes the pin', () => {
+    setTripPinned(5, true)
+    setTripPinned(5, true)
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([5])
+    setTripPinned(5, false)
+    expect(isTripPinned(5)).toBe(false)
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([])
+  })
+
+  it('#2228: prefs written before pinning existed still read back cleanly', async () => {
+    // An installed device carries the old shape in localStorage. The module reads
+    // it once at import, so re-import it to exercise that path: a missing
+    // pinnedTripIds must default to "nothing pinned", never undefined.
+    localStorage.setItem('trek_offline_prefs', JSON.stringify({ cacheTiles: false, disabledTripIds: [3], conflictStrategy: 'mine' }))
+    vi.resetModules()
+    const fresh = await import('../../../src/sync/offlinePrefs')
+    expect(fresh.getOfflinePrefs().pinnedTripIds).toEqual([])
+    expect(fresh.getOfflinePrefs().disabledTripIds).toEqual([3])
+    expect(fresh.isTripPinned(3)).toBe(false)
   })
 
   it('sets the conflict strategy', () => {

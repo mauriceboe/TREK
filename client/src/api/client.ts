@@ -214,16 +214,24 @@ apiClient.interceptors.response.use(
         }
       }
       // Pangolin header-auth extended compatibility mode: returns 401 with an
-      // HTML body (a JS redirect page) instead of a 302. TREK's own 401s are
-      // always application/json, so checking for text/html is unambiguous.
+      // HTML body (a JS redirect page) instead of a 302.
+      //
+      // A text/html 401 is NOT unambiguous on its own: several of TREK's own
+      // routes answer with res.status(401).send('Authentication required'),
+      // which Express labels text/html. Tearing the service worker down for one
+      // of those would cost the user offline mode for a proxy wall that isn't
+      // there, so confirm a reachable proxy first, exactly like the no-response
+      // branch above (#2228).
       if (error.response?.status === 401) {
         const ct = (error.response.headers?.['content-type'] as string | undefined) ?? ''
         if (ct.includes('text/html')) {
           const { pathname } = window.location
           if (!isAuthPublicPath(pathname) && !sessionStorage.getItem('proxy_reauth_attempted')) {
-            sessionStorage.setItem('proxy_reauth_attempted', '1')
-            await unregisterSWAndReload()
-            return Promise.reject(error)
+            if (await probeNow() === 'proxy-wall') {
+              sessionStorage.setItem('proxy_reauth_attempted', '1')
+              await unregisterSWAndReload()
+              return Promise.reject(error)
+            }
           }
         }
       }

@@ -6,33 +6,18 @@
  *   - What to store: a map-tiles toggle plus a per-trip on/off.
  *   - Sync conflicts: a keep-mine / keep-theirs resolver and a default strategy.
  *   - Cache stats + clear.
+ *
+ * All of the logic lives in `useOfflineSettings`, shared with the phone twin
+ * `MSettingsOffline`; this file is the desktop markup over it.
  */
-import React, { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon } from 'lucide-react'
+import React from 'react'
+import { RefreshCw, Trash2, Database, CloudOff, Download, Check, GitMerge, Map as MapIcon, AlertTriangle } from 'lucide-react'
 import Section from './Section'
 import ToggleSwitch from './ToggleSwitch'
-import { offlineDb, clearAll, clearTripData } from '../../db/offlineDb'
-import { tripsApi } from '../../api/client'
-import { tripSyncManager, type PrepareProgress } from '../../sync/tripSyncManager'
-import { mutationQueue } from '../../sync/mutationQueue'
-import { clearTileCache } from '../../sync/tilePrefetcher'
-import { isEffectivelyOffline } from '../../sync/networkMode'
-import {
-  getOfflinePrefs, setCacheTiles, setConflictStrategy,
-  isTripOfflineEnabled, setTripOfflineEnabled, onOfflinePrefsChange,
-  type ConflictStrategy,
-} from '../../sync/offlinePrefs'
-import { useNetworkMode } from '../../hooks/useNetworkMode'
+import { useOfflineSettings, offlineNoticeKey, isOfflineNoticeWarning } from './useOfflineSettings'
 import { useTranslation } from '../../i18n'
-import type { SyncMeta, QueuedMutation } from '../../db/offlineDb'
-import type { Trip } from '../../types'
-
-interface CachedTripRow {
-  trip: Trip
-  meta: SyncMeta
-  placeCount: number
-  fileCount: number
-}
+import type { ConflictStrategy } from '../../sync/offlinePrefs'
+import type { QueuedMutation } from '../../db/offlineDb'
 
 function conflictName(m: QueuedMutation): string {
   const body = (m.body ?? {}) as { name?: unknown }
@@ -44,132 +29,14 @@ function conflictName(m: QueuedMutation): string {
 
 export default function OfflineTab(): React.ReactElement {
   const { t } = useTranslation()
-  const { offline, forced, setForced } = useNetworkMode()
-  const [rows, setRows] = useState<CachedTripRow[]>([])
-  const [allTrips, setAllTrips] = useState<Trip[]>([])
-  const [pendingCount, setPendingCount] = useState(0)
-  const [failedCount, setFailedCount] = useState(0)
-  const [conflicts, setConflicts] = useState<QueuedMutation[]>([])
-  const [syncing, setSyncing] = useState(false)
-  const [clearing, setClearing] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [preparing, setPreparing] = useState(false)
-  const [progress, setProgress] = useState<PrepareProgress | null>(null)
-  const [prefs, setPrefs] = useState(getOfflinePrefs())
-
-  useEffect(() => onOfflinePrefsChange(() => setPrefs(getOfflinePrefs())), [])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [metas, pending, failed, conflictList] = await Promise.all([
-        offlineDb.syncMeta.toArray(),
-        mutationQueue.pendingCount(),
-        mutationQueue.failedCount(),
-        mutationQueue.conflicts(),
-      ])
-      setPendingCount(pending)
-      setFailedCount(failed)
-      setConflicts(conflictList)
-
-      const result: CachedTripRow[] = []
-      for (const meta of metas) {
-        const trip = await offlineDb.trips.get(meta.tripId)
-        if (!trip) continue
-        const [placeCount, fileCount] = await Promise.all([
-          offlineDb.places.where('trip_id').equals(meta.tripId).count(),
-          offlineDb.tripFiles.where('trip_id').equals(meta.tripId).count(),
-        ])
-        result.push({ trip, meta, placeCount, fileCount })
-      }
-      result.sort((a, b) => (a.trip.start_date ?? '').localeCompare(b.trip.start_date ?? ''))
-      setRows(result)
-
-      // The per-trip storage toggles are driven by the FULL trip list, not just
-      // the cached ones, so a trip turned off stays visible and re-enableable.
-      try {
-        const trips = isEffectivelyOffline()
-          ? await offlineDb.trips.toArray()
-          : await tripsApi.list().then(r => (r as { trips: Trip[] }).trips).catch(() => offlineDb.trips.toArray())
-        trips.sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''))
-        setAllTrips(trips)
-      } catch {
-        setAllTrips([])
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const runPrepare = useCallback(async () => {
-    setPreparing(true)
-    setProgress(null)
-    try {
-      await tripSyncManager.prepareForOffline(p => setProgress(p))
-      await load()
-    } finally {
-      setPreparing(false)
-    }
-  }, [load])
-
-  async function handleToggleForce() {
-    if (!forced) {
-      // Turning offline mode on: download everything first (while still online),
-      // then engage so the app has all it needs before the network drops.
-      if (navigator.onLine) await runPrepare()
-      setForced(true)
-    } else {
-      // Back online: lifting the switch flushes the queue + re-syncs (syncTriggers).
-      setForced(false)
-    }
-  }
-
-  async function handleResync() {
-    setSyncing(true)
-    try {
-      await tripSyncManager.syncAll()
-      await load()
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  async function handleClear() {
-    if (!window.confirm(t('settings.offline.clearConfirm'))) return
-    setClearing(true)
-    try {
-      await clearAll()
-      await load()
-    } finally {
-      setClearing(false)
-    }
-  }
-
-  async function handleToggleTiles() {
-    const next = !prefs.cacheTiles
-    setCacheTiles(next)
-    // Turning tiles off reclaims the bulk tile storage straight away.
-    if (!next) await clearTileCache()
-  }
-
-  async function handleToggleTrip(tripId: number) {
-    const next = !isTripOfflineEnabled(tripId)
-    setTripOfflineEnabled(tripId, next)
-    if (!next) {
-      await clearTripData(tripId)
-      await load()
-    } else if (navigator.onLine) {
-      tripSyncManager.syncAll().then(load).catch(() => {})
-    }
-  }
-
-  async function resolveConflict(id: string, keepMine: boolean) {
-    if (keepMine) await mutationQueue.resolveKeepMine(id)
-    else await mutationQueue.resolveKeepServer(id)
-    await load()
-  }
+  const {
+    offline, forced,
+    rows, allTrips, pendingCount, failedCount, conflicts,
+    syncing, clearing, loading, preparing, progress, notice, prefs, canClear,
+    runPrepare, handleToggleForce, handleResync, handleClear,
+    handleToggleTiles, tripStorageState, handleToggleTrip, resolveConflict,
+    handleConflictStrategy,
+  } = useOfflineSettings()
 
   const formatDate = (d: string | null | undefined) =>
     d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
@@ -237,9 +104,10 @@ export default function OfflineTab(): React.ReactElement {
                 </div>
               </div>
             )}
-            {!preparing && progress?.phase === 'done' && (
-              <div className="text-content-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'calc(12px * var(--fs-scale-body, 1))', marginTop: 10, color: '#10b981' }}>
-                <Check size={14} /> {t('settings.offline.prepare.done')}
+            {!preparing && notice && notice.kind !== 'load-failed' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'calc(12px * var(--fs-scale-body, 1))', marginTop: 10, color: isOfflineNoticeWarning(notice) ? 'var(--warning)' : 'var(--success)' }}>
+                {isOfflineNoticeWarning(notice) ? <AlertTriangle size={14} /> : <Check size={14} />}
+                {t(offlineNoticeKey(notice), notice.kind === 'stored' ? { count: notice.trips } : undefined)}
               </div>
             )}
           </div>
@@ -273,7 +141,7 @@ export default function OfflineTab(): React.ReactElement {
               control={
                 <select
                   value={prefs.conflictStrategy}
-                  onChange={e => setConflictStrategy(e.target.value as ConflictStrategy)}
+                  onChange={e => handleConflictStrategy(e.target.value as ConflictStrategy)}
                   className="border border-edge bg-surface-secondary text-content"
                   style={{ padding: '6px 10px', borderRadius: 8, fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}
                 >
@@ -302,7 +170,7 @@ export default function OfflineTab(): React.ReactElement {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {allTrips.map((trip) => {
-                  const on = isTripOfflineEnabled(trip.id)
+                  const { on, dateEligible } = tripStorageState(trip)
                   return (
                     <div key={trip.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                       <div style={{ minWidth: 0 }}>
@@ -311,9 +179,10 @@ export default function OfflineTab(): React.ReactElement {
                         </div>
                         <div className="text-content-muted" style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))' }}>
                           {on ? t('settings.offline.storage.tripOn') : t('settings.offline.storage.tripOff')}
+                          {!dateEligible && ` · ${t('settings.offline.storage.tripFinished')}`}
                         </div>
                       </div>
-                      <ToggleSwitch on={on} onToggle={() => handleToggleTrip(trip.id)} label={trip.title} />
+                      <ToggleSwitch on={on} onToggle={() => handleToggleTrip(trip)} label={trip.title} />
                     </div>
                   )
                 })}
@@ -335,10 +204,10 @@ export default function OfflineTab(): React.ReactElement {
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button"
-              onClick={handleClear}
-              disabled={clearing || rows.length === 0}
+              onClick={() => { if (window.confirm(t('settings.offline.clearConfirm'))) void handleClear() }}
+              disabled={clearing || !canClear}
               className="border border-edge bg-surface-secondary text-[#ef4444]"
-              style={btnStyle(clearing || rows.length === 0)}
+              style={btnStyle(clearing || !canClear)}
             >
               <Trash2 size={14} />
               {t('settings.offline.clear')}
@@ -349,7 +218,7 @@ export default function OfflineTab(): React.ReactElement {
             <p className="text-content-muted" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>{t('settings.offline.loading')}</p>
           ) : rows.length === 0 ? (
             <p className="text-content-muted" style={{ fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>
-              {t('settings.offline.empty')}
+              {t(notice?.kind === 'load-failed' ? 'settings.offline.notice.loadFailed' : 'settings.offline.empty')}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -6,6 +6,7 @@ import { useSystemNoticeStore } from '../../../src/store/systemNoticeStore';
 import { authApi } from '../../../src/api/client';
 import { resetAllStores } from '../../helpers/store';
 import { buildUser } from '../../helpers/factories';
+import { isAuthed, setAuthed } from '../../../src/sync/authGate';
 
 // The websocket module is already mocked globally in tests/setup.ts
 import { connect, disconnect } from '../../../src/api/websocket';
@@ -21,12 +22,13 @@ vi.mock('../../../src/sync/syncTriggers', () => syncTriggers);
 
 // The user-scoped offline DB is real (fake-indexeddb); only the reopen step is
 // made failable so the "auth still succeeds when the DB won't open" path runs.
-const dbControl = vi.hoisted(() => ({ reopenFails: false }));
+const dbControl = vi.hoisted(() => ({ reopenFails: false, reopenedFor: null as number | string | null }));
 vi.mock('../../../src/db/offlineDb', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/db/offlineDb')>();
   return {
     ...actual,
     reopenForUser: async (userId: number | string) => {
+      dbControl.reopenedFor = userId;
       if (dbControl.reopenFails) throw new Error('offline db locked');
       return actual.reopenForUser(userId);
     },
@@ -37,6 +39,7 @@ beforeEach(() => {
   resetAllStores();
   vi.clearAllMocks();
   dbControl.reopenFails = false;
+  dbControl.reopenedFor = null;
 });
 
 afterEach(() => {
@@ -315,6 +318,54 @@ describe('authStore', () => {
 
       expect(state.isAuthenticated).toBe(true);
       expect(state.isLoading).toBe(false);
+    });
+  });
+
+  describe('FE-STORE-AUTH-021: a session kept without a reachable server is still live (#2228)', () => {
+    afterEach(() => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    });
+
+    it('marks a session that launched offline as authenticated for the sync layer', async () => {
+      // onAuthSuccess is the only caller of setAuthed(true), and the mutation
+      // queue's flush, syncAll and prepareForOffline are all gated on it. The
+      // offline branch used to keep the session but skip it, so a PWA that
+      // launched without network could never sync again for the rest of its
+      // life: the settings buttons spun and returned having done nothing.
+      setAuthed(false);
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+      server.use(http.get('/api/auth/me', () => HttpResponse.error()));
+      useAuthStore.setState({ user: buildUser({ id: 42 }), isAuthenticated: true });
+
+      await useAuthStore.getState().loadUser();
+
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+      expect(isAuthed()).toBe(true);
+      // …and it points the offline DB at this user's scoped database, so reads
+      // come from the right one rather than the anonymous fallback.
+      expect(dbControl.reopenedFor).toBe(42);
+    });
+
+    it('does the same when the server is erroring rather than absent', async () => {
+      setAuthed(false);
+      server.use(http.get('/api/auth/me', () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+      useAuthStore.setState({ user: buildUser({ id: 7 }), isAuthenticated: true });
+
+      await useAuthStore.getState().loadUser();
+
+      expect(useAuthStore.getState().authCheckFailed).toBe(true);
+      expect(isAuthed()).toBe(true);
+    });
+
+    it('leaves the gate closed when the session was rejected', async () => {
+      setAuthed(false);
+      server.use(http.get('/api/auth/me', () => HttpResponse.json({ error: 'nope' }, { status: 401 })));
+      useAuthStore.setState({ user: buildUser(), isAuthenticated: true });
+
+      await useAuthStore.getState().loadUser();
+
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(isAuthed()).toBe(false);
     });
   });
 

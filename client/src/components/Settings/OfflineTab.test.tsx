@@ -1,4 +1,4 @@
-// FE-COMP-OFFLINETAB-001 to FE-COMP-OFFLINETAB-024
+// FE-COMP-OFFLINETAB-001 to FE-COMP-OFFLINETAB-028
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -21,16 +21,17 @@ const h = vi.hoisted(() => {
   const syncMetaToArray = vi.fn();
   const tripsGet = vi.fn();
   const tripsToArray = vi.fn();
+  const tripsCount = vi.fn();
   const placeCount = vi.fn();
   const fileCount = vi.fn();
   const counted = (fn: (id: number) => Promise<number>) => ({
     where: () => ({ equals: (id: number) => ({ count: () => fn(id) }) }),
   });
   return {
-    syncMetaToArray, tripsGet, tripsToArray, placeCount, fileCount,
+    syncMetaToArray, tripsGet, tripsToArray, tripsCount, placeCount, fileCount,
     fakeDb: {
       syncMeta: { toArray: syncMetaToArray },
-      trips: { get: tripsGet, toArray: tripsToArray },
+      trips: { get: tripsGet, toArray: tripsToArray, count: tripsCount },
       places: counted(placeCount),
       tripFiles: counted(fileCount),
     },
@@ -104,6 +105,7 @@ const conflict = (over: Partial<QueuedMutation> = {}): QueuedMutation => ({
 /** Seed the Dexie cache with the given (trip, meta) pairs. */
 function cache(rows: { trip: Trip; meta?: Partial<SyncMeta>; places?: number; files?: number }[]): void {
   h.syncMetaToArray.mockResolvedValue(rows.map(r => meta(r.trip.id, r.meta)));
+  h.tripsCount.mockResolvedValue(rows.length);
   h.tripsGet.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.trip);
   h.placeCount.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.places ?? 0);
   h.fileCount.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.files ?? 0);
@@ -130,6 +132,7 @@ beforeEach(() => {
   h.syncMetaToArray.mockResolvedValue([]);
   h.tripsGet.mockResolvedValue(undefined);
   h.tripsToArray.mockResolvedValue([]);
+  h.tripsCount.mockResolvedValue(0);
   h.placeCount.mockResolvedValue(0);
   h.fileCount.mockResolvedValue(0);
   h.pendingCount.mockResolvedValue(0);
@@ -138,8 +141,8 @@ beforeEach(() => {
   h.clearAll.mockResolvedValue(undefined);
   h.clearTripData.mockResolvedValue(undefined);
   h.clearTileCache.mockResolvedValue(undefined);
-  h.prepareForOffline.mockResolvedValue(undefined);
-  h.syncAll.mockResolvedValue(undefined);
+  h.prepareForOffline.mockResolvedValue({ status: 'done', trips: 1 });
+  h.syncAll.mockResolvedValue({ status: 'done', trips: 1 });
   h.resolveKeepMine.mockResolvedValue(undefined);
   h.resolveKeepServer.mockResolvedValue(undefined);
 
@@ -284,6 +287,7 @@ describe('OfflineTab', () => {
       cb({ phase: 'files', current: 1, total: 4, label: 'Paris' });
       await new Promise<void>(resolve => { release = resolve; });
       cb({ phase: 'done', current: 4, total: 4 });
+      return { status: 'done', trips: 4 };
     });
     render(<OfflineTab />);
 
@@ -294,7 +298,7 @@ describe('OfflineTab', () => {
     expect(screen.getByRole('button', { name: 'Downloading…' })).toBeDisabled();
 
     await act(async () => { release(); });
-    expect(await screen.findByText('Ready for offline use')).toBeInTheDocument();
+    expect(await screen.findByText('Stored 4 trip(s) on this device')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download for offline use' })).toBeEnabled();
   });
 
@@ -304,6 +308,7 @@ describe('OfflineTab', () => {
     h.prepareForOffline.mockImplementation(async (cb: (p: PrepareProgress) => void) => {
       cb({ phase: 'tiles', current: 0, total: 0 });
       await new Promise<void>(resolve => { release = resolve; });
+      return { status: 'done', trips: 1 };
     });
     render(<OfflineTab />);
 
@@ -322,6 +327,7 @@ describe('OfflineTab', () => {
     h.prepareForOffline.mockImplementation(async (cb: (p: PrepareProgress) => void) => {
       cb({ phase: 'trips', current: 1, total: 4 });
       await new Promise<void>(resolve => { release = resolve; });
+      return { status: 'done', trips: 4 };
     });
     render(<OfflineTab />);
 
@@ -380,7 +386,7 @@ describe('OfflineTab', () => {
   it('FE-COMP-OFFLINETAB-017: Re-sync shows the syncing label while it runs', async () => {
     const user = userEvent.setup();
     let release!: () => void;
-    h.syncAll.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
+    h.syncAll.mockImplementation(() => new Promise(resolve => { release = () => resolve({ status: 'done', trips: 1 }); }));
     render(<OfflineTab />);
 
     await screen.findByText('No trips cached yet. Connect to the internet to sync.');
@@ -408,21 +414,69 @@ describe('OfflineTab', () => {
     expect(h.clearTileCache).toHaveBeenCalledTimes(1);
   });
 
-  it('FE-COMP-OFFLINETAB-019: switching a trip off evicts it, switching it back on re-syncs', async () => {
+  it('FE-COMP-OFFLINETAB-019: switching a finished trip on pins and re-syncs it, switching it off evicts it', async () => {
     const user = userEvent.setup();
     render(<OfflineTab />);
 
+    // Both fixture trips ended in 2025, so the date rule would skip them: the
+    // switch has to read "off" rather than promising storage that never happens.
     const toggle = await screen.findByRole('button', { name: 'Tokyo' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByText('Stored offline')).toHaveLength(2);
-
-    await user.click(toggle);
-    expect(h.clearTripData).toHaveBeenCalledWith(2);
-    await waitFor(() => expect(screen.getByText('Not stored')).toBeInTheDocument());
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getAllByText(/Not stored · Finished/)).toHaveLength(2);
 
     await user.click(toggle);
     await waitFor(() => expect(h.syncAll).toHaveBeenCalledTimes(1));
-    expect(h.clearTripData).toHaveBeenCalledTimes(1);
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([2]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tokyo' })).toHaveAttribute('aria-pressed', 'true'));
+
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    expect(h.clearTripData).toHaveBeenCalledWith(2);
+    // Turning it off releases the pin, so "off then on" cannot leave it pinned.
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([]);
+  });
+
+  it('FE-COMP-OFFLINETAB-025: an ongoing trip is stored without needing a pin', async () => {
+    const soon = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const ongoing = buildTrip({ id: 7, title: 'Lisbon', start_date: '2025-01-01', end_date: soon });
+    server.use(http.get('/api/trips', () => HttpResponse.json({ trips: [ongoing] })));
+    render(<OfflineTab />);
+
+    const toggle = await screen.findByRole('button', { name: 'Lisbon' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Stored offline')).toBeInTheDocument();
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([]);
+  });
+
+  it('FE-COMP-OFFLINETAB-026: a sync that never ran says so instead of reporting success', async () => {
+    const user = userEvent.setup();
+    h.prepareForOffline.mockResolvedValue({ status: 'skipped', reason: 'busy' });
+    render(<OfflineTab />);
+
+    await screen.findByText('No trips cached yet. Connect to the internet to sync.');
+    await user.click(screen.getByRole('button', { name: 'Download for offline use' }));
+
+    expect(await screen.findByText('A sync is already running. Try again in a moment.')).toBeInTheDocument();
+    expect(screen.queryByText(/Stored .* trip/)).not.toBeInTheDocument();
+  });
+
+  it('FE-COMP-OFFLINETAB-028: a download that throws is reported instead of leaving the last frame up', async () => {
+    const user = userEvent.setup();
+    h.prepareForOffline.mockRejectedValue(new Error('network went away'));
+    render(<OfflineTab />);
+
+    await screen.findByText('No trips cached yet. Connect to the internet to sync.');
+    await user.click(screen.getByRole('button', { name: 'Download for offline use' }));
+
+    expect(await screen.findByText('The download could not finish. Check your connection and try again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download for offline use' })).toBeEnabled();
+  });
+
+  it('FE-COMP-OFFLINETAB-027: an unreadable offline database is reported, not shown as empty', async () => {
+    h.syncMetaToArray.mockRejectedValue(new Error('DatabaseClosedError'));
+    render(<OfflineTab />);
+
+    expect(await screen.findByText(/Could not read this device’s offline storage/)).toBeInTheDocument();
+    expect(screen.queryByText('No trips cached yet. Connect to the internet to sync.')).not.toBeInTheDocument();
   });
 
   it('FE-COMP-OFFLINETAB-020: the per-trip section disappears when there are no trips at all', async () => {
@@ -478,6 +532,7 @@ describe('OfflineTab', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Clear cache' })).toBeEnabled());
     h.syncMetaToArray.mockResolvedValue([]);
+    h.tripsCount.mockResolvedValue(0);
     await user.click(screen.getByRole('button', { name: 'Clear cache' }));
 
     expect(h.clearAll).toHaveBeenCalledTimes(1);

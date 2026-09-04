@@ -12,6 +12,11 @@
  *                       world map"). See tripSyncManager / clearTileCache.
  *   disabledTripIds   — trips the user explicitly excluded from offline storage.
  *                       Everything else that is date-eligible is cached.
+ *   pinnedTripIds     : trips the user explicitly asked for that the date rule
+ *                       would otherwise skip or evict (a finished trip). Without
+ *                       this there was no way to say yes: the list was opt-out
+ *                       only, so ticking a past trip changed nothing and the
+ *                       download quietly stored none of them (#2228).
  *   conflictStrategy  — what to do when an offline edit collides with a newer
  *                       server change: 'ask' surfaces a per-conflict picker,
  *                       'mine'/'server' resolve automatically.
@@ -22,6 +27,7 @@ export type ConflictStrategy = 'ask' | 'mine' | 'server'
 export interface OfflinePrefs {
   cacheTiles: boolean
   disabledTripIds: number[]
+  pinnedTripIds: number[]
   conflictStrategy: ConflictStrategy
 }
 
@@ -30,6 +36,7 @@ const STORAGE_KEY = 'trek_offline_prefs'
 const DEFAULTS: OfflinePrefs = {
   cacheTiles: true,
   disabledTripIds: [],
+  pinnedTripIds: [],
   conflictStrategy: 'ask',
 }
 
@@ -44,6 +51,7 @@ function read(): OfflinePrefs {
     return {
       cacheTiles: typeof parsed.cacheTiles === 'boolean' ? parsed.cacheTiles : DEFAULTS.cacheTiles,
       disabledTripIds: Array.isArray(parsed.disabledTripIds) ? parsed.disabledTripIds.filter(n => typeof n === 'number') : [],
+      pinnedTripIds: Array.isArray(parsed.pinnedTripIds) ? parsed.pinnedTripIds.filter(n => typeof n === 'number') : [],
       conflictStrategy: parsed.conflictStrategy === 'mine' || parsed.conflictStrategy === 'server' ? parsed.conflictStrategy : 'ask',
     }
   } catch {
@@ -59,7 +67,7 @@ function write(next: OfflinePrefs): void {
 
 /** Current snapshot (a copy — callers must not mutate it in place). */
 export function getOfflinePrefs(): OfflinePrefs {
-  return { ..._prefs, disabledTripIds: [..._prefs.disabledTripIds] }
+  return { ..._prefs, disabledTripIds: [..._prefs.disabledTripIds], pinnedTripIds: [..._prefs.pinnedTripIds] }
 }
 
 export function setCacheTiles(on: boolean): void {
@@ -77,6 +85,14 @@ export function isTripOfflineEnabled(tripId: number): boolean {
   return !_prefs.disabledTripIds.includes(tripId)
 }
 
+/**
+ * True when the user explicitly asked to keep this trip, overriding the date
+ * rule that otherwise skips and evicts finished trips (tripSyncManager).
+ */
+export function isTripPinned(tripId: number): boolean {
+  return _prefs.pinnedTripIds.includes(tripId)
+}
+
 /** Turn offline storage for a single trip on or off. */
 export function setTripOfflineEnabled(tripId: number, on: boolean): void {
   const has = _prefs.disabledTripIds.includes(tripId)
@@ -86,6 +102,20 @@ export function setTripOfflineEnabled(tripId: number, on: boolean): void {
     ? _prefs.disabledTripIds.filter(id => id !== tripId)
     : [..._prefs.disabledTripIds, tripId]
   write({ ..._prefs, disabledTripIds })
+}
+
+/**
+ * Pin a trip the date rule would not keep on its own, or release it again.
+ * Turning a trip off releases the pin too, so "off then on" cannot leave a
+ * finished trip silently pinned.
+ */
+export function setTripPinned(tripId: number, on: boolean): void {
+  const has = _prefs.pinnedTripIds.includes(tripId)
+  if (on === has) return
+  const pinnedTripIds = on
+    ? [..._prefs.pinnedTripIds, tripId]
+    : _prefs.pinnedTripIds.filter(id => id !== tripId)
+  write({ ..._prefs, pinnedTripIds })
 }
 
 /** Subscribe to preference changes. Returns an unsubscribe function. */

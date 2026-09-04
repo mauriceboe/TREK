@@ -294,12 +294,27 @@ export const useAuthStore = create<AuthState>()(
         // Genuinely offline — keep the persisted session so the PWA serves cached
         // data without a scary error. This is the offline-first happy path.
         set({ isLoading: false })
+        // ...but the session still has to be marked live. onAuthSuccess is the
+        // only caller of setAuthed(true), and every repair path (the mutation
+        // queue's flush, syncAll, prepareForOffline) is gated on it. Skipping
+        // it here left a session that launched without network unable to sync
+        // for the rest of its life, even after the signal came back: the offline
+        // settings buttons spun and returned instantly having done nothing, and
+        // queued edits never uploaded (#2228). It also points the offline DB at
+        // this user's scoped database, so cached data is read from the right
+        // one rather than the anonymous fallback.
+        const cachedUser = get().user
+        if (cachedUser && get().isAuthenticated) await onAuthSuccess(cachedUser.id)
       } else {
         // Server erroring (5xx) or unreachable while we're online: keep the session
         // (don't eject the user over a transient outage), but flag it so the UI can
         // say "couldn't reach the server" instead of showing a blank, error-free
         // page that looks like the user's trips were lost. #1283
         set({ isLoading: false, authCheckFailed: true })
+        // Same reasoning as the offline branch: the session is kept, so it must
+        // be marked live or the sync layer stays dead until the next full login.
+        const cachedUser = get().user
+        if (cachedUser && get().isAuthenticated) await onAuthSuccess(cachedUser.id)
       }
     }
   },

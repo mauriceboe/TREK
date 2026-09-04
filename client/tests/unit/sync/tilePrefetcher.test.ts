@@ -16,12 +16,14 @@ import {
   countTiles,
   prefetchTiles,
   prefetchTilesForTrip,
+  UNPERSISTED_MAX_ZOOM,
   clearTileCache,
   MAX_TILES,
   TILE_CONCURRENCY,
   type TileBbox,
 } from '../../../src/sync/tilePrefetcher';
 import { offlineDb, clearAll, upsertSyncMeta } from '../../../src/db/offlineDb';
+import { requestPersistentStorage, _resetPersistentStorage } from '../../../src/sync/persistentStorage';
 import { setAuthed } from '../../../src/sync/authGate';
 import { buildPlace } from '../../helpers/factories';
 
@@ -346,6 +348,30 @@ describe('prefetchTilesForTrip', () => {
     const meta = await offlineDb.syncMeta.get(1);
     expect(meta!.tilesBbox).not.toBeNull();
     expect(meta!.tilesBbox).toHaveLength(4);
+  });
+
+  it('#2228: caps the depth when the browser refused persistent storage', async () => {
+    await upsertSyncMeta({ tripId: 1, lastSyncedAt: Date.now(), status: 'idle', tilesBbox: null, filesCachedCount: 0 });
+    const places = [buildPlace({ trip_id: 1, lat: 48.8566, lng: 2.3522 })];
+
+    // Opaque tiles are billed at ~7 MB each. Without an eviction exemption a
+    // full-depth run bills this origin tens of gigabytes, and the browser
+    // answers by evicting the whole bucket, the precached app shell included,
+    // which Workbox then never refills because sw.js has not changed.
+    _resetPersistentStorage();
+    await prefetchTilesForTrip(1, places, 'https://{s}.example.com/{z}/{x}/{y}.png');
+    const zooms = vi.mocked(fetch).mock.calls.map(c => Number(new URL(String(c[0])).pathname.split('/')[1]));
+    expect(Math.max(...zooms)).toBe(UNPERSISTED_MAX_ZOOM);
+
+    vi.mocked(fetch).mockClear();
+    Object.defineProperty(navigator, 'storage', {
+      configurable: true,
+      value: { persist: async () => true, persisted: async () => true },
+    });
+    await requestPersistentStorage();
+    await prefetchTilesForTrip(1, places, 'https://{s}.example.com/{z}/{x}/{y}.png', true);
+    const deepZooms = vi.mocked(fetch).mock.calls.map(c => Number(new URL(String(c[0])).pathname.split('/')[1]));
+    expect(Math.max(...deepZooms)).toBe(16);
   });
 
   it('zoom-clamps instead of skipping when the bbox exceeds MAX_TILES', async () => {

@@ -10,6 +10,7 @@ import { server } from '../../helpers/msw/server';
 import { http, HttpResponse } from 'msw';
 import { tripSyncManager } from '../../../src/sync/tripSyncManager';
 import { setAuthed } from '../../../src/sync/authGate';
+import { setTripPinned, _resetOfflinePrefs } from '../../../src/sync/offlinePrefs';
 import { offlineDb, clearAll, upsertTrip } from '../../../src/db/offlineDb';
 import {
   buildTrip,
@@ -47,6 +48,7 @@ function makeBundle(tripId: number) {
 beforeEach(async () => {
   await clearAll();
   tripSyncManager._resetSyncing();
+  _resetOfflinePrefs();
   setAuthed(true);
   Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true });
   // Stub fetch for blob caching (used by cacheFilesForTrip)
@@ -77,6 +79,28 @@ describe('tripSyncManager.syncAll — auth gate (B4)', () => {
 // ── offline guard ─────────────────────────────────────────────────────────────
 
 describe('tripSyncManager.syncAll — offline guard', () => {
+  it('#2228: reports why a run did not start instead of looking like a success', async () => {
+    setAuthed(false);
+    expect(await tripSyncManager.syncAll()).toEqual({ status: 'skipped', reason: 'signed-out' });
+    expect(await tripSyncManager.prepareForOffline()).toEqual({ status: 'skipped', reason: 'signed-out' });
+
+    setAuthed(true);
+    Object.defineProperty(navigator, 'onLine', { value: false, writable: true, configurable: true });
+    expect(await tripSyncManager.syncAll()).toEqual({ status: 'skipped', reason: 'offline' });
+    expect(await tripSyncManager.prepareForOffline()).toEqual({ status: 'skipped', reason: 'offline' });
+  });
+
+  it('#2228: reports how many trips a completed run stored', async () => {
+    const tripId = 104;
+    const trip = buildTrip({ id: tripId, end_date: dateOffset(3) });
+    server.use(
+      http.get('/api/trips', () => HttpResponse.json({ trips: [trip] })),
+      http.get(`/api/trips/${tripId}/bundle`, () => HttpResponse.json({ ...makeBundle(tripId), trip })),
+    );
+
+    expect(await tripSyncManager.prepareForOffline()).toEqual({ status: 'done', trips: 1 });
+  });
+
   it('does nothing when offline', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false });
 
@@ -147,6 +171,27 @@ describe('tripSyncManager.syncAll — trip filtering', () => {
     expect(bundleCalled).toBe(false);
     expect(await offlineDb.trips.get(tripId)).toBeUndefined();
   });
+
+  it('#2228: caches a past trip once the user pins it', async () => {
+    const tripId = 103;
+    const trip = buildTrip({ id: tripId, end_date: dateOffset(-40) });
+    const bundle = makeBundle(tripId);
+
+    server.use(
+      http.get('/api/trips', () => HttpResponse.json({ trips: [trip] })),
+      http.get(`/api/trips/${tripId}/bundle`, () => HttpResponse.json({ ...bundle, trip })),
+    );
+
+    // Without the pin the date rule refuses it, which is what made the per-trip
+    // switch look like it did nothing for anyone whose trips are all finished.
+    await tripSyncManager.syncAll();
+    expect(await offlineDb.trips.get(tripId)).toBeUndefined();
+
+    setTripPinned(tripId, true);
+    tripSyncManager._resetSyncing();
+    await tripSyncManager.syncAll();
+    expect(await offlineDb.trips.get(tripId)).toBeDefined();
+  });
 });
 
 // ── stale eviction ─────────────────────────────────────────────────────────────
@@ -165,6 +210,21 @@ describe('tripSyncManager.syncAll — stale eviction', () => {
 
     await tripSyncManager.syncAll();
     expect(await offlineDb.trips.get(staleId)).toBeUndefined();
+  });
+
+  it('#2228: does not evict a pinned trip, however long ago it ended', async () => {
+    const pinnedId = 202;
+    const trip = buildTrip({ id: pinnedId, end_date: dateOffset(-400) });
+    await upsertTrip(trip);
+    setTripPinned(pinnedId, true);
+
+    server.use(
+      http.get('/api/trips', () => HttpResponse.json({ trips: [trip] })),
+      http.get(`/api/trips/${pinnedId}/bundle`, () => HttpResponse.json({ ...makeBundle(pinnedId), trip })),
+    );
+
+    await tripSyncManager.syncAll();
+    expect(await offlineDb.trips.get(pinnedId)).toBeDefined();
   });
 
   it('does NOT evict trips that ended exactly 6 days ago', async () => {

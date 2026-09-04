@@ -21,16 +21,17 @@ const h = vi.hoisted(() => {
   const syncMetaToArray = vi.fn();
   const tripsGet = vi.fn();
   const tripsToArray = vi.fn();
+  const tripsCount = vi.fn();
   const placeCount = vi.fn();
   const fileCount = vi.fn();
   const counted = (fn: (id: number) => Promise<number>) => ({
     where: () => ({ equals: (id: number) => ({ count: () => fn(id) }) }),
   });
   return {
-    syncMetaToArray, tripsGet, tripsToArray, placeCount, fileCount,
+    syncMetaToArray, tripsGet, tripsToArray, tripsCount, placeCount, fileCount,
     fakeDb: {
       syncMeta: { toArray: syncMetaToArray },
-      trips: { get: tripsGet, toArray: tripsToArray },
+      trips: { get: tripsGet, toArray: tripsToArray, count: tripsCount },
       places: counted(placeCount),
       tripFiles: counted(fileCount),
     },
@@ -104,6 +105,7 @@ const conflict = (over: Partial<QueuedMutation> = {}): QueuedMutation => ({
 /** Seed the Dexie cache with the given (trip, meta) pairs. */
 function cache(rows: { trip: Trip; meta?: Partial<SyncMeta>; places?: number; files?: number }[]): void {
   h.syncMetaToArray.mockResolvedValue(rows.map(r => meta(r.trip.id, r.meta)));
+  h.tripsCount.mockResolvedValue(rows.length);
   h.tripsGet.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.trip);
   h.placeCount.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.places ?? 0);
   h.fileCount.mockImplementation(async (id: number) => rows.find(r => r.trip.id === id)?.files ?? 0);
@@ -126,6 +128,7 @@ beforeEach(() => {
   h.syncMetaToArray.mockResolvedValue([]);
   h.tripsGet.mockResolvedValue(undefined);
   h.tripsToArray.mockResolvedValue([]);
+  h.tripsCount.mockResolvedValue(0);
   h.placeCount.mockResolvedValue(0);
   h.fileCount.mockResolvedValue(0);
   h.pendingCount.mockResolvedValue(0);
@@ -134,8 +137,8 @@ beforeEach(() => {
   h.clearAll.mockResolvedValue(undefined);
   h.clearTripData.mockResolvedValue(undefined);
   h.clearTileCache.mockResolvedValue(undefined);
-  h.prepareForOffline.mockResolvedValue(undefined);
-  h.syncAll.mockResolvedValue(undefined);
+  h.prepareForOffline.mockResolvedValue({ status: 'done', trips: 1 });
+  h.syncAll.mockResolvedValue({ status: 'done', trips: 1 });
   h.resolveKeepMine.mockResolvedValue(undefined);
   h.resolveKeepServer.mockResolvedValue(undefined);
 
@@ -256,6 +259,7 @@ describe('MSettingsOffline', () => {
       cb({ phase: 'files', current: 1, total: 4, label: 'Paris' });
       await new Promise<void>(resolve => { release = resolve; });
       cb({ phase: 'done', current: 4, total: 4 });
+      return { status: 'done', trips: 4 };
     });
     render(<MSettingsOffline />);
 
@@ -266,7 +270,7 @@ describe('MSettingsOffline', () => {
     expect(screen.getByRole('button', { name: 'Downloading…' })).toBeDisabled();
 
     await act(async () => { release(); });
-    expect(await screen.findByText('Ready for offline use')).toBeInTheDocument();
+    expect(await screen.findByText('Stored 4 trip(s) on this device')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download for offline use' })).toBeEnabled();
   });
 
@@ -276,6 +280,7 @@ describe('MSettingsOffline', () => {
     h.prepareForOffline.mockImplementation(async (cb: (p: PrepareProgress) => void) => {
       cb({ phase: 'tiles', current: 0, total: 0 });
       await new Promise<void>(resolve => { release = resolve; });
+      return { status: 'done', trips: 1 };
     });
     render(<MSettingsOffline />);
 
@@ -349,21 +354,36 @@ describe('MSettingsOffline', () => {
     expect(h.clearTileCache).toHaveBeenCalledTimes(1);
   });
 
-  it('FE-MOB-OFFLINE-015: switching a trip off evicts it, switching it back on re-syncs', async () => {
+  it('FE-MOB-OFFLINE-015: switching a finished trip on pins and re-syncs it, switching it off evicts it', async () => {
     const user = userEvent.setup();
     render(<MSettingsOffline />);
 
+    // Both fixture trips ended in 2025, so the date rule would skip them and the
+    // switch has to say so rather than promising storage that never happens.
     const toggle = await screen.findByRole('switch', { name: 'Tokyo' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getAllByText('Stored offline')).toHaveLength(2);
-
-    await user.click(toggle);
-    expect(h.clearTripData).toHaveBeenCalledWith(2);
-    await waitFor(() => expect(screen.getByText('Not stored')).toBeInTheDocument());
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getAllByText(/Not stored · Finished/)).toHaveLength(2);
 
     await user.click(toggle);
     await waitFor(() => expect(h.syncAll).toHaveBeenCalledTimes(1));
-    expect(h.clearTripData).toHaveBeenCalledTimes(1);
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([2]);
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Tokyo' })).toHaveAttribute('aria-checked', 'true'));
+
+    await user.click(screen.getByRole('switch', { name: 'Tokyo' }));
+    expect(h.clearTripData).toHaveBeenCalledWith(2);
+    expect(getOfflinePrefs().pinnedTripIds).toEqual([]);
+  });
+
+  it('FE-MOB-OFFLINE-022: a sync that never ran says so instead of reporting success', async () => {
+    const user = userEvent.setup();
+    h.prepareForOffline.mockResolvedValue({ status: 'skipped', reason: 'offline' });
+    render(<MSettingsOffline />);
+
+    await screen.findByText('No trips cached yet. Connect to the internet to sync.');
+    await user.click(screen.getByRole('button', { name: 'Download for offline use' }));
+
+    expect(await screen.findByText('No connection. Connect to store trips for offline use.')).toBeInTheDocument();
+    expect(screen.queryByText(/Stored .* trip/)).not.toBeInTheDocument();
   });
 
   it('FE-MOB-OFFLINE-016: the per-trip section disappears when there are no trips at all', async () => {

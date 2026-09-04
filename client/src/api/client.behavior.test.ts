@@ -230,7 +230,8 @@ describe('client > proxy auth challenges', () => {
     return getRegistration
   }
 
-  it('FE-APIWIRE-011: an HTML 401 unregisters the service worker and reloads', async () => {
+  it('FE-APIWIRE-011: an HTML 401 behind a confirmed proxy wall unregisters the service worker and reloads', async () => {
+    probeNow.mockResolvedValue('proxy-wall')
     const unregister = vi.fn(async () => true)
     installServiceWorker(unregister)
     server.use(http.get('/api/auth/me', () =>
@@ -241,6 +242,25 @@ describe('client > proxy auth challenges', () => {
     expect(unregister).toHaveBeenCalled()
     expect(reload).toHaveBeenCalledTimes(1)
     expect(sessionStorage.getItem('proxy_reauth_attempted')).toBe('1')
+  })
+
+  it('FE-APIWIRE-016: an HTML 401 from TREK itself keeps the service worker (#2228)', async () => {
+    // text/html is not proof of a proxy: several of TREK's own routes answer
+    // res.status(401).send('Authentication required'), which Express labels
+    // text/html. Tearing the worker down for one of those costs the user
+    // offline mode for a wall that is not there, so confirm reachability first.
+    probeNow.mockResolvedValue('online')
+    const unregister = vi.fn(async () => true)
+    installServiceWorker(unregister)
+    server.use(http.get('/api/auth/me', () =>
+      new HttpResponse('Authentication required', { status: 401, headers: { 'Content-Type': 'text/html' } })))
+
+    await captureError(() => apiClient.get('/auth/me'))
+
+    expect(probeNow).toHaveBeenCalled()
+    expect(unregister).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem('proxy_reauth_attempted')).toBeNull()
   })
 
   it('FE-APIWIRE-012: the reauth reload only fires once per session', async () => {
