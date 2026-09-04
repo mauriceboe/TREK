@@ -10,7 +10,7 @@ import { resetAllStores } from '../../../helpers/store'
 import { server } from '../../../helpers/msw/server'
 import { act, fireEvent, render, screen, waitFor, within } from '../../../helpers/render'
 
-// FE-MOB-CNOTE-001 to FE-MOB-CNOTE-026
+// FE-MOB-CNOTE-001 to FE-MOB-CNOTE-033
 
 // react-markdown ships as ESM-only chunks that jsdom chokes on; the note cards
 // only care that the raw text reaches the renderer.
@@ -251,7 +251,7 @@ describe('MCollabNotes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'collab.notes.create' }))
 
     await waitFor(() => expect(createdBodies).toEqual([
-      { title: 'Insurance', content: 'call the hotline', category: 'Docs', color: '#ef4444' },
+      { title: 'Insurance', content: 'call the hotline', category: 'Docs', color: '#ef4444', website: null },
     ]))
     expect(await screen.findByText('Insurance')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -270,7 +270,7 @@ describe('MCollabNotes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'collab.notes.create' }))
 
     await waitFor(() => expect(createdBodies).toEqual([
-      { title: 'Ferry', category: 'Transport', color: '#6366f1' },
+      { title: 'Ferry', category: 'Transport', color: '#6366f1', website: null },
     ]))
   })
 
@@ -292,7 +292,7 @@ describe('MCollabNotes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'collab.notes.create' }))
 
     await waitFor(() => expect(createdBodies).toEqual([
-      { title: 'Ferry', category: 'Food', color: '#6366f1' },
+      { title: 'Ferry', category: 'Food', color: '#6366f1', website: null },
     ]))
   })
 
@@ -324,7 +324,7 @@ describe('MCollabNotes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'collab.notes.save' }))
 
     await waitFor(() => expect(updatedBodies).toEqual([
-      { id: '1', body: { title: 'Visa (done)', content: 'apply early', category: 'Docs', color: '#ef4444' } },
+      { id: '1', body: { title: 'Visa (done)', content: 'apply early', category: 'Docs', color: '#ef4444', website: null } },
     ]))
     expect(await screen.findByText('Visa (done)')).toBeInTheDocument()
   })
@@ -514,5 +514,97 @@ describe('MCollabNotes', () => {
 
     unmount()
     expect(removeListener).toHaveBeenCalledWith(handler)
+  })
+
+  it('FE-MOB-CNOTE-027: creates a note with the trimmed website', async () => {
+    serveNotes([])
+    serveWrites()
+    await renderNotes()
+
+    fireEvent.click(screen.getByRole('button', { name: /collab\.notes\.new/ }))
+    fireEvent.change(screen.getByPlaceholderText('collab.notes.titlePlaceholder'), { target: { value: 'Ferry' } })
+    fireEvent.change(screen.getByPlaceholderText('collab.notes.websitePlaceholder'), { target: { value: '  https://ferry.test/booking  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'collab.notes.create' }))
+
+    await waitFor(() => expect(createdBodies).toEqual([
+      { title: 'Ferry', color: '#6366f1', website: 'https://ferry.test/booking' },
+    ]))
+  })
+
+  it('FE-MOB-CNOTE-028: a blank website is posted as null instead of an empty string', async () => {
+    serveNotes([])
+    serveWrites()
+    await renderNotes()
+
+    fireEvent.click(screen.getByRole('button', { name: /collab\.notes\.new/ }))
+    fireEvent.change(screen.getByPlaceholderText('collab.notes.titlePlaceholder'), { target: { value: 'Ferry' } })
+    fireEvent.change(screen.getByPlaceholderText('collab.notes.websitePlaceholder'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'collab.notes.create' }))
+
+    await waitFor(() => expect(createdBodies).toEqual([
+      { title: 'Ferry', color: '#6366f1', website: null },
+    ]))
+  })
+
+  it('FE-MOB-CNOTE-029: editing prefills the stored website and saves it back unchanged', async () => {
+    serveNotes([note(1, { title: 'Visa', website: 'https://visa.test' })])
+    serveWrites()
+    await renderNotes()
+
+    fireEvent.click(screen.getByText('Visa'))
+    expect(screen.getByPlaceholderText('collab.notes.websitePlaceholder')).toHaveValue('https://visa.test')
+    fireEvent.click(screen.getByRole('button', { name: 'collab.notes.save' }))
+
+    await waitFor(() => expect(updatedBodies).toEqual([
+      { id: '1', body: { title: 'Visa', color: '#6366f1', website: 'https://visa.test' } },
+    ]))
+  })
+
+  it('FE-MOB-CNOTE-030: clearing the website sends an explicit null so the server drops it', async () => {
+    serveNotes([note(1, { title: 'Visa', website: 'https://visa.test' })])
+    serveWrites()
+    await renderNotes()
+
+    fireEvent.click(screen.getByText('Visa'))
+    fireEvent.change(screen.getByPlaceholderText('collab.notes.websitePlaceholder'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'collab.notes.save' }))
+
+    await waitFor(() => expect(updatedBodies).toEqual([
+      { id: '1', body: { title: 'Visa', color: '#6366f1', website: null } },
+    ]))
+  })
+
+  it('FE-MOB-CNOTE-031: the viewer sheet links a bare host out to a new tab', async () => {
+    serveNotes([note(1, { title: 'Visa', website: 'www.visa.test' })])
+    await renderNotes(buildPlanner({ can: (() => false) as TripPlanner['can'] }))
+
+    fireEvent.click(screen.getByText('Visa'))
+    const link = within(screen.getByRole('dialog', { name: 'Visa' })).getByRole('link')
+    expect(link).toHaveAttribute('href', 'https://www.visa.test')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link).toHaveTextContent('visa.test')
+  })
+
+  it('FE-MOB-CNOTE-032: a javascript: website is never turned into a link', async () => {
+    serveNotes([note(1, { title: 'Visa', website: 'javascript:alert(1)' })])
+    await renderNotes(buildPlanner({ can: (() => false) as TripPlanner['can'] }))
+
+    expect(screen.queryAllByRole('link')).toHaveLength(0)
+    fireEvent.click(screen.getByText('Visa'))
+    expect(screen.getByRole('dialog', { name: 'Visa' })).toBeInTheDocument()
+    expect(screen.queryAllByRole('link')).toHaveLength(0)
+  })
+
+  it('FE-MOB-CNOTE-033: only a card with a website carries the link affordance', async () => {
+    serveNotes([
+      note(1, { title: 'Visa', website: 'https://visa.test' }),
+      note(2, { title: 'Tent' }),
+    ])
+    await renderNotes()
+
+    const links = screen.getAllByRole('link', { name: 'collab.notes.website' })
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', 'https://visa.test')
   })
 })

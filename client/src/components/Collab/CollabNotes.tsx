@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { sanitizedMarkdownComponents, sanitizedMarkdownPlugins } from '../shared/markdownSanitize'
 import { createPortal } from 'react-dom'
-import { Plus, Pencil, X, StickyNote, Settings } from 'lucide-react'
+import { Plus, Pencil, X, StickyNote, Settings, ExternalLink } from 'lucide-react'
 import { collabApi } from '../../api/client'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
@@ -21,6 +21,7 @@ import { CategorySettingsModal } from './CollabNotesCategorySettingsModal'
 import { NoteCard } from './CollabNotesCard'
 import { FilePreviewPortal } from './CollabNotesFilePreviewPortal'
 import { AuthedImg } from './CollabNotesAuthedImg'
+import { safeExternalHref } from '../../utils/safeUrl'
 
 // ── Main Component ──────────────────────────────────────────────────────────
 interface CollabNotesProps {
@@ -393,9 +394,18 @@ function CollabNotesGrid(S: NotesState) {
   )
 }
 
+/** Label for the link chip: the host is what people recognise, "www." is noise. */
+function linkHost(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
+}
+
 function ViewNoteModal(S: NotesState) {
   const { viewingNote, setViewingNote, canEdit, setEditingNote, getCategoryColor, t, setPreviewFile } = S
   if (!viewingNote) return null
+  // A member without collab_edit only ever gets this modal, so the link has to
+  // be here too (#2222). Allow-listed like the card tile: the field takes any
+  // string, and a javascript: one would run in this origin.
+  const websiteHref = safeExternalHref(viewingNote.website)
   return createPortal(
     <div
       style={{
@@ -447,6 +457,17 @@ function ViewNoteModal(S: NotesState) {
         </div>
         <div className="collab-note-md-full" style={{ padding: '16px 20px', overflowY: 'auto', fontSize: 'calc(14px * var(--fs-scale-body, 1))', color: 'var(--text-primary)', lineHeight: 1.7 }}>
           <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={sanitizedMarkdownPlugins} components={sanitizedMarkdownComponents}>{viewingNote.content || ''}</Markdown>
+          {websiteHref && (
+            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12,
+                padding: '6px 12px', borderRadius: 999, border: '1px solid var(--border-primary)',
+                fontSize: 'calc(12px * var(--fs-scale-caption, 1))', fontWeight: 600,
+                color: 'var(--text-primary)', textDecoration: 'none',
+              }}>
+              <ExternalLink size={13} color="var(--text-muted)" /> {linkHost(websiteHref)}
+            </a>
+          )}
           {(viewingNote.attachments || []).length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-primary)' }}>
               <div style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>{t('files.title')}</div>

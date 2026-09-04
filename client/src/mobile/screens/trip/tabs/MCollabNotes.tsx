@@ -3,11 +3,12 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { sanitizedMarkdownPlugins, sanitizedMarkdownComponents } from '../../../../components/shared/markdownSanitize'
-import { Check, FileText, Paperclip, Pin, PinOff, Plus, StickyNote, Trash2, X } from 'lucide-react'
+import { Check, ExternalLink, FileText, Paperclip, Pin, PinOff, Plus, StickyNote, Trash2, X } from 'lucide-react'
 import MDancingTrek from '../../../components/MDancingTrek'
 import { collabApi } from '../../../../api/client'
 import { addListener, removeListener } from '../../../../api/websocket'
 import { openFile } from '../../../../utils/fileDownload'
+import { safeExternalHref } from '../../../../utils/safeUrl'
 import MSheet from '../../../components/MSheet'
 import { Eyebrow, FIELD_AREA_CLS, FIELD_CLS, FormSheetFooter, FormSheetHeader } from '../sheets/PlSheetChrome'
 import MConfirmSheet from '../../settings/MConfirmSheet'
@@ -36,7 +37,13 @@ interface NoteFormSubmitData {
   content?: string
   category?: string
   color: string
+  website: string | null
   pendingFiles: File[]
+}
+
+/** Label for a link chip: the host is what people recognise, "www." is noise. */
+function linkHost(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
 }
 
 /**
@@ -98,6 +105,7 @@ export default function MCollabNotes({ planner }: MCollabNotesProps) {
     try {
       const res = (await collabApi.createNote(tripId, {
         title: data.title, content: data.content, category: data.category, color: data.color,
+        website: data.website,
       })) as NoteResponse
       created = res.note
     } catch {
@@ -119,7 +127,7 @@ export default function MCollabNotes({ planner }: MCollabNotesProps) {
 
   const handleUpdate = useCallback(async (
     noteId: number,
-    data: { title?: string; content?: string; category?: string; color?: string; pinned?: boolean },
+    data: { title?: string; content?: string; category?: string; color?: string; pinned?: boolean; website?: string | null },
     pendingFiles: File[] = [],
   ) => {
     let updated: CollabNoteData | undefined
@@ -256,6 +264,7 @@ export default function MCollabNotes({ planner }: MCollabNotesProps) {
           if (formTarget && formTarget !== 'new') {
             await handleUpdate(formTarget.id, {
               title: data.title, content: data.content, category: data.category, color: data.color,
+              website: data.website,
             }, data.pendingFiles)
           } else {
             await handleCreate(data)
@@ -296,6 +305,10 @@ function NoteCardRow({ note, color, canEdit, onTap, onTogglePin, onDelete, t }: 
   t: TripPlanner['t']
 }) {
   const initial = (note.username || '?')[0]?.toUpperCase() || '?'
+  // An editor is routed to the form sheet, never to the viewer, so the card is
+  // the only surface where both roles can reach the link (#2222). The field
+  // takes any string, so the href is allow-listed the way the desktop tile is.
+  const websiteHref = safeExternalHref(note.website)
 
   return (
     <div className="mt-2 overflow-hidden rounded-2xl border border-[color:var(--m-rowbr)] bg-[color:var(--m-ic)]">
@@ -312,6 +325,17 @@ function NoteCardRow({ note, color, canEdit, onTap, onTogglePin, onDelete, t }: 
             </span>
           )}
         </button>
+        {websiteHref && (
+          <a
+            href={websiteHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('collab.notes.website')}
+            className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full bg-[color:var(--m-ic)] text-m-muted"
+          >
+            <ExternalLink size={12} strokeWidth={2.2} />
+          </a>
+        )}
         {canEdit && (
           <button
             type="button"
@@ -376,6 +400,7 @@ function NoteFormSheet({ open, target, categories, colorMap, canUploadFiles, onC
   const [category, setCategory] = useState<string | null>(null)
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCategoryDraft, setNewCategoryDraft] = useState('')
+  const [website, setWebsite] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [existingFiles, setExistingFiles] = useState<CollabNoteFile[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -388,6 +413,7 @@ function NoteFormSheet({ open, target, categories, colorMap, canUploadFiles, onC
     setCategory(note?.category || null)
     setAddingCategory(false)
     setNewCategoryDraft('')
+    setWebsite(note?.website || '')
     setPendingFiles([])
     setExistingFiles(note?.attachments || [])
   }, [open, note])
@@ -403,6 +429,9 @@ function NoteFormSheet({ open, target, categories, colorMap, canUploadFiles, onC
         content: content.trim() || undefined,
         category: category || undefined,
         color: getCategoryColor(category, colorMap),
+        // Always sent, never undefined: the server only writes the column when
+        // the key is present, so an emptied field has to arrive as null to clear.
+        website: website.trim() || null,
         pendingFiles,
       })
       onClose()
@@ -500,6 +529,16 @@ function NoteFormSheet({ open, target, categories, colorMap, canUploadFiles, onC
           )}
         </div>
 
+        <Eyebrow className="mb-[5px] mt-3 uppercase">{t('collab.notes.website')}</Eyebrow>
+        <input
+          type="url"
+          inputMode="url"
+          value={website}
+          onChange={e => setWebsite(e.target.value)}
+          placeholder={t('collab.notes.websitePlaceholder')}
+          className={FIELD_CLS}
+        />
+
         {canUploadFiles && (
           <>
             <Eyebrow className="mb-[6px] mt-3 uppercase">{t('collab.notes.attachFiles')}</Eyebrow>
@@ -588,6 +627,7 @@ function NoteViewSheet({ open, note, onClose, t }: {
   useEffect(() => {
     if (open) setSnapshot(note)
   }, [open, note])
+  const websiteHref = safeExternalHref(snapshot?.website)
 
   return (
     <MSheet open={open} onClose={onClose} ariaLabel={snapshot?.title}>
@@ -603,6 +643,17 @@ function NoteViewSheet({ open, note, onClose, t }: {
           <div className="font-geist text-[0.8125rem] leading-[1.6] text-m-ink [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-2 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-5">
             <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={sanitizedMarkdownPlugins} components={sanitizedMarkdownComponents}>{snapshot.content}</Markdown>
           </div>
+        )}
+        {websiteHref && (
+          <a
+            href={websiteHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-[5px] rounded-full border border-[color:var(--m-rowbr)] bg-m-card px-3 py-[7px] font-geist text-[0.71875rem] font-semibold text-m-ink"
+          >
+            <ExternalLink size={13} strokeWidth={2} className="text-m-muted" />
+            {linkHost(websiteHref)}
+          </a>
         )}
         {(snapshot?.attachments.length ?? 0) > 0 && (
           <div className="mt-4 flex flex-col gap-[6px]">

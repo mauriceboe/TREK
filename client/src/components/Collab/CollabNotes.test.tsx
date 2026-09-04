@@ -1275,7 +1275,7 @@ describe('CollabNotes', () => {
   });
 });
 
-// FE-W5CNT-001 to FE-W5CNT-029
+// FE-W5CNT-001 to FE-W5CNT-036
 // Fills in the load/error/attachment/category branches of useCollabNotes and the
 // view modal that the smoke tests above do not reach.
 
@@ -1946,5 +1946,33 @@ describe('CollabNotes details', () => {
     expect(href.startsWith('#')).toBe(true);
     expect(full.querySelector(`[id="${href.slice(1)}"]`)).not.toBeNull();
     expect(ref).not.toHaveAttribute('target');
+  });
+
+  it('FE-W5CNT-035: the expanded note links its website out to a new tab', async () => {
+    const user = userEvent.setup();
+    serveNotes({ notes: [buildNote({ id: 9, title: 'Hotel', website: 'www.hotel.test' })] });
+    server.use(http.get('/api/trips/1/collab/link-preview', () => HttpResponse.json({ title: 'Hotel', image: null })));
+    render(<CollabNotes {...defaultProps} />);
+    await screen.findByText('Hotel');
+    await user.click(screen.getByTitle('collab.notes.expand'));
+    const full = await openedNoteBody();
+
+    // A member without collab_edit never opens the edit modal, so this is the
+    // only place the link is readable for them (#2222).
+    const link = within(full).getByRole('link');
+    expect(link).toHaveAttribute('href', 'https://www.hotel.test');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveTextContent('hotel.test');
+  });
+
+  it('FE-W5CNT-036: a javascript: website stays unlinked in the expanded note', async () => {
+    const user = userEvent.setup();
+    serveNotes({ notes: [buildNote({ id: 10, title: 'Hotel', website: 'javascript:alert(1)' })] });
+    render(<CollabNotes {...defaultProps} />);
+    await screen.findByText('Hotel');
+    await user.click(screen.getByTitle('collab.notes.expand'));
+    const full = await openedNoteBody();
+
+    expect(within(full).queryAllByRole('link')).toHaveLength(0);
   });
 });
