@@ -134,6 +134,21 @@ persistence:
     existingClaim: ""
     annotations: {}
 
+# Readiness and liveness probes
+probes:
+  liveness:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  readiness:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
 resources:
   requests:
     cpu: 100m

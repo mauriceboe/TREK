@@ -8,7 +8,7 @@ This is a minimal Helm chart for deploying the TREK app.
 - Optional persistent storage for `/app/data` and `/app/uploads`
 - Configurable environment variables and secrets
 - Optional generic Ingress support
-- Health checks on `/api/health`
+- Configurable health checks (liveness/readiness probes) on `/api/health`
 
 ## Helm Repository
 
