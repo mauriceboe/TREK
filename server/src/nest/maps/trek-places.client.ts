@@ -49,7 +49,15 @@ export interface TrekPlace {
   };
   brand: { name: string | null; wikidata: string | null } | null;
   source: string;
-  hours: unknown | null;
+  /**
+   * Opening hours in OSM syntax, plus where they came from. The index carries
+   * them for a small share of places; the rest are read from the schema.org
+   * data the operator publishes on their own site, in the same page fetch the
+   * description comes from.
+   */
+  hours: { osm: string; source: string | null; sourceUrl: string | null } | null;
+  /** Quoted from the place's own site, when it publishes one for machines. */
+  description?: { text: string; source: string | null; sourceUrl: string | null } | null;
   score?: number;
 }
 

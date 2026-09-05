@@ -1825,11 +1825,10 @@ export class MapsService {
       const found = await trekPlacesById(placeId.slice('gers:'.length)).catch(() => null);
       if (!found) return { place: null };
 
-      // What the index does not have, the free sources still do. The index
-      // carries no opening hours yet and never carries cuisine, wheelchair
-      // access or a menu link; OpenStreetMap has all of them for the same
-      // building. Without this the hours a user saw while adding the place
-      // disappeared from its card afterwards, which reads like data loss.
+      // What the index does not have, the free sources still do: cuisine,
+      // wheelchair access, a menu link. OpenStreetMap has all of them for the
+      // same building, and without this the details a user saw while adding the
+      // place disappeared from its card afterwards, which reads like data loss.
       //
       // Matched by name and coordinate, with the same two gates
       // resolveOsmIdentity applies everywhere: within range, and sharing a
@@ -1841,16 +1840,42 @@ export class MapsService {
       }).catch(() => null);
 
       const record = toPlaceRecord(found);
-      if (!osm) return { place: record };
+      // Hours the index read off the operator's own site, run through the same
+      // expansion OSM's go through — the client reads a list of weekday lines,
+      // not the raw syntax, and handing it two shapes for one field would be a
+      // bug on every card that shows it.
+      //
+      // Measured across seven countries, OpenStreetMap has hours for 27.5
+      // percent of gastronomy; this covers part of the rest. It is the
+      // fallback, not the first choice: an OSM entry describes this exact
+      // object and gets corrected by people who walked past, where a chain's
+      // website often carries one set of hours for every branch.
+      const fromSite =
+        typeof found.hours?.osm === 'string' ? buildOsmDetails({ opening_hours: found.hours.osm }, '', '') : null;
+      if (!osm) {
+        return {
+          place: fromSite?.opening_hours
+            ? {
+                ...record,
+                opening_hours: fromSite.opening_hours,
+                open_now: fromSite.open_now,
+                opening_periods: fromSite.opening_periods,
+              }
+            : record,
+        };
+      }
 
       const osmDetails = buildOsmDetails(osm.tags, '', '');
+      const hoursFrom = osmDetails.opening_hours ? osmDetails : fromSite;
       return {
         place: {
           // Index first: its name, coordinate and contact details are the ones
           // the user picked. OSM only fills what is still missing.
           ...osmDetails,
           ...record,
-          opening_hours: osmDetails.opening_hours ?? null,
+          opening_hours: hoursFrom?.opening_hours ?? null,
+          open_now: hoursFrom?.open_now ?? null,
+          opening_periods: hoursFrom?.opening_periods ?? null,
           website: record.website ?? osmDetails.website ?? null,
           phone: record.phone ?? osmDetails.phone ?? null,
           osm_id: placeId,

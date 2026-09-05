@@ -144,7 +144,27 @@ import type { SsrfResult } from '../../../src/utils/ssrfGuard';
 // flowing exactly as they did for the legacy module.
 const svc = new MapsService(new DatabaseService(db as never), photoCacheStub);
 
+/**
+ * Switch the TREK Places index off for one case.
+ *
+ * The index now answers search and autocomplete before Google is asked, which
+ * is the point of it. A case that is about the shape of the GOOGLE request has
+ * to take the index out of the way first, or it asserts against the index's URL
+ * and fails for the right reason.
+ *
+ * Spied on the method rather than driven through app_settings, because
+ * trekPlacesEnabled writes its key straight into the SQL and the db stub only
+ * sees bound parameters. The default and the 'false' path are covered in
+ * maps.area.test.ts, which does go through the setting.
+ */
+let indexSpy: { mockRestore: () => void } | null = null;
+function indexOff(): void {
+  indexSpy = vi.spyOn(svc, 'trekPlacesEnabled').mockReturnValue(false);
+}
+
 afterEach(() => {
+  indexSpy?.mockRestore();
+  indexSpy = null;
   vi.unstubAllGlobals();
   mockDbGet.mockReset();
   mockDbGet.mockReturnValue(undefined);
@@ -1196,6 +1216,7 @@ describe('searchPlaces (fetch stubbed)', () => {
   // on its own. The body field and the query parameter are what Google's
   // reference specifies for each half.
   it('MAPS-039f: sends the session token in the autocomplete body', async () => {
+    indexOff();
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'ENCRYPTED' }).mockReturnValueOnce(null);
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) });
     vi.stubGlobal('fetch', fetchMock);
@@ -1208,6 +1229,7 @@ describe('searchPlaces (fetch stubbed)', () => {
   });
 
   it('MAPS-039g: omits the field entirely when there is no session token', async () => {
+    indexOff();
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'ENCRYPTED' }).mockReturnValueOnce(null);
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) });
     vi.stubGlobal('fetch', fetchMock);
@@ -1335,6 +1357,7 @@ describe('searchPlaces (fetch stubbed)', () => {
   });
 
   it('MAPS-183: drops permanently closed Google results and keeps the rest (#1341)', async () => {
+    indexOff();
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'some-key' });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -1530,6 +1553,7 @@ describe('autocompletePlaces (fetch stubbed)', () => {
   });
 
   it('MAPS-088: includes locationBias in Google request when provided', async () => {
+    indexOff();
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'test-key' });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -1549,6 +1573,7 @@ describe('autocompletePlaces (fetch stubbed)', () => {
   });
 
   it('MAPS-089: omits locationBias from Google request when not provided', async () => {
+    indexOff();
     mockDbGet.mockReturnValueOnce({ maps_api_key: 'test-key' });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
