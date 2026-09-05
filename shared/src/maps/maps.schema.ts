@@ -131,7 +131,14 @@ export const placePhotoCandidateSchema = z.object({
 });
 export type PlacePhotoCandidate = z.infer<typeof placePhotoCandidateSchema>;
 
-export const placeDescriptionSourceSchema = z.enum(['google', 'osm', 'wikivoyage', 'wikipedia']);
+export const placeDescriptionSourceSchema = z.enum([
+  'google',
+  'osm',
+  'wikivoyage',
+  'wikipedia',
+  /** Quoted from the place's own site, via the TREK Places API. */
+  'website',
+]);
 export type PlaceDescriptionSource = z.infer<typeof placeDescriptionSourceSchema>;
 
 export const placeDescriptionSchema = z.object({

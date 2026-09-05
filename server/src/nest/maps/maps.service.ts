@@ -687,6 +687,35 @@ export class MapsService {
     return this.resolveMapsKey(userId).key;
   }
 
+  /**
+   * A coordinate for a name that came out of an import, from whichever source
+   * has it.
+   *
+   * Booking imports geocode every venue and every uncoordinated endpoint in one
+   * request loop, up to thirty sequential lookups. Every one of those used to be
+   * a Nominatim call on the background lane, waiting out its throttle. The index
+   * answers most of them without leaving our own infrastructure and without a
+   * throttle at all; a street address it does not know still falls through to
+   * Nominatim, which is the source that resolves addresses.
+   *
+   * Never throws: an import that cannot place a hotel still imports the hotel.
+   */
+  async geocodeQuery(query: string): Promise<{ lat: number; lng: number } | null> {
+    if (this.trekPlacesEnabled()) {
+      try {
+        const found = await trekPlacesSearch(query, { limit: 1 });
+        const hit = found[0];
+        if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lng)) {
+          return { lat: hit.lat, lng: hit.lng };
+        }
+      } catch (err: unknown) {
+        console.warn('TREK Places geocode failed, falling back:', (err as Error).message);
+      }
+    }
+    const hit = (await this.searchNominatim(query, undefined, 'background'))[0];
+    return hit?.lat != null && hit?.lng != null ? { lat: hit.lat, lng: hit.lng } : null;
+  }
+
   // ── Nominatim search ───────────────────────────────────────────────────────
 
   /**

@@ -21,6 +21,7 @@ import {
   type WikiIdentity,
 } from '../maps/maps.service';
 import { buildOsmDetails, isGooglePlaceId, parseWikipediaTag, rankCommonsCandidates, toWikiLang } from '../maps/maps.helpers';
+import { trekPlacesById } from '../maps/trek-places.client';
 import { PlacePhotoCacheService } from '../place-photos/place-photo-cache.service';
 
 /**
@@ -570,6 +571,38 @@ export class PlaceEnrichmentService {
 
   // ── Description ────────────────────────────────────────────────────────────
 
+  /**
+   * The description the place publishes on its own site, served from the TREK
+   * Places API rather than fetched here.
+   *
+   * TREK never opens the business's website itself: that would be one request
+   * per instance per place, against small servers, from hundreds of homelabs.
+   * The API fetches each page once, keeps the summary, and every instance reads
+   * it from there. Only places carrying a GERS id can be looked up, which is
+   * exactly the ones that came from the API in the first place.
+   */
+  private async websiteDescription(placeId: string): Promise<PlaceDescription | null> {
+    if (!placeId.startsWith('gers:')) return null;
+    try {
+      const place = await trekPlacesById(placeId.slice(5));
+      const got = (place as { description?: { text?: string; sourceUrl?: string } } | null)?.description;
+      const text = typeof got?.text === 'string' ? got.text.trim() : '';
+      if (!text) return null;
+      return {
+        text,
+        source: 'website',
+        sourceUrl: typeof got?.sourceUrl === 'string' ? got.sourceUrl : null,
+        // Not a licensed corpus: a quoted summary from the operator's own page,
+        // credited and linked back. Saying "CC-something" here would be a claim
+        // about terms nobody granted.
+        license: null,
+      };
+    } catch {
+      // The API being down must never cost the place its other sources.
+      return null;
+    }
+  }
+
   private async collectDescription(
     userId: number,
     placeId: string,
@@ -598,6 +631,19 @@ export class PlaceEnrichmentService {
     if (extract) {
       return { text: extract.text, source: extract.source, sourceUrl: extract.sourceUrl, license: 'CC BY-SA 4.0' };
     }
+
+    // Then the place's own website, through the TREK Places API.
+    //
+    // Placed here and not higher on purpose: an encyclopaedia article reached
+    // through the OSM `wikipedia` tag is about this exact place and was written
+    // by someone with no stake in it, which beats marketing copy. But for the
+    // ordinary case — a restaurant, a shop, a hotel, none of which will ever
+    // have an article — the operator's own summary is the only description that
+    // exists, and it is published in JSON-LD or og:description precisely so
+    // machines can read it. That covers roughly 43 percent of places, where the
+    // encyclopaedias cover a fraction of a percent.
+    const fromSite = await this.websiteDescription(placeId);
+    if (fromSite) return fromSite;
 
     const apiKey = this.maps.getMapsKey(userId);
     if (apiKey && !this.maps.detailsDisabled() && isGooglePlaceId(placeId)) {

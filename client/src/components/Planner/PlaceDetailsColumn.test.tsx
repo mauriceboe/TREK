@@ -169,6 +169,28 @@ describe('PlaceDetailsColumn', () => {
     expect(link.parentElement).toHaveTextContent('CC BY-SA 4.0')
   })
 
+  it('FE-PDC-010b: credits a website description by host', async () => {
+    // The source labels used to be a ternary chain ending in 'Wikipedia', so a
+    // restaurant's own marketing copy would have been credited to an
+    // encyclopaedia. There is no fixed name for "the place's own website", and
+    // the host is the honest one.
+    placeEnrichment.mockResolvedValue({
+      photos: [],
+      facts: [],
+      description: {
+        text: 'Pizza in Rostock, seit 2015.',
+        source: 'website',
+        sourceUrl: 'https://www.losteria.net/rostock',
+        license: null,
+      },
+    })
+    renderColumn()
+
+    const link = await screen.findByRole('link', { name: /losteria\.net/ })
+    expect(link).toHaveAttribute('href', 'https://www.losteria.net/rostock')
+    expect(screen.queryByText(/Wikipedia/)).not.toBeInTheDocument()
+  })
+
   it('FE-PDC-011: says so when the admin switched enrichment off', async () => {
     placeEnrichment.mockResolvedValue({ photos: [], description: null, facts: [], disabled: true })
     renderColumn()
