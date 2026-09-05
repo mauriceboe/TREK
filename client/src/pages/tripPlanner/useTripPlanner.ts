@@ -8,7 +8,7 @@ import { useToast } from '../../components/shared/Toast'
 import { Map, Ticket, PackageCheck, Wallet, FolderOpen, Users, Train } from 'lucide-react'
 import { resolvePluginIcon } from '../../components/shared/PluginIcon'
 import { useTranslation, translateApiError } from '../../i18n'
-import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, healthApi, airtrailApi, mapsApi, placesApi } from '../../api/client'
+import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, healthApi, airtrailApi, mapsApi } from '../../api/client'
 import { parsedItemToDraft, isTransportItem, isUnplaceableItem, type BookingReviewDraft } from '../../components/Planner/parsedItemToDraft'
 import type { BookingImportPreviewItem } from '@trek/shared'
 import { accommodationRepo } from '../../repo/accommodationRepo'
@@ -933,8 +933,14 @@ export function useTripPlanner() {
       }
     } catch { /* geocode failure is non-fatal — create the place without coords */ }
     try {
-      const place = await placesApi.create(tripId, { name: name || address || 'Accommodation', lat, lng, address } as never)
-      return (place as { id?: number })?.id ?? null
+      // Through the store, not placesApi directly: the API answers { place },
+      // and reading .id off that wrapper linked nothing — every save of the
+      // hotel then minted another orphan place, because the store never
+      // learned about the previous one and the name match above could not
+      // find it. addPlace unwraps the response and puts the place into
+      // `places`, so the next save reuses it.
+      const place = await tripActions.addPlace(tripId, { name: name || address || 'Accommodation', lat, lng, address } as never)
+      return place?.id ?? null
     } catch { return null }
   }
 
