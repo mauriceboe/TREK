@@ -41,6 +41,7 @@ import {
   toWikiLang,
   haversineMetres,
   namesOverlap,
+  mergeSearchResults,
   type GoogleOpeningHours,
   type OverpassPoi,
 } from './maps.helpers';
@@ -756,7 +757,12 @@ export class MapsService {
    * whole import. Yielding does not make the import faster, it stops it from
    * being the only thing the process will do for half a minute.
    */
-  async searchNominatim(query: string, lang?: string, lane: GeoLane = 'interactive') {
+  async searchNominatim(
+    query: string,
+    lang?: string,
+    lane: GeoLane = 'interactive',
+    bias?: { lat: number; lng: number },
+  ) {
     const params = new URLSearchParams({
       q: query,
       format: 'json',
@@ -769,6 +775,15 @@ export class MapsService {
       limit: '10',
       'accept-language': toApiLang(lang),
     });
+    // Prefer the area the caller is looking at, never restrict to it
+    // (bounded=0). Without this, "Hase-dera" returns the temple of that name in
+    // Nara rather than the one in Kamakura the user is standing next to; with
+    // bounded=1 a search for somewhere genuinely far away would return nothing.
+    if (bias) {
+      const d = 0.5;
+      params.set('viewbox', [bias.lng - d, bias.lat - d, bias.lng + d, bias.lat + d].join(','));
+      params.set('bounded', '0');
+    }
     // Through the shared client: one throttle for the whole process.
     const response = await nominatimFetch('search', params, { lane });
     if (!response.ok) {
@@ -1616,13 +1631,29 @@ export class MapsService {
     // this method did before.
     if (this.trekPlacesEnabled()) {
       try {
-        const found = await trekPlacesSearch(query, {
-          lat: locationBias?.lat,
-          lng: locationBias?.lng,
-          limit: 10,
-        });
-        if (found.length > 0) {
-          return { places: found.map(toPlaceRecord), source: 'trek-places' };
+        // Both at once. The index is a dataset of businesses and is very good
+        // at those; OpenStreetMap is where the temples, bridges, riverside
+        // walks and viewpoints are, and a travel search asks for those
+        // constantly. Concurrently, so the pair costs the slower one rather
+        // than the sum. This is the explicit search, not the keystroke path
+        // Nominatim's policy rules out.
+        const [found, osm] = await Promise.all([
+          trekPlacesSearch(query, {
+            lat: locationBias?.lat,
+            lng: locationBias?.lng,
+            limit: 10,
+          }),
+          this.searchNominatim(query, lang, 'interactive', locationBias).catch((err: unknown) => {
+            console.warn('OpenStreetMap search failed, index only:', (err as Error).message);
+            return [] as Record<string, unknown>[];
+          }),
+        ]);
+        const places = mergeSearchResults(found.map(toPlaceRecord), osm, query);
+        if (places.length > 0) {
+          return {
+            places,
+            source: osm.length > 0 ? 'trek-places+openstreetmap' : 'trek-places',
+          };
         }
       } catch (err: unknown) {
         // Logged, not surfaced: the fallback below is a working answer.
