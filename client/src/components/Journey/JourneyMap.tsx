@@ -405,6 +405,16 @@ function JourneyMap(
       photoLayerRef.current = null
       if (!photos?.length) return
 
+      // The initial view (setView/fitBounds) is set on a deferred rAF in the
+      // map-build effect above, so this can run before the map has a center/zoom
+      // — latLngToContainerPoint throws in that window. Skip; the moveend/zoomend
+      // listener below redraws once the deferred view lands.
+      try {
+        map.getCenter()
+      } catch {
+        return
+      }
+
       const group = L.layerGroup()
       for (const cluster of clusterPhotos(map, photos)) {
         const marker = L.marker([cluster.lat, cluster.lng], {
