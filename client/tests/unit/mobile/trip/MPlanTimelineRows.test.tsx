@@ -519,4 +519,15 @@ describe('NoteRow', () => {
     expect(onEdit).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('reorder')).toBeInTheDocument()
   })
+
+  it('FE-MOB-PLROW-041: a link in the note body opens the link instead of the sheet', () => {
+    const onEdit = vi.fn()
+    render(<NoteRow {...base} note={note({ time: 'See [the map](https://example.com)' })} chrome={chrome(true)} onEdit={onEdit} />)
+
+    fireEvent.click(screen.getByRole('link', { name: 'the map' }))
+    expect(onEdit).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByText('Buy museum tickets'))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
 })

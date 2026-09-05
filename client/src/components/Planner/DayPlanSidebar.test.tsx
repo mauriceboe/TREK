@@ -1388,39 +1388,90 @@ describe('DayPlanSidebar', () => {
     expect(onDeletePlace).toHaveBeenCalledWith(42)
   })
 
-  // ── Note card edit/delete buttons ─────────────────────────────────────
+  // ── Note card editing (#2249) ─────────────────────────
 
-  it('FE-PLANNER-DAYPLAN-064: note card edit button calls openEditNote', async () => {
+  it('FE-PLANNER-DAYPLAN-064: clicking a note row opens its edit modal', async () => {
     const user = userEvent.setup()
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
     const note = buildDayNote({ id: 55, day_id: 10, text: 'My note' })
     mockDayNotesState.dayNotes = { '10': [note] }
     render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
-    // Find note edit button (Pencil in note-edit-buttons)
-    const noteEditBtns = document.querySelectorAll('.note-edit-buttons button')
-    if (noteEditBtns.length > 0) {
-      await user.click(noteEditBtns[0] as HTMLElement)
-      expect(mockDayNotesState.openEditNote).toHaveBeenCalled()
-    }
+    await user.click(cardRow(screen.getByText('My note')))
+    expect(mockDayNotesState.openEditNote).toHaveBeenCalledWith(10, expect.objectContaining({ id: 55 }))
   })
 
-  it('FE-PLANNER-DAYPLAN-065: deleting a note asks for confirmation before calling deleteNote', async () => {
+  // The bug: an absolutely-positioned pencil/trash pill sat on the note's own
+  // reorder chevrons, and a coarse-pointer `opacity: 1 !important` in index.css
+  // made it permanent on tablets. Nothing may float over that column again.
+  it('FE-PLANNER-DAYPLAN-064b: the note row carries no floating action pill over its reorder buttons', () => {
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    mockDayNotesState.dayNotes = { '10': [buildDayNote({ id: 55, day_id: 10, text: 'My note' })] }
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
+    const row = cardRow(screen.getByText('My note'))
+    expect(document.querySelector('.note-edit-buttons')).toBeNull()
+    expect(row.querySelectorAll('[style*="position: absolute"]')).toHaveLength(0)
+    expect(row.querySelectorAll('.reorder-buttons button')).toHaveLength(2)
+    // Positional, not just by class: the reorder column owns the row's right edge.
+    expect(row.lastElementChild).toHaveClass('reorder-buttons')
+  })
+
+  it('FE-PLANNER-DAYPLAN-064e: the keyboard reaches the note and opens it with Enter', () => {
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    mockDayNotesState.dayNotes = { '10': [buildDayNote({ id: 55, day_id: 10, text: 'My note' })] }
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
+    const row = cardRow(screen.getByText('My note'))
+    expect(row).toHaveAttribute('tabindex', '0')
+    // A press-scale on a draggable row fights the drag, so the row opts out (#2158).
+    expect(row).toHaveAttribute('data-no-press')
+    fireEvent.keyDown(row, { key: 'Enter' })
+    expect(mockDayNotesState.openEditNote).toHaveBeenCalledWith(10, expect.objectContaining({ id: 55 }))
+  })
+
+  it('FE-PLANNER-DAYPLAN-064c: a link inside the note body opens the link, not the edit modal', async () => {
     const user = userEvent.setup()
     const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
-    const note = buildDayNote({ id: 55, day_id: 10, text: 'My note' })
-    mockDayNotesState.dayNotes = { '10': [note] }
+    mockDayNotesState.dayNotes = { '10': [buildDayNote({ id: 55, day_id: 10, text: 'My note', time: '[docs](https://example.com)' })] }
     render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
-    // Find note delete button (Trash2 in note-edit-buttons)
-    const noteEditBtns = document.querySelectorAll('.note-edit-buttons button')
-    if (noteEditBtns.length > 1) {
-      await user.click(noteEditBtns[1] as HTMLElement)
-      // Clicking delete opens a confirmation dialog rather than deleting immediately.
-      expect(mockDayNotesState.deleteNote).not.toHaveBeenCalled()
-      expect(screen.getByText('Delete note?')).toBeInTheDocument()
-      // Confirming triggers the actual delete.
-      await user.click(screen.getByRole('button', { name: /^delete$/i }))
-      expect(mockDayNotesState.deleteNote).toHaveBeenCalled()
-    }
+    await user.click(screen.getByRole('link', { name: 'docs' }))
+    expect(mockDayNotesState.openEditNote).not.toHaveBeenCalled()
+  })
+
+  it('FE-PLANNER-DAYPLAN-064d: the reorder chevrons still move the note instead of editing it', async () => {
+    const user = userEvent.setup()
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    mockDayNotesState.dayNotes = { '10': [
+      buildDayNote({ id: 55, day_id: 10, text: 'First note', sort_order: 0 }),
+      buildDayNote({ id: 56, day_id: 10, text: 'Second note', sort_order: 1 }),
+    ] }
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
+    const row = cardRow(screen.getByText('Second note'))
+    await user.click(row.querySelectorAll('.reorder-buttons button')[0] as HTMLElement)
+    expect(mockDayNotesState.moveNote).toHaveBeenCalled()
+    expect(mockDayNotesState.openEditNote).not.toHaveBeenCalled()
+  })
+
+  it('FE-PLANNER-DAYPLAN-065: the note modal deletes only through the confirmation dialog', async () => {
+    const user = userEvent.setup()
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    mockDayNotesState.dayNotes = { '10': [buildDayNote({ id: 55, day_id: 10, text: 'My note' })] }
+    mockDayNotesState.noteUi = { '10': { mode: 'edit', noteId: 55, text: 'My note', time: '', icon: 'FileText', color: null } }
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    expect(mockDayNotesState.deleteNote).not.toHaveBeenCalled()
+    expect(screen.getByText('Delete note?')).toBeInTheDocument()
+    const confirm = within(screen.getByText('Delete note?').closest('[class*="z-[10000]"]') as HTMLElement)
+    await user.click(confirm.getByRole('button', { name: /^delete$/i }))
+    expect(mockDayNotesState.deleteNote).toHaveBeenCalledWith(10, 55)
+    // Otherwise the edit modal is left open on a note that no longer exists.
+    expect(mockDayNotesState.cancelNote).toHaveBeenCalledWith(10)
+  })
+
+  it('FE-PLANNER-DAYPLAN-065b: a note being created offers no delete', () => {
+    const day = buildDay({ id: 10, date: '2025-06-01', title: 'Day 1' })
+    mockDayNotesState.dayNotes = { '10': [] }
+    mockDayNotesState.noteUi = { '10': { mode: 'add', text: '', time: '', icon: 'FileText', color: null } }
+    render(<DayPlanSidebar {...makeDefaultProps({ days: [day] })} />)
+    expect(screen.queryByRole('button', { name: /^delete$/i })).toBeNull()
   })
 
   // ── Drop on assignment: same-day reorder ─────────────────────────────
@@ -2940,6 +2991,10 @@ describe('DayPlanSidebar', () => {
     expect(screen.queryByLabelText('Add Note')).not.toBeInTheDocument()
     expect(dragRow(screen.getByText('Read only place'))).toBeNull()
     expect(screen.getByText('A note')).toBeInTheDocument()
+    // A viewer must not reach the edit modal they could never save (#2249).
+    const noteRow = cardRow(screen.getByText('A note'))
+    expect(noteRow).not.toHaveAttribute('role', 'button')
+    expect(noteRow.querySelectorAll('.reorder-buttons')).toHaveLength(0)
   })
 
   it('FE-PLANNER-DAYPLAN-132: the read-only chevron still collapses and expands the day', async () => {

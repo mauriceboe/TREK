@@ -194,7 +194,11 @@ export function useTripPlanner() {
     if (activeTab === 'finanzplan') tripActions.loadBudgetItems?.(tripId)
     if (activeTab === 'dateien' && (!files || files.length === 0)) tripActions.loadFiles?.(tripId)
   }, [tripId])
-  const { leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed, startResizeLeft, startResizeRight } = useResizablePanels()
+  const {
+    leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed,
+    leftHidden, rightHidden, toggleLeft, toggleRight, narrow: narrowPanels,
+    startResizeLeft, startResizeRight,
+  } = useResizablePanels()
   const { selectedPlaceId, selectedAssignmentId, setSelectedPlaceId, selectAssignment } = usePlaceSelection()
   const [showDayDetail, setShowDayDetail] = useState<Day | null>(null)
   const [dayDetailCollapsed, setDayDetailCollapsed] = useState(false)
@@ -1081,7 +1085,9 @@ export function useTripPlanner() {
     enabledAddons, collabFeatures, tripAccommodations, setTripAccommodations,
     allowedFileTypes, tripMembers, setTripMembers, refreshMembers, loadAccommodations,
     TRANSPORT_TYPES, TRIP_TABS, activeTab, setActiveTab, handleTabChange,
-    leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed, startResizeLeft, startResizeRight,
+    leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed,
+    leftHidden, rightHidden, toggleLeft, toggleRight, narrowPanels,
+    startResizeLeft, startResizeRight,
     selectedPlaceId, selectedAssignmentId, setSelectedPlaceId, selectAssignment,
     showDayDetail, setShowDayDetail, dayDetailCollapsed, setDayDetailCollapsed,
     showPlaceForm, setShowPlaceForm, editingPlace, setEditingPlace,

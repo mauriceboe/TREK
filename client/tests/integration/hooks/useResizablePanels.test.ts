@@ -1,12 +1,36 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent } from '@testing-library/react';
 import { useResizablePanels } from '../../../src/hooks/useResizablePanels';
 
+/**
+ * The suite's jsdom stub answers `matches: false` to everything, so the hook is
+ * in its wide layout unless a test says otherwise. `narrow()` puts it in the
+ * 768-1023 band the foldable lands in (#2247).
+ */
+function setViewport(width: number, narrow: boolean) {
+  Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width });
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query.includes('min-width: 768px') ? narrow : false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
+
 describe('useResizablePanels', () => {
+  const realMatchMedia = window.matchMedia;
+
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
   });
 
   it('FE-HOOK-PANELS-001: default leftWidth is 340 when localStorage is empty', () => {
@@ -164,5 +188,86 @@ describe('useResizablePanels', () => {
     const { result } = renderHook(() => useResizablePanels());
     expect(result.current.setLeftCollapsed).toBeTypeOf('function');
     expect(result.current.setRightCollapsed).toBeTypeOf('function');
+  });
+
+  // ── The narrow band, 768-1023px (#2247) ──────────────────────────────────
+
+  it('FE-HOOK-PANELS-015: a wide layout shows whatever the collapse flags say', () => {
+    setViewport(1440, false);
+    const { result } = renderHook(() => useResizablePanels());
+    expect(result.current.narrow).toBe(false);
+    expect(result.current.leftHidden).toBe(false);
+    expect(result.current.rightHidden).toBe(false);
+
+    act(() => { result.current.toggleRight(); });
+    expect(result.current.rightHidden).toBe(true);
+    expect(result.current.leftHidden).toBe(false);
+    expect(result.current.rightCollapsed).toBe(true);
+  });
+
+  it('FE-HOOK-PANELS-016: the narrow band opens the day plan and hides the places list', () => {
+    setViewport(860, true);
+    const { result } = renderHook(() => useResizablePanels());
+    expect(result.current.narrow).toBe(true);
+    expect(result.current.leftHidden).toBe(false);
+    expect(result.current.rightHidden).toBe(true);
+  });
+
+  it('FE-HOOK-PANELS-017: opening one panel in the narrow band closes the other', () => {
+    setViewport(860, true);
+    const { result } = renderHook(() => useResizablePanels());
+
+    act(() => { result.current.toggleRight(); });
+    expect(result.current.rightHidden).toBe(false);
+    expect(result.current.leftHidden).toBe(true);
+
+    act(() => { result.current.toggleLeft(); });
+    expect(result.current.leftHidden).toBe(false);
+    expect(result.current.rightHidden).toBe(true);
+  });
+
+  it('FE-HOOK-PANELS-018: tapping the open panel in the narrow band leaves the map alone', () => {
+    setViewport(860, true);
+    const { result } = renderHook(() => useResizablePanels());
+
+    act(() => { result.current.toggleLeft(); });
+    expect(result.current.leftHidden).toBe(true);
+    expect(result.current.rightHidden).toBe(true);
+  });
+
+  // A marker tap calls both setters with false; in the narrow band that used to
+  // re-crowd the screen the user had just cleared.
+  it('FE-HOOK-PANELS-019: reopening both panels does not re-crowd the narrow layout', () => {
+    setViewport(860, true);
+    const { result } = renderHook(() => useResizablePanels());
+
+    act(() => { result.current.toggleRight(); });
+    act(() => { result.current.setLeftCollapsed(false); result.current.setRightCollapsed(false); });
+    expect(result.current.rightHidden).toBe(false);
+    expect(result.current.leftHidden).toBe(true);
+  });
+
+  it('FE-HOOK-PANELS-020: a panel dragged wide on a desktop is clamped so the map keeps 360px', () => {
+    localStorage.setItem('sidebarLeftWidth', '520');
+    setViewport(800, true);
+    const { result } = renderHook(() => useResizablePanels());
+    // 800 - 360 map - 20 margins = 420
+    expect(result.current.leftWidth).toBe(420);
+    // The stored value is untouched, so a wide window gets its 520 back.
+    expect(localStorage.getItem('sidebarLeftWidth')).toBe('520');
+  });
+
+  it('FE-HOOK-PANELS-021: the clamp never squeezes a panel below the drag minimum', () => {
+    localStorage.setItem('sidebarLeftWidth', '520');
+    setViewport(500, true);
+    const { result } = renderHook(() => useResizablePanels());
+    expect(result.current.leftWidth).toBe(200);
+  });
+
+  it('FE-HOOK-PANELS-022: a wide layout leaves the stored widths alone', () => {
+    localStorage.setItem('sidebarLeftWidth', '520');
+    setViewport(1100, false);
+    const { result } = renderHook(() => useResizablePanels());
+    expect(result.current.leftWidth).toBe(520);
   });
 });

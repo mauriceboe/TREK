@@ -38,7 +38,6 @@ import { addonsApi, accommodationsApi, authApi, tripsApi, assignmentsApi, mapsAp
 import { accommodationRepo } from '../repo/accommodationRepo'
 import { useAuthStore } from '../store/authStore'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import { useResizablePanels } from '../hooks/useResizablePanels'
 import { useTripWebSocket } from '../hooks/useTripWebSocket'
 import { useRouteCalculation } from '../hooks/useRouteCalculation'
 import { usePlaceSelection } from '../hooks/usePlaceSelection'
@@ -246,7 +245,9 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
     enabledAddons, collabFeatures, tripAccommodations, setTripAccommodations,
     allowedFileTypes, tripMembers, setTripMembers, refreshMembers, loadAccommodations,
     TRANSPORT_TYPES, TRIP_TABS, activeTab, setActiveTab, handleTabChange,
-    leftWidth, rightWidth, leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed, startResizeLeft, startResizeRight,
+    leftWidth, rightWidth,
+    leftHidden, rightHidden, toggleLeft, toggleRight, narrowPanels,
+    startResizeLeft, startResizeRight,
     selectedPlaceId, selectedAssignmentId, setSelectedPlaceId, selectAssignment,
     showDayDetail, setShowDayDetail, dayDetailCollapsed, setDayDetailCollapsed,
     showPlaceForm, setShowPlaceForm, editingPlace, setEditingPlace,
@@ -327,6 +328,14 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
   }
   if (!trip) return null
 
+  // What each panel actually occupies right now, and where that leaves the
+  // strip of map between them. The panels float 10px inside the map, so the
+  // corridor starts past that margin.
+  const leftPanelPx = leftHidden ? 0 : leftWidth
+  const rightPanelPx = rightHidden ? 0 : rightWidth
+  const mapInsetLeft = leftPanelPx ? leftPanelPx + 10 : 0
+  const mapInsetRight = rightPanelPx ? rightPanelPx + 10 : 0
+
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', ...fontStyle }}>
       <Navbar tripTitle={trip.title} tripId={tripId} showBack onBack={() => navigate('/dashboard')} onShare={() => setShowMembersModal(true)} />
@@ -381,8 +390,8 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
               tileUrl={mapTileUrl}
               fitKey={fitKey}
               dayOrderMap={dayOrderMap}
-              leftWidth={leftCollapsed ? 0 : leftWidth}
-              rightWidth={rightCollapsed ? 0 : rightWidth}
+              leftWidth={leftPanelPx}
+              rightWidth={rightPanelPx}
               hasInspector={!!selectedPlace}
               hasDayDetail={!!showDayDetail && !selectedPlace}
               reservations={reservations}
@@ -399,7 +408,14 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
             />
 
             {(poiPillEnabled || glMap) && (
-              <div className="hidden md:flex" style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 25, pointerEvents: 'none', alignItems: 'flex-start', gap: 8 }}>
+              <div className="hidden md:flex" style={{
+                position: 'absolute', top: 14,
+                // Centred on the corridor the panels leave, not on the viewport: at
+                // 860px the viewport centre sits under the Places panel, where this
+                // cluster covered both collapse tabs and Add Place/Activity (#2247).
+                left: `calc(${mapInsetLeft}px + (100% - ${mapInsetLeft}px - ${mapInsetRight}px) / 2)`,
+                transform: 'translateX(-50%)', zIndex: 25, pointerEvents: 'none', alignItems: 'flex-start', gap: 8,
+              }}>
                 {poiPillEnabled && (
                   <PoiCategoryPill active={poi.active} onToggle={poi.toggle} loadingKeys={poi.loadingKeys} errorKeys={poi.errorKeys} moved={poi.moved} onSearchArea={poi.searchArea} />
                 )}
@@ -425,30 +441,32 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
             )}
 
             <div className="hidden md:block" style={{ position: 'absolute', left: 10, top: 10, bottom: 10, zIndex: 20 }}>
-              <button type="button" onClick={() => setLeftCollapsed(c => !c)}
+              <button type="button" onClick={toggleLeft}
+                aria-label={leftHidden ? t('trip.mobilePlan') : t('common.collapse')}
+                title={leftHidden ? t('trip.mobilePlan') : t('common.collapse')}
                 style={{
-                  position: leftCollapsed ? 'fixed' : 'absolute', top: leftCollapsed ? 'calc(var(--nav-h) + 44px + 14px)' : 14, left: leftCollapsed ? 10 : undefined, right: leftCollapsed ? undefined : -28, zIndex: -1,
-                  width: 36, height: 36, borderRadius: leftCollapsed ? 10 : '0 10px 10px 0',
-                  background: leftCollapsed ? '#000' : 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-                  boxShadow: leftCollapsed ? '0 2px 12px rgba(0,0,0,0.2)' : 'none', border: 'none',
+                  position: leftHidden ? 'fixed' : 'absolute', top: leftHidden ? 'calc(var(--nav-h) + 44px + 14px)' : 14, left: leftHidden ? 10 : undefined, right: leftHidden ? undefined : -28, zIndex: -1,
+                  width: 36, height: 36, borderRadius: leftHidden ? 10 : '0 10px 10px 0',
+                  background: leftHidden ? '#000' : 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                  boxShadow: leftHidden ? '0 2px 12px rgba(0,0,0,0.2)' : 'none', border: 'none',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: leftCollapsed ? '#fff' : 'var(--text-faint)', transition: 'color 0.15s',
+                  color: leftHidden ? '#fff' : 'var(--text-faint)', transition: 'color 0.15s',
                 }}
-                onMouseEnter={e => { if (!leftCollapsed) e.currentTarget.style.color = 'var(--text-primary)' }}
-                onMouseLeave={e => { if (!leftCollapsed) e.currentTarget.style.color = 'var(--text-faint)' }}>
-                {leftCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                onMouseEnter={e => { if (!leftHidden) e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { if (!leftHidden) e.currentTarget.style.color = 'var(--text-faint)' }}>
+                {leftHidden ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
               </button>
 
               <div style={{
-                width: leftCollapsed ? 0 : leftWidth, height: '100%',
+                width: leftHidden ? 0 : leftWidth, height: '100%',
                 background: 'var(--sidebar-bg)',
                 backdropFilter: 'blur(24px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-                boxShadow: leftCollapsed ? 'none' : 'var(--sidebar-shadow)',
+                boxShadow: leftHidden ? 'none' : 'var(--sidebar-shadow)',
                 borderRadius: 16,
                 overflow: 'hidden', display: 'flex', flexDirection: 'column',
                 transition: 'width 0.25s ease',
-                opacity: leftCollapsed ? 0 : 1,
+                opacity: leftHidden ? 0 : 1,
               }}>
                 <DayPlanSidebar
                   isMobile={isMobile}
@@ -501,7 +519,7 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
                   onRouteRefresh={() => { if (selectedDayId) updateRouteForDay(selectedDayId) }}
                   onAddBookingToAssignment={can('day_edit', trip) ? (dayId, assignmentId) => { tripActions.setSelectedDay(dayId); setBookingForAssignmentId(assignmentId); setEditingReservation(null); setShowReservationModal(true) } : undefined}
                 />
-                {!leftCollapsed && (
+                {!leftHidden && !narrowPanels && (
                   <div
                     role="presentation"
                     onMouseDown={startResizeLeft}
@@ -514,32 +532,34 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
             </div>
 
             <div className="hidden md:block" style={{ position: 'absolute', right: 10, top: 10, bottom: 10, zIndex: 20 }}>
-              <button type="button" onClick={() => setRightCollapsed(c => !c)}
+              <button type="button" onClick={toggleRight}
+                aria-label={rightHidden ? t('trip.mobilePlaces') : t('common.collapse')}
+                title={rightHidden ? t('trip.mobilePlaces') : t('common.collapse')}
                 style={{
-                  position: rightCollapsed ? 'fixed' : 'absolute', top: rightCollapsed ? 'calc(var(--nav-h) + 44px + 14px)' : 14, right: rightCollapsed ? 10 : undefined, left: rightCollapsed ? undefined : -28, zIndex: -1,
-                  width: 36, height: 36, borderRadius: rightCollapsed ? 10 : '10px 0 0 10px',
-                  background: rightCollapsed ? '#000' : 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-                  boxShadow: rightCollapsed ? '0 2px 12px rgba(0,0,0,0.2)' : 'none', border: 'none',
+                  position: rightHidden ? 'fixed' : 'absolute', top: rightHidden ? 'calc(var(--nav-h) + 44px + 14px)' : 14, right: rightHidden ? 10 : undefined, left: rightHidden ? undefined : -28, zIndex: -1,
+                  width: 36, height: 36, borderRadius: rightHidden ? 10 : '10px 0 0 10px',
+                  background: rightHidden ? '#000' : 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                  boxShadow: rightHidden ? '0 2px 12px rgba(0,0,0,0.2)' : 'none', border: 'none',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: rightCollapsed ? '#fff' : 'var(--text-faint)', transition: 'color 0.15s',
+                  color: rightHidden ? '#fff' : 'var(--text-faint)', transition: 'color 0.15s',
                 }}
-                onMouseEnter={e => { if (!rightCollapsed) e.currentTarget.style.color = 'var(--text-primary)' }}
-                onMouseLeave={e => { if (!rightCollapsed) e.currentTarget.style.color = 'var(--text-faint)' }}>
-                {rightCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+                onMouseEnter={e => { if (!rightHidden) e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { if (!rightHidden) e.currentTarget.style.color = 'var(--text-faint)' }}>
+                {rightHidden ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
               </button>
 
               <div style={{
-                width: rightCollapsed ? 0 : rightWidth, height: '100%',
+                width: rightHidden ? 0 : rightWidth, height: '100%',
                 background: 'var(--sidebar-bg)',
                 backdropFilter: 'blur(24px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-                boxShadow: rightCollapsed ? 'none' : 'var(--sidebar-shadow)',
+                boxShadow: rightHidden ? 'none' : 'var(--sidebar-shadow)',
                 borderRadius: 16,
                 overflow: 'hidden', display: 'flex', flexDirection: 'column',
                 transition: 'width 0.25s ease',
-                opacity: rightCollapsed ? 0 : 1,
+                opacity: rightHidden ? 0 : 1,
               }}>
-                {!rightCollapsed && (
+                {!rightHidden && !narrowPanels && (
                   <div
                     role="presentation"
                     onMouseDown={startResizeRight}
@@ -614,8 +634,8 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
                   weatherPlaceName={weatherPlaceName}
                   onClose={() => { setShowDayDetail(null); handleSelectDay(null) }}
                   onAccommodationChange={loadAccommodations}
-                  leftWidth={isMobile ? 0 : (leftCollapsed ? 0 : leftWidth)}
-                  rightWidth={isMobile ? 0 : (rightCollapsed ? 0 : rightWidth)}
+                  leftWidth={isMobile ? 0 : leftPanelPx}
+                  rightWidth={isMobile ? 0 : rightPanelPx}
                   collapsed={dayDetailCollapsed}
                   onToggleCollapse={() => setDayDetailCollapsed(c => !c)}
                   mobile={isMobile}
@@ -659,8 +679,8 @@ function TripPlannerPageDesktop(): React.ReactElement | null {
                 onUpdatePlace={async (placeId, data) => { try { await tripActions.updatePlace(tripId, placeId, data) } catch (err: unknown) { toast.error(err instanceof Error ? err.message : t('common.unknownError')) } }}
                 onUploadImage={async (placeId, file) => { await tripActions.uploadPlaceImage(tripId, placeId, file) }}
                 onRate={async (placeId, rating) => { try { await tripActions.ratePlace(tripId, placeId, rating) } catch (err: unknown) { toast.error(err instanceof Error ? err.message : t('common.unknownError')) } }}
-                leftWidth={(isMobile || window.innerWidth < 900) ? 0 : (leftCollapsed ? 0 : leftWidth)}
-                rightWidth={(isMobile || window.innerWidth < 900) ? 0 : (rightCollapsed ? 0 : rightWidth)}
+                leftWidth={isMobile ? 0 : leftPanelPx}
+                rightWidth={isMobile ? 0 : rightPanelPx}
               />
             )}
 

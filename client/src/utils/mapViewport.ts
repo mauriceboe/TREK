@@ -215,8 +215,14 @@ export function computeMapViewport(
   const wrapsWorld = options.wrapsWorld ?? isGl
 
   const padding: ViewportPadding = { ...NO_PADDING, ...options.padding }
-  const width = Math.max(1, (options.width ?? defaultWidth()) - padding.left - padding.right)
-  const height = Math.max(1, (options.height ?? defaultHeight()) - padding.top - padding.bottom)
+  const rawWidth = options.width ?? defaultWidth()
+  const rawHeight = options.height ?? defaultHeight()
+  // Padding wider than the box leaves a sliver, and the camera is then framed for
+  // THAT — a continent instead of the trip. Two 300px planner panels on an 860px
+  // foldable did exactly this (#2247). Never surrender more than two thirds; the
+  // centre offset still uses the real padding, so the framing stays where it was.
+  const width = Math.max(1, rawWidth / 3, rawWidth - padding.left - padding.right)
+  const height = Math.max(1, rawHeight / 3, rawHeight - padding.top - padding.bottom)
 
   const lats = pts.map(p => p[0])
   const south = Math.min(...lats)

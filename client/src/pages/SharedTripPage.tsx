@@ -19,10 +19,10 @@ import { createElement, useEffect, useRef } from 'react';
 import { renderIconMarkup } from '../utils/iconMarkup';
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import { getCategoryIcon } from '../components/shared/categoryIcons';
+import PublicLanguagePicker from '../components/shared/PublicLanguagePicker';
 import { OFM_POSITRON, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, MAP_MAX_ZOOM, attributionForTile } from '../constants/mapDefaults';
 import VectorBasemap from '../components/Map/VectorBasemap';
-import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n';
-import { useSettingsStore } from '../store/settingsStore';
+import { useTranslation } from '../i18n';
 import { avatarSrc } from '../utils/avatarSrc';
 import { safeHexColor } from '../utils/safeColor';
 import { getMergedItems, getTransportForDay, hidesOnMiddleDay } from '../utils/dayMerge';
@@ -335,70 +335,7 @@ export default function SharedTripPage() {
           {t('shared.readOnly')}
         </div>
 
-        {/* Language picker - top right */}
-        <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
-          <button type="button"
-            onClick={() => setShowLangPicker((v) => !v)}
-            className="bg-[rgba(255,255,255,0.1)] text-[rgba(255,255,255,0.7)]"
-            style={{
-              padding: '5px 12px',
-              borderRadius: 20,
-              border: '1px solid rgba(255,255,255,0.15)',
-              backdropFilter: 'blur(8px)',
-              fontSize: 'calc(11px * var(--fs-scale-caption, 1))',
-              fontWeight: 500,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {SUPPORTED_LANGUAGES.find((l) => l.value === (locale?.split('-')[0] || 'en'))?.label || 'Language'}
-          </button>
-          {showLangPicker && (
-            <div
-              className="bg-white"
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 6,
-                borderRadius: 10,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                padding: 4,
-                zIndex: 50,
-                minWidth: 150,
-              }}
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <button
-                  type="button"
-                  key={lang.value}
-                  onClick={() => {
-                    // Set language locally without API call (shared page has no auth)
-                    useSettingsStore.setState((s) => ({ settings: { ...s.settings, language: lang.value } }));
-                    setShowLangPicker(false);
-                  }}
-                  className="text-[#374151]"
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '6px 12px',
-                    border: 'none',
-                    background: 'none',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontSize: 'calc(12px * var(--fs-scale-body, 1))',
-                    borderRadius: 6,
-                    fontFamily: 'inherit',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f3f4f6')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                >
-                  {lang.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <PublicLanguagePicker locale={locale} open={showLangPicker} onOpenChange={setShowLangPicker} />
       </div>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>

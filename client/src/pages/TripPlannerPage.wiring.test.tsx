@@ -165,6 +165,11 @@ function baseState(): HookState {
     rightCollapsed: false,
     setLeftCollapsed: vi.fn(),
     setRightCollapsed: vi.fn(),
+    leftHidden: false,
+    rightHidden: false,
+    toggleLeft: vi.fn(),
+    toggleRight: vi.fn(),
+    narrowPanels: false,
     startResizeLeft: vi.fn(),
     startResizeRight: vi.fn(),
     selectedPlaceId: null,
@@ -371,7 +376,7 @@ describe('TripPlannerPage — plan tab', () => {
   })
 
   it('FE-PAGE-TPW-009: collapsed panels report a zero width to the map', () => {
-    renderPage({ leftCollapsed: true, rightCollapsed: true })
+    renderPage({ leftHidden: true, rightHidden: true })
 
     expect(props('map').leftWidth).toBe(0)
     expect(props('map').rightWidth).toBe(0)
@@ -410,19 +415,42 @@ describe('TripPlannerPage — plan tab', () => {
 
     const [leftBtn, rightBtn] = screen.getAllByRole('button')
     fireEvent.click(leftBtn)
-    expect(updaterOf<boolean>(hookState.setLeftCollapsed)(false)).toBe(true)
+    expect(hookState.toggleLeft).toHaveBeenCalled()
 
     fireEvent.mouseEnter(leftBtn)
     fireEvent.mouseLeave(leftBtn)
 
     fireEvent.click(rightBtn)
-    expect(updaterOf<boolean>(hookState.setRightCollapsed)(false)).toBe(true)
+    expect(hookState.toggleRight).toHaveBeenCalled()
     fireEvent.mouseEnter(rightBtn)
     fireEvent.mouseLeave(rightBtn)
   })
 
+  // The tabs are the only way back to a panel on a touch device, and they used to
+  // announce themselves with nothing but a hover colour (#2247).
+  it('FE-PAGE-TPW-013b: each collapse tab is named for what it does', () => {
+    renderPage({ leftHidden: true, rightHidden: false })
+    const [leftBtn, rightBtn] = screen.getAllByRole('button')
+    expect(leftBtn).toHaveAttribute('aria-label', 'trip.mobilePlan')
+    expect(rightBtn).toHaveAttribute('aria-label', 'common.collapse')
+  })
+
+  // At a foldable's ~860px the viewport centre sits under the Places panel, so the
+  // floating POI/compass cluster covered both tabs and the Add Place button (#2247).
+  it('FE-PAGE-TPW-013c: the floating map controls centre on the map corridor, not the viewport', () => {
+    const { container } = renderPage({ leftWidth: 340, rightWidth: 300 })
+    const cluster = container.querySelector('div[style*="translateX(-50%)"][style*="z-index: 25"]') as HTMLElement
+    expect(cluster.style.left).toBe('calc(350px + 0.5 * (100% - 350px - 310px))')
+  })
+
+  it('FE-PAGE-TPW-013d: a hidden panel takes no corridor away from the map controls', () => {
+    const { container } = renderPage({ leftWidth: 340, rightWidth: 300, rightHidden: true })
+    const cluster = container.querySelector('div[style*="translateX(-50%)"][style*="z-index: 25"]') as HTMLElement
+    expect(cluster.style.left).toBe('calc(350px + 0.5 * (100% - 350px - 0px))')
+  })
+
   it('FE-PAGE-TPW-014: a collapsed panel keeps its toggle but drops the hover highlight', () => {
-    renderPage({ leftCollapsed: true, rightCollapsed: true })
+    renderPage({ leftHidden: true, rightHidden: true })
 
     const [leftBtn, rightBtn] = screen.getAllByRole('button')
     fireEvent.mouseEnter(leftBtn)
@@ -431,6 +459,13 @@ describe('TripPlannerPage — plan tab', () => {
     fireEvent.mouseLeave(rightBtn)
 
     expect(screen.getByTestId('day-plan-sidebar')).toBeInTheDocument()
+  })
+
+  // Mouse-only handles (mousedown + document mousemove) are inert on a tablet, and
+  // a 4px invisible strip on the panel edge is a trap for a fat finger (#2247).
+  it('FE-PAGE-TPW-015b: the narrow layout drops the mouse-only resize handles', () => {
+    const { container } = renderPage({ narrowPanels: true })
+    expect(container.querySelectorAll('div[style*="col-resize"]')).toHaveLength(0)
   })
 
   it('FE-PAGE-TPW-015: the resize handles start a drag on mouse-down and highlight on hover', () => {

@@ -11,6 +11,7 @@ import { markdownLinkComponents } from '../shared/markdownLink'
 
 interface NoteModalUi {
   mode: 'add' | 'edit'
+  noteId?: number
   icon: string
   text: string
   time: string
@@ -25,6 +26,8 @@ interface DayPlanSidebarNoteModalProps {
   noteInputRef: React.RefObject<HTMLInputElement>
   cancelNote: (dayId: number) => void
   saveNote: (dayId: number) => void
+  /** Asks the planner to confirm and then delete the note being edited (#2249). */
+  onRequestDelete: (dayId: number, noteId: number) => void
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -38,19 +41,19 @@ const BODY_MAX = 2000
  * right. The preview is the reason the colour picker is worth having — a swatch
  * row tells you nothing about what a tinted card looks like next to a place.
  */
-export function DayPlanSidebarNoteModal({ noteUi, setNoteUi, noteInputRef, cancelNote, saveNote, t }: DayPlanSidebarNoteModalProps) {
+export function DayPlanSidebarNoteModal({ noteUi, setNoteUi, noteInputRef, cancelNote, saveNote, onRequestDelete, t }: DayPlanSidebarNoteModalProps) {
   return (
     <>
       {Object.entries(noteUi).map(([dayId, ui]) => ui && createPortal(
         <NoteDialog key={dayId} dayId={dayId} ui={ui} setNoteUi={setNoteUi} noteInputRef={noteInputRef}
-          cancelNote={cancelNote} saveNote={saveNote} t={t} />,
+          cancelNote={cancelNote} saveNote={saveNote} onRequestDelete={onRequestDelete} t={t} />,
         document.body
       ))}
     </>
   )
 }
 
-function NoteDialog({ dayId, ui, setNoteUi, noteInputRef, cancelNote, saveNote, t }: Omit<DayPlanSidebarNoteModalProps, 'noteUi'> & {
+function NoteDialog({ dayId, ui, setNoteUi, noteInputRef, cancelNote, saveNote, onRequestDelete, t }: Omit<DayPlanSidebarNoteModalProps, 'noteUi'> & {
   dayId: string
   ui: NoteModalUi
 }) {
@@ -174,7 +177,17 @@ function NoteDialog({ dayId, ui, setNoteUi, noteInputRef, cancelNote, saveNote, 
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        {/* Delete lives here rather than on the row: the row's floating pencil/trash
+            pill covered the reorder chevrons and, on a coarse pointer, never went
+            away (#2249). The planner still confirms before it deletes. */}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+          {ui.mode === 'edit' && ui.noteId != null && (
+            <button type="button" onClick={() => onRequestDelete(Number(dayId), ui.noteId!)}
+              className="text-danger"
+              style={{ marginRight: 'auto', fontSize: 'calc(12px * var(--fs-scale-body, 1))', background: 'none', border: '1px solid var(--border-primary)', borderRadius: 8, padding: '7px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {t('common.delete')}
+            </button>
+          )}
           <button type="button" onClick={() => cancelNote(Number(dayId))} className="text-content-muted" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', background: 'none', border: '1px solid var(--border-primary)', borderRadius: 8, padding: '7px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>{t('common.cancel')}</button>
           <button type="button" onClick={() => saveNote(Number(dayId))} disabled={!canSave}
             className={!canSave ? 'bg-[var(--border-primary)] text-content-faint' : 'bg-accent text-accent-text'}

@@ -1317,7 +1317,7 @@ describe('SharedTripPage', () => {
       const option = screen.getByRole('button', { name: /deutsch/i });
 
       fireEvent.mouseEnter(option);
-      expect(option.style.background).toBe('rgb(243, 244, 246)');
+      expect(option.style.background).toBe('var(--bg-hover)');
       fireEvent.mouseLeave(option);
       expect(option.style.background).toBe('none');
     });

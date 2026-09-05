@@ -28,8 +28,8 @@ import MobileEntryView from '../components/Journey/MobileEntryView';
 import MobileMapTimeline from '../components/Journey/MobileMapTimeline';
 import PhotoLightbox from '../components/Journey/PhotoLightbox';
 import EmptyState from '../components/shared/EmptyState';
-import { SUPPORTED_LANGUAGES, useTranslation } from '../i18n';
-import { useSettingsStore } from '../store/settingsStore';
+import PublicLanguagePicker from '../components/shared/PublicLanguagePicker';
+import { useTranslation } from '../i18n';
 import { formatLocationName } from '../utils/formatters';
 import { useJourneyPublic } from './journeyPublic/useJourneyPublic';
 
@@ -616,70 +616,7 @@ export default function JourneyPublicPage() {
           }}
         />
 
-        {/* Language picker */}
-        <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
-          <button type="button"
-            onClick={() => setShowLangPicker((v) => !v)}
-            style={{
-              padding: '5px 12px',
-              borderRadius: 20,
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(8px)',
-              color: 'rgba(255,255,255,0.7)',
-              fontSize: 'calc(11px * var(--fs-scale-caption, 1))',
-              fontWeight: 500,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {SUPPORTED_LANGUAGES.find((l) => l.value === (locale?.split('-')[0] || 'en'))?.label || 'Language'}
-          </button>
-          {showLangPicker && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 6,
-                background: 'white',
-                borderRadius: 10,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                padding: 4,
-                zIndex: 50,
-                minWidth: 150,
-              }}
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <button
-                  type="button"
-                  key={lang.value}
-                  onClick={() => {
-                    useSettingsStore.setState((s) => ({ settings: { ...s.settings, language: lang.value } }));
-                    setShowLangPicker(false);
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '6px 12px',
-                    border: 'none',
-                    background: 'none',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontSize: 'calc(12px * var(--fs-scale-body, 1))',
-                    color: '#374151',
-                    borderRadius: 6,
-                    fontFamily: 'inherit',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f3f4f6')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                >
-                  {lang.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <PublicLanguagePicker locale={locale} open={showLangPicker} onOpenChange={setShowLangPicker} />
 
         {/* Logo */}
         <div

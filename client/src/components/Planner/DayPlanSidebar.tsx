@@ -696,19 +696,13 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     })
   }
 
-  const openEditNote = (dayId: number, note: DayNote, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    _openEditNote(dayId, note)
-  }
+  const openEditNote = (dayId: number, note: DayNote) => _openEditNote(dayId, note)
 
   // Deleting a note asks for confirmation first — the edit/delete icons sit close together and are
   // easy to mis-tap on touch devices, where an accidental delete was previously unrecoverable.
   const [pendingDeleteNote, setPendingDeleteNote] = useState<{ dayId: number; noteId: number } | null>(null)
 
-  const deleteNote = async (dayId: number, noteId: number, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    await _deleteNote(dayId, noteId)
-  }
+  const deleteNote = (dayId: number, noteId: number) => _deleteNote(dayId, noteId)
 
   // Unified reorder: assigns positions to ALL item types based on new visual order
   const applyMergedOrder = async (dayId: number, newOrder: { type: string; data: any }[]) => {
@@ -2614,17 +2608,33 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             { divider: true },
                             { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => setPendingDeleteNote({ dayId: day.id, noteId: note.id }) },
                           ]) : undefined}
+                          {...(canEditDays ? {
+                            role: 'button' as const,
+                            // No press-scale: index.css shrinks every [role=button] on
+                            // :active, which on a draggable row fights the drag (#2158).
+                            'data-no-press': '',
+                            tabIndex: 0,
+                            // The row is the note's edit affordance — the same gesture the
+                            // phone shell already uses (#2249). Links inside the rendered
+                            // body and the reorder buttons keep their own click.
+                            onClick: (e: React.MouseEvent) => {
+                              if ((e.target as HTMLElement).closest('a, button')) return
+                              openEditNote(day.id, note)
+                            },
+                            onKeyDown: (e: React.KeyboardEvent) => {
+                              if (e.target !== e.currentTarget) return
+                              if (e.key !== 'Enter' && e.key !== ' ') return
+                              e.preventDefault()
+                              openEditNote(day.id, note)
+                            },
+                          } : {})}
                           onMouseEnter={e => {
                             const grip = e.currentTarget.querySelector('.dp-grip') as HTMLElement | null
                             if (grip) grip.style.opacity = '1'
-                            const editBtns = e.currentTarget.querySelector('.note-edit-buttons') as HTMLElement | null
-                            if (editBtns) editBtns.style.opacity = '1'
                           }}
                           onMouseLeave={e => {
                             const grip = e.currentTarget.querySelector('.dp-grip') as HTMLElement | null
                             if (grip) grip.style.opacity = '0.3'
-                            const editBtns = e.currentTarget.querySelector('.note-edit-buttons') as HTMLElement | null
-                            if (editBtns) editBtns.style.opacity = '0'
                           }}
                           style={{
                             position: 'relative',
@@ -2636,7 +2646,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             borderTop: showDropLine ? '2px solid var(--text-primary)' : undefined,
                             background: noteSkin.background,
                             opacity: draggingId === `note-${note.id}` ? 0.4 : 1,
-                            transition: 'background 0.1s', cursor: 'grab', userSelect: 'none',
+                            transition: 'background 0.1s', cursor: canEditDays ? 'pointer' : 'default', userSelect: 'none',
                           }}
                         >
                           {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
@@ -2658,19 +2668,6 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               </div>
                             )}
                           </div>
-                          {/* Stacked in a capsule of their own, set off from the text:
-                              a note card is as tall as its body, so the height is free
-                              while the width next to the text is not, and a 10px icon
-                              in a 14px box was barely a target. */}
-                        {/* Floated over the text rather than sharing the row with
-                            it: a note is mostly text, and reserving a column for
-                            two buttons that are invisible until you hover costs
-                            every note a shorter line for the whole time you are
-                            not hovering. */}
-                        {canEditDays && <div className="note-edit-buttons bg-surface-card" style={{ position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3, padding: 4, borderRadius: 999, border: '1px solid var(--border-faint)', boxShadow: '0 4px 14px rgba(0,0,0,0.10)', opacity: 0, transition: 'opacity 0.15s' }}>
-                          <button type="button" onClick={e => openEditNote(day.id, note, e)} aria-label={t('dayplan.noteEdit')} title={t('dayplan.noteEdit')} className="text-content-faint note-edit-btn" style={{ background: 'none', border: 'none', width: 30, height: 30, borderRadius: 999, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0 }}><Pencil size={15} /></button>
-                          <button type="button" onClick={e => { e.stopPropagation(); setPendingDeleteNote({ dayId: day.id, noteId: note.id }) }} aria-label={t('dayplan.noteDelete')} title={t('dayplan.noteDelete')} className="text-content-faint note-edit-btn note-edit-btn-danger" style={{ background: 'none', border: 'none', width: 30, height: 30, borderRadius: 999, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0 }}><Trash2 size={15} /></button>
-                        </div>}
                         {canEditDays && <div className="reorder-buttons" style={{ flexShrink: 0, display: 'flex', gap: 1, transition: 'opacity 0.15s' }}>
                           <button type="button" onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'up') }} disabled={noteIdx === 0} className={noteIdx === 0 ? 'text-[var(--border-primary)]' : 'text-content-faint'} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === 0 ? 'default' : 'pointer', display: 'flex', lineHeight: 1 }}><ChevronUp size={12} strokeWidth={2} /></button>
                           <button type="button" onClick={e => { e.stopPropagation(); moveNote(day.id, note.id, 'down') }} disabled={noteIdx === merged.length - 1} className={noteIdx === merged.length - 1 ? 'text-[var(--border-primary)]' : 'text-content-faint'} style={{ background: 'none', border: 'none', padding: '1px 2px', cursor: noteIdx === merged.length - 1 ? 'default' : 'pointer', display: 'flex', lineHeight: 1 }}><ChevronDown size={12} strokeWidth={2} /></button>
@@ -2877,6 +2874,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
         noteInputRef={noteInputRef}
         cancelNote={cancelNote}
         saveNote={saveNote}
+        onRequestDelete={(dayId, noteId) => setPendingDeleteNote({ dayId, noteId })}
         t={t}
       />
 
@@ -2892,7 +2890,13 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
       <ConfirmDialog
         isOpen={!!pendingDeleteNote}
         onClose={() => setPendingDeleteNote(null)}
-        onConfirm={() => { if (pendingDeleteNote) deleteNote(pendingDeleteNote.dayId, pendingDeleteNote.noteId) }}
+        onConfirm={() => {
+          if (!pendingDeleteNote) return
+          // Close the edit modal behind the confirm; leaving it open would go on
+          // editing a note that no longer exists.
+          cancelNote(pendingDeleteNote.dayId)
+          deleteNote(pendingDeleteNote.dayId, pendingDeleteNote.noteId)
+        }}
         title={t('dayplan.confirmDeleteNoteTitle')}
         message={t('dayplan.confirmDeleteNoteBody')}
       />

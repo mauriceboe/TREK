@@ -223,4 +223,43 @@ describe('computeMapViewport', () => {
       expect(x).toBeLessThanOrEqual(VIEW.width)
     }
   })
+
+  // Two 300px planner panels on an 860px foldable left the framing window 140px
+  // wide, and the camera then opened on half of East Asia instead of the trip
+  // (#2247). The layout fix stops it happening; this stops it mattering.
+  it('never frames the camera for less than a third of the box, however wide the padding', () => {
+    const sane = computeMapViewport([PARIS, LYON], {
+      ...VIEW,
+      tileSize: TILE_SIZE_RASTER,
+      padding: { left: 380, right: 340 },
+    })!
+    const absurd = computeMapViewport([PARIS, LYON], {
+      ...VIEW,
+      tileSize: TILE_SIZE_RASTER,
+      padding: { left: 480, right: 480 },
+    })!
+    // 1000 - 960 = 40px of window would zoom ~2.5 levels further out than the
+    // third the clamp guarantees.
+    const floored = computeMapViewport([PARIS, LYON], {
+      width: VIEW.width / 3,
+      height: VIEW.height,
+      tileSize: TILE_SIZE_RASTER,
+    })!
+    expect(absurd.zoom).toBe(floored.zoom)
+    expect(absurd.zoom).toBeGreaterThan(sane.zoom - 3)
+  })
+
+  it('leaves a sane padding untouched', () => {
+    const withPadding = computeMapViewport([PARIS, LYON], {
+      ...VIEW,
+      tileSize: TILE_SIZE_RASTER,
+      padding: { left: 200, right: 100 },
+    })!
+    const equivalent = computeMapViewport([PARIS, LYON], {
+      width: VIEW.width - 300,
+      height: VIEW.height,
+      tileSize: TILE_SIZE_RASTER,
+    })!
+    expect(withPadding.zoom).toBe(equivalent.zoom)
+  })
 })

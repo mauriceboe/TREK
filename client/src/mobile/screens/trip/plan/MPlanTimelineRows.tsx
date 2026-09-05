@@ -547,7 +547,8 @@ export function NoteRow({ note, chrome, reorder, drag, onEdit }: {
       {...dragProps(drag)}
       role={chrome.editing ? 'button' : undefined}
       tabIndex={chrome.editing ? 0 : undefined}
-      onClick={chrome.editing ? onEdit : undefined}
+      // A link in the rendered body keeps its own tap; the rest of the row edits.
+      onClick={chrome.editing ? (e => { if (!(e.target as HTMLElement).closest('a')) onEdit() }) : undefined}
       onKeyDown={chrome.editing ? (e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onEdit() } }) : undefined}
       className={`my-[2px] flex items-center gap-2.5 ${chrome.editing ? 'cursor-pointer' : ''} ${dragClass(drag)}`}
     >

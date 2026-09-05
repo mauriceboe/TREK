@@ -237,7 +237,7 @@ describe('JourneyPublicPage wiring', () => {
     const { hook } = setup({ showLangPicker: true });
     const german = screen.getByRole('button', { name: 'Deutsch' });
     fireEvent.mouseEnter(german);
-    expect(german).toHaveStyle({ background: 'rgb(243, 244, 246)' });
+    expect(german).toHaveStyle({ background: 'var(--bg-hover)' });
     fireEvent.mouseLeave(german);
 
     fireEvent.click(german);
