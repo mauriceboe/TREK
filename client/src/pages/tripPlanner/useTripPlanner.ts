@@ -916,8 +916,18 @@ export function useTripPlanner() {
     if (n) {
       const existing = places.find(p => p.name?.trim().toLowerCase() === n)
         ?? places.find(p => p.name && (p.name.toLowerCase().includes(n) || n.includes(p.name.toLowerCase())))
-      if (existing) return existing.id
+      // Only a server-side id may be linked. A negative id is an offline temp id
+      // (mutationQueue.nextTempId): the reservation write is online-only, the queue
+      // rewrites temp ids in a URL but never inside another entity's body, and
+      // day_accommodations.place_id carries a foreign key — so a temp id here is a
+      // rolled-back insert and a 500 instead of a saved booking.
+      if (existing && existing.id > 0) return existing.id
     }
+    // Offline the booking itself cannot be written (reservations are online-only),
+    // so minting a place here would only leave an orphan behind on the next flush
+    // — and its temp id could never be linked anyway. Link nothing, and skip the
+    // geocode round-trip too; the retry online matches this venue by name.
+    if (isEffectivelyOffline()) return null
     let lat: number | null = null
     let lng: number | null = null
     let address: string | null = venue.address ?? null
@@ -939,8 +949,8 @@ export function useTripPlanner() {
       // learned about the previous one and the name match above could not
       // find it. addPlace unwraps the response and puts the place into
       // `places`, so the next save reuses it.
-      const place = await tripActions.addPlace(tripId, { name: name || address || 'Accommodation', lat, lng, address } as never)
-      return place?.id ?? null
+      const place = await tripActions.addPlace(tripId, { name: name || address || 'Accommodation', lat, lng, address })
+      return place && place.id > 0 ? place.id : null
     } catch { return null }
   }
 

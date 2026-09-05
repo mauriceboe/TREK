@@ -1603,6 +1603,42 @@ describe('useTripPlanner — bookings and transports', () => {
     expect(second.create_accommodation.place_id).toBe(901)
   })
 
+  it('FE-TP-HOOK-081d: offline, no place is minted for a booking that cannot be written', async () => {
+    env.forcedOffline = true
+    seedTrip()
+
+    const { result } = await renderPlanner()
+    await act(async () => {
+      await result.current.handleSaveReservation({
+        title: 'Ryokan Sakura', type: 'hotel',
+        create_accommodation: { venue: { name: 'Ryokan Sakura' } },
+      } as never)
+    })
+
+    // A place created offline gets a negative temp id, and the reservation write
+    // is online-only — linking one is a foreign-key failure on the server.
+    expect(actions.addPlace).not.toHaveBeenCalled()
+    expect(mapsApi.search).not.toHaveBeenCalled()
+    const payload = actions.addReservation.mock.calls[0][1] as { create_accommodation: { place_id?: number } }
+    expect(payload.create_accommodation.place_id).toBeUndefined()
+  })
+
+  it('FE-TP-HOOK-081e: a place still holding an offline temp id is not linked as the accommodation', async () => {
+    actions.addPlace.mockResolvedValue(buildPlace({ id: 902, name: 'Ryokan Sakura' }))
+    seedTrip({ places: [buildPlace({ id: -1758000000000, name: 'Ryokan Sakura' })] })
+
+    const { result } = await renderPlanner()
+    await act(async () => {
+      await result.current.handleSaveReservation({
+        title: 'Ryokan Sakura', type: 'hotel',
+        create_accommodation: { venue: { name: 'Ryokan Sakura' } },
+      } as never)
+    })
+
+    const payload = actions.addReservation.mock.calls[0][1] as { create_accommodation: { place_id?: number } }
+    expect(payload.create_accommodation.place_id).toBe(902)
+  })
+
   it('FE-TP-HOOK-081b: a geocoded venue without a reviewed address adopts the hit address', async () => {
     vi.mocked(mapsApi.search).mockResolvedValue({
       places: [{ lat: 35.1, lng: 135.7, address: 'Kyoto, JP' }],
