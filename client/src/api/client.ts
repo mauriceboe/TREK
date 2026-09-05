@@ -1,3 +1,4 @@
+import { isEffectivelyOffline } from '../sync/networkMode'
 import axios, { AxiosInstance } from 'axios'
 import type { z } from 'zod'
 import type { Place } from '../types'
@@ -1035,10 +1036,58 @@ export const memoriesApi = {
     }).then(r => r.data),
 }
 
+/**
+ * Place search that still answers with no network.
+ *
+ * The cache is what `sync/placePrefetcher` stored for the trip's area, and this
+ * is the one place it is read from, so all ten call sites got the offline path
+ * without any of them learning about it. `source` says 'offline-cache' rather
+ * than pretending to be the index — several screens show it, and a stale answer
+ * that claims to be live is worse than one that says what it is.
+ *
+ * Only network-level failures fall through. A 4xx or 5xx means the server did
+ * answer and the caller has to see it.
+ */
+async function withCachedPlaces<T>(
+  query: string,
+  shape: (places: Record<string, unknown>[]) => T,
+  online: () => Promise<T>,
+): Promise<T> {
+  const fromCache = async (): Promise<Record<string, unknown>[]> => {
+    const { searchCachedPlaces, cachedToPlaceRecord } = await import('../sync/placePrefetcher')
+    return (await searchCachedPlaces(query)).map(cachedToPlaceRecord)
+  }
+
+  if (isEffectivelyOffline()) return shape(await fromCache())
+  try {
+    return await online()
+  } catch (err) {
+    const e = err as { isAxiosError?: boolean; response?: unknown; code?: string } | null
+    const neverArrived = !!e && e.isAxiosError === true && e.response == null && e.code !== 'ERR_CANCELED'
+    if (!neverArrived) throw err
+    const cached = await fromCache()
+    if (!cached.length) throw err
+    return shape(cached)
+  }
+}
+
 export const mapsApi = {
-  search: (query: string, lang?: string) => apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search')),
+  search: (query: string, lang?: string) =>
+    withCachedPlaces(query, (places) => ({ places, source: 'offline-cache' }), () =>
+      apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search'))),
   autocomplete: (input: string, lang?: string, locationBias?: { low: { lat: number; lng: number }; high: { lat: number; lng: number } }, signal?: AbortSignal, sessionToken?: string) =>
-      apiClient.post('/maps/autocomplete', { input, lang, locationBias, sessionToken }, { signal }).then(r => checkInDev(mapsAutocompleteResultSchema, r.data, 'maps.autocomplete')),
+    withCachedPlaces(
+      input,
+      (places) => ({
+        suggestions: places.map((p) => ({
+          placeId: String(p.osm_id),
+          mainText: String(p.name),
+          secondaryText: String(p.address || ''),
+        })),
+        source: 'offline-cache',
+      }),
+      () => apiClient.post('/maps/autocomplete', { input, lang, locationBias, sessionToken }, { signal }).then(r => checkInDev(mapsAutocompleteResultSchema, r.data, 'maps.autocomplete')),
+    ),
   details: (placeId: string, lang?: string, sessionToken?: string) => apiClient.get(`/maps/details/${encodeURIComponent(placeId)}`, { params: { lang, sessionToken } }).then(r => checkInDev(mapsPlaceDetailsResultSchema, r.data, 'maps.details')),
   // Pictures and a description for a place that is being looked at but not yet
   // saved. Fans out to several providers server-side, so it takes a signal and
@@ -1059,6 +1108,26 @@ export const mapsApi = {
   // OSM-only POI explore: places of a category within the current map viewport bbox.
   // Overpass can be slow on a fresh (uncached) area, so this call gets a longer
   // timeout than the global default instead of aborting at 8s and showing nothing.
+  /**
+   * Every place in a box, for the offline cache. One call per trip area, not
+   * per keystroke, so the timeout is generous where the search ones are short.
+   */
+  area: (
+    bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number },
+    limit?: number,
+    signal?: AbortSignal,
+  ) =>
+    apiClient
+      .get('/maps/area', { params: { ...bbox, limit }, signal, timeout: 30000 })
+      .then(
+        (r) =>
+          r.data as {
+            results: Record<string, unknown>[]
+            truncated: boolean
+            unavailable?: boolean
+          },
+      ),
+
   pois: (category: string, bbox: { south: number; west: number; north: number; east: number }, lang?: string, signal?: AbortSignal) =>
     apiClient.get('/maps/pois', { params: { category, ...bbox, lang }, signal, timeout: 20000 }).then(r => r.data as { pois: import('../components/Map/poiCategories').Poi[]; source: string; truncated: boolean; clamped?: boolean }),
 }

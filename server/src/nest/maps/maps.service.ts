@@ -18,6 +18,7 @@ import { nominatimFetch, type GeoLane } from '../geo/nominatim.client';
 import {
   trekPlacesSearch,
   trekPlacesById,
+  trekPlacesArea,
   trekPlacesNearby,
   toPlaceRecord,
   POI_CATEGORY_TO_TREK,
@@ -549,6 +550,33 @@ export class MapsService {
       "SELECT value FROM app_settings WHERE key = 'trek_places_enabled'",
     );
     return row?.value !== 'false';
+  }
+
+  /**
+   * The places in a trip's area, for the offline cache.
+   *
+   * The one call TREK makes that is not driven by something a user just typed.
+   * It runs when a trip is prepared for offline use, alongside the map tiles,
+   * and it is the reason searching a trip works on a plane: without it the
+   * offline instance has the trip's own places and nothing else, so "find a
+   * pharmacy near the hotel" has nothing to answer from.
+   *
+   * Returns null rather than throwing when the index is switched off or the
+   * service is unreachable, because this is a nice-to-have running in the
+   * background of a sync — a failure here must not fail the sync.
+   */
+  async placesInArea(
+    bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number },
+    limit?: number,
+  ): Promise<{ results: Record<string, unknown>[]; truncated: boolean } | null> {
+    if (!this.trekPlacesEnabled()) return null;
+    try {
+      const area = await trekPlacesArea(bbox, limit);
+      return { results: area.results.map(toPlaceRecord), truncated: area.truncated };
+    } catch (err) {
+      console.warn('TREK Places area lookup failed:', (err as Error).message);
+      return null;
+    }
   }
 
   autocompleteDisabled(): boolean {

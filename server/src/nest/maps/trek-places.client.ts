@@ -185,6 +185,33 @@ export async function trekPlacesNearby(
   return Array.isArray(body.results) ? body.results : [];
 }
 
+export interface TrekPlacesArea {
+  count: number;
+  truncated: boolean;
+  results: TrekPlace[];
+}
+
+/**
+ * Every place in a box, best first. What an instance takes once so the trip
+ * keeps working with no network.
+ *
+ * The API caps the box at 1.5 degrees a side and the row count at 20000; both
+ * are its call, not ours, and a `truncated` answer is passed through honestly
+ * rather than smoothed over. A client that believed it had the whole area would
+ * search offline and quietly miss places.
+ */
+export async function trekPlacesArea(
+  bbox: { minLat: number; minLng: number; maxLat: number; maxLng: number },
+  limit = 2000,
+): Promise<TrekPlacesArea> {
+  const body = await getJson<TrekPlacesArea>('/v1/bbox', { ...bbox, limit });
+  return {
+    count: Number(body.count) || 0,
+    truncated: !!body.truncated,
+    results: Array.isArray(body.results) ? body.results : [],
+  };
+}
+
 export async function trekPlacesById(gers: string): Promise<TrekPlace | null> {
   try {
     const body = await getJson<{ place: TrekPlace }>(`/v1/place/${encodeURIComponent(gers)}`, {});

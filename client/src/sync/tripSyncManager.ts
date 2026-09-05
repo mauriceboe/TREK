@@ -29,6 +29,7 @@ import {
   clearTripData,
   enforceBlobBudget,
 } from '../db/offlineDb'
+import { prefetchPlacesForTrip } from './placePrefetcher'
 import { prefetchTilesForTrip } from './tilePrefetcher'
 import { isAuthed } from './authGate'
 import { getOfflinePrefs, isTripOfflineEnabled, isTripPinned } from './offlinePrefs'
@@ -264,6 +265,10 @@ export const tripSyncManager = {
             if (!isAuthed() || !navigator.onLine) return
             const places = await offlineDb.places.where('trip_id').equals(trip.id).toArray()
             await prefetchTilesForTrip(trip.id, places, tileUrl, undefined, cartoKey).catch(console.error)
+            // The places around the trip, so search answers with no network.
+            // Sequential rather than parallel: the tiles are the bigger win and
+            // should not be competing with this for the connection.
+            await prefetchPlacesForTrip(trip.id, places).catch(console.error)
           }
         })
       }
@@ -328,6 +333,7 @@ export const tripSyncManager = {
           onProgress?.({ phase: 'tiles', current: ++i, total, label: trip.title })
           const places = await offlineDb.places.where('trip_id').equals(trip.id).toArray()
           await prefetchTilesForTrip(trip.id, places, tileUrl, true, cartoKey).catch(console.error)
+          await prefetchPlacesForTrip(trip.id, places, true).catch(console.error)
         }
       }
 
