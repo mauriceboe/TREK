@@ -103,15 +103,20 @@ export { haversineMetres };
  * and for most of the rest it returned the shops AROUND the landmark rather
  * than nothing, which is worse than nothing because it looks like an answer.
  *
- * Two candidate signals for "the index does not have this one" were measured
- * and both failed. The index's own score does not separate the cases (a
- * threshold of 0.75 catches 19 of 62 misses and throws away 6 of 66 hits), and
- * name overlap against the result set does not either (57 false positives,
- * because "Hase Station" shares a word with "Hase-dera"). So this does not
- * classify. It shows both, and lets the name decide the order:
+ * Three orderings were tried against that corpus, and the two clever ones lost.
  *
- *   1. results whose name plausibly matches what was typed, index first
- *   2. everything else, index first
+ * A score threshold cannot tell the cases apart: at 0.75 it catches 19 of 62
+ * misses and throws away 6 of 66 hits. Promoting results whose name matches
+ * what was typed is worse than it sounds, because "Hase Station" shares a word
+ * with "Hase-dera" while OpenStreetMap answers in the local language and
+ * returns the correct temple under a name that shares nothing at all: the rule
+ * pushed seven weak index matches above the right answer, which landed at
+ * position eight.
+ *
+ * So this does not rank. It alternates, index first, and lets each source's own
+ * ordering stand. An exact business match still opens the list, because the
+ * index put it first; a landmark the index does not carry is second rather than
+ * eleventh. Neither source has to be judged by the other's yardstick.
  *
  * A place both sources know is kept once, as the index's copy, because that is
  * the one carrying a stable id, contact details and hours.
@@ -119,7 +124,6 @@ export { haversineMetres };
 export function mergeSearchResults(
   fromIndex: Record<string, unknown>[],
   fromOsm: Record<string, unknown>[],
-  query: string,
   limit = 10,
 ): Record<string, unknown>[] {
   const sameThing = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
@@ -139,15 +143,13 @@ export function mergeSearchResults(
   };
 
   const extra = fromOsm.filter((o) => !fromIndex.some((i) => sameThing(i, o)));
-  const matches = (p: Record<string, unknown>): boolean =>
-    typeof p.name === 'string' && namesOverlap(query, p.name);
 
-  return [
-    ...fromIndex.filter(matches),
-    ...extra.filter(matches),
-    ...fromIndex.filter((p) => !matches(p)),
-    ...extra.filter((p) => !matches(p)),
-  ].slice(0, limit);
+  const out: Record<string, unknown>[] = [];
+  for (let i = 0; i < Math.max(fromIndex.length, extra.length) && out.length < limit; i++) {
+    if (i < fromIndex.length) out.push(fromIndex[i]);
+    if (i < extra.length && out.length < limit) out.push(extra[i]);
+  }
+  return out;
 }
 
 export function namesOverlap(a: string, b: string): boolean {

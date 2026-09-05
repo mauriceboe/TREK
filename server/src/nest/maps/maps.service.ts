@@ -1648,7 +1648,7 @@ export class MapsService {
             return [] as Record<string, unknown>[];
           }),
         ]);
-        const places = mergeSearchResults(found.map(toPlaceRecord), osm, query);
+        const places = mergeSearchResults(found.map(toPlaceRecord), osm);
         if (places.length > 0) {
           return {
             places,
