@@ -212,6 +212,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Platsberikning',
   'admin.placesEnrich.subtitle':
     'Visar bilder och en beskrivning när du lägger till en plats. Wikipedia och OpenStreetMap används alltid; Google tillkommer när Platsfoton eller Platsdetaljer är på.',
+  'admin.placeShadow.title': 'Logg över platssökningar',
+  'admin.placeShadow.subtitle':
+    'Registrera vilket sökresultat som valdes, så att ett annat platsindex senare kan mätas mot verkliga sökningar. Ingenting lämnar den här instansen och en administratör kan när som helst exportera eller radera loggen.',
   'admin.bagTracking.title': 'Spårning av väskor',
   'admin.bagTracking.subtitle': 'Aktivera vikt- och väskfördelning för packningsartiklar',
   'admin.collab.chat.title': 'Chatt',

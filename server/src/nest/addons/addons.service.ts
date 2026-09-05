@@ -183,6 +183,16 @@ export class AddonsService {
   updatePlacesDetails(enabled: boolean) { return this.writeFlag('places_details_enabled', enabled); }
 
   /**
+   * The shadow log, fail-CLOSED like the three above but for the opposite
+   * reason: they read `=== 'true'` because a migration backfilled a row for
+   * installs that were already using the feature. Nothing is using this one,
+   * so there is nothing to backfill and an absent row correctly means off.
+   * PlaceShadowService.enabled() reads the same key the same way.
+   */
+  getPlaceShadow() { return this.readFlag('place_shadow_enabled'); }
+  updatePlaceShadow(enabled: boolean) { return this.writeFlag('place_shadow_enabled', enabled); }
+
+  /**
    * Enrichment reads fail-OPEN, unlike the three switches above.
    *
    * Those needed migration 185 to backfill 'true' precisely because they read

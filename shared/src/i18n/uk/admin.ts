@@ -169,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Збагачення місць',
   'admin.placesEnrich.subtitle':
     'Показує зображення та опис під час додавання місця. Wikipedia та OpenStreetMap використовуються завжди; Google додається, якщо ввімкнено «Фото місць» або «Деталі місць».',
+  'admin.placeShadow.title': 'Журнал пошуку місць',
+  'admin.placeShadow.subtitle':
+    'Записувати, який результат пошуку було обрано, щоб згодом оцінити інший індекс місць на справжніх запитах. Ніщо не залишає цей сервер, і адміністратор будь-коли може вивантажити або видалити журнал.',
   'admin.bagTracking.title': 'Відстеження багажу',
   'admin.bagTracking.subtitle': 'Увімкнути вагу та прив’язку до багажу для речей',
   'admin.collab.chat.title': 'Чат',

@@ -25,11 +25,12 @@ interface MAdminSettingsSectionProps {
 export default function MAdminSettingsSection({ admin, t }: MAdminSettingsSectionProps) {
   const {
     toast,
-    setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled,
+    setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled, setPlaceShadowEnabled,
     placesPhotosEnabled, setPlacesPhotosEnabledState,
     placesAutocompleteEnabled, setPlacesAutocompleteEnabledState,
     placesDetailsEnabled, setPlacesDetailsEnabledState,
     placesEnrichEnabled, setPlacesEnrichEnabledState,
+    placeShadowEnabled, setPlaceShadowEnabledState,
     oidcConfig, setOidcConfig, savingOidc, setSavingOidc,
     passwordLogin, setPasswordLogin, passwordRegistration, setPasswordRegistration,
     oidcLogin, setOidcLogin, oidcRegistration, setOidcRegistration,
@@ -339,6 +340,26 @@ export default function MAdminSettingsSection({ admin, t }: MAdminSettingsSectio
                     } catch {
                       setPlacesEnrichEnabledState(!next)
                       setPlacesEnrichEnabled(!next)
+                    }
+                  }}
+                />
+              }
+            />
+            <MAdminRow
+              title={t('admin.placeShadow.title')}
+              hint={t('admin.placeShadow.subtitle')}
+              trailing={
+                <MToggle
+                  checked={placeShadowEnabled}
+                  ariaLabel={t('admin.placeShadow.title')}
+                  onChange={async (next) => {
+                    setPlaceShadowEnabledState(next)
+                    setPlaceShadowEnabled(next)
+                    try {
+                      await adminApi.updatePlaceShadow(next)
+                    } catch {
+                      setPlaceShadowEnabledState(!next)
+                      setPlaceShadowEnabled(!next)
                     }
                   }}
                 />

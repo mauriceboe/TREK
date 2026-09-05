@@ -206,6 +206,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': '장소 정보 보강',
   'admin.placesEnrich.subtitle':
     '장소를 추가할 때 사진과 설명을 표시합니다. Wikipedia와 OpenStreetMap은 항상 사용되며, 장소 사진 또는 장소 세부정보가 켜져 있으면 Google도 함께 사용됩니다.',
+  'admin.placeShadow.title': '장소 검색 기록',
+  'admin.placeShadow.subtitle':
+    '어떤 검색 결과가 선택되었는지 기록하여, 나중에 다른 장소 색인을 실제 검색으로 평가할 수 있게 합니다. 이 인스턴스 밖으로 나가는 것은 없으며 관리자는 언제든지 기록을 내보내거나 삭제할 수 있습니다.',
   'admin.bagTracking.title': '가방 추적',
   'admin.bagTracking.subtitle': '짐 항목에 무게 및 가방 배정을 활성화합니다',
   'admin.collab.chat.title': '채팅',

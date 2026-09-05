@@ -211,6 +211,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Làm giàu địa điểm',
   'admin.placesEnrich.subtitle':
     'Hiển thị hình ảnh và mô tả khi thêm địa điểm. Wikipedia và OpenStreetMap luôn được dùng; Google được thêm vào khi bật Ảnh địa điểm hoặc Chi tiết địa điểm.',
+  'admin.placeShadow.title': 'Nhật ký tìm kiếm địa điểm',
+  'admin.placeShadow.subtitle':
+    'Ghi lại kết quả tìm kiếm nào đã được chọn, để sau này có thể đánh giá một chỉ mục địa điểm khác bằng những lượt tìm kiếm thật. Không có gì rời khỏi máy chủ này, và quản trị viên có thể xuất hoặc xóa nhật ký bất cứ lúc nào.',
   'admin.bagTracking.title': 'Theo dõi túi',
   'admin.bagTracking.subtitle': 'Cho phép phân bổ trọng lượng và túi để đóng gói các mặt hàng',
   'admin.collab.chat.title': 'Trò chuyện',

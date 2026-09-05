@@ -170,6 +170,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Enrichissement des lieux',
   'admin.placesEnrich.subtitle':
     "Affiche des images et une description lors de l'ajout d'un lieu. Wikipédia et OpenStreetMap sont toujours utilisés ; Google s'y ajoute si Photos de lieux ou Détails de lieux sont activés.",
+  'admin.placeShadow.title': 'Journal des recherches de lieux',
+  'admin.placeShadow.subtitle':
+    'Enregistrer quel résultat de recherche a été retenu, afin de pouvoir évaluer plus tard un autre index de lieux sur de vraies recherches. Rien ne quitte cette instance, et un administrateur peut exporter ou supprimer le journal à tout moment.',
   'admin.bagTracking.title': 'Suivi des bagages',
   'admin.bagTracking.subtitle': "Activer le poids et l'attribution de bagages pour les articles",
   'admin.collab.chat.title': 'Chat',

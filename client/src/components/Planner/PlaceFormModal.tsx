@@ -3,6 +3,7 @@ import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import NoteFormatToolbar from '../shared/NoteFormatToolbar'
 import { mapsApi } from '../../api/client'
+import { recordPlacePick } from '../../api/placeShadow'
 import { useAuthStore } from '../../store/authStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
@@ -89,6 +90,14 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [mapsSearch, setMapsSearch] = useState('')
   const [mapsResults, setMapsResults] = useState([])
+  /**
+   * What produced the list currently on screen, kept for the shadow log: the
+   * query as typed and the provider the envelope named. A ref rather than
+   * state because nothing renders from it and a pick must read the value that
+   * belonged to the list, not a value a re-render replaced.
+   */
+  const searchMetaRef = useRef<{ query: string; source: string } | null>(null)
+  const acMetaRef = useRef<{ query: string; source: string } | null>(null)
   const [isSearchingMaps, setIsSearchingMaps] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showNewCategory, setShowNewCategory] = useState(false)
@@ -252,6 +261,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     acAbortRef.current = controller
     try {
       const result = await mapsApi.autocomplete(query, language, locationBias, controller.signal, placesSessionRef.current.current())
+      acMetaRef.current = { query, source: result.source || 'unknown' }
       setAcSuggestions(result.suggestions || [])
       setAcHighlight(-1)
     } catch (err: unknown) {
@@ -311,6 +321,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
         }
       }
       const result = await mapsApi.search(mapsSearch, language)
+      searchMetaRef.current = { query: mapsSearch.trim(), source: result.source || 'unknown' }
       setMapsResults(result.places || [])
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, t('places.mapsSearchError')))
@@ -319,7 +330,13 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     }
   }
 
-  const handleSelectMapsResult = (result) => {
+  /**
+   * `pick` is present only when the click came from a ranked list. The
+   * collection picker and the autocomplete detour reach this function with a
+   * place that was never ranked against a query, and a made-up rank would be
+   * worse than no row at all.
+   */
+  const handleSelectMapsResult = (result, pick?: { mode: 'search' | 'autocomplete'; rank: number; count: number }) => {
     setForm(prev => mergeResult(prev, result, autoFilledRef.current))
     // The one point every pick flows through, so the detail column hangs here.
     // A new pick drops whatever hero image belonged to the previous place.
@@ -336,12 +353,36 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
         details: result,
       })
       setForm(prev => ({ ...prev, image_url: undefined }))
+      if (pick) {
+        const meta = pick.mode === 'search' ? searchMetaRef.current : acMetaRef.current
+        if (meta) {
+          recordPlacePick({
+            query: meta.query,
+            lang: language,
+            // The bias the search actually ran under is a box around the trip's
+            // existing places; the corpus stores its centre, which is what an
+            // evaluation needs to bias its own index the same way.
+            biasLat: locationBias ? (locationBias.low.lat + locationBias.high.lat) / 2 : undefined,
+            biasLng: locationBias ? (locationBias.low.lng + locationBias.high.lng) / 2 : undefined,
+            source: `${pick.mode}:${meta.source}`,
+            liveRank: pick.rank,
+            liveCount: pick.count,
+            pickedName: result.name || '',
+            pickedLat: lat,
+            pickedLng: lng,
+            pickedPlaceId: result.google_place_id || result.osm_id || null,
+          })
+        }
+      }
     }
     setMapsResults([])
     setMapsSearch('')
   }
 
   const handleSelectSuggestion = async (suggestion: { placeId: string; mainText: string; secondaryText: string }) => {
+    // Read before the list is cleared: this is the rank the user saw.
+    const acRank = acSuggestions.findIndex(s => s.placeId === suggestion.placeId)
+    const acCount = acSuggestions.length
     setAcSuggestions([])
     setAcHighlight(-1)
     const previousSearch = mapsSearch
@@ -372,7 +413,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
         place = search.places?.[0] ?? null
       }
       if (place) {
-        handleSelectMapsResult(place)
+        handleSelectMapsResult(place, acRank >= 0 ? { mode: 'autocomplete', rank: acRank, count: acCount } : undefined)
       } else {
         setMapsSearch(previousSearch)
         toast.error(t('places.mapsSearchError'))
@@ -768,7 +809,7 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => handleSelectMapsResult(result)}
+                  onClick={() => handleSelectMapsResult(result, { mode: 'search', rank: idx, count: mapsResults.length })}
                   className="w-full text-left px-3 py-2 hover:bg-surface-hover border-b border-edge-faint last:border-0"
                 >
                   <div className="font-medium text-sm">{result.name}</div>

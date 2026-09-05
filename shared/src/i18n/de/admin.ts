@@ -169,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Ortsanreicherung',
   'admin.placesEnrich.subtitle':
     'Bilder und eine Beschreibung beim Hinzufügen eines Ortes anzeigen. Wikipedia und OpenStreetMap werden immer genutzt; Google kommt zusätzlich dazu, wenn Ortsfotos oder Ortsdetails aktiv sind.',
+  'admin.placeShadow.title': 'Ortssuche protokollieren',
+  'admin.placeShadow.subtitle':
+    'Festhalten, welches Suchergebnis ausgewählt wurde, damit sich ein anderer Ortsindex später an echten Suchen messen lässt. Nichts verlässt diese Instanz, und ein Administrator kann das Protokoll jederzeit exportieren oder löschen.',
   'admin.bagTracking.title': 'Gepäck-Tracking',
   'admin.bagTracking.subtitle': 'Gewicht und Gepäckstück-Zuordnung für Packlisteneinträge aktivieren',
   'admin.collab.chat.title': 'Chat',

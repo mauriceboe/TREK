@@ -169,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Helyek gazdagítása',
   'admin.placesEnrich.subtitle':
     'Képeket és leírást mutat hely hozzáadásakor. A Wikipédia és az OpenStreetMap mindig használatban van; a Google akkor jön hozzá, ha a Helyfotók vagy a Helyadatok be vannak kapcsolva.',
+  'admin.placeShadow.title': 'Helykeresési napló',
+  'admin.placeShadow.subtitle':
+    'Rögzíti, melyik találatot választották ki, hogy egy másik helyindexet később valódi kereséseken lehessen mérni. Semmi nem hagyja el ezt a példányt, és egy rendszergazda bármikor exportálhatja vagy törölheti a naplót.',
   'admin.bagTracking.title': 'Poggyászkövetés',
   'admin.bagTracking.subtitle': 'Súly- és táskahozzárendelés engedélyezése csomagolási tételeknél',
   'admin.collab.chat.title': 'Chat',

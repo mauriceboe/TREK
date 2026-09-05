@@ -200,6 +200,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': '場所の情報補完',
   'admin.placesEnrich.subtitle':
     '場所を追加するときに写真と説明を表示します。WikipediaとOpenStreetMapは常に使用され、「場所の写真」または「場所の詳細」が有効な場合はGoogleも追加されます。',
+  'admin.placeShadow.title': '場所検索の記録',
+  'admin.placeShadow.subtitle':
+    'どの検索結果が選ばれたかを記録し、後で別の場所インデックスを実際の検索で評価できるようにします。データがこのインスタンスの外に出ることはなく、管理者はいつでも書き出しや削除ができます。',
   'admin.bagTracking.title': 'バッグ管理',
   'admin.bagTracking.subtitle': '持ち物の重量とバッグ割り当てを有効化',
   'admin.collab.chat.title': 'チャット',

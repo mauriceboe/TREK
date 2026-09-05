@@ -213,6 +213,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Yer zenginleştirme',
   'admin.placesEnrich.subtitle':
     'Bir yer eklerken görseller ve açıklama gösterir. Wikipedia ve OpenStreetMap her zaman kullanılır; Yer Fotoğrafları veya Yer Ayrıntıları açıkken Google da eklenir.',
+  'admin.placeShadow.title': 'Yer arama günlüğü',
+  'admin.placeShadow.subtitle':
+    'Hangi arama sonucunun seçildiğini kaydeder, böylece başka bir yer dizini daha sonra gerçek aramalarla ölçülebilir. Hiçbir şey bu sunucudan çıkmaz ve bir yönetici günlüğü istediği zaman dışa aktarabilir veya silebilir.',
   'admin.bagTracking.title': 'Çanta Takibi',
   'admin.bagTracking.subtitle': 'Paketleme öğeleri için ağırlık ve torba atamasını etkinleştirin',
   'admin.collab.chat.title': 'Sohbet',

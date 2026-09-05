@@ -187,6 +187,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'إثراء الأماكن',
   'admin.placesEnrich.subtitle':
     'يعرض صورًا ووصفًا أثناء إضافة مكان. تُستخدم ويكيبيديا وOpenStreetMap دائمًا، وتُضاف Google عند تفعيل صور الأماكن أو تفاصيل الأماكن.',
+  'admin.placeShadow.title': 'سجل البحث عن الأماكن',
+  'admin.placeShadow.subtitle':
+    'تسجيل نتيجة البحث التي جرى اختيارها، حتى يمكن لاحقًا قياس فهرس أماكن آخر على عمليات بحث حقيقية. لا يغادر أي شيء هذا الخادم، ويمكن للمشرف تصدير السجل أو حذفه في أي وقت.',
   'admin.bagTracking.title': 'تتبع الأمتعة',
   'admin.bagTracking.subtitle': 'تفعيل الوزن وتعيين الأمتعة للعناصر',
   'admin.collab.chat.title': 'الدردشة',

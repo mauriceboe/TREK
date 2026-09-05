@@ -164,6 +164,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': '地点信息补充',
   'admin.placesEnrich.subtitle':
     '添加地点时显示图片和描述。始终使用维基百科和 OpenStreetMap；开启「地点照片」或「地点详情」时会额外使用 Google。',
+  'admin.placeShadow.title': '地点搜索记录',
+  'admin.placeShadow.subtitle':
+    '记录用户选中了哪条搜索结果，以便日后用真实的搜索来评估另一套地点索引。数据不会离开本实例，管理员随时可以导出或删除记录。',
   'admin.bagTracking.title': '行李追踪',
   'admin.bagTracking.subtitle': '为打包物品启用重量和行李分配',
   'admin.collab.chat.title': '聊天',

@@ -211,6 +211,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Pengayaan tempat',
   'admin.placesEnrich.subtitle':
     'Menampilkan gambar dan deskripsi saat menambahkan tempat. Wikipedia dan OpenStreetMap selalu digunakan; Google ditambahkan bila Foto Tempat atau Detail Tempat aktif.',
+  'admin.placeShadow.title': 'Log pencarian tempat',
+  'admin.placeShadow.subtitle':
+    'Mencatat hasil pencarian mana yang dipilih, agar indeks tempat lain nanti bisa diukur dengan pencarian sungguhan. Tidak ada yang meninggalkan instans ini, dan admin bisa mengekspor atau menghapus log kapan saja.',
   'admin.bagTracking.title': 'Pelacak Tas',
   'admin.bagTracking.subtitle': 'Aktifkan berat dan penugasan tas untuk item packing',
   'admin.collab.chat.title': 'Chat',

@@ -221,6 +221,16 @@ export class AdminController {
     return result;
   }
 
+  @Get('place-shadow')
+  getPlaceShadow() { return this.addons.getPlaceShadow(); }
+
+  @Put('place-shadow')
+  updatePlaceShadow(@CurrentUser() user: User, @Body() body: AdminFeatureToggleDto, @Req() req: Request) {
+    const result = this.addons.updatePlaceShadow(body.enabled);
+    this.audit.writeAudit({ userId: user.id, action: 'admin.place_shadow', ip: getClientIp(req), details: { enabled: result.enabled } });
+    return result;
+  }
+
   @Get('places-enrich')
   getPlacesEnrich() { return this.addons.getPlacesEnrich(); }
 

@@ -166,6 +166,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Enriquecimento de lugares',
   'admin.placesEnrich.subtitle':
     'Mostra imagens e uma descrição ao adicionar um lugar. Wikipédia e OpenStreetMap são sempre usados; o Google entra quando Fotos de lugares ou Detalhes de lugares estão ativos.',
+  'admin.placeShadow.title': 'Registo de pesquisas de locais',
+  'admin.placeShadow.subtitle':
+    'Registar qual resultado de pesquisa foi escolhido, para que outro índice de locais possa ser avaliado depois com pesquisas reais. Nada sai desta instância e um administrador pode exportar ou apagar o registo a qualquer momento.',
   'admin.bagTracking.title': 'Rastreamento de malas',
   'admin.bagTracking.subtitle': 'Ativar peso e atribuição de mala para itens da lista',
   'admin.collab.chat.title': 'Chat',

@@ -170,6 +170,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Enriquiment de llocs',
   'admin.placesEnrich.subtitle':
     "Mostra imatges i una descripció en afegir un lloc. Wikipedia i OpenStreetMap s'usen sempre; Google s'hi afegeix si Fotos de llocs o Detalls de llocs estan actius.",
+  'admin.placeShadow.title': 'Registre de cerques de llocs',
+  'admin.placeShadow.subtitle':
+    'Desar quin resultat de cerca s\'ha triat, per poder avaluar més endavant un altre índex de llocs amb cerques reals. No surt res d\'aquesta instància i un administrador pot exportar o esborrar el registre quan vulgui.',
   'admin.bagTracking.title': "Seguiment d'equipatge",
   'admin.bagTracking.subtitle': "Activar pes i assignació d'equipatge per a articles de la llista",
   'admin.collab.chat.title': 'Xat',

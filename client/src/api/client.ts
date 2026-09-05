@@ -646,6 +646,8 @@ export const adminApi = {
   updateBagTracking: (enabled: boolean) => apiClient.put('/admin/bag-tracking', { enabled }).then(r => r.data),
   getPlacesPhotos: () => apiClient.get('/admin/places-photos').then(r => r.data),
   updatePlacesPhotos: (enabled: boolean) => apiClient.put('/admin/places-photos', { enabled }).then(r => r.data),
+  getPlaceShadow: () => apiClient.get('/admin/place-shadow').then(r => r.data),
+  updatePlaceShadow: (enabled: boolean) => apiClient.put('/admin/place-shadow', { enabled }).then(r => r.data),
   getPlacesAutocomplete: () => apiClient.get('/admin/places-autocomplete').then(r => r.data),
   updatePlacesAutocomplete: (enabled: boolean) => apiClient.put('/admin/places-autocomplete', { enabled }).then(r => r.data),
   getPlacesDetails: () => apiClient.get('/admin/places-details').then(r => r.data),

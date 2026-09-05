@@ -169,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Plaatsverrijking',
   'admin.placesEnrich.subtitle':
     "Toont afbeeldingen en een beschrijving bij het toevoegen van een plaats. Wikipedia en OpenStreetMap worden altijd gebruikt; Google komt erbij als Plaatsfoto's of Plaatsdetails aanstaan.",
+  'admin.placeShadow.title': 'Logboek van plaatszoekopdrachten',
+  'admin.placeShadow.subtitle':
+    'Vastleggen welk zoekresultaat is gekozen, zodat een andere plaatsindex later aan echte zoekopdrachten kan worden getoetst. Er verlaat niets deze instantie en een beheerder kan het logboek altijd exporteren of verwijderen.',
   'admin.bagTracking.title': 'Bagagetracking',
   'admin.bagTracking.subtitle': 'Gewicht en bagagetoewijzing inschakelen voor paklijstitems',
   'admin.collab.chat.title': 'Chat',

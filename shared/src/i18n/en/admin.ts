@@ -208,6 +208,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Place Enrichment',
   'admin.placesEnrich.subtitle':
     'Show pictures and a description while adding a place. Wikipedia and OpenStreetMap are always used; Google is added on top when Place Photos or Place Details are on.',
+  'admin.placeShadow.title': 'Place Search Log',
+  'admin.placeShadow.subtitle':
+    'Record which search result was picked, so a different place index can be measured against real searches later. Nothing leaves this instance, and an admin can export or delete the log at any time.',
   'admin.bagTracking.title': 'Bag Tracking',
   'admin.bagTracking.subtitle': 'Enable weight and bag assignment for packing items',
   'admin.collab.chat.title': 'Chat',

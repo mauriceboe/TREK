@@ -167,6 +167,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Obohacení míst',
   'admin.placesEnrich.subtitle':
     'Zobrazí obrázky a popis při přidávání místa. Wikipedie a OpenStreetMap se používají vždy; Google se přidá, když jsou zapnuté Fotky míst nebo Detaily míst.',
+  'admin.placeShadow.title': 'Záznam vyhledávání míst',
+  'admin.placeShadow.subtitle':
+    'Zaznamenávat, který výsledek vyhledávání byl vybrán, aby bylo možné později porovnat jiný index míst na skutečných dotazech. Nic neopouští tuto instanci a správce může záznam kdykoli exportovat nebo smazat.',
   'admin.bagTracking.title': 'Sledování zavazadel',
   'admin.bagTracking.subtitle': 'Povolit váhu a přiřazení k zavazadlům u položek balení',
   'admin.collab.chat.title': 'Chat',
