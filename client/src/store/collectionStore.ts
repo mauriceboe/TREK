@@ -210,9 +210,12 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
   },
 
   createCollection: async (payload) => {
-    const data = await collectionsApi.create(payload)
+    // POST answers with the collection itself. Reading `.collection` off it
+    // returned undefined every time, so the caller never got the new id: a cover
+    // picked while creating a list was dropped and the list never opened.
+    const created = await collectionsApi.create(payload)
     await get().loadAll()
-    return data.collection ?? null
+    return created ?? null
   },
 
   updateCollection: async (id, updates) => {

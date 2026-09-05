@@ -53,9 +53,13 @@ export const collectionsApi = {
     ax.get(base).then((r: AxiosResponse) => r.data),
   get: (id: number): Promise<CollectionDetailResponse> =>
     ax.get(`${base}/${id}`).then((r: AxiosResponse) => r.data),
-  create: (body: CollectionCreateRequest): Promise<{ collection: Collection }> =>
+  // Both answer with the bare collection, not a { collection } envelope — the
+  // controller returns the service's `Collection` straight through, and the e2e
+  // suite pins that shape. Declaring the envelope made createCollection() resolve
+  // undefined for every caller.
+  create: (body: CollectionCreateRequest): Promise<Collection> =>
     ax.post(base, body satisfies CollectionCreateRequest).then((r: AxiosResponse) => r.data),
-  update: (id: number, body: CollectionUpdateRequest): Promise<{ collection: Collection }> =>
+  update: (id: number, body: CollectionUpdateRequest): Promise<Collection> =>
     ax.patch(`${base}/${id}`, body satisfies CollectionUpdateRequest).then((r: AxiosResponse) => r.data),
   uploadCover: (id: number, formData: FormData): Promise<Collection> =>
     postMultipart(`${base}/${id}/cover`, formData),

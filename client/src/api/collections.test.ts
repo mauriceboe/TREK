@@ -59,23 +59,26 @@ describe('collectionsApi', () => {
     expect(res.collection.name).toBe('Tokyo')
   })
 
-  it('FE-API-COLLECTIONS-003: create() posts the create payload', async () => {
-    server.use(http.post(BASE, record({ collection })))
+  // Both handlers answer with the BARE collection, the way the controller does —
+  // stubbing a { collection } envelope here is what let the client keep reading
+  // `.collection` off a response that never had one.
+  it('FE-API-COLLECTIONS-003: create() posts the create payload and returns the list itself', async () => {
+    server.use(http.post(BASE, record(collection)))
 
     const res = await collectionsApi.create({ name: 'Tokyo', color: '#111827' })
 
     expect(requestBody).toEqual({ name: 'Tokyo', color: '#111827' })
-    expect(res.collection.id).toBe(1)
+    expect(res.id).toBe(1)
   })
 
   it('FE-API-COLLECTIONS-004: update() patches the list by id', async () => {
-    server.use(http.patch(`${BASE}/:id`, record({ collection })))
+    server.use(http.patch(`${BASE}/:id`, record(collection)))
 
     const res = await collectionsApi.update(1, { name: 'Tokyo 2026' })
 
     expect(requestUrl).toContain(`${BASE}/1`)
     expect(requestBody).toEqual({ name: 'Tokyo 2026' })
-    expect(res.collection).toEqual(collection)
+    expect(res).toEqual(collection)
   })
 
   it('FE-API-COLLECTIONS-005: uploadCover() posts multipart to the cover endpoint', async () => {

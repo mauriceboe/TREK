@@ -69,8 +69,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(collectionsApi.list).mockResolvedValue(listResponse())
   vi.mocked(collectionsApi.get).mockResolvedValue(detail())
-  vi.mocked(collectionsApi.create).mockResolvedValue({ collection: listA })
-  vi.mocked(collectionsApi.update).mockResolvedValue({ collection: listA })
+  // The bare collection is what POST /addons/collections actually answers with;
+  // mocking a { collection } envelope here is what hid the bug this pins.
+  vi.mocked(collectionsApi.create).mockResolvedValue(listA)
+  vi.mocked(collectionsApi.update).mockResolvedValue(listA)
   vi.mocked(collectionsApi.uploadCover).mockResolvedValue(listA)
   vi.mocked(collectionsApi.remove).mockResolvedValue({ success: true })
   vi.mocked(collectionsApi.reorder).mockResolvedValue({ success: true })
@@ -289,9 +291,18 @@ describe('collectionStore — list CRUD', () => {
   })
 
   it('FE-STORE-COLLECTION-014: createCollection() returns null when the response carries no list', async () => {
-    vi.mocked(collectionsApi.create).mockResolvedValue({} as unknown as { collection: Collection })
+    vi.mocked(collectionsApi.create).mockResolvedValue(undefined as unknown as Collection)
 
     expect(await store().createCollection({ name: 'Tokyo' })).toBeNull()
+  })
+
+  // The API declared a { collection } envelope the server never sends, so the id
+  // never reached the caller: a cover picked while creating a list was dropped
+  // and the new list never opened.
+  it('FE-STORE-COLLECTION-014b: createCollection() hands back the id the server sent', async () => {
+    const created = await store().createCollection({ name: 'Tokyo' })
+
+    expect(created?.id).toBe(1)
   })
 
   it('FE-STORE-COLLECTION-015: updateCollection() reloads the detail when the list is active', async () => {
