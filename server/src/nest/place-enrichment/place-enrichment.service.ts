@@ -139,6 +139,43 @@ interface CachePayload extends CachedEnrichment {
   v?: number;
 }
 
+/**
+ * Categories where a picture taken nearby is almost certainly of something
+ * else, so the bottom rung of the ladder is skipped for them entirely.
+ *
+ * Measured across 600 places in six cities: 2 percent of ordinary businesses
+ * have a picture on Wikimedia, against 70 percent of churches. So for a cafe
+ * the curated rungs practically never fire and the fallback practically always
+ * does, which is how the town hall ends up over the doner shop. A missing
+ * picture is honest; a confident picture of the building opposite is not.
+ *
+ * Matched against the category the source reports: `basic_category` from the
+ * TREK index, the amenity/shop tag from OpenStreetMap, a Google type.
+ */
+const NEARBY_MISLEADS = [
+  'restaurant', 'cafe', 'coffee', 'bar', 'pub', 'bakery', 'fast_food', 'food',
+  'eatery', 'biergarten', 'ice_cream', 'shop', 'store', 'supermarket', 'retail',
+  'pharmacy', 'hairdresser', 'kiosk', 'convenience', 'butcher', 'greengrocer',
+  'clothing', 'florist', 'bank', 'atm', 'nightclub',
+];
+
+/**
+ * True when a nearby picture would more likely mislead than inform.
+ *
+ * Fails OPEN on an unknown category: without one we cannot tell a cathedral
+ * from a kebab shop, and silently dropping pictures for everything unlabelled
+ * would take them away from the places where the fallback actually works.
+ */
+export function nearbyWouldMislead(details: Record<string, unknown> | null): boolean {
+  if (!details) return false;
+  const haystack = [details.category, details.category_path, details.amenity, details.shop, details.cuisine]
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+    .toLowerCase();
+  if (!haystack) return false;
+  return NEARBY_MISLEADS.some(word => haystack.includes(word));
+}
+
 /** OSM yes/no tags; anything else (limited, only, designated) is shown verbatim. */
 function yesNo(value: unknown): 'yes' | 'no' | string | null {
   return typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : null;
@@ -287,7 +324,7 @@ export class PlaceEnrichmentService {
     const identity = await this.resolveIdentity(req, details);
 
     const [photos, description] = await Promise.all([
-      this.collectPhotos(userId, placeId, req, identity),
+      this.collectPhotos(userId, placeId, req, identity, details),
       this.collectDescription(userId, placeId, req, details, identity),
     ]);
 
@@ -373,6 +410,8 @@ export class PlaceEnrichmentService {
     placeId: string,
     req: MapsPlaceEnrichmentRequest,
     identity: PlaceIdentity,
+    /** The record the caller already holds; only its category is read. */
+    details: Record<string, unknown> | null,
   ): Promise<PlacePhotoCandidate[]> {
     const apiKey = this.maps.getMapsKey(userId);
     const wantsGoogle = !!apiKey && !this.maps.photosDisabled() && isGooglePlaceId(placeId);
@@ -424,8 +463,14 @@ export class PlaceEnrichmentService {
     // used to push this endpoint past the client's timeout. Geosearch is free
     // and unmetered, so a speculative call that gets discarded costs nothing
     // anyone pays for.
+    // Skipped outright for the categories where it misleads, rather than
+    // fetched and then filtered: the request is the cost, and there is nothing
+    // in the answer worth looking at for a cafe.
+    const skipNearby = nearbyWouldMislead(details) || nearbyWouldMislead(identity.osmTags);
     const nearbyPending =
-      curated < 2 ? this.maps.fetchCommonsCandidates(req.lat, req.lng, COMMONS_CAP) : Promise.resolve([]);
+      curated < 2 && !skipNearby
+        ? this.maps.fetchCommonsCandidates(req.lat, req.lng, COMMONS_CAP)
+        : Promise.resolve([]);
 
     const googleRefs = await googlePending;
     if (curated < 2 && googleRefs.length < GOOGLE_CAP) {

@@ -125,11 +125,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': '要求雙因素身份驗證（2FA）',
   'admin.requireMfaHint': '未啟用 2FA 的使用者必須先完成設定中的配置才能使用應用。',
   'admin.apiKeys': 'API 金鑰',
-  'admin.apiKeysHint': '可選。啟用地點的擴充套件資料，如照片和天氣。',
+  'admin.apiKeysHint': '地點資料從哪裡來。TREK 索引不需要金鑰，下面兩個提供者是選用的。',
+  'admin.trekApi.badgeDefault': '推薦的預設來源',
+  'admin.googleCaveat.badge': '不建議',
+  'admin.googleCaveat.body':
+    'TREK 是開源軟體，在這件事上我們並不中立。在這個規模上，評分和一般店家的照片只有 Google 有，這就是壟斷。這個欄位存在是因為沒有替代品，而不是因為我們推薦。填了它，每次查詢都會送往 Google。',
+  'admin.trekApi.badgeSoon':
+    '即將推出',
+  'admin.trekApi.badgeActive':
+    '已啟用',
+  'admin.trekApi.tagline':
+    'TREK 自己的地點索引。不用 Google 金鑰，沒有配額，也沒有人統計你搜了什麼。',
+  'admin.trekApi.factPlaces':
+    '全球 7363 萬個地點',
+  'admin.trekApi.factNoKey':
+    '不需金鑰，沒有配額',
+  'admin.trekApi.factOffline':
+    '國家資料包可離線使用',
+  'admin.trekApi.factPrivacy':
+    '搜尋內容從不記錄',
+  'admin.trekApi.more':
+    '裡面有什麼',
+  'admin.trekApi.fieldPhone':
+    '電話',
+  'admin.trekApi.fieldStableId':
+    '穩定識別碼',
+  'admin.trekApi.includedNote':
+    '簡介取自地點自己的網站，營業時間在已填寫之處取自 OpenStreetMap。',
+  'admin.trekApi.notRatings':
+    '評分',
+  'admin.trekApi.notPhotos':
+    '一般店家的照片',
+  'admin.trekApi.notIncludedNote':
+    '兩者在任何開放資料集中都沒有，出多少錢也沒有。這兩項仍然只能走 Google 金鑰。',
+  'admin.trekApi.sourcesLabel':
+    '來源',
+  'admin.trekApi.sourcesNote':
+    '回應裡的每個欄位都會標明它來自其中哪一個。',
+  'admin.trekApi.included':
+    '包含',
+  'admin.trekApi.notIncluded':
+    '不包含',
   'admin.mapsKey': 'Google Maps API 金鑰',
   'admin.mapsKeyHint': '用於地點搜尋。在 console.cloud.google.com 獲取',
   'admin.mapsKeyHintLong':
-    '沒有 API 金鑰時，使用 OpenStreetMap 搜尋地點。有了 Google API 金鑰，還可以載入照片、評分和營業時間。在 console.cloud.google.com 獲取。',
+    '沒有 Google API 金鑰時，會使用推薦的 TREK API。有金鑰時可以額外載入照片、評分和營業時間。可在 console.cloud.google.com 建立金鑰。',
   'admin.recommended': '推薦',
   'admin.weatherKey': 'OpenWeatherMap API 金鑰',
   'admin.weatherKeyHint': '用於天氣資料。在 openweathermap.org 免費獲取',
@@ -151,6 +191,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': '配置使用者可以上傳的檔案型別。',
   'admin.fileTypesFormat': '以逗號分隔的副檔名（如 jpg,png,pdf,doc）。使用 * 允許所有型別。',
   'admin.fileTypesSaved': '檔案型別設定已儲存',
+  'admin.googleOptions': '該金鑰的用途',
+  'admin.googleOptionsSummary': '已開啟 {on}/{total}',
   'admin.placesPhotos.title': '地點照片',
   'admin.placesPhotos.subtitle': '從 Google Places API 獲取照片。停用可節省 API 配額。Wikimedia 照片不受影響。',
   'admin.placesAutocomplete.title': '地點自動補全',

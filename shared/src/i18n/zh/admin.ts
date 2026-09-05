@@ -86,11 +86,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': '要求双因素身份验证（2FA）',
   'admin.requireMfaHint': '未启用 2FA 的用户必须先完成设置中的配置才能使用应用。',
   'admin.apiKeys': 'API 密钥',
-  'admin.apiKeysHint': '可选。启用地点的扩展数据，如照片和天气。',
+  'admin.apiKeysHint': '地点数据从哪里来。TREK 索引不需要密钥，下面两个提供方是可选的。',
+  'admin.trekApi.badgeDefault': '推荐的默认来源',
+  'admin.googleCaveat.badge': '不推荐',
+  'admin.googleCaveat.body':
+    'TREK 是开源软件，在这件事上我们并不中立。在这个规模上，评分和普通店铺的照片只有 Google 有，这就是垄断。这个输入框存在是因为没有替代品，而不是因为我们推荐。填了它，每次查询都会发往 Google。',
+  'admin.trekApi.badgeSoon':
+    '即将推出',
+  'admin.trekApi.badgeActive':
+    '已启用',
+  'admin.trekApi.tagline':
+    'TREK 自己的地点索引。不用 Google 密钥，没有配额，也没有人统计你搜了什么。',
+  'admin.trekApi.factPlaces':
+    '全球 7363 万个地点',
+  'admin.trekApi.factNoKey':
+    '无需密钥，没有配额',
+  'admin.trekApi.factOffline':
+    '国家数据包可离线使用',
+  'admin.trekApi.factPrivacy':
+    '搜索内容从不记录',
+  'admin.trekApi.more':
+    '里面有什么',
+  'admin.trekApi.fieldPhone':
+    '电话',
+  'admin.trekApi.fieldStableId':
+    '稳定标识',
+  'admin.trekApi.includedNote':
+    '简介取自地点自己的网站，营业时间在已填写的地方取自 OpenStreetMap。',
+  'admin.trekApi.notRatings':
+    '评分',
+  'admin.trekApi.notPhotos':
+    '普通店铺的照片',
+  'admin.trekApi.notIncludedNote':
+    '两者在任何开放数据集中都没有，出多少钱也没有。这两项仍然只能走 Google 密钥。',
+  'admin.trekApi.sourcesLabel':
+    '来源',
+  'admin.trekApi.sourcesNote':
+    '响应里的每个字段都会标明它来自其中哪一个。',
+  'admin.trekApi.included':
+    '包含',
+  'admin.trekApi.notIncluded':
+    '不包含',
   'admin.mapsKey': 'Google Maps API 密钥',
   'admin.mapsKeyHint': '用于地点搜索。在 console.cloud.google.com 获取',
   'admin.mapsKeyHintLong':
-    '没有 API 密钥时，使用 OpenStreetMap 搜索地点。有了 Google API 密钥，还可以加载照片、评分和营业时间。在 console.cloud.google.com 获取。',
+    '没有 Google API 密钥时，会使用推荐的 TREK API。有密钥时可以额外加载照片、评分和营业时间。可在 console.cloud.google.com 创建密钥。',
   'admin.recommended': '推荐',
   'admin.weatherKey': 'OpenWeatherMap API 密钥',
   'admin.weatherKeyHint': '用于天气数据。在 openweathermap.org 免费获取',
@@ -112,6 +152,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': '配置用户可以上传的文件类型。',
   'admin.fileTypesFormat': '以逗号分隔的扩展名（如 jpg,png,pdf,doc）。使用 * 允许所有类型。',
   'admin.fileTypesSaved': '文件类型设置已保存',
+  'admin.googleOptions': '该密钥的用途',
+  'admin.googleOptionsSummary': '已开启 {on}/{total}',
   'admin.placesPhotos.title': '地点照片',
   'admin.placesPhotos.subtitle': '从 Google Places API 获取照片。禁用可节省 API 配额。Wikimedia 照片不受影响。',
   'admin.placesAutocomplete.title': '地点自动补全',

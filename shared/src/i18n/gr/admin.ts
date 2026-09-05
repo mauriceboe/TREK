@@ -133,11 +133,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Οι χρήστες χωρίς 2FA πρέπει να ολοκληρώσουν τη ρύθμιση στις Ρυθμίσεις πριν χρησιμοποιήσουν την εφαρμογή.',
   'admin.apiKeys': 'Κλειδιά API',
-  'admin.apiKeysHint': 'Προαιρετικά. Ενεργοποιεί εκτεταμένα δεδομένα τόπων όπως φωτογραφίες και καιρό.',
+  'admin.apiKeysHint': 'Από πού προέρχονται τα δεδομένα τόπων. Το ευρετήριο του TREK δεν χρειάζεται κλειδί· οι δύο πάροχοι παρακάτω είναι προαιρετικοί.',
+  'admin.trekApi.badgeDefault': 'Προτεινόμενη προεπιλογή',
+  'admin.googleCaveat.badge': 'Δεν συνιστάται',
+  'admin.googleCaveat.body':
+    'Το TREK είναι ανοιχτού κώδικα και εδώ δεν είμαστε ουδέτεροι. Σε αυτή την κλίμακα, βαθμολογίες και φωτογραφίες συνηθισμένων καταστημάτων υπάρχουν μόνο στη Google, και αυτό είναι μονοπώλιο. Το πεδίο υπάρχει ελλείψει εναλλακτικής, όχι επειδή το συνιστούμε. Τότε κάθε αναζήτηση πηγαίνει στη Google.',
+  'admin.trekApi.badgeSoon':
+    'Σύντομα',
+  'admin.trekApi.badgeActive':
+    'Ενεργό',
+  'admin.trekApi.tagline':
+    'Το δικό του ευρετήριο τόπων του TREK. Αναζήτηση χωρίς κλειδί Google, χωρίς όριο και χωρίς να μετράει κανείς τις αναζητήσεις σας.',
+  'admin.trekApi.factPlaces':
+    '73,6 εκατομμύρια τόποι παγκοσμίως',
+  'admin.trekApi.factNoKey':
+    'Χωρίς κλειδί, χωρίς όριο',
+  'admin.trekApi.factOffline':
+    'Τα πακέτα χωρών δουλεύουν και εκτός σύνδεσης',
+  'admin.trekApi.factPrivacy':
+    'Οι αναζητήσεις δεν καταγράφονται ποτέ',
+  'admin.trekApi.more':
+    'Τι περιλαμβάνει',
+  'admin.trekApi.fieldPhone':
+    'Τηλέφωνο',
+  'admin.trekApi.fieldStableId':
+    'Σταθερό αναγνωριστικό',
+  'admin.trekApi.includedNote':
+    'Οι περιγραφές έρχονται από τον ιστότοπο του ίδιου του τόπου, οι ώρες λειτουργίας από το OpenStreetMap όπου έχουν καταχωρηθεί.',
+  'admin.trekApi.notRatings':
+    'Βαθμολογίες',
+  'admin.trekApi.notPhotos':
+    'Φωτογραφίες συνηθισμένων καταστημάτων',
+  'admin.trekApi.notIncludedNote':
+    'Καμία ανοιχτή πηγή δεν έχει ούτε το ένα ούτε το άλλο, σε καμία τιμή. Για αυτά τα δύο το κλειδί Google παραμένει ο μόνος δρόμος.',
+  'admin.trekApi.sourcesLabel':
+    'Πηγές',
+  'admin.trekApi.sourcesNote':
+    'Κάθε πεδίο μιας απάντησης λέει από ποια από αυτές προέρχεται.',
+  'admin.trekApi.included':
+    'Περιλαμβάνεται',
+  'admin.trekApi.notIncluded':
+    'Δεν περιλαμβάνεται',
   'admin.mapsKey': 'Google Maps API Key',
   'admin.mapsKeyHint': 'Απαιτείται για αναζήτηση τόπων. Λάβετε το από console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Χωρίς κλειδί API, χρησιμοποιείται το OpenStreetMap για αναζήτηση τόπων. Με κλειδί Google API, μπορούν επίσης να φορτωθούν φωτογραφίες, βαθμολογίες και ώρες λειτουργίας. Λάβετε ένα στο console.cloud.google.com.',
+    'Χωρίς κλειδί Google API χρησιμοποιείται το προτεινόμενο TREK API. Με κλειδί μπορούν επιπλέον να φορτωθούν φωτογραφίες, βαθμολογίες και ώρες λειτουργίας. Δημιουργήστε ένα στο console.cloud.google.com.',
   'admin.recommended': 'Συνιστάται',
   'admin.weatherKey': 'OpenWeatherMap API Key',
   'admin.weatherKeyHint': 'Για δεδομένα καιρού. Δωρεάν στο openweathermap.org',
@@ -161,6 +201,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Επεκτάσεις χωρισμένες με κόμμα (π.χ. jpg,png,pdf,doc). Χρησιμοποιήστε * για να επιτρέπονται όλοι οι τύποι.',
   'admin.fileTypesSaved': 'Οι ρυθμίσεις τύπων αρχείων αποθηκεύτηκαν',
+  'admin.googleOptions': 'Για τι χρησιμοποιείται το κλειδί',
+  'admin.googleOptionsSummary': '{on} από {total} ενεργά',
   'admin.placesPhotos.title': 'Φωτογραφίες Τόπων',
   'admin.placesPhotos.subtitle':
     'Λήψη φωτογραφιών από το Google Places API. Απενεργοποιήστε για εξοικονόμηση ποσοστώσης API. Οι φωτογραφίες Wikimedia δεν επηρεάζονται.',

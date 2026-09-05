@@ -88,11 +88,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Користувачі без 2FA повинні завершити налаштування в розділі «Налаштування» перед використанням програми.',
   'admin.apiKeys': 'API-ключі',
-  'admin.apiKeysHint': 'Необов’язково. Включає розширені дані про місця, такі як фото та погода.',
+  'admin.apiKeysHint': "Звідки беруться дані про місця. Покажчику TREK ключ не потрібен; два постачальники нижче необов'язкові.",
+  'admin.trekApi.badgeDefault': 'Рекомендоване джерело',
+  'admin.googleCaveat.badge': 'Не рекомендовано',
+  'admin.googleCaveat.body':
+    'TREK має відкритий код, і ми тут не нейтральні. У такому масштабі відгуки та світлини звичайних закладів є лише в Google, і це і є монополія. Поле тут через брак альтернативи, а не тому, що ми його радимо. Тоді кожен запит іде до Google.',
+  'admin.trekApi.badgeSoon':
+    'Незабаром',
+  'admin.trekApi.badgeActive':
+    'Увімкнено',
+  'admin.trekApi.tagline':
+    'Власний покажчик місць TREK. Пошук без ключа Google, без квоти й без того, щоб хтось рахував ваші запити.',
+  'admin.trekApi.factPlaces':
+    '73,6 мільйона місць у світі',
+  'admin.trekApi.factNoKey':
+    'Без ключа, без квоти',
+  'admin.trekApi.factOffline':
+    'Пакети країн працюють офлайн',
+  'admin.trekApi.factPrivacy':
+    'Запити ніколи не записуються',
+  'admin.trekApi.more':
+    'Що всередині',
+  'admin.trekApi.fieldPhone':
+    'Телефон',
+  'admin.trekApi.fieldStableId':
+    'Стала позначка',
+  'admin.trekApi.includedNote':
+    'Описи беруться із сайту самого місця, години роботи — з OpenStreetMap там, де їх зазначено.',
+  'admin.trekApi.notRatings':
+    'Відгуки',
+  'admin.trekApi.notPhotos':
+    'Світлини звичайних закладів',
+  'admin.trekApi.notIncludedNote':
+    'Ані того, ані іншого немає в жодному відкритому джерелі за жодну ціну. До цих двох ключ Google лишається єдиним шляхом.',
+  'admin.trekApi.sourcesLabel':
+    'Джерела',
+  'admin.trekApi.sourcesNote':
+    'Кожне поле у відповіді вказує, з якого з них воно походить.',
+  'admin.trekApi.included':
+    'Входить',
+  'admin.trekApi.notIncluded':
+    'Не входить',
   'admin.mapsKey': 'API-ключ Google Maps',
   'admin.mapsKeyHint': 'Необхідний для пошуку місць. Отримайте на console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Без API-ключа для пошуку місць використовується OpenStreetMap. З ключем Google API можна завантажувати фото, рейтинги та години роботи. Отримайте ключ на console.cloud.google.com.',
+    'Без ключа Google API використовується рекомендований TREK API. З ключем додатково завантажуються світлини, оцінки та години роботи. Створити ключ можна на console.cloud.google.com.',
   'admin.recommended': 'Рекомендується',
   'admin.weatherKey': 'API-ключ OpenWeatherMap',
   'admin.weatherKeyHint': 'Для даних про погоду. Безкоштовно на openweathermap.org',
@@ -115,6 +155,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Налаштуйте, які типи файлів можуть завантажувати користувачі.',
   'admin.fileTypesFormat': 'Розширення через кому (напр. jpg,png,pdf,doc). Використовуйте * для дозволу всіх типів.',
   'admin.fileTypesSaved': 'Налаштування типів файлів збережено',
+  'admin.googleOptions': 'Для чого використовується ключ',
+  'admin.googleOptionsSummary': 'увімкнено {on} з {total}',
   'admin.placesPhotos.title': 'Фотографії місць',
   'admin.placesPhotos.subtitle':
     'Завантаження фотографій з Google Places API. Вимкніть для економії квоти API. Фотографії Wikimedia не зачіпаються.',

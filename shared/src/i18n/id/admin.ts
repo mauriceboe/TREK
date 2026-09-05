@@ -129,11 +129,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Pengguna tanpa 2FA harus menyelesaikan pengaturan di Pengaturan sebelum menggunakan aplikasi.',
   'admin.apiKeys': 'Kunci API',
-  'admin.apiKeysHint': 'Opsional. Mengaktifkan data tempat yang lebih lengkap seperti foto dan cuaca.',
+  'admin.apiKeysHint': 'Dari mana data tempat berasal. Indeks TREK tidak butuh kunci; dua penyedia di bawah bersifat opsional.',
+  'admin.trekApi.badgeDefault': 'Sumber baku yang disarankan',
+  'admin.googleCaveat.badge': 'Tidak disarankan',
+  'admin.googleCaveat.body':
+    'TREK adalah perangkat lunak sumber terbuka dan di sini kami tidak netral. Pada skala ini ulasan dan foto usaha biasa hanya ada di Google, dan itulah monopoli. Kolom ini ada karena tidak ada penggantinya, bukan karena kami menyarankan. Lalu setiap pencarian pergi ke Google.',
+  'admin.trekApi.badgeSoon':
+    'Segera',
+  'admin.trekApi.badgeActive':
+    'Aktif',
+  'admin.trekApi.tagline':
+    'Indeks tempat milik TREK sendiri. Mencari tanpa kunci Google, tanpa kuota, dan tanpa ada yang menghitung pencarian Anda.',
+  'admin.trekApi.factPlaces':
+    '73,6 juta tempat di seluruh dunia',
+  'admin.trekApi.factNoKey':
+    'Tanpa kunci, tanpa kuota',
+  'admin.trekApi.factOffline':
+    'Paket per negara jalan offline',
+  'admin.trekApi.factPrivacy':
+    'Pencarian tidak pernah dicatat',
+  'admin.trekApi.more':
+    'Apa isinya',
+  'admin.trekApi.fieldPhone':
+    'Telepon',
+  'admin.trekApi.fieldStableId':
+    'Id tetap',
+  'admin.trekApi.includedNote':
+    'Deskripsi berasal dari situs tempat itu sendiri, jam buka dari OpenStreetMap di mana sudah diisi.',
+  'admin.trekApi.notRatings':
+    'Ulasan',
+  'admin.trekApi.notPhotos':
+    'Foto usaha biasa',
+  'admin.trekApi.notIncludedNote':
+    'Tidak ada sumber terbuka yang punya keduanya, dengan harga berapa pun. Untuk keduanya kunci Google tetap satu-satunya jalan.',
+  'admin.trekApi.sourcesLabel':
+    'Sumber',
+  'admin.trekApi.sourcesNote':
+    'Setiap ruas dalam respons menyebutkan berasal dari yang mana.',
+  'admin.trekApi.included':
+    'Termasuk',
+  'admin.trekApi.notIncluded':
+    'Tidak termasuk',
   'admin.mapsKey': 'Kunci API Google Maps',
   'admin.mapsKeyHint': 'Diperlukan untuk pencarian tempat. Dapatkan di console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Tanpa kunci API, OpenStreetMap digunakan untuk pencarian tempat. Dengan kunci API Google, foto, rating, dan jam buka juga bisa dimuat. Dapatkan di console.cloud.google.com.',
+    'Tanpa kunci API Google, TREK API yang disarankan akan dipakai. Dengan kunci, foto, ulasan, dan jam buka bisa dimuat sebagai tambahan. Buat kunci di console.cloud.google.com.',
   'admin.recommended': 'Direkomendasikan',
   'admin.weatherKey': 'Kunci API OpenWeatherMap',
   'admin.weatherKeyHint': 'Untuk data cuaca. Gratis di openweathermap.org',
@@ -157,6 +197,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Ekstensi dipisahkan koma (contoh: jpg,png,pdf,doc). Gunakan * untuk mengizinkan semua jenis.',
   'admin.fileTypesSaved': 'Pengaturan jenis file disimpan',
+  'admin.googleOptions': 'Kunci ini dipakai untuk apa',
+  'admin.googleOptionsSummary': '{on} dari {total} aktif',
   'admin.placesPhotos.title': 'Foto Tempat',
   'admin.placesPhotos.subtitle':
     'Mengambil foto dari Google Places API. Nonaktifkan untuk menghemat kuota API. Foto Wikimedia tidak terpengaruh.',

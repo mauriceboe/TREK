@@ -128,11 +128,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': 'Require two-factor authentication (2FA)',
   'admin.requireMfaHint': 'Users without 2FA must complete setup in Settings before using the app.',
   'admin.apiKeys': 'API Keys',
-  'admin.apiKeysHint': 'Optional. Enables extended place data like photos and weather.',
+  'admin.apiKeysHint': 'Where place data comes from. The TREK index needs no key; the two providers below are optional.',
+  'admin.trekApi.badgeDefault': 'Recommended default',
+  'admin.googleCaveat.badge': 'Not recommended',
+  'admin.googleCaveat.body':
+    'TREK is open source and we are not neutral here. Ratings and photos of ordinary businesses exist at this scale only at Google, and that is what a monopoly is. The field is here because there is no alternative, not because we recommend it. Every lookup then goes to Google.',
+  'admin.trekApi.badgeSoon':
+    'Coming',
+  'admin.trekApi.badgeActive':
+    'Active',
+  'admin.trekApi.tagline':
+    'TREK\'s own place index. Search without a Google key, without a quota and without anyone counting your lookups.',
+  'admin.trekApi.factPlaces':
+    '73.6 million places worldwide',
+  'admin.trekApi.factNoKey':
+    'No key, no quota',
+  'admin.trekApi.factOffline':
+    'Country packages work offline',
+  'admin.trekApi.factPrivacy':
+    'Searches are never logged',
+  'admin.trekApi.more':
+    'What is in it',
+  'admin.trekApi.fieldPhone':
+    'Phone',
+  'admin.trekApi.fieldStableId':
+    'Stable id',
+  'admin.trekApi.includedNote':
+    'Descriptions come from the place\'s own website; opening hours from OpenStreetMap where they are tagged.',
+  'admin.trekApi.notRatings':
+    'Ratings',
+  'admin.trekApi.notPhotos':
+    'Photos of ordinary businesses',
+  'admin.trekApi.notIncludedNote':
+    'No open dataset has either, at any price. A Google key stays the only way to those two.',
+  'admin.trekApi.sourcesLabel':
+    'Sources',
+  'admin.trekApi.sourcesNote':
+    'Every field in a response says which of these it came from.',
+  'admin.trekApi.included':
+    'Included',
+  'admin.trekApi.notIncluded':
+    'Not included',
   'admin.mapsKey': 'Google Maps API Key',
   'admin.mapsKeyHint': 'Required for place search. Get at console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Without an API key, OpenStreetMap is used for place search. With a Google API key, photos, ratings, and opening hours can be loaded as well. Get one at console.cloud.google.com.',
+    'Without a Google API key the recommended TREK API is used. With one, photos, ratings and opening hours can be loaded on top. Create a key at console.cloud.google.com.',
   'admin.recommended': 'Recommended',
   'admin.weatherKey': 'OpenWeatherMap API Key',
   'admin.weatherKeyHint': 'For weather data. Free at openweathermap.org',
@@ -155,6 +195,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Configure which file types users can upload.',
   'admin.fileTypesFormat': 'Comma-separated extensions (e.g. jpg,png,pdf,doc). Use * to allow all types.',
   'admin.fileTypesSaved': 'File type settings saved',
+  'admin.googleOptions': 'What the key may be used for',
+  'admin.googleOptionsSummary': '{on} of {total} on',
   'admin.placesPhotos.title': 'Place Photos',
   'admin.placesPhotos.subtitle':
     'Fetch photos from the Google Places API. Disable to save API quota. Wikimedia photos are unaffected.',

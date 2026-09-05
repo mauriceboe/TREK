@@ -93,11 +93,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     "Els usuaris sense 2FA han de completar la configuració a Ajustos abans d'utilitzar l'aplicació.",
   'admin.apiKeys': 'Claus API',
-  'admin.apiKeysHint': 'Opcional. Activa dades ampliades de llocs, com ara fotos i previsió meteorològica.',
+  'admin.apiKeysHint': "D'on vénen les dades de llocs. L'índex de TREK no necessita clau; els dos proveïdors de sota són opcionals.",
+  'admin.trekApi.badgeDefault': 'Font recomanada per defecte',
+  'admin.googleCaveat.badge': 'No recomanat',
+  'admin.googleCaveat.body':
+    "TREK és programari lliure i aquí no som neutrals. En aquesta escala, les valoracions i les fotos de negocis corrents només existeixen a Google, i això és un monopoli. El camp hi és per manca d'alternativa, no perquè el recomanem. Llavors cada consulta va a Google.",
+  'admin.trekApi.badgeSoon':
+    'Aviat',
+  'admin.trekApi.badgeActive':
+    'Actiu',
+  'admin.trekApi.tagline':
+    'L\'índex de llocs propi de TREK. Cercar sense clau de Google, sense quota i sense que ningú compti les teves cerques.',
+  'admin.trekApi.factPlaces':
+    '73,6 milions de llocs al món',
+  'admin.trekApi.factNoKey':
+    'Sense clau, sense quota',
+  'admin.trekApi.factOffline':
+    'Els paquets per país funcionen sense connexió',
+  'admin.trekApi.factPrivacy':
+    'Les cerques no es registren mai',
+  'admin.trekApi.more':
+    'Què hi ha a dins',
+  'admin.trekApi.fieldPhone':
+    'Telèfon',
+  'admin.trekApi.fieldStableId':
+    'Identificador estable',
+  'admin.trekApi.includedNote':
+    'Les descripcions vénen del web del lloc mateix; els horaris, d\'OpenStreetMap allà on hi són.',
+  'admin.trekApi.notRatings':
+    'Valoracions',
+  'admin.trekApi.notPhotos':
+    'Fotos de negocis corrents',
+  'admin.trekApi.notIncludedNote':
+    'Cap font oberta no té ni les unes ni les altres, a cap preu. Per a aquestes dues una clau de Google continua sent l\'únic camí.',
+  'admin.trekApi.sourcesLabel':
+    'Fonts',
+  'admin.trekApi.sourcesNote':
+    'Cada camp d\'una resposta diu de quina d\'elles ve.',
+  'admin.trekApi.included':
+    'Inclòs',
+  'admin.trekApi.notIncluded':
+    'No inclòs',
   'admin.mapsKey': 'Clau API de Google Maps',
   'admin.mapsKeyHint': 'Obligatòria per cercar llocs. Aconsegueix-la a console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    "Sense una clau API, la cerca de llocs fa servir OpenStreetMap. Amb una clau de Google també es poden carregar fotos, valoracions i horaris d'obertura. Aconsegueix-la a console.cloud.google.com.",
+    "Sense clau d'API de Google s'utilitza l'API de TREK recomanada. Amb una clau es poden carregar a més fotos, valoracions i horaris. Crea-la a console.cloud.google.com.",
   'admin.recommended': 'Recomanat',
   'admin.weatherKey': "Clau API d'OpenWeatherMap",
   'admin.weatherKeyHint': 'Per a dades meteorològiques. Gratuït a openweathermap.org',
@@ -116,6 +156,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Extensions separades per comes (p. ex. jpg,png,pdf,doc). Utilitza * per permetre tots els tipus.',
   'admin.fileTypesSaved': 'Ajustos de tipus de fitxer desats',
+  'admin.googleOptions': 'Per a què s\'utilitza la clau',
+  'admin.googleOptionsSummary': '{on} de {total} actius',
   'admin.placesPhotos.title': 'Fotos de Llocs',
   'admin.placesPhotos.subtitle':
     "Obtén fotos de la Google Places API. Desactiva per estalviar quota d'API. Les fotos de Wikimedia no es veuen afectades.",

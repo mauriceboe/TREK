@@ -86,11 +86,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': 'Exigir autenticação em dois fatores (2FA)',
   'admin.requireMfaHint': 'Usuários sem 2FA precisam concluir a configuração em Configurações antes de usar o app.',
   'admin.apiKeys': 'Chaves de API',
-  'admin.apiKeysHint': 'Opcional. Habilita dados estendidos de lugares, como fotos e clima.',
+  'admin.apiKeysHint': 'De onde vêm os dados de locais. O índice do TREK não precisa de chave; os dois provedores abaixo são opcionais.',
+  'admin.trekApi.badgeDefault': 'Padrão recomendado',
+  'admin.googleCaveat.badge': 'Não recomendado',
+  'admin.googleCaveat.body':
+    'O TREK é código aberto e aqui não somos neutros. Nesta escala, avaliações e fotos de estabelecimentos comuns só existem no Google, e isso é um monopólio. O campo está aqui por falta de alternativa, não porque o recomendamos. Aí cada consulta vai para o Google.',
+  'admin.trekApi.badgeSoon':
+    'Em breve',
+  'admin.trekApi.badgeActive':
+    'Ativo',
+  'admin.trekApi.tagline':
+    'O índice de locais do próprio TREK. Pesquisar sem chave do Google, sem cota e sem que ninguém conte as suas buscas.',
+  'admin.trekApi.factPlaces':
+    '73,6 milhões de locais no mundo',
+  'admin.trekApi.factNoKey':
+    'Sem chave, sem cota',
+  'admin.trekApi.factOffline':
+    'Os pacotes por país funcionam offline',
+  'admin.trekApi.factPrivacy':
+    'As buscas nunca são registadas',
+  'admin.trekApi.more':
+    'O que vem dentro',
+  'admin.trekApi.fieldPhone':
+    'Telefone',
+  'admin.trekApi.fieldStableId':
+    'Identificador estável',
+  'admin.trekApi.includedNote':
+    'As descrições vêm do site do próprio local; os horários, do OpenStreetMap onde estiverem preenchidos.',
+  'admin.trekApi.notRatings':
+    'Avaliações',
+  'admin.trekApi.notPhotos':
+    'Fotos de estabelecimentos comuns',
+  'admin.trekApi.notIncludedNote':
+    'Nenhuma fonte aberta tem uma nem outra, a preço nenhum. Para essas duas uma chave do Google continua sendo o único caminho.',
+  'admin.trekApi.sourcesLabel':
+    'Fontes',
+  'admin.trekApi.sourcesNote':
+    'Cada campo de uma resposta diz de qual delas veio.',
+  'admin.trekApi.included':
+    'Incluído',
+  'admin.trekApi.notIncluded':
+    'Não incluído',
   'admin.mapsKey': 'Chave da API Google Maps',
   'admin.mapsKeyHint': 'Necessária para busca de lugares. Obtenha em console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Sem chave de API, o OpenStreetMap é usado na busca. Com uma chave Google, também podem ser carregadas fotos, avaliações e horários. Obtenha em console.cloud.google.com.',
+    'Sem chave de API do Google é usada a API do TREK recomendada. Com uma chave é possível carregar além disso fotos, avaliações e horários. Crie uma em console.cloud.google.com.',
   'admin.recommended': 'Recomendado',
   'admin.weatherKey': 'Chave OpenWeatherMap',
   'admin.weatherKeyHint': 'Para dados meteorológicos. Grátis em openweathermap.org',
@@ -112,6 +152,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Configure quais tipos de arquivo os usuários podem enviar.',
   'admin.fileTypesFormat': 'Extensões separadas por vírgula (ex.: jpg,png,pdf,doc). Use * para permitir todos.',
   'admin.fileTypesSaved': 'Configurações de tipos de arquivo salvas',
+  'admin.googleOptions': 'Para que a chave é usada',
+  'admin.googleOptionsSummary': '{on} de {total} ativados',
   'admin.placesPhotos.title': 'Fotos de Locais',
   'admin.placesPhotos.subtitle':
     'Busca fotos da Google Places API. Desative para economizar cota da API. Fotos do Wikimedia não são afetadas.',

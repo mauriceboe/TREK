@@ -129,11 +129,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': 'Yêu cầu xác thực hai yếu tố (2FA)',
   'admin.requireMfaHint': 'Người dùng không có 2FA phải hoàn tất thiết lập trong Cài đặt trước khi sử dụng ứng dụng.',
   'admin.apiKeys': 'API Key',
-  'admin.apiKeysHint': 'Không bắt buộc. Cho phép dữ liệu địa điểm mở rộng như ảnh và thời tiết.',
+  'admin.apiKeysHint': 'Dữ liệu địa điểm đến từ đâu. Chỉ mục TREK không cần khóa; hai nhà cung cấp bên dưới là tùy chọn.',
+  'admin.trekApi.badgeDefault': 'Nguồn mặc định khuyến nghị',
+  'admin.googleCaveat.badge': 'Không khuyến nghị',
+  'admin.googleCaveat.body':
+    'TREK là phần mềm nguồn mở và ở đây chúng tôi không trung lập. Ở quy mô này, đánh giá và ảnh của các cửa hàng thông thường chỉ có ở Google, và đó là độc quyền. Ô này có mặt vì không có lựa chọn khác, không phải vì chúng tôi khuyến nghị. Khi đó mọi truy vấn đều đi tới Google.',
+  'admin.trekApi.badgeSoon':
+    'Sắp có',
+  'admin.trekApi.badgeActive':
+    'Đang bật',
+  'admin.trekApi.tagline':
+    'Chỉ mục địa điểm của riêng TREK. Tìm kiếm không cần khóa Google, không hạn mức, và không ai đếm lượt tìm của bạn.',
+  'admin.trekApi.factPlaces':
+    '73,6 triệu địa điểm trên toàn thế giới',
+  'admin.trekApi.factNoKey':
+    'Không khóa, không hạn mức',
+  'admin.trekApi.factOffline':
+    'Gói theo quốc gia dùng được ngoại tuyến',
+  'admin.trekApi.factPrivacy':
+    'Không bao giờ ghi lại nội dung tìm kiếm',
+  'admin.trekApi.more':
+    'Bên trong có gì',
+  'admin.trekApi.fieldPhone':
+    'Điện thoại',
+  'admin.trekApi.fieldStableId':
+    'Mã định danh ổn định',
+  'admin.trekApi.includedNote':
+    'Mô tả lấy từ trang web của chính địa điểm, giờ mở cửa lấy từ OpenStreetMap ở nơi đã được điền.',
+  'admin.trekApi.notRatings':
+    'Đánh giá',
+  'admin.trekApi.notPhotos':
+    'Ảnh của cửa hàng thông thường',
+  'admin.trekApi.notIncludedNote':
+    'Không nguồn mở nào có cả hai, với bất kỳ giá nào. Với hai thứ đó khóa Google vẫn là con đường duy nhất.',
+  'admin.trekApi.sourcesLabel':
+    'Nguồn',
+  'admin.trekApi.sourcesNote':
+    'Mọi trường trong phản hồi đều cho biết nó đến từ nguồn nào.',
+  'admin.trekApi.included':
+    'Có',
+  'admin.trekApi.notIncluded':
+    'Không có',
   'admin.mapsKey': 'Google Maps API Key',
   'admin.mapsKeyHint': 'Cần thiết cho tìm kiếm địa điểm. Truy cập tại console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Nếu không có khóa API, OpenStreetMap sẽ được sử dụng để tìm kiếm địa điểm. Với khóa Google API, bạn cũng có thể tải ảnh, xếp hạng và giờ mở cửa. Nhận một cái tại console.cloud.google.com.',
+    'Không có khóa API của Google thì TREK API được khuyến nghị sẽ được dùng. Có khóa thì có thể tải thêm ảnh, đánh giá và giờ mở cửa. Tạo khóa tại console.cloud.google.com.',
   'admin.recommended': 'Khuyến khích',
   'admin.weatherKey': 'OpenWeatherMap API Key',
   'admin.weatherKeyHint': 'Đối với dữ liệu thời tiết. Miễn phí tại openweathermap.org',
@@ -157,6 +197,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Các phần mở rộng được phân tách bằng dấu phẩy (ví dụ: jpg,png,pdf,doc). Sử dụng * để cho phép tất cả các loại.',
   'admin.fileTypesSaved': 'Đã lưu cài đặt loại tệp',
+  'admin.googleOptions': 'Khóa được dùng vào việc gì',
+  'admin.googleOptionsSummary': '{on}/{total} đang bật',
   'admin.placesPhotos.title': 'Đặt ảnh',
   'admin.placesPhotos.subtitle':
     'Tìm nạp ảnh từ Google Địa điểm API. Tắt để lưu hạn ngạch API. Hình ảnh của Wikimedia không bị ảnh hưởng.',
