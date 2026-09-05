@@ -402,13 +402,18 @@ export default function App() {
     || location.pathname.startsWith('/register')
     || location.pathname.startsWith('/forgot-password')
     || location.pathname.startsWith('/reset-password')
+  // Anonymous visitor routes: no session, so authenticated-only widgets (system
+  // notices, background tasks, save-to-collection) have nothing to do here and
+  // would otherwise fire a doomed authenticated request on mount.
+  const isPublicVisitorPage = isSharedPage || location.pathname.startsWith('/public/journey/')
+  const hideAuthedWidgets = isAuthPage || isPublicVisitorPage
 
   return (
     <TranslationProvider>
-      {!isAuthPage && <ErrorBoundary boundaryId="widget:system-notice" fallback={null}><SystemNoticeHost /></ErrorBoundary>}
+      {!hideAuthedWidgets && <ErrorBoundary boundaryId="widget:system-notice" fallback={null}><SystemNoticeHost /></ErrorBoundary>}
       <ErrorBoundary boundaryId="widget:toast" fallback={null}><ToastContainer /></ErrorBoundary>
-      {!isAuthPage && <ErrorBoundary boundaryId="widget:background-tasks" fallback={null}><BackgroundTasksWidget /></ErrorBoundary>}
-      {!isAuthPage && (isPhone ? <MSaveToCollectionSheet /> : <SaveToCollectionModal />)}
+      {!hideAuthedWidgets && <ErrorBoundary boundaryId="widget:background-tasks" fallback={null}><BackgroundTasksWidget /></ErrorBoundary>}
+      {!hideAuthedWidgets && (isPhone ? <MSaveToCollectionSheet /> : <SaveToCollectionModal />)}
       <ErrorBoundary boundaryId="widget:offline-banner" fallback={null}><OfflineBanner /></ErrorBoundary>
       {/* One boundary for all route chunks, above <Routes> so it stays mounted
           across navigations. react-router runs location updates inside a transition,
