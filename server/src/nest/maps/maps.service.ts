@@ -16,6 +16,13 @@ import { PlacePhotoCacheService } from '../place-photos/place-photo-cache.servic
 import { DatabaseService } from '../database/database.service';
 import { nominatimFetch, type GeoLane } from '../geo/nominatim.client';
 import {
+  trekPlacesSearch,
+  trekPlacesById,
+  trekPlacesNearby,
+  toPlaceRecord,
+  POI_CATEGORY_TO_TREK,
+} from './trek-places.client';
+import {
   UA,
   SEARCH_TEXT_FIELD_MASK,
   toApiLang,
@@ -531,6 +538,19 @@ export class MapsService {
     return row?.value === 'false';
   }
 
+  /**
+   * Fail-OPEN, unlike the three Google switches: the index is the path we want
+   * people on, and an install that upgrades without visiting the admin panel
+   * should land on it rather than stay on Nominatim, whose usage policy forbids
+   * what TREK was doing with it.
+   */
+  trekPlacesEnabled(): boolean {
+    const row = this.database.get<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = 'trek_places_enabled'",
+    );
+    return row?.value !== 'false';
+  }
+
   autocompleteDisabled(): boolean {
     return this.isSettingDisabled('places_autocomplete_enabled');
   }
@@ -577,8 +597,70 @@ export class MapsService {
     return this.resolveGoogleMapsUrl(url) as Promise<MapsResolveUrlResult>;
   }
 
-  // OSM-only POI search by category within a viewport bbox (never calls Google).
-  pois(category: string, bbox: { south: number; west: number; north: number; east: number }, lang?: string) {
+  // POI search by category within a viewport. Never calls Google.
+  //
+  // The index answers first: it holds the same places, indexed in an R-Tree, and
+  // the public Overpass mirrors this used to depend on are regularly overloaded.
+  // A miss or a failure drops through to Overpass exactly as before.
+  async pois(
+    category: string,
+    bbox: { south: number; west: number; north: number; east: number },
+    lang?: string,
+  ): Promise<PoiSearchResult> {
+    const terms = POI_CATEGORY_TO_TREK[category];
+    if (this.trekPlacesEnabled() && terms) {
+      try {
+        const lat = (bbox.south + bbox.north) / 2;
+        const lng = (bbox.west + bbox.east) / 2;
+        // Half the diagonal, so the circle covers the viewport corners rather
+        // than leaving the edges of the map empty.
+        const radius = Math.min(
+          20000,
+          Math.max(
+            300,
+            Math.round(
+              (Math.hypot(
+                (bbox.north - bbox.south) * 111_320,
+                (bbox.east - bbox.west) * 111_320 * Math.cos((lat * Math.PI) / 180),
+              ) / 2),
+            ),
+          ),
+        );
+        const found = await trekPlacesNearby(lat, lng, {
+          radius,
+          limit: 50,
+          category: terms.join(','),
+        });
+        if (found.length > 0) {
+          // Same shape the Overpass path produces, so the client and the map
+          // renderer need no branch. `source` stays 'openstreetmap' because it
+          // is a typed contract the client switches on, and the places are the
+          // same places; where they came from is an implementation detail of
+          // this method, not something the pill should render differently.
+          return {
+            pois: found.map(p => ({
+              osm_id: `gers:${p.gers}`,
+              name: p.name,
+              lat: p.lat,
+              lng: p.lng,
+              category,
+              poi_type: p.category ?? category,
+              address: p.address?.freeform ?? null,
+              website: p.contact?.website ?? null,
+              phone: p.contact?.phone ?? null,
+              opening_hours: null,
+              cuisine: null,
+              source: 'openstreetmap' as const,
+            })),
+            source: 'openstreetmap' as const,
+            truncated: found.length >= 50,
+            clamped: false,
+          };
+        }
+      } catch (err: unknown) {
+        console.warn('TREK Places nearby failed, falling back:', (err as Error).message);
+      }
+    }
     return this.searchOverpassPois(category, bbox, lang);
   }
 
@@ -966,6 +1048,18 @@ export class MapsService {
    * want a single image (fetchWikimediaPhoto, and through it getPlacePhoto) take
    * the first entry and get exactly the file they got before this existed.
    */
+  /**
+   * Anything photographed near a coordinate. The bottom rung of the picture
+   * ladder, and the only one with no claim on the subject at all.
+   *
+   * 60 metres rather than the 300 it used to be. Three hundred metres in a city
+   * centre is a whole block: the town hall, the church and the underground
+   * entrance are all inside it, and every one of them outranks the doner shop
+   * we were actually asked about. Sixty is roughly "the same building and its
+   * neighbours", which is the widest a picture can be taken and still plausibly
+   * show the place. It does not fix the real problem, which is that nobody
+   * photographed the shop, but it stops the wrong answer from being confident.
+   */
   async fetchCommonsCandidates(lat: number, lng: number, limit = 5): Promise<CommonsCandidate[]> {
     const params = new URLSearchParams({
       action: 'query',
@@ -973,7 +1067,7 @@ export class MapsService {
       generator: 'geosearch',
       ggsprimary: 'all',
       ggsnamespace: '6',
-      ggsradius: '300',
+      ggsradius: '60',
       ggscoord: `${lat}|${lng}`,
       // Deliberately more than the caller asked for. Around anything worth
       // visiting the first few hits are survey tiles, passers-by and the
@@ -1455,6 +1549,30 @@ export class MapsService {
   ): Promise<{ places: Record<string, unknown>[]; source: string }> {
     const { key: apiKey, source: keySource } = this.resolveMapsKey(userId);
 
+    // The TREK index answers first, whether or not a Google key exists. It is
+    // the only source here that may be stored, works offline as a country
+    // package, and costs the caller nothing; a key buys ratings and photos on
+    // top of it, not a better search.
+    //
+    // It never throws upward. A search that used to work must keep working when
+    // the service is slow or down, so a failure drops through to exactly what
+    // this method did before.
+    if (this.trekPlacesEnabled()) {
+      try {
+        const found = await trekPlacesSearch(query, {
+          lat: locationBias?.lat,
+          lng: locationBias?.lng,
+          limit: 10,
+        });
+        if (found.length > 0) {
+          return { places: found.map(toPlaceRecord), source: 'trek-places' };
+        }
+      } catch (err: unknown) {
+        // Logged, not surfaced: the fallback below is a working answer.
+        console.warn('TREK Places search failed, falling back:', (err as Error).message);
+      }
+    }
+
     if (!apiKey) {
       const places = await this.searchNominatim(query, lang);
       return { places, source: 'openstreetmap' };
@@ -1525,6 +1643,37 @@ export class MapsService {
     sessionToken?: string,
   ): Promise<{ suggestions: { placeId: string; mainText: string; secondaryText: string }[]; source: string }> {
     const { key: apiKey, source: keySource } = this.resolveMapsKey(userId);
+
+    // This is the path that mattered most. Nominatim's usage policy names
+    // autocomplete as unacceptable use in its own words, regardless of rate,
+    // and the whole TREK fleet shares one User-Agent there: one abusive install
+    // could get every instance blocked at once. The index removes that.
+    //
+    // Same contract as search: never throws upward, falls through to what this
+    // method did before.
+    if (this.trekPlacesEnabled()) {
+      try {
+        const centre = locationBias
+          ? {
+              lat: (locationBias.low.lat + locationBias.high.lat) / 2,
+              lng: (locationBias.low.lng + locationBias.high.lng) / 2,
+            }
+          : undefined;
+        const found = await trekPlacesSearch(input, { lat: centre?.lat, lng: centre?.lng, limit: 8 });
+        if (found.length > 0) {
+          return {
+            suggestions: found.map(p => ({
+              placeId: `gers:${p.gers}`,
+              mainText: p.name,
+              secondaryText: [p.address?.locality, p.address?.country].filter(Boolean).join(', '),
+            })),
+            source: 'trek-places',
+          };
+        }
+      } catch (err: unknown) {
+        console.warn('TREK Places autocomplete failed, falling back:', (err as Error).message);
+      }
+    }
 
     if (!apiKey) {
       return this.autocompleteNominatim(input, lang);
@@ -1612,6 +1761,47 @@ export class MapsService {
     lang?: string,
     sessionToken?: string,
   ): Promise<{ place: Record<string, unknown> | null }> {
+    // A place picked out of the TREK index. Checked BEFORE the generic
+    // colon branch below, which would otherwise read "gers" as an OSM type
+    // and ask Overpass for an element that does not exist.
+    if (placeId.startsWith('gers:')) {
+      const found = await trekPlacesById(placeId.slice('gers:'.length)).catch(() => null);
+      if (!found) return { place: null };
+
+      // What the index does not have, the free sources still do. The index
+      // carries no opening hours yet and never carries cuisine, wheelchair
+      // access or a menu link; OpenStreetMap has all of them for the same
+      // building. Without this the hours a user saw while adding the place
+      // disappeared from its card afterwards, which reads like data loss.
+      //
+      // Matched by name and coordinate, with the same two gates
+      // resolveOsmIdentity applies everywhere: within range, and sharing a
+      // substantial word of the name. A confident description of the building
+      // next door is worse than none.
+      const osm = await this.resolveOsmIdentity(found.name, found.lat, found.lng, {
+        lang,
+        maxDistanceM: 150,
+      }).catch(() => null);
+
+      const record = toPlaceRecord(found);
+      if (!osm) return { place: record };
+
+      const osmDetails = buildOsmDetails(osm.tags, '', '');
+      return {
+        place: {
+          // Index first: its name, coordinate and contact details are the ones
+          // the user picked. OSM only fills what is still missing.
+          ...osmDetails,
+          ...record,
+          opening_hours: osmDetails.opening_hours ?? null,
+          website: record.website ?? osmDetails.website ?? null,
+          phone: record.phone ?? osmDetails.phone ?? null,
+          osm_id: placeId,
+          source: 'trek-places',
+        },
+      };
+    }
+
     // OSM details: placeId is "node:123456" or "way:123456" etc.
     if (placeId.includes(':')) {
       const [osmType, osmId] = placeId.split(':');
