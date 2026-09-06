@@ -254,7 +254,12 @@ export function ReservationModal({ isOpen, onClose, onSave, reservation, days, p
         // Hotels link a place through the accommodation record; every other type links
         // the picked trip place/activity directly on the reservation (#1353).
         place_id: form.type === 'hotel' ? null : (form.place_id || null),
-        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        // An empty object, not null: null clears the column outright, and that
+        // took the mirrored booking price with it on every edit of a type that
+        // fills no metadata of its own — restaurant, event, tour, parking, other,
+        // a hotel without check-in times (#2233). An object still clears what the
+        // form dropped, and lets the server carry the price across.
+        metadata,
         // Omitted on an edit: the server replaces the endpoint set whenever the
         // key is present, and this form never edits endpoints, so sending an
         // empty list would drop a transit booking's stations (#2216).
