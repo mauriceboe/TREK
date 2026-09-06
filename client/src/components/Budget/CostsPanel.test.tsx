@@ -309,10 +309,13 @@ describe('CostsPanel — settlements in the ledger', () => {
     render(<CostsPanel tripId={1} tripMembers={tripMembers} />)
 
     await screen.findByText('Taxi')
-    // 60 from the paid expense only — the 40 nobody has paid for is not a share.
-    const card = screen.getByText('Your share').closest('div[style*="border-radius: 22"]')
-    expect(card).toHaveTextContent('60')
-    expect(card).not.toHaveTextContent('100')
+    // "Your share" is the first of the two bold figures in the Total spend card's
+    // footer; the second is "You paid". 60 from the paid expense only — the 40
+    // nobody has paid for is not a share, though it still counts as spend.
+    const card = screen.getByText('Total spend').closest('div[style*="border-radius: 22"]')!
+    const figures = [...card.querySelectorAll('b')].map(b => b.textContent ?? '')
+    expect(figures[0]).toContain('60')
+    expect(figures[0]).not.toContain('100')
   })
 
   it('records a recorded-total expense with nobody to split with (#1286)', async () => {
