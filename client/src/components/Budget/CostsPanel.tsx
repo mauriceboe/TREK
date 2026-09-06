@@ -123,7 +123,14 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   // ── derived expense maths (everything converted to the base currency) ────
   const baseTotal = (e: BudgetItem) => convert(e.total_price || 0, curOf(e))
   const myPaidOf = (e: BudgetItem) => (e.payers || []).filter(p => p.user_id === me).reduce((a, p) => a + convert(p.amount, curOf(e)), 0)
+  // "Unfinished": a recorded total nobody has paid yet — counts toward the trip
+  // total but stays out of settlements until who-paid is filled in. A negative
+  // total (a refund, #2176) is just as unfinished until its recipient is named.
+  const isUnfinished = (e: BudgetItem) => baseTotal(e) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
   const myShareOf = (e: BudgetItem) => {
+    // Nobody paid, so nobody owes: the ledger skips these entirely (#2225), and
+    // counting them here left the tile contradicting the balances right beside it.
+    if (isUnfinished(e)) return 0
     const myMember = (e.members || []).find(m => m.user_id === me)
     if (!myMember) return 0
     if (myMember.amount !== null && myMember.amount !== undefined) {
@@ -133,10 +140,6 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
     const myShare = shares[me] || 0
     return convert(myShare, curOf(e))
   }
-  // "Unfinished": a recorded total nobody has paid yet — counts toward the trip
-  // total but stays out of settlements until who-paid is filled in. A negative
-  // total (a refund, #2176) is just as unfinished until its recipient is named.
-  const isUnfinished = (e: BudgetItem) => baseTotal(e) !== 0 && (e.payers || []).filter(p => p.amount !== 0).length === 0
 
   const totals = useMemo(() => {
     const totalSpend = budgetItems.reduce((a, e) => a + baseTotal(e), 0)

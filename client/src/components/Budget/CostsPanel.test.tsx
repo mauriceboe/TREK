@@ -295,6 +295,26 @@ describe('CostsPanel — settlements in the ledger', () => {
     expect(card).toHaveTextContent('120') // 120,00 € (locale separator), i.e. 90 + 30
   })
 
+  // #2225 follow-up — the ledger stopped charging payer-less expenses, but this
+  // tile kept counting them, so it contradicted the balances right beside it.
+  it('keeps a payer-less expense out of Your share, like the balances do', async () => {
+    seedStore(useSettingsStore, { settings: { ...useSettingsStore.getState().settings, default_currency: 'EUR' } })
+    seedStore(useAuthStore, { user: buildUser({ id: 1, username: 'alice' }), isAuthenticated: true })
+    const paid = { ...buildBudgetItem({ trip_id: 1, category: 'food', name: 'Dinner' }), total_price: 60, payers: [{ user_id: 1, amount: 60, username: 'alice' }], members: [{ user_id: 1, username: 'alice', paid: 1 }] }
+    const noPayer = { ...buildBudgetItem({ trip_id: 1, category: 'transport', name: 'Taxi' }), total_price: 40, payers: [], members: [{ user_id: 1, username: 'alice', paid: 0 }] }
+    server.use(
+      http.get('/api/trips/1/budget', () => HttpResponse.json({ items: [paid, noPayer] })),
+      http.get('/api/trips/1/budget/settlement', () => HttpResponse.json({ balances: [], flows: [], settlements: [] })),
+    )
+    render(<CostsPanel tripId={1} tripMembers={tripMembers} />)
+
+    await screen.findByText('Taxi')
+    // 60 from the paid expense only — the 40 nobody has paid for is not a share.
+    const card = screen.getByText('Your share').closest('div[style*="border-radius: 22"]')
+    expect(card).toHaveTextContent('60')
+    expect(card).not.toHaveTextContent('100')
+  })
+
   it('records a recorded-total expense with nobody to split with (#1286)', async () => {
     seedStore(useAuthStore, { user: buildUser({ id: 1, username: 'alice' }), isAuthenticated: true })
     let posted: Record<string, unknown> | null = null

@@ -49,6 +49,8 @@ services:
 #      - MCP_RATE_LIMIT=300 # Max MCP API requests per user per minute (default: 300)
 #      - MCP_MAX_SESSION_PER_USER=20 # Max concurrent MCP sessions per user (default: 20)
 #      - KITINERARY_EXTRACTOR_PATH= # Optional. Full path to kitinerary-extractor binary. Auto-detected from PATH and /usr/lib/*/libexec/kf6/ when unset.
+#      - LLM_TIMEOUT_MS=900000 # Optional. Ceiling (ms) for one AI-parsing call before it is abandoned, applied to every provider and to the HTTP client underneath. Generous by default so heavier documents fit; lower it on a cloud provider to fail fast. Must be a whole number of milliseconds between 1 and 2147483647 — anything else stops the server at startup with the reason. (default: 900000)
+#      - TREK_PLUGINS_IGNORE_TREK_RANGE=true # Optional. Lets plugins whose declared TREK version range predates this build, and plugins that declare none, be installed and activated anyway. Every gate warns instead of refusing; the plugin-API version gate and the Discover compatibility verdict stay hard. Off unless set. (default: off)
 #      - UNSPLASH_ACCESS_KEY= # Optional. Unsplash Access Key for trip-cover / place-image search. Without one, TREK uses Unsplash's unauthenticated endpoint, which some datacenter/VPS IPs are blocked from (#1449). Free key at unsplash.com/developers. Can also be set per-admin in Admin > Settings; the env var overrides that.
     volumes:
       - ./data:/app/data
