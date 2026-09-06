@@ -366,6 +366,99 @@ describe('safeFetchFollow (manual per-hop redirect SSRF)', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  // Following redirects by hand opts out of the platform's own rules, so they
+  // have to be restated. undici drops Authorization across origins itself
+  // (Fetch, "HTTP-redirect fetch" step 13) — without this, converting a caller
+  // that sends a bearer token to safeFetchFollow would have been a regression.
+  describe('credentials and body across a hop', () => {
+    const authInit = { method: 'POST', headers: { Authorization: 'Bearer secret', 'X-Api-Key': 'k', 'User-Agent': 'TREK' }, body: 'payload' };
+    const headerOf = (call: unknown[], name: string) =>
+      new Headers((call[1] as { headers?: ConstructorParameters<typeof Headers>[0] }).headers).get(name);
+
+    function twoHops(location: string, status = 307) {
+      mockLookup.mockResolvedValue({ address: '142.250.0.0', family: 4 });
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce(fakeResponse({ status, location, url: 'https://start.example/a' }))
+        .mockResolvedValueOnce(fakeResponse({ status: 200, url: location }));
+      vi.stubGlobal('fetch', mockFetch);
+      return mockFetch;
+    }
+
+    it('drops credential headers when the hop changes origin', async () => {
+      const mockFetch = twoHops('https://elsewhere.example/b');
+      await safeFetchFollow('https://start.example/a', authInit);
+
+      expect(headerOf(mockFetch.mock.calls[0], 'authorization')).toBe('Bearer secret');
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBeNull();
+      expect(headerOf(mockFetch.mock.calls[1], 'x-api-key')).toBeNull();
+      // User-Agent is not a credential and must survive: the goo.gl chain needs
+      // it on the last hop or Google serves a different page.
+      expect(headerOf(mockFetch.mock.calls[1], 'user-agent')).toBe('TREK');
+    });
+
+    it('keeps them on a same-origin hop', async () => {
+      const mockFetch = twoHops('https://start.example/b');
+      await safeFetchFollow('https://start.example/a', authInit);
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBe('Bearer secret');
+    });
+
+    it('treats the same host moving http to https as an upgrade, not a host change', async () => {
+      const mockFetch = twoHops('https://start.example/b');
+      await safeFetchFollow('http://start.example/a', authInit);
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBe('Bearer secret');
+    });
+
+    it('keeps method and body on a 307, which is what preserves them', async () => {
+      const mockFetch = twoHops('https://start.example/b', 307);
+      await safeFetchFollow('https://start.example/a', authInit);
+      expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: 'POST', body: 'payload' });
+    });
+
+    it('downgrades a 303 to GET without a body', async () => {
+      const mockFetch = twoHops('https://start.example/b', 303);
+      await safeFetchFollow('https://start.example/a', authInit);
+      expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: 'GET', body: undefined });
+      expect(headerOf(mockFetch.mock.calls[1], 'content-type')).toBeNull();
+    });
+
+    it('downgrades a 302 on a POST too, so a client_secret is not re-posted elsewhere', async () => {
+      const mockFetch = twoHops('https://elsewhere.example/b', 302);
+      await safeFetchFollow('https://start.example/a', authInit);
+      expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: 'GET', body: undefined });
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBeNull();
+    });
+
+    it('leaves a GET alone on a 301', async () => {
+      const mockFetch = twoHops('https://start.example/b', 301);
+      await safeFetchFollow('https://start.example/a', { headers: { 'User-Agent': 'TREK' } });
+      expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: undefined });
+      expect(headerOf(mockFetch.mock.calls[1], 'user-agent')).toBe('TREK');
+    });
+
+    it('keeps credentials when the caller opts in', async () => {
+      const mockFetch = twoHops('https://elsewhere.example/b');
+      await safeFetchFollow('https://start.example/a', authInit, { keepCredentialsOnRedirect: true });
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBe('Bearer secret');
+    });
+
+    it('an init without headers survives the strip untouched', async () => {
+      const mockFetch = twoHops('https://elsewhere.example/b');
+      await safeFetchFollow('https://start.example/a', { signal: AbortSignal.timeout(5000) });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('a relative redirect stays on the origin and keeps them', async () => {
+      mockLookup.mockResolvedValue({ address: '142.250.0.0', family: 4 });
+      const mockFetch = vi.fn()
+        .mockResolvedValueOnce(fakeResponse({ status: 307, location: '/moved', url: 'https://start.example/a' }))
+        .mockResolvedValueOnce(fakeResponse({ status: 200, url: 'https://start.example/moved' }));
+      vi.stubGlobal('fetch', mockFetch);
+      await safeFetchFollow('https://start.example/a', authInit);
+      expect(mockFetch.mock.calls[1][0]).toBe('https://start.example/moved');
+      expect(headerOf(mockFetch.mock.calls[1], 'authorization')).toBe('Bearer secret');
+    });
+  });
+
   it('blocks a redirect to a loopback address even with ALLOW_INTERNAL_NETWORK=true', async () => {
     mockLookup
       .mockResolvedValueOnce({ address: '142.250.0.0', family: 4 })
