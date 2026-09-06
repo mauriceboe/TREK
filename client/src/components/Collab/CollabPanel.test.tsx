@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 
 vi.mock('./CollabChat', () => ({ default: () => <div data-testid="collab-chat">Chat</div> }))
 vi.mock('./CollabNotes', () => ({ default: () => <div data-testid="collab-notes">Notes</div> }))
+vi.mock('./CollabLinks', () => ({ default: () => <div data-testid="collab-links">Links</div> }))
 vi.mock('./CollabPolls', () => ({ default: () => <div data-testid="collab-polls">Polls</div> }))
 vi.mock('./WhatsNextWidget', () => ({ default: () => <div data-testid="whats-next">WhatsNext</div> }))
 vi.mock('../../api/websocket', () => ({
@@ -39,11 +40,12 @@ describe('CollabPanel', () => {
   })
 
   // FE-COMP-COLLABPANEL-001
-  it('desktop layout renders all four panels', () => {
+  it('desktop layout renders all five panels', () => {
     setViewport(1280)
     render(<CollabPanel tripId={1} />)
     expect(screen.getByTestId('collab-chat')).toBeInTheDocument()
     expect(screen.getByTestId('collab-notes')).toBeInTheDocument()
+    expect(screen.getByTestId('collab-links')).toBeInTheDocument()
     expect(screen.getByTestId('collab-polls')).toBeInTheDocument()
     expect(screen.getByTestId('whats-next')).toBeInTheDocument()
   })
@@ -55,6 +57,7 @@ describe('CollabPanel', () => {
     // Tab buttons exist
     expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /notes/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^links$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /polls/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /what.?s next/i })).toBeInTheDocument()
     // Only chat visible by default
@@ -71,6 +74,13 @@ describe('CollabPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /notes/i }))
     expect(screen.getByTestId('collab-notes')).toBeInTheDocument()
     expect(screen.queryByTestId('collab-chat')).not.toBeInTheDocument()
+  })
+
+  it('mobile: Links tab shows the translated label, not the i18n key', () => {
+    setViewport(375)
+    render(<CollabPanel tripId={1} />)
+    expect(screen.getByRole('button', { name: 'Links' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'collab.tabs.links' })).not.toBeInTheDocument()
   })
 
   // FE-COMP-COLLABPANEL-004
@@ -147,7 +157,7 @@ describe('CollabPanel', () => {
 // FE-W5CPN-001 to FE-W5CPN-013
 // The desktop branch picks a different layout for every combination of enabled
 // collab features, so each combination gets its own case.
-const allOff = { chat: false, notes: false, polls: false, whatsnext: false }
+const allOff = { chat: false, notes: false, links: false, polls: false, whatsnext: false }
 
 describe('CollabPanel feature combinations', () => {
   beforeEach(() => {
@@ -172,6 +182,7 @@ describe('CollabPanel feature combinations', () => {
     render(<CollabPanel tripId={1} collabFeatures={{ ...allOff, chat: true }} />)
     expect(screen.getByTestId('collab-chat')).toBeInTheDocument()
     expect(screen.queryByTestId('collab-notes')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('collab-links')).not.toBeInTheDocument()
     expect(screen.queryByTestId('collab-polls')).not.toBeInTheDocument()
     expect(screen.queryByTestId('whats-next')).not.toBeInTheDocument()
   })

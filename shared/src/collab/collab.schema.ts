@@ -48,9 +48,35 @@ export const collabPollVoteRequestSchema = z.object({
 });
 export type CollabPollVoteRequest = z.infer<typeof collabPollVoteRequestSchema>;
 
+const httpUrl = z.string().trim().min(1).refine((value) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}, 'A valid http(s) URL is required');
+
+export const collabLinkCreateRequestSchema = z.object({
+  title: z.string().trim().min(1),
+  url: httpUrl,
+  pinned: z.union([z.boolean(), z.number()]).optional(),
+});
+export type CollabLinkCreateRequest = z.infer<typeof collabLinkCreateRequestSchema>;
+
+export const collabLinkUpdateRequestSchema = z.object({
+  title: z.string().trim().min(1).optional(),
+  url: httpUrl.optional(),
+  pinned: z.union([z.boolean(), z.number()]).optional(),
+});
+export type CollabLinkUpdateRequest = z.infer<typeof collabLinkUpdateRequestSchema>;
+
+// text may be empty when the chat message is image-only (multipart). The
+// controller still rejects a request with neither text nor files.
 export const collabMessageCreateRequestSchema = z.object({
-  text: z.string().min(1).max(5000),
-  reply_to: z.number().nullable().optional(),
+  text: z.string().max(5000).optional(),
+  // Multipart fields arrive as strings; JSON chat still sends a number/null.
+  reply_to: z.union([z.number(), z.string(), z.null()]).optional(),
 });
 export type CollabMessageCreateRequest = z.infer<typeof collabMessageCreateRequestSchema>;
 

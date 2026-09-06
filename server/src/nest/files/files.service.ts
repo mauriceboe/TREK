@@ -222,7 +222,9 @@ export class FilesService {
   }
 
   listFiles(tripId: string | number, showTrash: boolean) {
-    const where = showTrash ? 'f.trip_id = ? AND f.deleted_at IS NOT NULL' : 'f.trip_id = ? AND f.deleted_at IS NULL';
+    const where = showTrash
+      ? 'f.trip_id = ? AND f.deleted_at IS NOT NULL AND f.message_id IS NULL'
+      : 'f.trip_id = ? AND f.deleted_at IS NULL AND f.message_id IS NULL';
     const files = this.db.all<TripFile>(`${FILE_SELECT} WHERE ${where} ORDER BY f.starred DESC, f.created_at DESC`, tripId);
 
     const fileIds = files.map(f => f.id);

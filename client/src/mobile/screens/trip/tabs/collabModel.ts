@@ -42,6 +42,7 @@ export interface ChatMessage {
   created_at: string
   deleted?: number | boolean
   reactions: ChatReaction[]
+  attachments?: Array<{ id: number; url: string; original_name?: string; mime_type?: string }>
   /** Client-only: set once a delete (own or via WS) has landed. */
   _deleted?: boolean
 }

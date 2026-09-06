@@ -88,7 +88,7 @@ export function useTripPlanner() {
   // tab guard below waits for this before evicting anything, so a tab we were
   // asked to open ('collab' in particular, guessed off) survives the gap.
   const [addonsLoaded, setAddonsLoaded] = useState<boolean>(false)
-  const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, polls: true, whatsnext: true })
+  const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; links?: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, links: true, polls: true, whatsnext: true })
   const [tripAccommodations, setTripAccommodations] = useState<Accommodation[]>([])
   const [allowedFileTypes, setAllowedFileTypes] = useState<string | null>(null)
   const [tripMembers, setTripMembers] = useState<TripMember[]>([])

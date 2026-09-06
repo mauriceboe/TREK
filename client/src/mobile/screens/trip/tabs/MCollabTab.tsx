@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react'
-import { BarChart3, MessageCircle, StickyNote } from 'lucide-react'
+import { BarChart3, Link2, MessageCircle, StickyNote } from 'lucide-react'
 import type { MTabScreenProps } from './tabModel'
 import { TabScroller } from './tabChrome'
 import MCollabChat from './MCollabChat'
 import MCollabNotes from './MCollabNotes'
 import MCollabPolls from './MCollabPolls'
+import CollabLinks from '../../../../components/Collab/CollabLinks'
 
 /**
  * Tab 6 — Collab. Routes `shell.collabTab` ('chat' | 'notes' | 'polls', the
@@ -48,6 +49,23 @@ export default function MCollabTab({ planner, shell }: MTabScreenProps) {
       )
     }
     return <MCollabNotes planner={planner} />
+  }
+
+  if (shell.collabTab === 'links') {
+    if (planner.collabFeatures.links === false) {
+      return (
+        <TabScroller>
+          <CollabDisabledNotice icon={Link2} label={label} />
+        </TabScroller>
+      )
+    }
+    return (
+      <TabScroller>
+        <div className="min-h-[70vh] overflow-hidden rounded-[18px] bg-[color:var(--m-card)]">
+          <CollabLinks tripId={planner.tripId} />
+        </div>
+      </TabScroller>
+    )
   }
 
   if (shell.collabTab === 'polls') {

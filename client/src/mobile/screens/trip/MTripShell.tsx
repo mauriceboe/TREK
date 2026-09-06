@@ -35,7 +35,7 @@ export type TripPlanner = ReturnType<typeof useTripPlanner>
 export type MTripView = 'plan' | 'map'
 export type MTripMode = 'go' | 'edit' | 'browse'
 export type MTripListsTab = 'packing' | 'todo'
-export type MTripCollabTab = 'chat' | 'notes' | 'polls'
+export type MTripCollabTab = 'chat' | 'notes' | 'links' | 'polls'
 
 /**
  * Currently open bottom/floating sheet. Well-known ids (owned by the sheets
@@ -537,6 +537,7 @@ export default function MTripShell({
             {([
               { value: 'chat' as const, label: t('collab.tabs.chat') },
               { value: 'notes' as const, label: t('collab.tabs.notes') },
+              { value: 'links' as const, label: t('collab.tabs.links') || 'Links' },
               { value: 'polls' as const, label: t('collab.tabs.polls') },
             ]).map(seg => (
               <button
