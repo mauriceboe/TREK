@@ -80,10 +80,14 @@ spec:
               mountPath: /app/data
             - name: uploads
               mountPath: /app/uploads
+          {{- with (default dict .Values.probes).liveness }}
           livenessProbe:
-            {{- toYaml .Values.probes.liveness | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (default dict .Values.probes).readiness }}
           readinessProbe:
-            {{- toYaml .Values.probes.readiness | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
