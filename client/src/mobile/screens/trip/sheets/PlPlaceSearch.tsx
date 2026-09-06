@@ -213,7 +213,7 @@ export default function PlPlaceSearch({ planner, locationBias, onPick, onResolvi
       }
       if (!place) {
         const fullQuery = [suggestion.mainText, suggestion.secondaryText].filter(Boolean).join(', ')
-        const search = await mapsApi.search(fullQuery, language)
+        const search = await mapsApi.search(fullQuery, language, pointFromBox(locationBias))
         place = (search.places?.[0] as MapsPlace | undefined) ?? null
       }
       if (place) {
