@@ -121,11 +121,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': '二要素認証（2FA）を必須にする',
   'admin.requireMfaHint': '2FA未設定のユーザーは、利用前に設定が必要です。',
   'admin.apiKeys': 'APIキー',
-  'admin.apiKeysHint': '任意。写真や天気などの拡張データを有効化します。',
+  'admin.apiKeysHint': '場所データの出どころ。TREK のインデックスにキーは不要で、下の二つの提供元は任意です。',
+  'admin.trekApi.badgeDefault': '推奨の既定ソース',
+  'admin.googleCaveat.badge': '推奨しません',
+  'admin.googleCaveat.body':
+    'TREK はオープンソースで、この点で中立ではありません。この規模でレビューとふつうの店舗の写真があるのは Google だけで、それが独占です。この欄は代わりがないから置いてあるのであって、勧めているからではありません。使えば問い合わせはすべて Google に届きます。',
+  'admin.trekApi.badgeSoon':
+    'まもなく',
+  'admin.trekApi.badgeActive':
+    '有効',
+  'admin.trekApi.tagline':
+    'TREK 自前の場所インデックス。Google のキーなし、上限なし、そして誰にも検索を数えられずに探せます。',
+  'admin.trekApi.factPlaces':
+    '世界で 7,360 万件の場所',
+  'admin.trekApi.factNoKey':
+    'キーも上限も不要',
+  'admin.trekApi.factOffline':
+    '国別パッケージはオフラインでも使えます',
+  'admin.trekApi.factPrivacy':
+    '検索内容は一切記録しません',
+  'admin.trekApi.more':
+    '何が入っているか',
+  'admin.trekApi.fieldPhone':
+    '電話',
+  'admin.trekApi.fieldStableId':
+    '不変の識別子',
+  'admin.trekApi.includedNote':
+    '説明はその場所自身のサイトから、営業時間は記入されている範囲で OpenStreetMap から取得します。',
+  'admin.trekApi.notRatings':
+    'レビュー',
+  'admin.trekApi.notPhotos':
+    'ふつうの店舗の写真',
+  'admin.trekApi.notIncludedNote':
+    'どちらもどんな価格でも公開データセットには存在しません。この二つには Google のキーが唯一の道として残ります。',
+  'admin.trekApi.sourcesLabel':
+    '出典',
+  'admin.trekApi.sourcesNote':
+    '応答のどの項目も、このうちどれに由来するかを示します。',
+  'admin.trekApi.included':
+    '含まれるもの',
+  'admin.trekApi.notIncluded':
+    '含まれないもの',
   'admin.mapsKey': 'Google Maps APIキー',
   'admin.mapsKeyHint': '場所検索に必要。console.cloud.google.com で取得',
   'admin.mapsKeyHintLong':
-    'APIキーなしではOpenStreetMapを使用します。Google APIキーがあれば写真、評価、営業時間も表示できます。',
+    'Google の API キーがなくても、推奨の TREK API が使われます。キーがあれば、写真・評価・営業時間を追加で読み込めます。キーは console.cloud.google.com で作成できます。',
   'admin.recommended': '推奨',
   'admin.weatherKey': 'OpenWeatherMap APIキー',
   'admin.weatherKeyHint': '天気データ用。openweathermap.org で無料',
@@ -147,6 +187,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'ユーザーがアップロードできるファイル形式を設定します。',
   'admin.fileTypesFormat': '拡張子をカンマ区切り（例：jpg,png,pdf,doc）。すべて許可する場合は *。',
   'admin.fileTypesSaved': 'ファイル形式の設定を保存しました',
+  'admin.googleOptions': 'キーの使いみち',
+  'admin.googleOptionsSummary': '{total} 件中 {on} 件が有効',
   'admin.placesPhotos.title': '場所の写真',
   'admin.placesPhotos.subtitle':
     'Google Places APIから写真を取得します。APIクォータ節約のため無効にできます。Wikimediaの写真には影響しません。',
@@ -158,6 +200,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': '場所の情報補完',
   'admin.placesEnrich.subtitle':
     '場所を追加するときに写真と説明を表示します。WikipediaとOpenStreetMapは常に使用され、「場所の写真」または「場所の詳細」が有効な場合はGoogleも追加されます。',
+  'admin.placeShadow.title': '場所検索の記録',
+  'admin.placeShadow.subtitle':
+    'どの検索結果が選ばれたかを記録し、後で別の場所インデックスを実際の検索で評価できるようにします。データがこのインスタンスの外に出ることはなく、管理者はいつでも書き出しや削除ができます。',
   'admin.bagTracking.title': 'バッグ管理',
   'admin.bagTracking.subtitle': '持ち物の重量とバッグ割り当てを有効化',
   'admin.collab.chat.title': 'チャット',

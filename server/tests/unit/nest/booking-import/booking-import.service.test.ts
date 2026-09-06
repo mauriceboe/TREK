@@ -25,7 +25,10 @@ function make(opts: { kit?: boolean; ai?: boolean; extract?: any; parse?: any })
   const reservations = { create: vi.fn() };
   // budget/addons/realtime/maps ride the confirm() path only — the preview()
   // tests never reach them, so stubs beyond the positional slots aren't needed.
-  const maps = { searchNominatim: vi.fn() };
+  // geocodeQuery, not searchNominatim: the import asks the TREK index first
+  // and falls through to OpenStreetMap inside that method, so the service no
+  // longer knows which of the two answered.
+  const maps = { geocodeQuery: vi.fn() };
   // Places became a constructor dep with the place DI fold (was a path mock of
   // services/placeService); only confirm() reaches it, so a bare create stub does.
   const places = { create: vi.fn() };
@@ -116,11 +119,14 @@ describe('BookingImportService.preview endpoint geocoding (#1969)', () => {
     },
   };
 
-  const hit = (lat: number, lng: number) => [{ lat, lng, display_name: 'x' }];
+  // geocodeQuery answers with one coordinate or null, not a provider result
+  // list. Stubbing the old array shape made 'has coordinates' pass on an
+  // undefined lat, which is exactly the bug the test is meant to catch.
+  const hit = (lat: number, lng: number) => ({ lat, lng });
 
   it('gives a named station coordinates, so it survives the save', async () => {
     const { svc, maps } = make({ kit: true, extract: async () => [TRAIN_KI] });
-    maps.searchNominatim.mockResolvedValue(hit(52.525, 13.369));
+    maps.geocodeQuery.mockResolvedValue(hit(52.525, 13.369));
 
     const res = await svc.preview([file()], 'no-ai', 1);
     const endpoints = (res.items[0] as { endpoints?: { lat: number | null }[] }).endpoints ?? [];
@@ -134,12 +140,13 @@ describe('BookingImportService.preview endpoint geocoding (#1969)', () => {
       // Two legs out of and back into the same station.
       extract: async () => [TRAIN_KI, TRAIN_KI],
     });
-    maps.searchNominatim.mockResolvedValue(hit(52.525, 13.369));
+    maps.geocodeQuery.mockResolvedValue(hit(52.525, 13.369));
 
     await svc.preview([file()], 'no-ai', 1);
-    // Two distinct names across four endpoints — Nominatim allows about one
-    // request a second on this lane, so repeats have to come from the cache.
-    expect(maps.searchNominatim).toHaveBeenCalledTimes(2);
+    // Two distinct names across four endpoints. The index is fast, but its
+    // fallback lane is Nominatim at about one request a second, so repeats
+    // still have to come from the cache.
+    expect(maps.geocodeQuery).toHaveBeenCalledTimes(2);
   });
 
   /*
@@ -149,7 +156,7 @@ describe('BookingImportService.preview endpoint geocoding (#1969)', () => {
    */
   it('keeps an endpoint it cannot place, and says so', async () => {
     const { svc, maps } = make({ kit: true, extract: async () => [TRAIN_KI] });
-    maps.searchNominatim.mockResolvedValue([]);
+    maps.geocodeQuery.mockResolvedValue(null);
 
     const res = await svc.preview([file()], 'no-ai', 1);
     const endpoints = (res.items[0] as { endpoints?: { name: string }[] }).endpoints ?? [];
@@ -159,7 +166,7 @@ describe('BookingImportService.preview endpoint geocoding (#1969)', () => {
 
   it('survives a geocoder that throws, rather than failing the import', async () => {
     const { svc, maps } = make({ kit: true, extract: async () => [TRAIN_KI] });
-    maps.searchNominatim.mockRejectedValue(new Error('nominatim down'));
+    maps.geocodeQuery.mockRejectedValue(new Error('nominatim down'));
 
     const res = await svc.preview([file()], 'no-ai', 1);
     expect(res.items).toHaveLength(1);
@@ -177,6 +184,6 @@ describe('BookingImportService.preview endpoint geocoding (#1969)', () => {
     const { svc, maps } = make({ kit: true, extract: async () => [withGeo] });
 
     await svc.preview([file()], 'no-ai', 1);
-    expect(maps.searchNominatim).not.toHaveBeenCalled();
+    expect(maps.geocodeQuery).not.toHaveBeenCalled();
   });
 });

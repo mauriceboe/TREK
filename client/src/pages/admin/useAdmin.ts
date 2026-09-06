@@ -99,6 +99,11 @@ export function useAdmin() {
   useEffect(() => { adminApi.getPlacesDetails().then(d => setPlacesDetailsEnabledState(d.enabled)).catch(() => {}) }, [])
   useEffect(() => { adminApi.getPlacesEnrich().then(d => setPlacesEnrichEnabledState(d.enabled)).catch(() => {}) }, [])
 
+  // Place shadow log — off unless an admin turns it on, so the initial state is
+  // false rather than the true the four switches above start from.
+  const [placeShadowEnabled, setPlaceShadowEnabledState] = useState<boolean>(false)
+  useEffect(() => { adminApi.getPlaceShadow().then(d => setPlaceShadowEnabledState(d.enabled)).catch(() => {}) }, [])
+
   // Collab features
   const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, polls: true, whatsnext: true })
   useEffect(() => { adminApi.getCollabFeatures().then(d => setCollabFeatures(d)).catch(() => {}) }, [])
@@ -158,7 +163,7 @@ export function useAdmin() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false)
 
-  const { user: currentUser, updateApiKeys, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled, logout } = useAuthStore()
+  const { user: currentUser, updateApiKeys, setAppRequireMfa, setTripRemindersEnabled, setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled, setPlaceShadowEnabled, logout } = useAuthStore()
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -419,7 +424,7 @@ export function useAdmin() {
     // store-derived
     demoMode, serverTimezone, hour12, mcpEnabled, devMode, managed, currentUser,
     updateApiKeys, setAppRequireMfa, setTripRemindersEnabled,
-    setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled, logout,
+    setPlacesPhotosEnabled, setPlacesAutocompleteEnabled, setPlacesDetailsEnabled, setPlacesEnrichEnabled, setPlaceShadowEnabled, logout,
     navigate, toast,
     // state + setters
     activeTab, setActiveTab, users, setUsers, stats, isLoading,
@@ -430,6 +435,7 @@ export function useAdmin() {
     placesAutocompleteEnabled, setPlacesAutocompleteEnabledState,
     placesDetailsEnabled, setPlacesDetailsEnabledState,
     placesEnrichEnabled, setPlacesEnrichEnabledState,
+    placeShadowEnabled, setPlaceShadowEnabledState,
     collabFeatures, setCollabFeatures,
     oidcConfig, setOidcConfig, savingOidc, setSavingOidc,
     passwordLogin, setPasswordLogin, passwordRegistration, setPasswordRegistration,

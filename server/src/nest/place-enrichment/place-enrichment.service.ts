@@ -21,6 +21,7 @@ import {
   type WikiIdentity,
 } from '../maps/maps.service';
 import { buildOsmDetails, isGooglePlaceId, parseWikipediaTag, rankCommonsCandidates, toWikiLang } from '../maps/maps.helpers';
+import { trekPlacesById } from '../maps/trek-places.client';
 import { PlacePhotoCacheService } from '../place-photos/place-photo-cache.service';
 
 /**
@@ -137,6 +138,43 @@ interface CachedEnrichment {
 
 interface CachePayload extends CachedEnrichment {
   v?: number;
+}
+
+/**
+ * Categories where a picture taken nearby is almost certainly of something
+ * else, so the bottom rung of the ladder is skipped for them entirely.
+ *
+ * Measured across 600 places in six cities: 2 percent of ordinary businesses
+ * have a picture on Wikimedia, against 70 percent of churches. So for a cafe
+ * the curated rungs practically never fire and the fallback practically always
+ * does, which is how the town hall ends up over the doner shop. A missing
+ * picture is honest; a confident picture of the building opposite is not.
+ *
+ * Matched against the category the source reports: `basic_category` from the
+ * TREK index, the amenity/shop tag from OpenStreetMap, a Google type.
+ */
+const NEARBY_MISLEADS = [
+  'restaurant', 'cafe', 'coffee', 'bar', 'pub', 'bakery', 'fast_food', 'food',
+  'eatery', 'biergarten', 'ice_cream', 'shop', 'store', 'supermarket', 'retail',
+  'pharmacy', 'hairdresser', 'kiosk', 'convenience', 'butcher', 'greengrocer',
+  'clothing', 'florist', 'bank', 'atm', 'nightclub',
+];
+
+/**
+ * True when a nearby picture would more likely mislead than inform.
+ *
+ * Fails OPEN on an unknown category: without one we cannot tell a cathedral
+ * from a kebab shop, and silently dropping pictures for everything unlabelled
+ * would take them away from the places where the fallback actually works.
+ */
+export function nearbyWouldMislead(details: Record<string, unknown> | null): boolean {
+  if (!details) return false;
+  const haystack = [details.category, details.category_path, details.amenity, details.shop, details.cuisine]
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+    .toLowerCase();
+  if (!haystack) return false;
+  return NEARBY_MISLEADS.some(word => haystack.includes(word));
 }
 
 /** OSM yes/no tags; anything else (limited, only, designated) is shown verbatim. */
@@ -287,7 +325,7 @@ export class PlaceEnrichmentService {
     const identity = await this.resolveIdentity(req, details);
 
     const [photos, description] = await Promise.all([
-      this.collectPhotos(userId, placeId, req, identity),
+      this.collectPhotos(userId, placeId, req, identity, details),
       this.collectDescription(userId, placeId, req, details, identity),
     ]);
 
@@ -353,16 +391,21 @@ export class PlaceEnrichmentService {
       wikidata: fromPayload('wikidata'),
       wikimedia_commons: fromPayload('wikimedia_commons'),
       osmTags: null,
-      brand: { wikidata: null, wikipedia: null },
+      // The index knows the chain a branch belongs to and hands it over under
+      // the same key OSM uses. It stays out of the three fields above: those
+      // say "this is the article about this place", and a chain's is not.
+      brand: { wikidata: fromPayload('brand:wikidata'), wikipedia: fromPayload('brand:wikipedia') },
     };
     if (carried.wikipedia || carried.wikidata || carried.wikimedia_commons) return carried;
 
     const resolved = await this.maps.resolveOsmIdentity(req.name, req.lat, req.lng, { lang: req.lang });
     if (!resolved) return carried;
+    const brand = readBrandIdentity(resolved.tags);
     return {
       ...readWikiIdentity(resolved.tags),
       osmTags: resolved.tags,
-      brand: readBrandIdentity(resolved.tags),
+      // OSM first, the carried one when OSM has no brand tag for this object.
+      brand: brand.wikidata || brand.wikipedia ? brand : carried.brand,
     };
   }
 
@@ -373,6 +416,8 @@ export class PlaceEnrichmentService {
     placeId: string,
     req: MapsPlaceEnrichmentRequest,
     identity: PlaceIdentity,
+    /** The record the caller already holds; only its category is read. */
+    details: Record<string, unknown> | null,
   ): Promise<PlacePhotoCandidate[]> {
     const apiKey = this.maps.getMapsKey(userId);
     const wantsGoogle = !!apiKey && !this.maps.photosDisabled() && isGooglePlaceId(placeId);
@@ -424,8 +469,14 @@ export class PlaceEnrichmentService {
     // used to push this endpoint past the client's timeout. Geosearch is free
     // and unmetered, so a speculative call that gets discarded costs nothing
     // anyone pays for.
+    // Skipped outright for the categories where it misleads, rather than
+    // fetched and then filtered: the request is the cost, and there is nothing
+    // in the answer worth looking at for a cafe.
+    const skipNearby = nearbyWouldMislead(details) || nearbyWouldMislead(identity.osmTags);
     const nearbyPending =
-      curated < 2 ? this.maps.fetchCommonsCandidates(req.lat, req.lng, COMMONS_CAP) : Promise.resolve([]);
+      curated < 2 && !skipNearby
+        ? this.maps.fetchCommonsCandidates(req.lat, req.lng, COMMONS_CAP)
+        : Promise.resolve([]);
 
     const googleRefs = await googlePending;
     if (curated < 2 && googleRefs.length < GOOGLE_CAP) {
@@ -525,6 +576,38 @@ export class PlaceEnrichmentService {
 
   // ── Description ────────────────────────────────────────────────────────────
 
+  /**
+   * The description the place publishes on its own site, served from the TREK
+   * Places API rather than fetched here.
+   *
+   * TREK never opens the business's website itself: that would be one request
+   * per instance per place, against small servers, from hundreds of homelabs.
+   * The API fetches each page once, keeps the summary, and every instance reads
+   * it from there. Only places carrying a GERS id can be looked up, which is
+   * exactly the ones that came from the API in the first place.
+   */
+  private async websiteDescription(placeId: string): Promise<PlaceDescription | null> {
+    if (!placeId.startsWith('gers:')) return null;
+    try {
+      const place = await trekPlacesById(placeId.slice(5));
+      const got = (place as { description?: { text?: string; sourceUrl?: string } } | null)?.description;
+      const text = typeof got?.text === 'string' ? got.text.trim() : '';
+      if (!text) return null;
+      return {
+        text,
+        source: 'website',
+        sourceUrl: typeof got?.sourceUrl === 'string' ? got.sourceUrl : null,
+        // Not a licensed corpus: a quoted summary from the operator's own page,
+        // credited and linked back. Saying "CC-something" here would be a claim
+        // about terms nobody granted.
+        license: null,
+      };
+    } catch {
+      // The API being down must never cost the place its other sources.
+      return null;
+    }
+  }
+
   private async collectDescription(
     userId: number,
     placeId: string,
@@ -553,6 +636,19 @@ export class PlaceEnrichmentService {
     if (extract) {
       return { text: extract.text, source: extract.source, sourceUrl: extract.sourceUrl, license: 'CC BY-SA 4.0' };
     }
+
+    // Then the place's own website, through the TREK Places API.
+    //
+    // Placed here and not higher on purpose: an encyclopaedia article reached
+    // through the OSM `wikipedia` tag is about this exact place and was written
+    // by someone with no stake in it, which beats marketing copy. But for the
+    // ordinary case — a restaurant, a shop, a hotel, none of which will ever
+    // have an article — the operator's own summary is the only description that
+    // exists, and it is published in JSON-LD or og:description precisely so
+    // machines can read it. That covers roughly 43 percent of places, where the
+    // encyclopaedias cover a fraction of a percent.
+    const fromSite = await this.websiteDescription(placeId);
+    if (fromSite) return fromSite;
 
     const apiKey = this.maps.getMapsKey(userId);
     if (apiKey && !this.maps.detailsDisabled() && isGooglePlaceId(placeId)) {

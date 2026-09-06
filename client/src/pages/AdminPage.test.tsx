@@ -1032,7 +1032,7 @@ describe('AdminPage', () => {
 
       // Wait for the API Keys section to appear
       const apiKeysHeading = await screen.findByRole('heading', { name: /^api keys$/i });
-      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.bg-white');
+      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.rounded-xl');
 
       // Type in the maps key field (type="password" by default)
       const keyInputs = within(apiKeysCard!).getAllByPlaceholderText('Enter key...');
@@ -1063,7 +1063,7 @@ describe('AdminPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /settings/i }));
 
       const apiKeysHeading = await screen.findByRole('heading', { name: /^api keys$/i });
-      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.bg-white');
+      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.rounded-xl');
 
       // The Unsplash key is the second 'Enter key...' input (after Maps).
       const keyInputs = within(apiKeysCard!).getAllByPlaceholderText('Enter key...');
@@ -1096,15 +1096,15 @@ describe('AdminPage', () => {
 
       // Wait for the API Keys section
       const apiKeysHeading = await screen.findByRole('heading', { name: /^api keys$/i });
-      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.bg-white');
+      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.rounded-xl');
 
       // Type a key value to enable the Test button
       const keyInputs = within(apiKeysCard!).getAllByPlaceholderText('Enter key...');
       fireEvent.change(keyInputs[0], { target: { value: 'test-maps-key' } });
 
-      // Click the validate (Test) button for maps key — first "Test" button in the card
-      const testBtns = within(apiKeysCard!).getAllByRole('button', { name: /^test$/i });
-      fireEvent.click(testBtns[0]);
+      // The maps key is the only one with a Test button now: weather left the card
+      // when it stopped needing a key at all.
+      fireEvent.click(within(apiKeysCard!).getByRole('button', { name: /^test$/i }));
 
       await waitFor(() => {
         // After validation, valid indicator appears (admin.keyValid = 'Connected')

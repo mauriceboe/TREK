@@ -74,6 +74,40 @@ describe('MapsController (parity with the legacy /api/maps route)', () => {
     });
   });
 
+  describe('GET /area', () => {
+    const BOX = { minLat: 54, minLng: 12, maxLat: 54.2, maxLng: 12.3 };
+
+    it('delegates a valid box with parsed numbers', async () => {
+      const placesInArea = vi.fn().mockResolvedValue({ results: [{ name: 'x' }], truncated: false });
+      const res = await makeController({ placesInArea }).area('54', '12', '54.2', '12.3');
+      expect(res).toEqual({ results: [{ name: 'x' }], truncated: false });
+      expect(placesInArea).toHaveBeenCalledWith(BOX, 2000);
+    });
+
+    it('400 when the box has a non-finite value', async () => {
+      const placesInArea = vi.fn();
+      expect(await thrown(() => makeController({ placesInArea }).area('x', '12', '54.2', '12.3'))).toEqual({
+        status: 400,
+        body: { error: 'A valid bbox (minLat, minLng, maxLat, maxLng) is required' },
+      });
+      expect(placesInArea).not.toHaveBeenCalled();
+    });
+
+    it('caps the limit rather than passing a caller number straight through', async () => {
+      const placesInArea = vi.fn().mockResolvedValue({ results: [], truncated: false });
+      await makeController({ placesInArea }).area('54', '12', '54.2', '12.3', '999999');
+      expect(placesInArea).toHaveBeenCalledWith(BOX, 5000);
+    });
+
+    it('says the index is unavailable instead of failing the caller', async () => {
+      // This runs inside an offline sync. A null here means the index is off or
+      // unreachable, and the client caches nothing and carries on.
+      const placesInArea = vi.fn().mockResolvedValue(null);
+      const res = await makeController({ placesInArea }).area('54', '12', '54.2', '12.3');
+      expect(res).toEqual({ results: [], truncated: false, unavailable: true });
+    });
+  });
+
   describe('GET /pois', () => {
     it('400 when category is missing', async () => {
       const pois = vi.fn();

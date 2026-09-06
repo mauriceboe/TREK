@@ -116,8 +116,8 @@ export class BookingImportService {
       let found: { lat: number; lng: number } | null = null;
       try {
         for (const q of queries) {
-          const hit = (await this.maps.searchNominatim(q, undefined, 'background'))[0];
-          if (hit?.lat != null && hit?.lng != null) { found = { lat: hit.lat, lng: hit.lng }; break; }
+          const hit = await this.maps.geocodeQuery(q);
+          if (hit) { found = hit; break; }
         }
       } catch {
         // geocoding failure is non-fatal — the endpoint stays, and is warned about
@@ -240,9 +240,8 @@ export class BookingImportService {
               ].filter((q): q is string => !!q);
 
               for (const q of queries) {
-                const results = await this.maps.searchNominatim(q, undefined, 'background');
-                const hit = results[0];
-                if (hit?.lat != null && hit?.lng != null) {
+                const hit = await this.maps.geocodeQuery(q);
+                if (hit) {
                   lat = hit.lat;
                   lng = hit.lng;
                   break;

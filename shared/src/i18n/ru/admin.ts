@@ -88,11 +88,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Пользователи без 2FA должны завершить настройку в разделе «Настройки» перед использованием приложения.',
   'admin.apiKeys': 'API-ключи',
-  'admin.apiKeysHint': 'Необязательно. Включает расширенные данные о местах, такие как фото и погода.',
+  'admin.apiKeysHint': 'Откуда берутся данные о местах. Указателю TREK ключ не нужен; два поставщика ниже необязательны.',
+  'admin.trekApi.badgeDefault': 'Рекомендуемый источник',
+  'admin.googleCaveat.badge': 'Не рекомендуется',
+  'admin.googleCaveat.body':
+    'TREK с открытым исходным кодом, и мы здесь не нейтральны. В таком масштабе отзывы и фотографии обычных заведений есть только у Google, и это и есть монополия. Поле здесь из-за отсутствия альтернативы, а не потому, что мы его советуем. Тогда каждый запрос уходит в Google.',
+  'admin.trekApi.badgeSoon':
+    'Скоро',
+  'admin.trekApi.badgeActive':
+    'Включено',
+  'admin.trekApi.tagline':
+    'Собственный указатель мест TREK. Поиск без ключа Google, без квоты и без того, чтобы кто-то считал ваши запросы.',
+  'admin.trekApi.factPlaces':
+    '73,6 миллиона мест по всему миру',
+  'admin.trekApi.factNoKey':
+    'Без ключа, без квоты',
+  'admin.trekApi.factOffline':
+    'Страновые пакеты работают офлайн',
+  'admin.trekApi.factPrivacy':
+    'Запросы никогда не записываются',
+  'admin.trekApi.more':
+    'Что внутри',
+  'admin.trekApi.fieldPhone':
+    'Телефон',
+  'admin.trekApi.fieldStableId':
+    'Постоянный идентификатор',
+  'admin.trekApi.includedNote':
+    'Описания берутся с сайта самого места, часы работы — из OpenStreetMap там, где они указаны.',
+  'admin.trekApi.notRatings':
+    'Отзывы',
+  'admin.trekApi.notPhotos':
+    'Фотографии обычных заведений',
+  'admin.trekApi.notIncludedNote':
+    'Ни того, ни другого нет ни в одном открытом источнике ни за какие деньги. К этим двум ключ Google остаётся единственной дорогой.',
+  'admin.trekApi.sourcesLabel':
+    'Источники',
+  'admin.trekApi.sourcesNote':
+    'Каждое поле в ответе указывает, из какого из них оно пришло.',
+  'admin.trekApi.included':
+    'Входит',
+  'admin.trekApi.notIncluded':
+    'Не входит',
   'admin.mapsKey': 'API-ключ Google Maps',
   'admin.mapsKeyHint': 'Необходим для поиска мест. Получите на console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Без API-ключа используется OpenStreetMap для поиска мест. С ключом Google API можно загружать фото, рейтинги и часы работы. Получите ключ на console.cloud.google.com.',
+    'Без ключа Google API используется рекомендуемый TREK API. С ключом дополнительно загружаются фотографии, оценки и часы работы. Создать ключ можно на console.cloud.google.com.',
   'admin.recommended': 'Рекомендуется',
   'admin.weatherKey': 'API-ключ OpenWeatherMap',
   'admin.weatherKeyHint': 'Для данных о погоде. Бесплатно на openweathermap.org',
@@ -115,6 +155,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Настройте, какие типы файлов могут загружать пользователи.',
   'admin.fileTypesFormat': 'Расширения через запятую (напр. jpg,png,pdf,doc). Используйте * для разрешения всех типов.',
   'admin.fileTypesSaved': 'Настройки типов файлов сохранены',
+  'admin.googleOptions': 'Для чего используется ключ',
+  'admin.googleOptionsSummary': 'включено {on} из {total}',
   'admin.placesPhotos.title': 'Фотографии мест',
   'admin.placesPhotos.subtitle':
     'Загрузка фотографий из Google Places API. Отключите для экономии квоты API. Фотографии Wikimedia не затронуты.',
@@ -127,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Обогащение мест',
   'admin.placesEnrich.subtitle':
     'Показывает изображения и описание при добавлении места. Wikipedia и OpenStreetMap используются всегда; Google добавляется, если включены «Фото мест» или «Детали мест».',
+  'admin.placeShadow.title': 'Журнал поиска мест',
+  'admin.placeShadow.subtitle':
+    'Записывать, какой результат поиска был выбран, чтобы позже оценить другой индекс мест на реальных запросах. Ничего не покидает этот сервер, и администратор может в любой момент выгрузить или удалить журнал.',
   'admin.bagTracking.title': 'Отслеживание багажа',
   'admin.bagTracking.subtitle': 'Включить вес и привязку к багажу для вещей',
   'admin.collab.chat.title': 'Чат',

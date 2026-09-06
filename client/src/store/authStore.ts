@@ -55,6 +55,8 @@ interface AuthState {
   placesAutocompleteEnabled: boolean
   placesDetailsEnabled: boolean
   placesEnrichEnabled: boolean
+  /** Server records which search result was picked (admin switch, default off). */
+  placeShadowEnabled: boolean
 
   login: (email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>
   completeMfaLogin: (mfaToken: string, code: string, rememberMe?: boolean) => Promise<AuthResponse>
@@ -80,6 +82,7 @@ interface AuthState {
   setPlacesAutocompleteEnabled: (val: boolean) => void
   setPlacesDetailsEnabled: (val: boolean) => void
   setPlacesEnrichEnabled: (val: boolean) => void
+  setPlaceShadowEnabled: (val: boolean) => void
   demoLogin: () => Promise<AuthResponse>
 }
 
@@ -129,6 +132,8 @@ export const useAuthStore = create<AuthState>()(
   placesAutocompleteEnabled: true,
   placesDetailsEnabled: true,
   placesEnrichEnabled: true,
+  // Fail-closed: an old server sends no flag and nothing is logged.
+  placeShadowEnabled: false,
 
   login: async (email: string, password: string, rememberMe?: boolean) => {
     authSequence++
@@ -388,6 +393,7 @@ export const useAuthStore = create<AuthState>()(
   setPlacesAutocompleteEnabled: (val: boolean) => set({ placesAutocompleteEnabled: val }),
   setPlacesDetailsEnabled: (val: boolean) => set({ placesDetailsEnabled: val }),
   setPlacesEnrichEnabled: (val: boolean) => set({ placesEnrichEnabled: val }),
+  setPlaceShadowEnabled: (val: boolean) => set({ placeShadowEnabled: val }),
 
   demoLogin: async () => {
     authSequence++

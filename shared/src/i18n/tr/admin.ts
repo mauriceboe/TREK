@@ -130,11 +130,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     "2FA'sı olmayan kullanıcıların uygulamayı kullanmadan önce Ayarlar'da kurulumu tamamlaması gerekir.",
   'admin.apiKeys': 'API Anahtarları',
-  'admin.apiKeysHint': 'İsteğe bağlı. Fotoğraflar ve hava durumu gibi genişletilmiş yer verilerini etkinleştirir.',
+  'admin.apiKeysHint': 'Yer verilerinin nereden geldiği. TREK dizini anahtar istemez; aşağıdaki iki sağlayıcı isteğe bağlıdır.',
+  'admin.trekApi.badgeDefault': 'Önerilen varsayılan',
+  'admin.googleCaveat.badge': 'Önerilmez',
+  'admin.googleCaveat.body':
+    "TREK açık kaynaklıdır ve burada tarafsız değiliz. Bu ölçekte değerlendirmeler ve sıradan işletme fotoğrafları yalnızca Google'da vardır; tekel budur. Alan, başka seçenek olmadığı için burada; önerdiğimiz için değil. O zaman her sorgu Google'a gider.",
+  'admin.trekApi.badgeSoon':
+    'Yakında',
+  'admin.trekApi.badgeActive':
+    'Etkin',
+  'admin.trekApi.tagline':
+    'TREK\'in kendi yer dizini. Google anahtarı olmadan, kota olmadan ve kimse aramalarınızı saymadan arama.',
+  'admin.trekApi.factPlaces':
+    'Dünya genelinde 73,6 milyon yer',
+  'admin.trekApi.factNoKey':
+    'Anahtar yok, kota yok',
+  'admin.trekApi.factOffline':
+    'Ülke paketleri çevrimdışı da çalışır',
+  'admin.trekApi.factPrivacy':
+    'Aramalar hiçbir zaman kaydedilmez',
+  'admin.trekApi.more':
+    'İçinde ne var',
+  'admin.trekApi.fieldPhone':
+    'Telefon',
+  'admin.trekApi.fieldStableId':
+    'Kalıcı kimlik',
+  'admin.trekApi.includedNote':
+    'Açıklamalar yerin kendi sitesinden, çalışma saatleri girilmiş olduğu yerlerde OpenStreetMap\'ten gelir.',
+  'admin.trekApi.notRatings':
+    'Değerlendirmeler',
+  'admin.trekApi.notPhotos':
+    'Sıradan işletmelerin fotoğrafları',
+  'admin.trekApi.notIncludedNote':
+    'İkisini de hiçbir açık kaynak hiçbir fiyata sunmuyor. Bu ikisi için Google anahtarı tek yol olmayı sürdürüyor.',
+  'admin.trekApi.sourcesLabel':
+    'Kaynaklar',
+  'admin.trekApi.sourcesNote':
+    'Yanıttaki her alan, bunlardan hangisinden geldiğini söyler.',
+  'admin.trekApi.included':
+    'Dahil',
+  'admin.trekApi.notIncluded':
+    'Dahil değil',
   'admin.mapsKey': 'Google Haritalar API Anahtarı',
   'admin.mapsKeyHint': 'Yer arama için gereklidir. console.cloud.google.com adresinden erişin',
   'admin.mapsKeyHintLong':
-    'API anahtarı olmadan OpenStreetMap yer arama için kullanılır. Bir Google API anahtarıyla fotoğraflar, derecelendirmeler ve açılış saatleri de yüklenebilir. console.cloud.google.com adresinden bir tane edinin.',
+    'Google API anahtarı olmadan önerilen TREK API kullanılır. Anahtarla ek olarak fotoğraflar, değerlendirmeler ve çalışma saatleri yüklenebilir. Anahtarı console.cloud.google.com adresinde oluşturabilirsiniz.',
   'admin.recommended': 'Tavsiye edilen',
   'admin.weatherKey': 'OpenWeatherMap API Anahtarı',
   'admin.weatherKeyHint': "Hava durumu verileri için. openweathermap.org'da ücretsiz",
@@ -159,6 +199,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Virgülle ayrılmış uzantılar (ör. jpg,png,pdf,doc). Tüm türlere izin vermek için * kullanın.',
   'admin.fileTypesSaved': 'Dosya türü ayarları kaydedildi',
+  'admin.googleOptions': 'Anahtarın ne için kullanıldığı',
+  'admin.googleOptionsSummary': '{total} ayardan {on} tanesi açık',
   'admin.placesPhotos.title': 'Fotoğrafları Yerleştir',
   'admin.placesPhotos.subtitle':
     "Fotoğrafları Google Rehber API'sinden alın. API kotasını kaydetmeyi devre dışı bırakın. Wikimedia fotoğrafları etkilenmez.",
@@ -171,6 +213,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Yer zenginleştirme',
   'admin.placesEnrich.subtitle':
     'Bir yer eklerken görseller ve açıklama gösterir. Wikipedia ve OpenStreetMap her zaman kullanılır; Yer Fotoğrafları veya Yer Ayrıntıları açıkken Google da eklenir.',
+  'admin.placeShadow.title': 'Yer arama günlüğü',
+  'admin.placeShadow.subtitle':
+    'Hangi arama sonucunun seçildiğini kaydeder, böylece başka bir yer dizini daha sonra gerçek aramalarla ölçülebilir. Hiçbir şey bu sunucudan çıkmaz ve bir yönetici günlüğü istediği zaman dışa aktarabilir veya silebilir.',
   'admin.bagTracking.title': 'Çanta Takibi',
   'admin.bagTracking.subtitle': 'Paketleme öğeleri için ağırlık ve torba atamasını etkinleştirin',
   'admin.collab.chat.title': 'Sohbet',

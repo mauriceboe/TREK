@@ -379,6 +379,37 @@ function PhotoTile({
   )
 }
 
+/**
+ * Who the description came from, as the reader would name them.
+ *
+ * `website` has no fixed name — it is the place's own site — so it is credited
+ * by host: "losteria.net" says where the text is from far better than a generic
+ * word would. Deliberately not a ternary chain: the previous one fell through
+ * to 'Wikipedia', which would have credited a restaurant's marketing copy to an
+ * encyclopaedia.
+ */
+function descriptionSourceLabel(
+  source: NonNullable<MapsPlaceEnrichmentResult['description']>['source'],
+  sourceUrl: string | null,
+): string {
+  switch (source) {
+    case 'google':
+      return 'Google'
+    case 'osm':
+      return 'OpenStreetMap'
+    case 'wikivoyage':
+      return 'Wikivoyage'
+    case 'wikipedia':
+      return 'Wikipedia'
+    case 'website':
+      try {
+        return new URL(sourceUrl || '').hostname.replace(/^www\./, '')
+      } catch {
+        return 'Website'
+      }
+  }
+}
+
 function sourceLabelFor(source: PlacePhotoCandidate['source']): string {
   if (source === 'google') return 'Google'
   if (source === 'wikipedia') return 'Wikipedia'
@@ -659,14 +690,7 @@ function DescriptionBlock({
 }): React.ReactElement | null {
   if (!description) return null
 
-  const sourceLabel =
-    description.source === 'google'
-      ? 'Google'
-      : description.source === 'osm'
-        ? 'OpenStreetMap'
-        : description.source === 'wikivoyage'
-          ? 'Wikivoyage'
-          : 'Wikipedia'
+  const sourceLabel = descriptionSourceLabel(description.source, description.sourceUrl)
 
   // A description of the chain is not a description of this place, and the
   // heading is where that gets said. Without it the reader has no way to tell

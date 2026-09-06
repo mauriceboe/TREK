@@ -35,6 +35,13 @@ vi.mock('../../../src/utils/ssrfGuard', () => ({
 
 vi.mock('../../../src/config', () => ({ JWT_SECRET: 'test-secret', ENCRYPTION_KEY: '0'.repeat(64) }));
 
+const { mockTrekPlacesById } = vi.hoisted(() => ({
+  mockTrekPlacesById: vi.fn(async (_gers: string): Promise<unknown> => null),
+}));
+vi.mock('../../../src/nest/maps/trek-places.client', () => ({
+  trekPlacesById: mockTrekPlacesById,
+}));
+
 import { db } from '../../../src/db/database';
 import { DatabaseService } from '../../../src/nest/database/database.service';
 import { PlaceEnrichmentService } from '../../../src/nest/place-enrichment/place-enrichment.service';
@@ -81,6 +88,8 @@ beforeEach(() => {
   mockDbGet.mockReset();
   mockDbGet.mockReturnValue(undefined);
   mockDbRun.mockReset();
+  mockTrekPlacesById.mockReset();
+  mockTrekPlacesById.mockResolvedValue(null);
 });
 
 describe('identity resolution', () => {
@@ -339,3 +348,121 @@ describe('filling Google gaps from the free sources', () => {
   });
 })
 
+
+describe("the description on the place's own website", () => {
+  // The ordinary case, and the one nothing covered before: a restaurant has no
+  // encyclopaedia article and never will, but it does publish a summary of
+  // itself in JSON-LD for machines to read. 43 percent of Overture places carry
+  // a website; a fraction of a percent carry a wiki tag.
+  const GERS_REQ = {
+    lat: 54.0879,
+    lng: 12.1408,
+    name: "L'Osteria",
+    placeId: 'gers:abc-123',
+    lang: 'de',
+  };
+
+  it('ENRICH-090: quotes the site and credits it by URL', async () => {
+    mockTrekPlacesById.mockResolvedValue({
+      description: { text: 'Pizza in Rostock, seit 2015.', sourceUrl: 'https://losteria.net/rostock' },
+    });
+
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+
+    expect(mockTrekPlacesById).toHaveBeenCalledWith('abc-123');
+    expect(out.description).toEqual({
+      text: 'Pizza in Rostock, seit 2015.',
+      source: 'website',
+      sourceUrl: 'https://losteria.net/rostock',
+      // No licence claim: the operator published a summary for machines, they
+      // did not grant terms. Naming and linking the source is what is owed.
+      license: null,
+    });
+  });
+
+  it('ENRICH-091: leaves the encyclopaedias ahead of it', async () => {
+    // An article about this exact place, written by someone with no stake in
+    // it, beats the operator's own copy. The website only fills the gap the
+    // encyclopaedias leave, which is almost every business.
+    mockTrekPlacesById.mockResolvedValue({ description: { text: 'Unser Restaurant.', sourceUrl: 'https://x.de' } });
+    const maps = mapsStub({
+      details: vi.fn(async () => ({ place: { source: 'openstreetmap', wikipedia: 'de:Irgendwas' } })),
+      fetchWikiExtract: vi.fn(async () => EXTRACT),
+    });
+
+    const out = await make(maps).enrich(1, GERS_REQ);
+
+    expect(out.description?.source).toBe('wikipedia');
+  });
+
+  it('ENRICH-092: asks only for places that came from the API', async () => {
+    await make(mapsStub()).enrich(1, { ...GERS_REQ, placeId: 'ChIJsomethinggoogle' });
+    expect(mockTrekPlacesById).not.toHaveBeenCalled();
+  });
+
+  it('ENRICH-093: a failing API costs the place nothing else', async () => {
+    mockTrekPlacesById.mockRejectedValue(new Error('places api down'));
+    const maps = mapsStub({
+      details: vi.fn(async () => ({ place: { source: 'openstreetmap', name: "L'Osteria" } })),
+    });
+
+    await expect(make(maps).enrich(1, GERS_REQ)).resolves.toMatchObject({ description: null });
+  });
+
+  it('ENRICH-094: ignores an empty or whitespace-only summary', async () => {
+    mockTrekPlacesById.mockResolvedValue({ description: { text: '   ', sourceUrl: 'https://x.de' } });
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+    expect(out.description).toBeNull();
+  });
+
+  it('ENRICH-101: a place the index knows, whose site publishes no summary', async () => {
+    // The common answer, not an error: the GERS id resolves, and the place has
+    // no description field at all because its page carried nothing readable.
+    mockTrekPlacesById.mockResolvedValue({ gers: 'abc-123', name: "L'Osteria" });
+
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+
+    expect(mockTrekPlacesById).toHaveBeenCalledWith('abc-123');
+    expect(out.description).toBeNull();
+  });
+
+  it('ENRICH-102: still quotes a summary the API could not name a page for', async () => {
+    // The link is the credit, not the content. Dropping the text for want of a
+    // footnote would lose the only description the place has. The field is
+    // absent rather than null, so `sourceUrl` below is the normalisation and
+    // not the fixture read back.
+    mockTrekPlacesById.mockResolvedValue({ description: { text: 'Pizza in Rostock.' } });
+
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+
+    expect(out.description).toEqual({
+      text: 'Pizza in Rostock.',
+      source: 'website',
+      sourceUrl: null,
+      license: null,
+    });
+  });
+
+  it("ENRICH-103: the branch's own words come before the chain's article", async () => {
+    // L'Osteria Rostock carries brand:wikidata and has no article of its own.
+    // The chain article is about the company; the site is about this branch,
+    // and the branch is what was asked about.
+    mockTrekPlacesById.mockResolvedValue({
+      description: { text: 'Unsere Filiale in der Steinstraße.', sourceUrl: 'https://losteria.net/rostock' },
+    });
+    const maps = mapsStub({
+      resolveOsmIdentity: vi.fn(async () => ({
+        tags: { 'brand:wikidata': 'Q17323478', 'brand:wikipedia': 'de:L’Osteria' },
+        osmUrl: null,
+        matchedName: "L'Osteria",
+      })),
+      fetchWikiExtractFor: vi.fn(async () => EXTRACT),
+    });
+
+    const out = await make(maps).enrich(1, GERS_REQ);
+
+    expect(out.description).toMatchObject({ source: 'website', text: 'Unsere Filiale in der Steinstraße.' });
+    // The chain lookup starts at the brand's Wikidata item — it never ran.
+    expect(maps.fetchWikidataSitelinks).not.toHaveBeenCalled();
+  });
+});

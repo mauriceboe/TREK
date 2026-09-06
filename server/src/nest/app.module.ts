@@ -20,6 +20,7 @@ import { ManagedExtModule } from './managed/managed-ext.module';
 import { MapsModule } from './maps/maps.module';
 import { GeoModule } from './geo/geo.module';
 import { PlaceEnrichmentModule } from './place-enrichment/place-enrichment.module';
+import { PlaceShadowModule } from './place-shadow/place-shadow.module';
 import { CategoriesModule } from './categories/categories.module';
 import { TagsModule } from './tags/tags.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -76,7 +77,7 @@ import { RealtimeGatewayModule } from './realtime/realtime-gateway.module';
  * migrated.
  */
 @Module({
-  imports: [AppConfigModule, DatabaseModule, RealtimeModule, RealtimeGatewayModule, SchedulingModule, McpModule.forRoot({ accessPolicy: trekMcpAccessPolicy, validateAccess: trekMcpValidateAccess }), HealthModule, PlatformModule, McpTransportModule, WeatherModule, PublicApiModule, HelpModule, AirportsModule, ConfigModule, SystemNoticesModule, GeoModule, MapsModule, PlaceEnrichmentModule, CategoriesModule, TagsModule, NotificationsModule, AtlasModule, VacayModule, PackingModule, TodoModule, BudgetModule, ReservationsModule, DaysModule, DayNotesModule, AccommodationsModule, AssignmentsModule, PlacesModule, TripsModule, CollabModule, FilesModule, PhotosModule, MemoriesModule, AirtrailModule, JourneyModule, CollectionsModule, ShareModule, TripInviteModule, TransitModule, FeedsModule, SettingsModule, StorageModule, BackupModule, AuthModule, OidcModule, OauthModule, AdminModule, AddonsModule, AuditModule, PermissionsModule, PluginsModule, BookingImportModule, ReservationImportModule, LlmParseModule, ManagedExtModule],
+  imports: [AppConfigModule, DatabaseModule, RealtimeModule, RealtimeGatewayModule, SchedulingModule, McpModule.forRoot({ accessPolicy: trekMcpAccessPolicy, validateAccess: trekMcpValidateAccess }), HealthModule, PlatformModule, McpTransportModule, WeatherModule, PublicApiModule, HelpModule, AirportsModule, ConfigModule, SystemNoticesModule, GeoModule, MapsModule, PlaceEnrichmentModule, PlaceShadowModule, CategoriesModule, TagsModule, NotificationsModule, AtlasModule, VacayModule, PackingModule, TodoModule, BudgetModule, ReservationsModule, DaysModule, DayNotesModule, AccommodationsModule, AssignmentsModule, PlacesModule, TripsModule, CollabModule, FilesModule, PhotosModule, MemoriesModule, AirtrailModule, JourneyModule, CollectionsModule, ShareModule, TripInviteModule, TransitModule, FeedsModule, SettingsModule, StorageModule, BackupModule, AuthModule, OidcModule, OauthModule, AdminModule, AddonsModule, AuditModule, PermissionsModule, PluginsModule, BookingImportModule, ReservationImportModule, LlmParseModule, ManagedExtModule],
   providers: [
     // Default-deny: a route is authenticated unless it carries @Public() or
     // @OptionalAuth(), or declares its own @UseGuards chain. Protection used to

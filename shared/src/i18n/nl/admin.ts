@@ -88,11 +88,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Gebruikers zonder 2FA moeten de installatie in Instellingen voltooien voordat ze de app kunnen gebruiken.',
   'admin.apiKeys': 'API-sleutels',
-  'admin.apiKeysHint': "Optioneel. Schakelt uitgebreide plaatsgegevens in zoals foto's en weer.",
+  'admin.apiKeysHint': 'Waar plaatsgegevens vandaan komen. De TREK-index heeft geen sleutel nodig; de twee aanbieders hieronder zijn optioneel.',
+  'admin.trekApi.badgeDefault': 'Aanbevolen standaardbron',
+  'admin.googleCaveat.badge': 'Niet aanbevolen',
+  'admin.googleCaveat.body':
+    "TREK is open source en wij zijn hier niet neutraal. Op deze schaal bestaan beoordelingen en foto's van gewone zaken alleen bij Google, en dat is een monopolie. Het veld staat er bij gebrek aan alternatief, niet omdat wij het aanraden. Elke opvraging gaat dan naar Google.",
+  'admin.trekApi.badgeSoon':
+    'Binnenkort',
+  'admin.trekApi.badgeActive':
+    'Actief',
+  'admin.trekApi.tagline':
+    'TREK\'s eigen plaatsenindex. Zoeken zonder Google-sleutel, zonder quotum en zonder dat iemand meetelt.',
+  'admin.trekApi.factPlaces':
+    '73,6 miljoen plaatsen wereldwijd',
+  'admin.trekApi.factNoKey':
+    'Geen sleutel, geen quotum',
+  'admin.trekApi.factOffline':
+    'Landpakketten werken offline',
+  'admin.trekApi.factPrivacy':
+    'Zoekopdrachten worden nooit vastgelegd',
+  'admin.trekApi.more':
+    'Wat erin zit',
+  'admin.trekApi.fieldPhone':
+    'Telefoon',
+  'admin.trekApi.fieldStableId':
+    'Stabiele id',
+  'admin.trekApi.includedNote':
+    'Beschrijvingen komen van de website van de plaats zelf; openingstijden uit OpenStreetMap waar ze zijn ingevuld.',
+  'admin.trekApi.notRatings':
+    'Beoordelingen',
+  'admin.trekApi.notPhotos':
+    'Foto\'s van gewone zaken',
+  'admin.trekApi.notIncludedNote':
+    'Geen enkele open bron heeft ze, voor geen prijs. Een Google-sleutel blijft de enige weg naar die twee.',
+  'admin.trekApi.sourcesLabel':
+    'Bronnen',
+  'admin.trekApi.sourcesNote':
+    'Elk veld in een antwoord vermeldt uit welke ervan het komt.',
+  'admin.trekApi.included':
+    'Inbegrepen',
+  'admin.trekApi.notIncluded':
+    'Niet inbegrepen',
   'admin.mapsKey': 'Google Maps API-sleutel',
   'admin.mapsKeyHint': 'Vereist voor het zoeken van plaatsen. Verkrijgbaar op console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    "Zonder API-sleutel wordt OpenStreetMap gebruikt voor het zoeken van plaatsen. Met een Google API-sleutel kunnen ook foto's, beoordelingen en openingstijden worden geladen. Verkrijgbaar op console.cloud.google.com.",
+    "Zonder Google-API-sleutel wordt de aanbevolen TREK-API gebruikt. Met een sleutel kunnen daarnaast foto's, beoordelingen en openingstijden worden geladen. Maak er een aan op console.cloud.google.com.",
   'admin.recommended': 'Aanbevolen',
   'admin.weatherKey': 'OpenWeatherMap API-sleutel',
   'admin.weatherKeyHint': 'Voor weergegevens. Gratis op openweathermap.org',
@@ -115,6 +155,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Configureer welke bestandstypen gebruikers kunnen uploaden.',
   'admin.fileTypesFormat': 'Kommagescheiden extensies (bijv. jpg,png,pdf,doc). Gebruik * om alle typen toe te staan.',
   'admin.fileTypesSaved': 'Bestandstype-instellingen opgeslagen',
+  'admin.googleOptions': 'Waarvoor de sleutel wordt gebruikt',
+  'admin.googleOptionsSummary': '{on} van {total} aan',
   'admin.placesPhotos.title': "Plaatsfoto's",
   'admin.placesPhotos.subtitle':
     "Haalt foto's op via de Google Places API. Schakel uit om API-quota te besparen. Wikimedia-foto's worden niet beïnvloed.",
@@ -127,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Plaatsverrijking',
   'admin.placesEnrich.subtitle':
     "Toont afbeeldingen en een beschrijving bij het toevoegen van een plaats. Wikipedia en OpenStreetMap worden altijd gebruikt; Google komt erbij als Plaatsfoto's of Plaatsdetails aanstaan.",
+  'admin.placeShadow.title': 'Logboek van plaatszoekopdrachten',
+  'admin.placeShadow.subtitle':
+    'Vastleggen welk zoekresultaat is gekozen, zodat een andere plaatsindex later aan echte zoekopdrachten kan worden getoetst. Er verlaat niets deze instantie en een beheerder kan het logboek altijd exporteren of verwijderen.',
   'admin.bagTracking.title': 'Bagagetracking',
   'admin.bagTracking.subtitle': 'Gewicht en bagagetoewijzing inschakelen voor paklijstitems',
   'admin.collab.chat.title': 'Chat',

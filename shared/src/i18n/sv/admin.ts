@@ -130,11 +130,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Användare som inte har tvåfaktorsautentisering måste slutföra inställningarna under inställningar innan de använder appen.',
   'admin.apiKeys': 'API Nycklar',
-  'admin.apiKeysHint': 'Valfritt. Aktiverar utökade platsuppgifter, såsom foton och väderinformation.',
+  'admin.apiKeysHint': 'Var platsdata kommer ifrån. TREK-indexet behöver ingen nyckel; de två leverantörerna nedan är valfria.',
+  'admin.trekApi.badgeDefault': 'Rekommenderad standardkälla',
+  'admin.googleCaveat.badge': 'Avrådes',
+  'admin.googleCaveat.body':
+    'TREK är öppen källkod och vi är inte neutrala här. I den här skalan finns omdömen och foton på vanliga verksamheter bara hos Google, och det är ett monopol. Fältet finns i brist på alternativ, inte för att vi rekommenderar det. Varje uppslagning går då till Google.',
+  'admin.trekApi.badgeSoon':
+    'Snart',
+  'admin.trekApi.badgeActive':
+    'Aktiv',
+  'admin.trekApi.tagline':
+    'TREK:s eget platsregister. Sök utan Google-nyckel, utan kvot och utan att någon räknar dina sökningar.',
+  'admin.trekApi.factPlaces':
+    '73,6 miljoner platser i världen',
+  'admin.trekApi.factNoKey':
+    'Ingen nyckel, ingen kvot',
+  'admin.trekApi.factOffline':
+    'Landpaket fungerar offline',
+  'admin.trekApi.factPrivacy':
+    'Sökningar loggas aldrig',
+  'admin.trekApi.more':
+    'Vad som ingår',
+  'admin.trekApi.fieldPhone':
+    'Telefon',
+  'admin.trekApi.fieldStableId':
+    'Stabilt id',
+  'admin.trekApi.includedNote':
+    'Beskrivningar kommer från platsens egen webbplats, öppettider från OpenStreetMap där de är ifyllda.',
+  'admin.trekApi.notRatings':
+    'Omdömen',
+  'admin.trekApi.notPhotos':
+    'Foton på vanliga verksamheter',
+  'admin.trekApi.notIncludedNote':
+    'Ingen öppen källa har någotdera, till något pris. En Google-nyckel förblir enda vägen till de två.',
+  'admin.trekApi.sourcesLabel':
+    'Källor',
+  'admin.trekApi.sourcesNote':
+    'Varje fält i ett svar anger vilken av dem det kommer från.',
+  'admin.trekApi.included':
+    'Ingår',
+  'admin.trekApi.notIncluded':
+    'Ingår inte',
   'admin.mapsKey': 'Google Maps API Nyckel',
   'admin.mapsKeyHint': 'Krävs för att söka efter platser. Hämta på console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Utan en API-nyckel används OpenStreetMap för platssökning. Med en Google API-nyckel kan även foton, betyg och öppettider hämtas. Skaffa en på console.cloud.google.com.',
+    'Utan Google-API-nyckel används det rekommenderade TREK-API:et. Med en nyckel kan foton, omdömen och öppettider laddas dessutom. Skapa en på console.cloud.google.com.',
   'admin.recommended': 'Rekommenderat',
   'admin.weatherKey': 'OpenWeatherMap API Nyckel',
   'admin.weatherKeyHint': 'För väderdata. Gratis på openweathermap.org',
@@ -158,6 +198,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Filändelser separerade med kommatecken (t.ex. jpg, png, pdf, doc). Använd * för att tillåta alla filtyper.',
   'admin.fileTypesSaved': 'Inställningar för filtyper har sparats',
+  'admin.googleOptions': 'Vad nyckeln används till',
+  'admin.googleOptionsSummary': '{on} av {total} på',
   'admin.placesPhotos.title': 'Plats Foton',
   'admin.placesPhotos.subtitle':
     'Hämta bilder från Google Places API. Inaktivera för att spara API-kvoten. Wikimedia-bilder påverkas inte.',
@@ -170,6 +212,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Platsberikning',
   'admin.placesEnrich.subtitle':
     'Visar bilder och en beskrivning när du lägger till en plats. Wikipedia och OpenStreetMap används alltid; Google tillkommer när Platsfoton eller Platsdetaljer är på.',
+  'admin.placeShadow.title': 'Logg över platssökningar',
+  'admin.placeShadow.subtitle':
+    'Registrera vilket sökresultat som valdes, så att ett annat platsindex senare kan mätas mot verkliga sökningar. Ingenting lämnar den här instansen och en administratör kan när som helst exportera eller radera loggen.',
   'admin.bagTracking.title': 'Spårning av väskor',
   'admin.bagTracking.subtitle': 'Aktivera vikt- och väskfördelning för packningsartiklar',
   'admin.collab.chat.title': 'Chatt',

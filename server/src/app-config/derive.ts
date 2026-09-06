@@ -134,6 +134,12 @@ export function deriveManaged(raw: RawEnv) {
 export function deriveMaps(raw: RawEnv) {
   return {
     placesApiBase: raw.PLACES_API_BASE || undefined,
+    /**
+     * Base URL of the TREK Places API. Unset means the public instance; an
+     * operator who runs their own copy of the index points at it here, and one
+     * who wants nothing to leave their network points at their own machine.
+     */
+    trekPlacesUrl: raw.TREK_PLACES_URL || undefined,
     placesApiKey: raw.PLACES_API_KEY || undefined,
     /** Public pk.* token shipped with a managed instance; reaches the browser by design. */
     mapboxToken: raw.MAPBOX_ACCESS_TOKEN || undefined,

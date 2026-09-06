@@ -87,11 +87,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'A 2FA nélküli felhasználóknak a Beállításokban kell befejezniük a beállítást az alkalmazás használata előtt.',
   'admin.apiKeys': 'API kulcsok',
-  'admin.apiKeysHint': 'Opcionális. Bővített helyadatokat tesz lehetővé, például fotókat és időjárást.',
+  'admin.apiKeysHint': 'Honnan jönnek a helyadatok. A TREK-indexhez nem kell kulcs; az alábbi két szolgáltató nem kötelező.',
+  'admin.trekApi.badgeDefault': 'Ajánlott alapértelmezés',
+  'admin.googleCaveat.badge': 'Nem ajánlott',
+  'admin.googleCaveat.body':
+    'A TREK nyílt forráskódú, és ebben nem vagyunk semlegesek. Ebben a méretben az értékelések és a hétköznapi üzletek fotói csak a Google-nél léteznek, és ez a monopólium. A mező alternatíva híján van itt, nem mert ajánljuk. Minden lekérdezés ilyenkor a Google-höz megy.',
+  'admin.trekApi.badgeSoon':
+    'Hamarosan',
+  'admin.trekApi.badgeActive':
+    'Aktív',
+  'admin.trekApi.tagline':
+    'A TREK saját helyindexe. Keresés Google-kulcs nélkül, kvóta nélkül, és anélkül, hogy bárki számolná a lekérdezéseidet.',
+  'admin.trekApi.factPlaces':
+    '73,6 millió hely világszerte',
+  'admin.trekApi.factNoKey':
+    'Nincs kulcs, nincs kvóta',
+  'admin.trekApi.factOffline':
+    'Az országcsomagok offline is működnek',
+  'admin.trekApi.factPrivacy':
+    'A kereséseket soha nem naplózzuk',
+  'admin.trekApi.more':
+    'Mi van benne',
+  'admin.trekApi.fieldPhone':
+    'Telefon',
+  'admin.trekApi.fieldStableId':
+    'Állandó azonosító',
+  'admin.trekApi.includedNote':
+    'A leírások a hely saját webhelyéről jönnek, a nyitvatartás az OpenStreetMapből, ahol be van írva.',
+  'admin.trekApi.notRatings':
+    'Értékelések',
+  'admin.trekApi.notPhotos':
+    'Hétköznapi üzletek fotói',
+  'admin.trekApi.notIncludedNote':
+    'Egyiket sem kínálja nyílt forrás, semmilyen áron. Ehhez a kettőhöz a Google-kulcs marad az egyetlen út.',
+  'admin.trekApi.sourcesLabel':
+    'Források',
+  'admin.trekApi.sourcesNote':
+    'A válasz minden mezője megmondja, melyikükből származik.',
+  'admin.trekApi.included':
+    'Tartalmazza',
+  'admin.trekApi.notIncluded':
+    'Nem tartalmazza',
   'admin.mapsKey': 'Google Maps API kulcs',
   'admin.mapsKeyHint': 'Helykereséshez szükséges. Létrehozás: console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'API kulcs nélkül az OpenStreetMap szolgál helykeresésre. Google API kulccsal képek, értékelések és nyitvatartás is betölthetők. Létrehozás: console.cloud.google.com.',
+    'Google API-kulcs nélkül az ajánlott TREK API-t használjuk. Kulccsal ezen felül fotók, értékelések és nyitvatartás is betölthető. Kulcsot a console.cloud.google.com oldalon hozhatsz létre.',
   'admin.recommended': 'Ajánlott',
   'admin.weatherKey': 'OpenWeatherMap API kulcs',
   'admin.weatherKeyHint': 'Időjárás adatokhoz. Ingyenes: openweathermap.org',
@@ -115,6 +155,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Vesszővel elválasztott kiterjesztések (pl. jpg,png,pdf,doc). Használj *-ot az összes típus engedélyezéséhez.',
   'admin.fileTypesSaved': 'Fájltípus-beállítások mentve',
+  'admin.googleOptions': 'Mire használja a kulcsot',
+  'admin.googleOptionsSummary': '{on} / {total} bekapcsolva',
   'admin.placesPhotos.title': 'Helyfotók',
   'admin.placesPhotos.subtitle':
     'Fotók lekérése a Google Places API-ból. Tiltsa le az API-kvóta megtakarításához. A Wikimedia-fotók nem érintettek.',
@@ -127,6 +169,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Helyek gazdagítása',
   'admin.placesEnrich.subtitle':
     'Képeket és leírást mutat hely hozzáadásakor. A Wikipédia és az OpenStreetMap mindig használatban van; a Google akkor jön hozzá, ha a Helyfotók vagy a Helyadatok be vannak kapcsolva.',
+  'admin.placeShadow.title': 'Helykeresési napló',
+  'admin.placeShadow.subtitle':
+    'Rögzíti, melyik találatot választották ki, hogy egy másik helyindexet később valódi kereséseken lehessen mérni. Semmi nem hagyja el ezt a példányt, és egy rendszergazda bármikor exportálhatja vagy törölheti a naplót.',
   'admin.bagTracking.title': 'Poggyászkövetés',
   'admin.bagTracking.subtitle': 'Súly- és táskahozzárendelés engedélyezése csomagolási tételeknél',
   'admin.collab.chat.title': 'Chat',

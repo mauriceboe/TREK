@@ -126,11 +126,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': '2단계 인증 (2FA) 요구',
   'admin.requireMfaHint': '2FA가 없는 사용자는 앱을 사용하기 전에 설정에서 설정을 완료해야 합니다.',
   'admin.apiKeys': 'API 키',
-  'admin.apiKeysHint': '선택 사항. 사진 및 날씨 등 확장된 장소 데이터를 활성화합니다.',
+  'admin.apiKeysHint': '장소 데이터의 출처. TREK 색인에는 키가 필요 없으며, 아래 두 제공자는 선택 사항입니다.',
+  'admin.trekApi.badgeDefault': '권장 기본 소스',
+  'admin.googleCaveat.badge': '권장하지 않음',
+  'admin.googleCaveat.body':
+    'TREK은 오픈 소스이며 이 점에서 중립이 아닙니다. 이 규모에서 평점과 일반 상점 사진은 Google에만 있고, 그것이 독점입니다. 이 입력란은 대안이 없어서 있는 것이지 권해서가 아닙니다. 쓰면 모든 조회가 Google로 갑니다.',
+  'admin.trekApi.badgeSoon':
+    '곧 제공',
+  'admin.trekApi.badgeActive':
+    '사용 중',
+  'admin.trekApi.tagline':
+    'TREK 자체 장소 색인. Google 키 없이, 할당량 없이, 누구도 검색 횟수를 세지 않는 채로 찾습니다.',
+  'admin.trekApi.factPlaces':
+    '전 세계 7,363만 개 장소',
+  'admin.trekApi.factNoKey':
+    '키도 할당량도 없음',
+  'admin.trekApi.factOffline':
+    '국가별 패키지는 오프라인에서도 동작',
+  'admin.trekApi.factPrivacy':
+    '검색어는 결코 기록하지 않음',
+  'admin.trekApi.more':
+    '무엇이 들어 있나',
+  'admin.trekApi.fieldPhone':
+    '전화',
+  'admin.trekApi.fieldStableId':
+    '고정 식별자',
+  'admin.trekApi.includedNote':
+    '설명은 장소 자체의 웹사이트에서, 영업시간은 입력되어 있는 경우 OpenStreetMap에서 가져옵니다.',
+  'admin.trekApi.notRatings':
+    '평점',
+  'admin.trekApi.notPhotos':
+    '일반 상점의 사진',
+  'admin.trekApi.notIncludedNote':
+    '둘 다 어떤 값을 치르더라도 공개 데이터에는 없습니다. 이 둘에는 Google 키가 유일한 길로 남습니다.',
+  'admin.trekApi.sourcesLabel':
+    '출처',
+  'admin.trekApi.sourcesNote':
+    '응답의 모든 항목은 이 가운데 어디에서 왔는지 밝힙니다.',
+  'admin.trekApi.included':
+    '포함',
+  'admin.trekApi.notIncluded':
+    '미포함',
   'admin.mapsKey': 'Google Maps API 키',
   'admin.mapsKeyHint': '장소 검색에 필요합니다. console.cloud.google.com에서 발급',
   'admin.mapsKeyHintLong':
-    'API 키 없이는 장소 검색에 OpenStreetMap이 사용됩니다. Google API 키가 있으면 사진, 평점, 영업 시간도 불러올 수 있습니다. console.cloud.google.com에서 발급하세요.',
+    'Google API 키가 없어도 권장되는 TREK API가 사용됩니다. 키가 있으면 사진, 평점, 영업시간을 추가로 불러올 수 있습니다. 키는 console.cloud.google.com에서 만들 수 있습니다.',
   'admin.recommended': '권장',
   'admin.weatherKey': 'OpenWeatherMap API 키',
   'admin.weatherKeyHint': '날씨 데이터용. openweathermap.org에서 무료 발급',
@@ -152,6 +192,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': '사용자가 업로드할 수 있는 파일 형식을 설정합니다.',
   'admin.fileTypesFormat': '쉼표로 구분된 확장자 (예: jpg,png,pdf,doc). 모든 형식을 허용하려면 *를 사용하세요.',
   'admin.fileTypesSaved': '파일 형식 설정이 저장되었습니다',
+  'admin.googleOptions': '키의 사용 범위',
+  'admin.googleOptionsSummary': '{total}개 중 {on}개 켜짐',
   'admin.placesPhotos.title': '장소 사진',
   'admin.placesPhotos.subtitle':
     'Google Places API에서 사진을 가져옵니다. API 할당량 절약을 위해 비활성화할 수 있습니다. Wikimedia 사진은 영향을 받지 않습니다.',
@@ -164,6 +206,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': '장소 정보 보강',
   'admin.placesEnrich.subtitle':
     '장소를 추가할 때 사진과 설명을 표시합니다. Wikipedia와 OpenStreetMap은 항상 사용되며, 장소 사진 또는 장소 세부정보가 켜져 있으면 Google도 함께 사용됩니다.',
+  'admin.placeShadow.title': '장소 검색 기록',
+  'admin.placeShadow.subtitle':
+    '어떤 검색 결과가 선택되었는지 기록하여, 나중에 다른 장소 색인을 실제 검색으로 평가할 수 있게 합니다. 이 인스턴스 밖으로 나가는 것은 없으며 관리자는 언제든지 기록을 내보내거나 삭제할 수 있습니다.',
   'admin.bagTracking.title': '가방 추적',
   'admin.bagTracking.subtitle': '짐 항목에 무게 및 가방 배정을 활성화합니다',
   'admin.collab.chat.title': '채팅',

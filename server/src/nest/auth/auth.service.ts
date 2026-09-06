@@ -285,6 +285,11 @@ export class AuthService {
     const placesDetailsEnabled = placesDetailsSetting !== 'false';
     const placesEnrichSetting = this.db.get<{ value: string }>("SELECT value FROM app_settings WHERE key = 'places_enrich_enabled'")?.value;
     const placesEnrichEnabled = placesEnrichSetting !== 'false';
+    // Fail-closed, and deliberately on this unauthenticated endpoint: whether an
+    // instance records what its users search for is something a visitor is
+    // entitled to know before logging in, not a detail to keep behind the door.
+    const placeShadowSetting = this.db.get<{ value: string }>("SELECT value FROM app_settings WHERE key = 'place_shadow_enabled'")?.value;
+    const placeShadowEnabled = placeShadowSetting === 'true';
     const setupComplete = userCount > 0 && !this.db.get("SELECT id FROM users WHERE role = 'admin' AND must_change_password = 1 LIMIT 1");
 
     return {
@@ -333,6 +338,7 @@ export class AuthService {
       places_autocomplete_enabled: placesAutocompleteEnabled,
       places_details_enabled: placesDetailsEnabled,
       places_enrich_enabled: placesEnrichEnabled,
+      place_shadow_enabled: placeShadowEnabled,
       permissions: authenticatedUser ? this.permissions.getAllPermissions() : undefined,
       // Case-sensitive on purpose (legacy parity).
       dev_mode: readEnv().app.nodeEnv === 'development',

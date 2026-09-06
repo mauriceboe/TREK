@@ -88,11 +88,51 @@ const admin: TranslationStrings = {
   'admin.requireMfaHint':
     'Los usuarios sin 2FA deben completar la configuración en Ajustes antes de usar la aplicación.',
   'admin.apiKeys': 'Claves API',
-  'admin.apiKeysHint': 'Opcional. Activa datos ampliados de lugares, como fotos y previsión del tiempo.',
+  'admin.apiKeysHint': 'De dónde vienen los datos de lugares. El índice de TREK no necesita clave; los dos proveedores de abajo son opcionales.',
+  'admin.trekApi.badgeDefault': 'Fuente recomendada por defecto',
+  'admin.googleCaveat.badge': 'No recomendado',
+  'admin.googleCaveat.body':
+    'TREK es software libre y aquí no somos neutrales. A esta escala, las valoraciones y las fotos de negocios corrientes solo existen en Google, y eso es un monopolio. El campo está aquí por falta de alternativa, no porque lo recomendemos. Cada consulta va entonces a Google.',
+  'admin.trekApi.badgeSoon':
+    'Pronto',
+  'admin.trekApi.badgeActive':
+    'Activo',
+  'admin.trekApi.tagline':
+    'El índice de lugares propio de TREK. Buscar sin clave de Google, sin cuota y sin que nadie cuente tus búsquedas.',
+  'admin.trekApi.factPlaces':
+    '73,6 millones de lugares en el mundo',
+  'admin.trekApi.factNoKey':
+    'Sin clave, sin cuota',
+  'admin.trekApi.factOffline':
+    'Los paquetes por país funcionan sin conexión',
+  'admin.trekApi.factPrivacy':
+    'Las búsquedas nunca se registran',
+  'admin.trekApi.more':
+    'Qué contiene',
+  'admin.trekApi.fieldPhone':
+    'Teléfono',
+  'admin.trekApi.fieldStableId':
+    'Identificador estable',
+  'admin.trekApi.includedNote':
+    'Las descripciones vienen de la web del propio lugar; los horarios, de OpenStreetMap donde estén puestos.',
+  'admin.trekApi.notRatings':
+    'Valoraciones',
+  'admin.trekApi.notPhotos':
+    'Fotos de negocios corrientes',
+  'admin.trekApi.notIncludedNote':
+    'Ninguna fuente abierta tiene ninguna de las dos, a ningún precio. Una clave de Google sigue siendo el único camino.',
+  'admin.trekApi.sourcesLabel':
+    'Fuentes',
+  'admin.trekApi.sourcesNote':
+    'Cada campo de una respuesta dice de cuál de ellas viene.',
+  'admin.trekApi.included':
+    'Incluido',
+  'admin.trekApi.notIncluded':
+    'No incluido',
   'admin.mapsKey': 'Clave API de Google Maps',
   'admin.mapsKeyHint': 'Obligatoria para buscar lugares. Consíguela en console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Sin una clave API, la búsqueda de lugares usa OpenStreetMap. Con una clave de Google también se pueden cargar fotos, valoraciones y horarios de apertura. Consíguela en console.cloud.google.com.',
+    'Sin clave de API de Google se usa la API de TREK recomendada. Con una clave se pueden cargar además fotos, valoraciones y horarios. Créala en console.cloud.google.com.',
   'admin.recommended': 'Recomendado',
   'admin.weatherKey': 'Clave API de OpenWeatherMap',
   'admin.weatherKeyHint': 'Para datos meteorológicos. Gratis en openweathermap.org',
@@ -114,6 +154,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesFormat':
     'Extensiones separadas por comas (p. ej. jpg,png,pdf,doc). Usa * para permitir todos los tipos.',
   'admin.fileTypesSaved': 'Ajustes de tipos de archivo guardados',
+  'admin.googleOptions': 'Para qué se usa la clave',
+  'admin.googleOptionsSummary': '{on} de {total} activados',
   'admin.placesPhotos.title': 'Fotos de Lugares',
   'admin.placesPhotos.subtitle':
     'Obtiene fotos de la Google Places API. Desactiva para ahorrar cuota de API. Las fotos de Wikimedia no se ven afectadas.',
@@ -126,6 +168,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Enriquecimiento de lugares',
   'admin.placesEnrich.subtitle':
     'Muestra imágenes y una descripción al añadir un lugar. Wikipedia y OpenStreetMap se usan siempre; Google se añade cuando Fotos de lugares o Detalles de lugares están activados.',
+  'admin.placeShadow.title': 'Registro de búsquedas de lugares',
+  'admin.placeShadow.subtitle':
+    'Guardar qué resultado de búsqueda se eligió, para poder evaluar más adelante otro índice de lugares con búsquedas reales. Nada sale de esta instancia y un administrador puede exportar o borrar el registro cuando quiera.',
   'admin.bagTracking.title': 'Seguimiento de equipaje',
   'admin.bagTracking.subtitle': 'Activar peso y asignación de equipaje para artículos de la lista',
   'admin.collab.chat.title': 'Chat',

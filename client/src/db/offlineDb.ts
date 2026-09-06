@@ -68,6 +68,14 @@ export interface SyncMeta {
   tilesBbox: [number, number, number, number] | null;
   /** Non-photo files available offline for this trip after the last sync. */
   filesCachedCount: number;
+  /**
+   * The rounded bbox the cached area places were fetched for. Compared rather
+   * than a timestamp: adding a place inside the area the trip already covers
+   * should not re-download it, and moving the trip should.
+   *
+   * Optional so a row written before this landed still reads.
+   */
+  areaPlacesKey?: string;
 }
 
 export interface BlobCacheEntry {
@@ -83,6 +91,33 @@ export interface BlobCacheEntry {
    *  across IndexedDB round-trips, so the LRU budget reads this instead. */
   bytes: number;
   mime: string;
+  cachedAt: number;
+}
+
+/**
+ * A place from the TREK Places index, cached for the area of one trip.
+ *
+ * NOT a trip place — those are in `places` and belong to the user. These are
+ * candidates: the shops, restaurants and stations that happen to be near where
+ * the trip goes, taken once so search still answers on a plane. They are
+ * disposable and are re-fetched whenever the trip's area changes.
+ *
+ * The key is the GERS id, which is stable across index rebuilds; `tripId` is
+ * indexed so the whole set can be dropped with the trip.
+ */
+export interface CachedAreaPlace {
+  /** GERS id, without the `gers:` prefix the server puts on `osm_id`. */
+  gers: string;
+  tripId: number;
+  name: string;
+  /** Lowercased, diacritics folded — what an offline search actually matches on. */
+  searchName: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  category: string | null;
+  website: string | null;
+  phone: string | null;
   cachedAt: number;
 }
 
@@ -141,6 +176,7 @@ class TrekOfflineDb extends Dexie {
   syncMeta!: Table<SyncMeta, number>;
   blobCache!: Table<BlobCacheEntry, string>;
   importFiles!: Table<ImportSourceFile, [string, string]>;
+  areaPlaces!: Table<CachedAreaPlace, string>;
 
   constructor(name: string = ANON_DB_NAME) {
     super(name);
@@ -180,6 +216,13 @@ class TrekOfflineDb extends Dexie {
     // v4: durable store for booking-import source files (survives a reload mid-parse).
     this.version(4).stores({
       importFiles: '[jobId+fileName], jobId, createdAt',
+    });
+
+    // v5: places from the TREK Places index for the trip's area, so search
+    // answers offline. `searchName` is indexed because that is what an offline
+    // query filters on; `tripId` so the set drops with its trip.
+    this.version(5).stores({
+      areaPlaces: 'gers, tripId, searchName',
     });
   }
 }

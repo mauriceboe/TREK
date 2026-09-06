@@ -105,6 +105,37 @@ export class MapsController {
     }
   }
 
+  /**
+   * Every place in a box, for the offline cache. Read-only and cheap.
+   *
+   * Not a browse endpoint: the index caps the box at 1.5 degrees a side, and
+   * this passes the cap's refusal straight through rather than paging around
+   * it. The honest use is one trip's area, taken once.
+   */
+  @Get('area')
+  async area(
+    @Query('minLat') minLat?: string,
+    @Query('minLng') minLng?: string,
+    @Query('maxLat') maxLat?: string,
+    @Query('maxLng') maxLng?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const bbox = {
+      minLat: Number(minLat),
+      minLng: Number(minLng),
+      maxLat: Number(maxLat),
+      maxLng: Number(maxLng),
+    };
+    if (Object.values(bbox).some((v) => !Number.isFinite(v))) {
+      throw new HttpException({ error: 'A valid bbox (minLat, minLng, maxLat, maxLng) is required' }, 400);
+    }
+    const capped = Math.min(Math.max(Number(limit) || 2000, 1), 5000);
+    const area = await this.maps.placesInArea(bbox, capped);
+    // A null means the index is off or unreachable. An empty area is not an
+    // error — the caller caches nothing and carries on.
+    return area ?? { results: [], truncated: false, unavailable: true };
+  }
+
   @Post('autocomplete')
   @HttpCode(200)
   async autocomplete(

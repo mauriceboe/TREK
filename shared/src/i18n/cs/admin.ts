@@ -86,11 +86,51 @@ const admin: TranslationStrings = {
   'admin.requireMfa': 'Vyžadovat dvoufázové ověření (2FA)',
   'admin.requireMfaHint': 'Uživatelé bez 2FA musí dokončit nastavení v Nastavení před použitím aplikace.',
   'admin.apiKeys': 'API klíče',
-  'admin.apiKeysHint': 'Volitelné. Povoluje rozšířená data o místech (fotky, počasí).',
+  'admin.apiKeysHint': 'Odkud pocházejí data míst. Index TREK nepotřebuje klíč; dva poskytovatelé níže jsou volitelní.',
+  'admin.trekApi.badgeDefault': 'Doporučený výchozí zdroj',
+  'admin.googleCaveat.badge': 'Nedoporučeno',
+  'admin.googleCaveat.body':
+    'TREK je otevřený software a nejsme v tom neutrální. V tomto měřítku existují hodnocení a fotografie běžných podniků jen u Googlu, a to je monopol. Pole tu je z nedostatku alternativy, ne proto, že bychom je doporučovali. Každý dotaz pak jde do Googlu.',
+  'admin.trekApi.badgeSoon':
+    'Brzy',
+  'admin.trekApi.badgeActive':
+    'Aktivní',
+  'admin.trekApi.tagline':
+    'Vlastní rejstřík míst TREKu. Hledání bez klíče od Googlu, bez kvóty a bez toho, aby někdo počítal vaše dotazy.',
+  'admin.trekApi.factPlaces':
+    '73,6 milionu míst po celém světě',
+  'admin.trekApi.factNoKey':
+    'Bez klíče, bez kvóty',
+  'admin.trekApi.factOffline':
+    'Balíčky zemí fungují offline',
+  'admin.trekApi.factPrivacy':
+    'Dotazy se nikdy nezaznamenávají',
+  'admin.trekApi.more':
+    'Co v tom je',
+  'admin.trekApi.fieldPhone':
+    'Telefon',
+  'admin.trekApi.fieldStableId':
+    'Stálý identifikátor',
+  'admin.trekApi.includedNote':
+    'Popisy pocházejí z webu samotného místa, otevírací doba z OpenStreetMap tam, kde je vyplněná.',
+  'admin.trekApi.notRatings':
+    'Hodnocení',
+  'admin.trekApi.notPhotos':
+    'Fotografie běžných podniků',
+  'admin.trekApi.notIncludedNote':
+    'Ani jedno nemá žádný otevřený zdroj, za žádnou cenu. K těmto dvěma zůstává klíč od Googlu jedinou cestou.',
+  'admin.trekApi.sourcesLabel':
+    'Zdroje',
+  'admin.trekApi.sourcesNote':
+    'Každé pole v odpovědi uvádí, ze kterého z nich pochází.',
+  'admin.trekApi.included':
+    'Obsahuje',
+  'admin.trekApi.notIncluded':
+    'Neobsahuje',
   'admin.mapsKey': 'Google Maps API klíč',
   'admin.mapsKeyHint': 'Povinné pro hledání míst. Získáte na console.cloud.google.com',
   'admin.mapsKeyHintLong':
-    'Bez API klíče se pro hledání používá OpenStreetMap. S Google klíčem lze načítat fotky, hodnocení a otevírací dobu.',
+    'Bez klíče Google API se používá doporučené API TREK. S klíčem lze navíc načíst fotografie, hodnocení a otevírací dobu. Klíč vytvoříte na console.cloud.google.com.',
   'admin.recommended': 'Doporučeno',
   'admin.weatherKey': 'OpenWeatherMap API klíč',
   'admin.weatherKeyHint': 'Pro data o počasí. Zdarma na openweathermap.org',
@@ -113,6 +153,8 @@ const admin: TranslationStrings = {
   'admin.fileTypesHint': 'Nastavte, které typy souborů mohou uživatelé nahrávat.',
   'admin.fileTypesFormat': 'Přípony oddělené čárkou (např. jpg,png,pdf,doc). Použijte * pro všechny typy.',
   'admin.fileTypesSaved': 'Nastavení souborů uloženo',
+  'admin.googleOptions': 'K čemu se klíč používá',
+  'admin.googleOptionsSummary': '{on} ze {total} zapnuto',
   'admin.placesPhotos.title': 'Fotografie míst',
   'admin.placesPhotos.subtitle':
     'Načítání fotografií z Google Places API. Zakázáním ušetříte kvótu API. Fotografie z Wikimedia nejsou ovlivněny.',
@@ -125,6 +167,9 @@ const admin: TranslationStrings = {
   'admin.placesEnrich.title': 'Obohacení míst',
   'admin.placesEnrich.subtitle':
     'Zobrazí obrázky a popis při přidávání místa. Wikipedie a OpenStreetMap se používají vždy; Google se přidá, když jsou zapnuté Fotky míst nebo Detaily míst.',
+  'admin.placeShadow.title': 'Záznam vyhledávání míst',
+  'admin.placeShadow.subtitle':
+    'Zaznamenávat, který výsledek vyhledávání byl vybrán, aby bylo možné později porovnat jiný index míst na skutečných dotazech. Nic neopouští tuto instanci a správce může záznam kdykoli exportovat nebo smazat.',
   'admin.bagTracking.title': 'Sledování zavazadel',
   'admin.bagTracking.subtitle': 'Povolit váhu a přiřazení k zavazadlům u položek balení',
   'admin.collab.chat.title': 'Chat',

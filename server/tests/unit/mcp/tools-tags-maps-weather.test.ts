@@ -40,6 +40,22 @@ vi.mock('../../../src/nest/weather/weather.impl', () => ({
   getDetailedWeather: vi.fn().mockResolvedValue({ hourly: [] }),
 }));
 
+// MapsService.pois() asks the TREK Places index before Overpass, and the real
+// client would send that request from a unit test. The gate above it is left
+// alone on purpose: it fails open, so these cases run on the shipping default
+// with the index answering nothing, which is the drop-through they are about.
+const { trekNearbyMock } = vi.hoisted(() => ({
+  trekNearbyMock: vi.fn(async (
+    _lat: number,
+    _lng: number,
+    _opts?: { radius?: number; limit?: number; category?: string },
+  ): Promise<unknown[]> => []),
+}));
+vi.mock('../../../src/nest/maps/trek-places.client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/nest/maps/trek-places.client')>()),
+  trekPlacesNearby: trekNearbyMock,
+}));
+
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
 import { resetTestDb } from '../../helpers/test-db';
@@ -413,9 +429,13 @@ describe('Tool: get_place_details', () => {
 describe('Tool: search_pois', () => {
   const BBOX = { south: 48.85, west: 2.33, north: 48.87, east: 2.36 };
 
+  // The index is asked first and answers nothing here, so this case also pins
+  // the drop-through: an empty index page must reach Overpass rather than come
+  // back as an empty POI list.
   it('returns the POIs of a category inside the bbox', async () => {
     const { user } = createUser(testDb);
     vi.mocked(MapsService.prototype.searchOverpassPois).mockClear();
+    trekNearbyMock.mockClear();
 
     await withHarness(user.id, async (h) => {
       const result = await h.client.callTool({
@@ -426,13 +446,85 @@ describe('Tool: search_pois', () => {
       expect(data.pois).toHaveLength(1);
       expect(data.pois[0].name).toBe('Chez Nous');
       expect(data.source).toBe('openstreetmap');
+      expect(trekNearbyMock).toHaveBeenCalled();
       expect(MapsService.prototype.searchOverpassPois).toHaveBeenCalledWith('restaurant', BBOX, 'fr');
+    });
+  });
+
+  // Overpass is the fallback now, not the first stop. `source` stays
+  // 'openstreetmap' because the client switches on it and these are the same
+  // places; where they were read is this method's business, not the pill's.
+  it('answers from the TREK Places index and leaves Overpass alone', async () => {
+    const { user } = createUser(testDb);
+    vi.mocked(MapsService.prototype.searchOverpassPois).mockClear();
+    trekNearbyMock.mockClear();
+    trekNearbyMock.mockResolvedValueOnce([
+      {
+        gers: 'abc-123',
+        name: 'Le Comptoir',
+        lat: 48.861,
+        lng: 2.341,
+        category: 'restaurant',
+        address: { freeform: '9 Rue de Rivoli' },
+        contact: { website: 'https://example.test/', phone: null },
+        hours: { osm: 'Mo-Fr 09:00-17:00', source: null, sourceUrl: null },
+      },
+    ]);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({
+        name: 'search_pois',
+        arguments: { category: 'restaurant', bbox: BBOX },
+      });
+      const data = parseToolResult(result) as any;
+      expect(data.pois).toHaveLength(1);
+      expect(data.pois[0].osm_id).toBe('gers:abc-123');
+      expect(data.pois[0].name).toBe('Le Comptoir');
+      // The index carries opening hours; dropping them would leave the tool
+      // description promising something the answer never has.
+      expect(data.pois[0].opening_hours).toBe('Mo-Fr 09:00-17:00');
+      expect(data.source).toBe('openstreetmap');
+      expect(data.clamped).toBe(false);
+      expect(MapsService.prototype.searchOverpassPois).not.toHaveBeenCalled();
+
+      // The bbox becomes a centre plus half its diagonal, and the category
+      // becomes the Overture terms it maps to.
+      const [lat, lng, opts] = trekNearbyMock.mock.calls[0];
+      expect(lat).toBeCloseTo(48.86, 5);
+      expect(lng).toBeCloseTo(2.345, 5);
+      expect(opts?.category).toBe('restaurant,casual_eatery,fast_food');
+      expect(opts?.limit).toBe(50);
+      expect(opts?.radius).toBeGreaterThan(300);
+      expect(opts?.radius).toBeLessThanOrEqual(20000);
+    });
+  });
+
+  // The index searches a disc, so a viewport wider than 40km is narrowed there
+  // as well — and says so, the same way the Overpass path does.
+  it('reports a viewport the index had to narrow as clamped', async () => {
+    const { user } = createUser(testDb);
+    trekNearbyMock.mockClear();
+    trekNearbyMock.mockResolvedValueOnce([
+      { gers: 'wide-1', name: 'Far Away', lat: 48.9, lng: 2.4, category: null, address: null, contact: null, hours: null },
+    ]);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({
+        name: 'search_pois',
+        arguments: { category: 'restaurant', bbox: { south: 48.4, west: 2.0, north: 48.9, east: 2.5 } },
+      });
+      const data = parseToolResult(result) as any;
+      expect(data.clamped).toBe(true);
+      expect(data.pois[0].poi_type).toBe('restaurant');
+      expect(data.pois[0].address).toBeNull();
+      expect(trekNearbyMock.mock.calls[0][2]?.radius).toBe(20000);
     });
   });
 
   it('passes no language through when none is given', async () => {
     const { user } = createUser(testDb);
     vi.mocked(MapsService.prototype.searchOverpassPois).mockClear();
+    trekNearbyMock.mockClear();
 
     await withHarness(user.id, async (h) => {
       await h.client.callTool({ name: 'search_pois', arguments: { category: 'museum', bbox: BBOX } });
@@ -479,6 +571,23 @@ describe('Tool: search_pois', () => {
       expect(result.isError).toBe(true);
       expect((result as { content: { text: string }[] }).content[0].text).toBe('POI search failed.');
     });
+  });
+
+  // Dropping through must not turn an outage into an empty answer: the index
+  // failure is logged and Overpass failing under it is still what reaches the
+  // caller.
+  it('answers isError when the index fails and every Overpass mirror is unreachable', async () => {
+    const { user } = createUser(testDb);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    trekNearbyMock.mockRejectedValueOnce(new Error('index down'));
+    vi.mocked(MapsService.prototype.searchOverpassPois).mockRejectedValueOnce(new Error('all mirrors failed'));
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({ name: 'search_pois', arguments: { category: 'bar', bbox: BBOX } });
+      expect(result.isError).toBe(true);
+      expect((result as { content: { text: string }[] }).content[0].text).toBe('POI search failed.');
+    });
+    warn.mockRestore();
   });
 });
 

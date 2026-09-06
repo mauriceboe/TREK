@@ -40,6 +40,17 @@ vi.mock('../../../src/utils/ssrfGuard', () => ({
 
 vi.mock('../../../src/config', () => ({ JWT_SECRET: 'test-secret', ENCRYPTION_KEY: '0'.repeat(64) }));
 
+// Reached for any `gers:` place id, where the real one is an outbound request
+// to the TREK Places API. Only this export is replaced; the record shaping the
+// rest of the module provides stays as it is.
+const { mockTrekPlacesById } = vi.hoisted(() => ({
+  mockTrekPlacesById: vi.fn(async (_gers: string): Promise<unknown> => null),
+}));
+vi.mock('../../../src/nest/maps/trek-places.client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/nest/maps/trek-places.client')>()),
+  trekPlacesById: mockTrekPlacesById,
+}));
+
 import { db } from '../../../src/db/database';
 import { DatabaseService } from '../../../src/nest/database/database.service';
 import {
@@ -49,6 +60,7 @@ import {
   collectFacts,
   collectHours,
   collectRating,
+  nearbyWouldMislead,
 } from '../../../src/nest/place-enrichment/place-enrichment.service';
 import type { MapsService } from '../../../src/nest/maps/maps.service';
 import type { PlacePhotoCacheService } from '../../../src/nest/place-photos/place-photo-cache.service';
@@ -125,6 +137,8 @@ beforeEach(() => {
   mockDbRun.mockReset();
   mockSafeFetchFollow.mockReset();
   mockSafeFetchFollow.mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer });
+  mockTrekPlacesById.mockReset();
+  mockTrekPlacesById.mockResolvedValue(null);
 });
 
 // ── Kill switch ──────────────────────────────────────────────────────────────
@@ -994,5 +1008,120 @@ describe('picture source ladder', () => {
     const shifted = (await make(two, cacheStub()).enrich(1, REQ)).photos.find((p) => p.attribution === 'Alice');
 
     expect(shifted?.key).toBe(first);
+  });
+});
+
+/**
+ * ENRICH-110..116 — the categories cut off from the nearby fallback.
+ *
+ * The bottom rung is "anything photographed within 300m", and for an ordinary
+ * business that is the building opposite. Two percent of them have a picture on
+ * Commons against seventy percent of churches, so for a cafe the curated rungs
+ * practically never fire and the fallback practically always does — which is
+ * how a doner shop ended up illustrated with the town hall across the square.
+ */
+describe('nearby pictures that would mislead', () => {
+  const GERS_REQ = { ...REQ, placeId: 'gers:abc-123' };
+
+  // What the TREK index reports for a place: one `category` string.
+  const indexPlace = (category: string) =>
+    mapsStub({
+      details: vi.fn(async () => ({ place: { source: 'trek-places', category } })),
+      fetchCommonsCandidates: vi.fn(async () => [commonsCandidate()]),
+    });
+
+  it('ENRICH-110: a business is cut off, whichever field names its trade', () => {
+    // Overture reports `category`; the OSM tags the identity lookup brings back
+    // report `amenity`, `shop` or `cuisine`. `category_path` is the name the
+    // API gives the field — the guard reads it, though toPlaceRecord drops it
+    // before a details record is ever shaped.
+    expect(nearbyWouldMislead({ category: 'pizza_restaurant' })).toBe(true);
+    expect(nearbyWouldMislead({ category_path: 'eat_and_drink>cafe' })).toBe(true);
+    expect(nearbyWouldMislead({ amenity: 'fast_food' })).toBe(true);
+    expect(nearbyWouldMislead({ shop: 'bakery' })).toBe(true);
+    expect(nearbyWouldMislead({ cuisine: 'coffee_shop' })).toBe(true);
+  });
+
+  it('ENRICH-111: a monument is not, which is the case the fallback exists for', () => {
+    // At 300m from a castle or a church, what was photographed is the castle.
+    expect(nearbyWouldMislead({ category: 'landmark_and_historical_building' })).toBe(false);
+    expect(nearbyWouldMislead({ category: 'castle' })).toBe(false);
+    expect(nearbyWouldMislead({ category: 'museum' })).toBe(false);
+    expect(nearbyWouldMislead({ amenity: 'place_of_worship' })).toBe(false);
+  });
+
+  it('ENRICH-112: fails open when nothing says what the place is', () => {
+    // Unlabelled is not the same as harmless, but there is no telling a
+    // cathedral from a kebab shop without a category, and cutting off
+    // everything unlabelled would take the fallback from the places it works
+    // for. The name is not a category either: "Cafe Central" may well be a
+    // listed building.
+    expect(nearbyWouldMislead(null)).toBe(false);
+    expect(nearbyWouldMislead({})).toBe(false);
+    expect(nearbyWouldMislead({ name: 'Cafe Central', category: null })).toBe(false);
+  });
+
+  it('ENRICH-113: never asks the coordinate search about a cafe', async () => {
+    const maps = indexPlace('coffee_shop');
+
+    const out = await make(maps, cacheStub()).enrich(1, GERS_REQ);
+
+    // Skipped outright rather than fetched and then filtered: the request is
+    // the whole cost, and there is nothing in the answer worth looking at.
+    expect(maps.fetchCommonsCandidates).not.toHaveBeenCalled();
+    expect(out.photos).toEqual([]);
+  });
+
+  it('ENRICH-114: still asks it for a place the fallback was built for', async () => {
+    const maps = indexPlace('landmark_and_historical_building');
+
+    const out = await make(maps, cacheStub()).enrich(1, GERS_REQ);
+
+    expect(maps.fetchCommonsCandidates).toHaveBeenCalledWith(REQ.lat, REQ.lng, 5);
+    expect(out.photos).toHaveLength(1);
+  });
+
+  it('ENRICH-115: reads the OSM tags too, which is where a takeaway says so', async () => {
+    // buildOsmDetails carries cuisine but neither amenity nor shop, so for an
+    // OSM place — cuisine=kebab, amenity=fast_food — only the tags the identity
+    // lookup brought back name the trade.
+    const maps = mapsStub({
+      details: vi.fn(async () => ({ place: { source: 'openstreetmap', cuisine: 'kebab' } })),
+      resolveOsmIdentity: vi.fn(async () => ({
+        tags: { amenity: 'fast_food', cuisine: 'kebab' },
+        osmUrl: null,
+        matchedName: 'Döner Rostock',
+      })),
+      fetchCommonsCandidates: vi.fn(async () => [commonsCandidate()]),
+    });
+
+    const out = await make(maps, cacheStub()).enrich(1, OSM_REQ);
+
+    expect(maps.fetchCommonsCandidates).not.toHaveBeenCalled();
+    expect(out.photos).toEqual([]);
+  });
+
+  it('ENRICH-116: cuts only the bottom rung, not the curated ones above it', async () => {
+    // A cafe somebody tagged in OpenStreetMap still has pictures attached to
+    // that exact object. One of them is below the bar of two that normally lets
+    // the coordinate search top the strip up — being a cafe is what stops it.
+    // The item comes from the OSM tag and not from the index record, whose
+    // `wikidata` holds the chain's item rather than this branch's.
+    const maps = mapsStub({
+      details: vi.fn(async () => ({ place: { source: 'trek-places', category: 'cafe' } })),
+      resolveOsmIdentity: vi.fn(async () => ({
+        tags: { wikidata: 'Q1' },
+        osmUrl: null,
+        matchedName: 'Café Central',
+      })),
+      fetchWikidataCandidates: vi.fn(async () => ({ candidates: [commonsCandidate()], commonsCategory: null })),
+      fetchCommonsCandidates: vi.fn(async () => [commonsCandidate({ attribution: 'Bob' })]),
+    });
+
+    const out = await make(maps, cacheStub()).enrich(1, GERS_REQ);
+
+    expect(maps.fetchWikidataCandidates).toHaveBeenCalledWith('Q1', 5);
+    expect(maps.fetchCommonsCandidates).not.toHaveBeenCalled();
+    expect(out.photos).toHaveLength(1);
   });
 });
