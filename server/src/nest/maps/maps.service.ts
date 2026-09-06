@@ -76,6 +76,9 @@ function logKeyFailure(label: string, status: number, userId: number, source: Ap
   console.error(`[Maps] ${label} failed with ${status} userId=${userId} keySource=${source}`);
 }
 
+/** Ceiling for one Google Places call. Generous — the photo download is the slow one. */
+const GOOGLE_FETCH_TIMEOUT_MS = 20000;
+
 function googleFetch(rawEndpoint: string, label: string, init?: RequestInit): Promise<Response> {
   const endpoint = placesEndpoint(rawEndpoint);
   googleApiCallCount++;
@@ -83,6 +86,11 @@ function googleFetch(rawEndpoint: string, label: string, init?: RequestInit): Pr
   const referer = readEnv().app.appUrl ? getAppUrl() : undefined;
   return fetch(endpoint, {
     ...init,
+    // A default ceiling here rather than at each of the nine call sites, none of
+    // which passed one: a hung upstream held the request handler open for as
+    // long as it liked. A caller that needs longer still wins, it only has to
+    // say so.
+    signal: init?.signal ?? AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     headers: { ...(referer ? { Referer: referer } : {}), ...((init?.headers as Record<string, string>) ?? {}) },
   });
 }

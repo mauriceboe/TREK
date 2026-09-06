@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { logDebug, logError, logInfo } from '../../audit/audit-log.logger';
 import { decrypt_api_key } from '../../common/crypto/apiKeyCrypto';
 import { DatabaseService } from '../../database/database.service';
-import { checkSsrf, createPinnedDispatcher } from '../../../utils/ssrfGuard';
+import { safeFetchFollow, SsrfBlockedError } from '../../../utils/ssrfGuard';
 
 /**
  * Renders the outgoing body. Discord and Slack get their native shapes; anything
@@ -66,20 +66,18 @@ export class WebhookService {
   ): Promise<boolean> {
     if (!url) return false;
 
-    const ssrf = await checkSsrf(url);
-    if (!ssrf.allowed) {
-      logError(`Webhook blocked by SSRF guard event=${payload.event} url=${url} reason=${ssrf.error}`);
-      return false;
-    }
-
     try {
-      const res = await fetch(url, {
+      // Every hop re-checked and re-pinned. Checking only the first URL was not
+      // enough: Node skips the pinned lookup for an IP-literal host, so a 307 to
+      // 127.0.0.1 or 169.254.169.254 connected straight through
+      // (GHSA-8mw6-xphx-886m). No dispatcher or redirect here — safeFetchFollow
+      // sets both per hop and would overwrite them.
+      const res = await safeFetchFollow(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: buildWebhookBody(url, payload),
         signal: AbortSignal.timeout(10000),
-        dispatcher: createPinnedDispatcher(ssrf.resolvedIp!),
-      } as RequestInit);
+      });
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
@@ -91,6 +89,13 @@ export class WebhookService {
       logDebug(`Webhook url=${url} payload=${buildWebhookBody(url, payload).substring(0, 500)}`);
       return true;
     } catch (err) {
+      // The guard used to run before the try, with its own line and its own
+      // `return false`. safeFetchFollow throws instead, so the same line and the
+      // same result are reproduced here rather than changing what callers see.
+      if (err instanceof SsrfBlockedError) {
+        logError(`Webhook blocked by SSRF guard event=${payload.event} url=${url} reason=${err.message}`);
+        return false;
+      }
       logError(`Webhook failed event=${payload.event}: ${err instanceof Error ? err.message : err}`);
       return false;
     }

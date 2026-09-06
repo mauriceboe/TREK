@@ -21,7 +21,29 @@ const { sendMailMock } = vi.hoisted(() => ({ sendMailMock: vi.fn().mockResolvedV
 vi.mock('nodemailer', () => ({ default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock, verify: vi.fn() })) } }));
 vi.stubGlobal('fetch', vi.fn());
 vi.mock('../../../src/websocket', () => ({ broadcast: vi.fn(), broadcastToUser: vi.fn() }));
-vi.mock('../../../src/utils/ssrfGuard', () => ({ checkSsrf: vi.fn(async () => ({ allowed: true, resolvedIp: '1.2.3.4' })), createPinnedDispatcher: vi.fn(() => ({})) }));
+vi.mock('../../../src/utils/ssrfGuard', () => {
+  class SsrfBlockedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'SsrfBlockedError';
+    }
+  }
+  const checkSsrf = vi.fn(async (_url: string) => ({ allowed: true, resolvedIp: '1.2.3.4' }));
+  return {
+    checkSsrf,
+    createPinnedDispatcher: vi.fn(() => ({})),
+    SsrfBlockedError,
+    // The notification transports go through safeFetchFollow now, so the fake
+    // has to guard and then hand over to the stubbed fetch the way it does.
+    safeFetchFollow: vi.fn(async (url: string, init?: RequestInit) => {
+      const verdict = await checkSsrf(url);
+      if (!verdict.allowed) {
+        throw new SsrfBlockedError((verdict as { error?: string }).error ?? 'Request blocked by SSRF guard');
+      }
+      return fetch(url, init);
+    }),
+  };
+});
 
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
