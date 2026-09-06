@@ -269,7 +269,12 @@ Request bodies validated with Zod are documented automatically from the same sch
 The official TREK Docker image bundles the binary automatically: on both amd64 and arm64 it installs
 `libkitinerary-bin` via apt (Debian trixie) and symlinks it to `/usr/local/bin/kitinerary-extractor`, which the image
 also pins via `KITINERARY_EXTRACTOR_PATH`. When running TREK from source, install `libkitinerary-bin` (Debian trixie /
-Ubuntu 25.04+) or download the static binary directly and place it anywhere on `PATH`. The
+Ubuntu 25.04+). There is no static binary to download; to run a newer extractor than your distribution
+packages, build one and point `KITINERARY_EXTRACTOR_PATH` at it, or derive an image from the official one with your own
+apt sources. The extractor's version is in the startup log and in `GET /api/admin/system-info` (admin only) — worth
+checking before reporting that a provider is unsupported, since a missing vendor script and an unsupported provider
+both come back empty. `LOG_LEVEL=debug` additionally passes the extractor's raw stderr through, including the
+`JS ERROR` lines that name a failing script; it is read once at startup, so it needs a restart. The
 `GET /api/health/features` endpoint returns `{ "bookingImport": true }` when the binary is found. The Import button in
 the Reservations panel is hidden only when **neither** extractor is available — an instance running the AI Parsing
 addon still offers it with `bookingImport: false`.

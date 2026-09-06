@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TokensModule } from '../tokens/tokens.module';
 import { OauthModule } from '../oauth/oauth.module';
+import { KitineraryExtractorModule } from '../booking-import/kitinerary-extractor.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { VersionCheckJob } from './version-check.job';
@@ -24,7 +25,7 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { AppConfigModule } from '../app-config/app-config.module';
 
 @Module({
-  imports: [AppConfigModule, PluginsRuntimeModule, SettingsModule, AuditModule, AddonsModule, AuthModule, NotificationsModule, PackingModule, PermissionsModule, TokensModule, OauthModule, SchedulingModule],
+  imports: [AppConfigModule, PluginsRuntimeModule, SettingsModule, AuditModule, AddonsModule, AuthModule, NotificationsModule, PackingModule, PermissionsModule, TokensModule, OauthModule, SchedulingModule, KitineraryExtractorModule],
   controllers: [AdminController],
   providers: [AdminService, VersionCheckJob, DemoResetJob],
 })

@@ -121,6 +121,72 @@ describe('OpenAiCompatibleClient', () => {
     expect(second.messages).toEqual(first.messages);
   });
 
+  // #2262 — reasoning models (the gpt-5 family) reject any explicit temperature.
+  // temperature: 0 sat in the shared body, so it went out on every attempt
+  // including both retries, and the import could not succeed at all.
+  const TEMP_400 = { error: { message: "Unsupported value: 'temperature' does not support 0 with this model. Only the default (1) value is supported.", code: 'unsupported_value' } };
+
+  it('drops temperature when the model rejects it (400, #2262)', async () => {
+    safeFetchLlmMock
+      .mockResolvedValueOnce(jsonResponse(TEMP_400, false, 400))
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"reservations":[{"@type":"FlightReservation"}]}' } }] }));
+    const out = await new OpenAiCompatibleClient().extract(baseInput);
+    expect(out).toEqual([{ '@type': 'FlightReservation' }]);
+    expect(safeFetchLlmMock).toHaveBeenCalledTimes(2);
+
+    const first = JSON.parse((safeFetchLlmMock.mock.calls[0][1] as RequestInit).body as string);
+    const second = JSON.parse((safeFetchLlmMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(first.temperature).toBe(0);
+    expect('temperature' in second).toBe(false);
+    // Only temperature goes; the schema and the token param are untouched.
+    expect(second.response_format.type).toBe('json_schema');
+    expect(second.max_tokens).toBe(4096);
+  });
+
+  // A gpt-5 rejects both parameters, and the API names one per response. Either
+  // order has to converge, which a chain of one-shot ifs cannot do.
+  it('combines the token-param and temperature remedies, token param named first', async () => {
+    safeFetchLlmMock
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead." } }, false, 400))
+      .mockResolvedValueOnce(jsonResponse(TEMP_400, false, 400))
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"reservations":[{"@type":"FlightReservation"}]}' } }] }));
+    const out = await new OpenAiCompatibleClient().extract(baseInput);
+    expect(out).toEqual([{ '@type': 'FlightReservation' }]);
+    expect(safeFetchLlmMock).toHaveBeenCalledTimes(3);
+
+    const third = JSON.parse((safeFetchLlmMock.mock.calls[2][1] as RequestInit).body as string);
+    expect(third.max_completion_tokens).toBe(4096);
+    expect('temperature' in third).toBe(false);
+    expect(third.response_format.type).toBe('json_schema');
+  });
+
+  it('combines them the other way round too, temperature named first', async () => {
+    safeFetchLlmMock
+      .mockResolvedValueOnce(jsonResponse(TEMP_400, false, 400))
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead." } }, false, 400))
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"reservations":[{"@type":"FlightReservation"}]}' } }] }));
+    const out = await new OpenAiCompatibleClient().extract(baseInput);
+    expect(out).toEqual([{ '@type': 'FlightReservation' }]);
+    expect(safeFetchLlmMock).toHaveBeenCalledTimes(3);
+
+    const third = JSON.parse((safeFetchLlmMock.mock.calls[2][1] as RequestInit).body as string);
+    expect(third.max_completion_tokens).toBe(4096);
+    expect('temperature' in third).toBe(false);
+  });
+
+  it('keeps temperature when a 400 only mentions the word in passing', async () => {
+    safeFetchLlmMock
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'Your prompt mentions temperature but the schema is invalid' } }, false, 400))
+      .mockResolvedValueOnce(jsonResponse({ choices: [{ message: { content: '{"reservations":[]}' } }] }));
+    await new OpenAiCompatibleClient().extract(baseInput);
+
+    const second = JSON.parse((safeFetchLlmMock.mock.calls[1][1] as RequestInit).body as string);
+    // Not a parameter rejection, so it falls through to the json_object retry
+    // with deterministic sampling intact — which is what local models need.
+    expect(second.temperature).toBe(0);
+    expect(second.response_format.type).toBe('json_object');
+  });
+
   it('throws when the json_object retry also fails (400 twice)', async () => {
     safeFetchLlmMock
       .mockResolvedValueOnce(jsonResponse({ error: 'no json_schema' }, false, 400))

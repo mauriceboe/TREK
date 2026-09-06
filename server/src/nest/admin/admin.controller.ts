@@ -5,6 +5,7 @@ import { AdminService } from './admin.service';
 import { TokenService } from '../tokens/token.service';
 import { RegistrationInvitesService } from '../auth/registration-invites.service';
 import { OauthService } from '../oauth/oauth.service';
+import { KitineraryExtractorService } from '../booking-import/kitinerary-extractor.service';
 import {
   AdminUserCreateDto,
   AdminUserUpdateDto,
@@ -68,6 +69,7 @@ export class AdminController {
     private readonly tokens: TokenService,
     private readonly invites: RegistrationInvitesService,
     private readonly oauth: OauthService,
+    private readonly kitinerary: KitineraryExtractorService,
   ) {}
 
   // ── Users ──
@@ -148,6 +150,15 @@ export class AdminController {
 
   @Get('version-check')
   async versionCheck() { return this.admin.checkVersion(); }
+
+  /**
+   * Versions of the bundled tools an operator cannot see from the UI. Today the
+   * only one is the KItinerary extractor, whose age decides which booking
+   * providers parse at all — and a stale one is indistinguishable from an
+   * unsupported provider without this (#2261).
+   */
+  @Get('system-info')
+  systemInfo() { return { kitinerary: this.kitinerary.describe() }; }
 
   // ── Invites ──
   @Get('invites')
