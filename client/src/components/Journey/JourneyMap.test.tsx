@@ -1,4 +1,4 @@
-// FE-COMP-JOURNEYMAP-001 to FE-COMP-JOURNEYMAP-049
+// FE-COMP-JOURNEYMAP-001 to FE-COMP-JOURNEYMAP-050
 
 vi.mock('../../api/websocket', () => ({
   connect: vi.fn(),
@@ -27,6 +27,10 @@ vi.mock('leaflet', () => {
     setView: vi.fn(),
     flyTo: vi.fn(),
     getZoom: vi.fn(() => 10),
+    // Leaflet throws "Set map center and zoom first." out of these until the map
+    // has a view; the loaded map is the default here, FE-COMP-JOURNEYMAP-050
+    // takes it away for the window that #2254 fell into.
+    getCenter: vi.fn(() => ({ lat: 0, lng: 0 })),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     // The photo layer subscribes to zoom/pan and clusters in screen space (#1614).
@@ -58,6 +62,7 @@ import { render, act, fireEvent, waitFor } from '../../../tests/helpers/render';
 import { resetAllStores, seedStore } from '../../../tests/helpers/store';
 import { useSettingsStore } from '../../store/settingsStore';
 import { buildSettings } from '../../../tests/helpers/factories';
+import type { Mock } from 'vitest';
 import L from 'leaflet';
 import JourneyMap from './JourneyMap';
 import type { JourneyMapHandle } from './JourneyMap';
@@ -692,5 +697,48 @@ describe('JourneyMap', () => {
     const html = vi.mocked(L.divIcon).mock.calls.map(c => String(c[0]?.html)).filter(h => h.includes('/uploads/'));
     expect(html).toHaveLength(1);
     expect(html[0]).not.toMatch(/>\d+</);
+  });
+
+  // #2254 — the map effect defers its opening fitBounds/setView to a rAF, so this
+  // effect can draw while the map still has no center or zoom. Clustering
+  // projects to container pixels, which throws in that window and took the whole
+  // public journey page down with it.
+  it('FE-COMP-JOURNEYMAP-050: waits out a map that has no view yet, then draws on moveend', () => {
+    const noView = () => { throw new Error('Set map center and zoom first.'); };
+    let hasView = false;
+    const photoHtml = () =>
+      vi.mocked(L.divIcon).mock.calls.map(c => String(c[0]?.html)).filter(h => h.includes('/uploads/'));
+
+    // The mock hands out one shared map instance, so it can be reached — and
+    // stripped of its view — before the component ever builds one. Typed down to
+    // the three spies this needs: L.map's signature promises a real Leaflet map.
+    type MapProbe = { getCenter: Mock; latLngToContainerPoint: Mock; on: Mock };
+    L.map(document.createElement('div'));
+    const map = mockedMap() as MapProbe;
+    vi.mocked(L.map).mockClear();
+    map.getCenter.mockImplementation(() => (hasView ? { lat: 0, lng: 0 } : noView()));
+    map.latLngToContainerPoint.mockImplementation(() => (hasView ? { x: 0, y: 0 } : noView()));
+
+    try {
+      // Rendering must survive the viewless window, and draw nothing in it.
+      expect(() =>
+        render(
+          <JourneyMap checkins={[]} entries={[]} photos={[{ id: 'p1', lat: 1, lng: 2, thumbUrl: '/uploads/late.jpg' }]} />,
+        ),
+      ).not.toThrow();
+      expect(photoHtml()).toHaveLength(0);
+
+      // The deferred fitBounds lands: the listener this effect registered redraws.
+      hasView = true;
+      const redraw = map.on.mock.calls.find(c => c[0] === 'moveend')?.[1] as () => void;
+      expect(redraw).toBeTypeOf('function');
+      act(() => { redraw(); });
+
+      expect(photoHtml()).toHaveLength(1);
+      expect(photoHtml()[0]).toContain('/uploads/late.jpg');
+    } finally {
+      map.getCenter.mockImplementation(() => ({ lat: 0, lng: 0 }));
+      map.latLngToContainerPoint.mockImplementation(() => ({ x: 0, y: 0 }));
+    }
   });
 });
