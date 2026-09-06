@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Место',
   'mobileTrip.addToDayQuestion': 'Добавить в день?',
   'mobileTrip.addTransportShort': 'Транспорт',
+  'mobileTrip.allDays': 'Все дни',
   'mobileTrip.assignedDays': 'Назначенные дни',
   'mobileTrip.assignmentNotes': 'Заметки на день',
   'mobileTrip.bookingsEmpty': 'Пока нет бронирований',
