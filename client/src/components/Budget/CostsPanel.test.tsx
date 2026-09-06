@@ -312,7 +312,7 @@ describe('CostsPanel — settlements in the ledger', () => {
     // "Your share" is the first of the two bold figures in the Total spend card's
     // footer; the second is "You paid". 60 from the paid expense only — the 40
     // nobody has paid for is not a share, though it still counts as spend.
-    const card = screen.getByText('Total spend').closest('div[style*="border-radius: 22"]')!
+    const card = screen.getByText('Total trip spend').closest('div[style*="border-radius: 22"]')!
     const figures = [...card.querySelectorAll('b')].map(b => b.textContent ?? '')
     expect(figures[0]).toContain('60')
     expect(figures[0]).not.toContain('100')
