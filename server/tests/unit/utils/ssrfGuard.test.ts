@@ -431,7 +431,10 @@ describe('safeFetchFollow (manual per-hop redirect SSRF)', () => {
     it('leaves a GET alone on a 301', async () => {
       const mockFetch = twoHops('https://start.example/b', 301);
       await safeFetchFollow('https://start.example/a', { headers: { 'User-Agent': 'TREK' } });
-      expect(mockFetch.mock.calls[1][1]).toMatchObject({ method: undefined });
+      // No downgrade to apply: the request was already a GET, so the init keeps
+      // its shape and the caller's own header rides along.
+      expect((mockFetch.mock.calls[1][1] as RequestInit).method).toBeUndefined();
+      expect((mockFetch.mock.calls[1][1] as RequestInit).body).toBeUndefined();
       expect(headerOf(mockFetch.mock.calls[1], 'user-agent')).toBe('TREK');
     });
 
