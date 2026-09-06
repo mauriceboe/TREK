@@ -1,6 +1,6 @@
 {
   "name": "@trek/server",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "main": "src/index.ts",
   "scripts": {
     "start": "node --require tsconfig-paths/register dist/index.js",
