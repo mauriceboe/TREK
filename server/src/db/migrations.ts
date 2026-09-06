@@ -4257,6 +4257,24 @@ function runMigrations(db: Database.Database): void {
         db.exec('ALTER TABLE journey_entries ADD COLUMN stats_excluded INTEGER NOT NULL DEFAULT 0');
       }
     },
+    () => {
+      try {
+        db.exec('ALTER TABLE trip_files ADD COLUMN message_id INTEGER REFERENCES collab_messages(id) ON DELETE CASCADE');
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column name')) throw err;
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_trip_files_message_id ON trip_files(message_id)');
+    },
+    () => {
+      db.exec(`CREATE TABLE IF NOT EXISTS collab_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL, url TEXT NOT NULL, pinned INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_collab_links_trip ON collab_links(trip_id)');
+    },
   ];
 
   if (currentVersion < migrations.length) {

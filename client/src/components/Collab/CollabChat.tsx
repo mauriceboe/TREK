@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { ArrowUp, Reply, Smile, X } from 'lucide-react'
+import { ArrowUp, ImagePlus, Reply, Smile, X } from 'lucide-react'
 import type { User } from '../../types'
 import { useCollabChat } from './useCollabChat'
 import { ChatMessages } from './CollabChatMessages'
@@ -14,7 +14,7 @@ interface CollabChatProps {
 
 export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
   const S = useCollabChat(tripId, currentUser)
-  const { t, is12h, can, trip, canEdit, messages, setMessages, loading, setLoading, hasMore, setHasMore, loadingMore, setLoadingMore, text, setText, replyTo, setReplyTo, hoveredId, setHoveredId, sending, setSending, showEmoji, setShowEmoji, reactMenu, setReactMenu, deletingIds, setDeletingIds, deleteTimersRef, containerRef, messagesRef, scrollRef, textareaRef, emojiBtnRef, isAtBottom, scrollToBottom, checkAtBottom, handleLoadMore, handleTextChange, handleSend, handleKeyDown, handleDelete, handleReact, handleEmojiSelect, isOwn, isEmojiOnly } = S
+  const { t, canEdit, loading, text, replyTo, setReplyTo, sending, showEmoji, setShowEmoji, reactMenu, setReactMenu, containerRef, textareaRef, emojiBtnRef, imageInputRef, imageFiles, imagePreviews, uploadProgress, addImageFiles, removeImage, handlePaste, handleDrop, handleTextChange, handleSend, handleKeyDown, handleReact, handleEmojiSelect } = S
   if (loading) {
     return (
       <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -27,7 +27,7 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0, height: '100%' }}>
       <ChatMessages {...S} />
       {/* Composer */}
-      <div style={{ flexShrink: 0, paddingTop: 8, paddingLeft: 12, paddingRight: 12, borderTop: '1px solid var(--border-faint)' }} className="pb-3 bg-surface-card">
+      <div onDragOver={e => e.preventDefault()} onDrop={handleDrop} style={{ flexShrink: 0, paddingTop: 8, paddingLeft: 12, paddingRight: 12, borderTop: '1px solid var(--border-faint)' }} className="pb-3 bg-surface-card">
         {/* Reply preview */}
         {replyTo && (
           <div style={{
@@ -48,6 +48,8 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
           </div>
         )}
 
+        {imagePreviews.length > 0 && <div style={{ display: 'flex', gap: 8, marginBottom: 8, overflowX: 'auto' }}>{imagePreviews.map((url, i) => <div key={url} style={{ position: 'relative' }}><img src={url} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8 }} /><button type="button" onClick={() => removeImage(i)} aria-label="Remove image" style={{ position: 'absolute', top: -6, right: -6, border: 0, borderRadius: '50%', background: 'var(--text-primary)', color: 'var(--bg-primary)', width: 18, height: 18, cursor: 'pointer' }}>×</button></div>)}</div>}
+        {uploadProgress > 0 && uploadProgress < 100 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Uploading {uploadProgress}%</div>}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
           {/* Emoji button */}
           {canEdit && (
@@ -60,6 +62,8 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
               <Smile size={20} />
             </button>
           )}
+
+          {canEdit && <><input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden onChange={e => { if (e.target.files) addImageFiles(e.target.files); e.currentTarget.value = '' }} /><button type="button" onClick={() => imageInputRef.current?.click()} aria-label="Attach images" style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}><ImagePlus size={19} /></button></>}
 
           <textarea
             ref={textareaRef}
@@ -76,15 +80,16 @@ export default function CollabChat({ tripId, currentUser }: CollabChatProps) {
             value={text}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
           />
 
           {/* Send */}
           {canEdit && (
-            <button type="button" onClick={handleSend} disabled={!text.trim() || sending} style={{
+            <button type="button" onClick={handleSend} disabled={(!text.trim() && !imageFiles.length) || sending} style={{
               width: 34, height: 34, borderRadius: '50%', border: 'none',
-              background: text.trim() ? '#007AFF' : 'var(--border-primary)',
+              background: text.trim() || imageFiles.length ? '#007AFF' : 'var(--border-primary)',
               color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: text.trim() ? 'pointer' : 'default', flexShrink: 0,
+              cursor: text.trim() || imageFiles.length ? 'pointer' : 'default', flexShrink: 0,
               transition: 'background 0.15s',
             }}>
               <ArrowUp size={18} strokeWidth={2.5} />

@@ -3,6 +3,7 @@ import { Trash2, Reply, ChevronUp } from 'lucide-react'
 import { URL_REGEX } from './CollabChat.constants'
 import { formatTime, formatDateSeparator, shouldShowDateSeparator } from './CollabChat.helpers'
 import { MessageText } from './CollabChatMessageText'
+import { CollabChatAttachment } from './CollabChatAttachment'
 import { LinkPreview } from './CollabChatLinkPreview'
 import { ReactionBadge } from './CollabChatReactionBadge'
 import EmptyState from '../shared/EmptyState'
@@ -166,6 +167,7 @@ export function ChatMessages(props: any) {
                           {hasReply ? (
                             <div style={{ padding: '0 10px 4px' }}><MessageText text={msg.text} /></div>
                           ) : <MessageText text={msg.text} />}
+                          {msg.attachments?.map((attachment: any) => <CollabChatAttachment key={attachment.id} attachment={attachment} />)}
                           {(msg.text.match(URL_REGEX) || []).slice(0, 1).map(url => (
                             <LinkPreview key={url} url={url} tripId={tripId} own={own} onLoad={() => { if (isAtBottom.current) setTimeout(() => scrollToBottom('smooth'), 50) }} />
                           ))}

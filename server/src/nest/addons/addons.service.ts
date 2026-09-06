@@ -49,7 +49,7 @@ export class AddonsService {
   getCollabFeatures() {
     const rows = this.db
       .prepare(
-        "SELECT key, value FROM app_settings WHERE key IN ('collab_chat_enabled', 'collab_notes_enabled', 'collab_polls_enabled', 'collab_whatsnext_enabled')",
+        "SELECT key, value FROM app_settings WHERE key IN ('collab_chat_enabled', 'collab_notes_enabled', 'collab_links_enabled', 'collab_polls_enabled', 'collab_whatsnext_enabled')",
       )
       .all() as { key: string; value: string }[];
     const map: Record<string, string> = {};
@@ -57,15 +57,17 @@ export class AddonsService {
     return {
       chat: map['collab_chat_enabled'] !== 'false',
       notes: map['collab_notes_enabled'] !== 'false',
+      links: map['collab_links_enabled'] !== 'false',
       polls: map['collab_polls_enabled'] !== 'false',
       whatsnext: map['collab_whatsnext_enabled'] !== 'false',
     };
   }
 
-  updateCollabFeatures(features: { chat?: boolean; notes?: boolean; polls?: boolean; whatsnext?: boolean }) {
+  updateCollabFeatures(features: { chat?: boolean; notes?: boolean; links?: boolean; polls?: boolean; whatsnext?: boolean }) {
     const mapping: Record<string, string> = {
       chat: 'collab_chat_enabled',
       notes: 'collab_notes_enabled',
+      links: 'collab_links_enabled',
       polls: 'collab_polls_enabled',
       whatsnext: 'collab_whatsnext_enabled',
     };

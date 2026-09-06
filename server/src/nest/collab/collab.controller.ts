@@ -11,10 +11,11 @@ import {
   Put,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Options } from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -26,6 +27,8 @@ import {
   CollabNoteUpdateDto,
   CollabPollCreateDto,
   CollabPollVoteDto,
+  CollabLinkCreateDto,
+  CollabLinkUpdateDto,
   CollabMessageCreateDto,
   CollabReactionDto,
 } from './collab.dto';
@@ -35,6 +38,16 @@ import { RequirePermission, TripAccessGuard } from '../permissions/trip-access.g
 import { BLOCKED_EXTENSIONS } from '../files/files.constants';
 
 export const MAX_NOTE_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_CHAT_IMAGES = 4;
+const CHAT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+export const collabChatImageFilter: Options['fileFilter'] = (_req, file, cb) => {
+  if (!CHAT_IMAGE_TYPES.has(file.mimetype)) {
+    const err: Error & { statusCode?: number } = new Error('Only JPEG, PNG, GIF, and WebP images are allowed');
+    err.statusCode = 400;
+    return cb(err);
+  }
+  cb(null, true);
+};
 // Consumed by collab.module.ts's MulterModule factory; the rest of the multer
 // options (spool destination, filename, limits) come from the storage upload
 // factory.
@@ -189,6 +202,45 @@ export class CollabController {
     return { success: true };
   }
 
+  // ── Shared links ────────────────────────────────────────────────────────
+  @UseGuards(TripAccessGuard)
+  @Get('links')
+  listLinks(@CurrentUser() user: User, @Param('tripId') tripId: string) {
+    return { links: this.collab.listLinks(tripId) };
+  }
+
+  @UseGuards(TripAccessGuard)
+  @RequirePermission('collab_edit')
+  @Post('links')
+  createLink(@CurrentUser() user: User, @Param('tripId') tripId: string, @Body() body: CollabLinkCreateDto, @Headers('x-socket-id') socketId?: string) {
+    const link = this.collab.createLink(tripId, user.id, { title: body.title, url: body.url, pinned: Boolean(body.pinned) });
+    this.collab.broadcast(tripId, 'collab:link:created', { link }, socketId);
+    return { link };
+  }
+
+  @UseGuards(TripAccessGuard)
+  @RequirePermission('collab_edit')
+  @Put('links/:id')
+  updateLink(@CurrentUser() user: User, @Param('tripId') tripId: string, @Param('id') id: string, @Body() body: CollabLinkUpdateDto, @Headers('x-socket-id') socketId?: string) {
+    const link = this.collab.updateLink(tripId, id, {
+      title: body.title,
+      url: body.url,
+      pinned: body.pinned === undefined ? undefined : Boolean(body.pinned),
+    });
+    if (!link) throw new HttpException({ error: 'Link not found' }, 404);
+    this.collab.broadcast(tripId, 'collab:link:updated', { link }, socketId);
+    return { link };
+  }
+
+  @UseGuards(TripAccessGuard)
+  @RequirePermission('collab_edit')
+  @Delete('links/:id')
+  deleteLink(@CurrentUser() user: User, @Param('tripId') tripId: string, @Param('id') id: string, @Headers('x-socket-id') socketId?: string) {
+    if (!this.collab.deleteLink(tripId, id)) throw new HttpException({ error: 'Link not found' }, 404);
+    this.collab.broadcast(tripId, 'collab:link:deleted', { linkId: Number(id) }, socketId);
+    return { success: true };
+  }
+
   // ── Polls ───────────────────────────────────────────────────────────────
   @UseGuards(TripAccessGuard)
   @Get('polls')
@@ -257,20 +309,50 @@ export class CollabController {
   @UseGuards(TripAccessGuard)
   @RequirePermission('collab_edit')
   @Post('messages')
-  createMessage(@CurrentUser() user: User, @Param('tripId') tripId: string, @Body() body: CollabMessageCreateDto, @Headers('x-socket-id') socketId?: string) {
-    // The pipe's min(1)/max(5000) replaced the bespoke length checks (and still
-    // rejects before the trip-access check, like the legacy pre-access check
-    // did); min(1) doesn't trim, so whitespace-only text keeps its bespoke 400.
-    if (!body.text.trim()) {
-      throw new HttpException({ error: 'Message text is required' }, 400);
+  @UseInterceptors(FilesInterceptor('images', MAX_CHAT_IMAGES, { fileFilter: collabChatImageFilter, limits: { files: MAX_CHAT_IMAGES, fileSize: 10 * 1024 * 1024 } }))
+  async createMessage(@CurrentUser() user: User, @Param('tripId') tripId: string, @Body() body: CollabMessageCreateDto, @UploadedFiles() files: Express.Multer.File[] | undefined, @Headers('x-socket-id') socketId?: string) {
+    const uploaded = files || [];
+    const cleanupSpool = () => uploaded.forEach(file => { if (file.path) { try { fs.unlinkSync(file.path); } catch { /* best-effort */ } } });
+    if (body.text && body.text.length > 5000) {
+      cleanupSpool();
+      throw new HttpException({ error: 'text must be 5000 characters or less' }, 400);
     }
-    const result = this.collab.createMessage(tripId, user.id, body.text, body.reply_to);
+    const trip = this.requireTrip(tripId, user);
+    if (uploaded.length && !this.collab.canUploadFiles(trip, user)) {
+      cleanupSpool();
+      throw new HttpException({ error: 'No permission to upload files' }, 403);
+    }
+    const text = (body.text || '').trim();
+    if (!text && !uploaded.length) {
+      cleanupSpool();
+      throw new HttpException({ error: 'Message text or image is required' }, 400);
+    }
+    const committed: string[] = [];
+    try {
+      for (const file of uploaded) {
+        await this.storage.put('files', file.filename, { tmpPath: file.path });
+        committed.push(file.filename);
+      }
+    } catch (err) {
+      cleanupSpool();
+      for (const name of committed) await this.storage.delete('files', name).catch(() => {});
+      throw err;
+    }
+    const replyTo = body.reply_to === undefined || body.reply_to === '' || body.reply_to === null ? null : Number(body.reply_to);
+    const result = this.collab.createMessage(
+      tripId,
+      user.id,
+      text,
+      Number.isFinite(replyTo as number) ? replyTo : null,
+      uploaded.map(file => ({ filename: file.filename, originalname: file.originalname, size: file.size, mimetype: file.mimetype })),
+    );
     if (result.error === 'reply_not_found') {
+      for (const name of committed) await this.storage.delete('files', name).catch(() => {});
       throw new HttpException({ error: 'Reply target message not found' }, 400);
     }
     this.collab.broadcast(tripId, 'collab:message:created', { message: result.message }, socketId);
-    const t = body.text.trim();
-    this.collab.notifyCollab(tripId, user, t.length > 80 ? t.substring(0, 80) + '...' : t);
+    const preview = text || 'sent an image';
+    this.collab.notifyCollab(tripId, user, preview.length > 80 ? preview.substring(0, 80) + '...' : preview);
     return { message: result.message };
   }
 

@@ -702,6 +702,8 @@ export default function PluginFrame({ pluginId, tripId = null, placeId = null, d
           }}
           onError={() => setLoadFailed(true)}
           sandbox="allow-scripts allow-forms"
+          allowFullScreen
+          allow="fullscreen"
           referrerPolicy="no-referrer"
           loading="lazy"
           title={title || pluginId}

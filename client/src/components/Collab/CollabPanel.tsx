@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useTranslation } from '../../i18n'
-import { MessageCircle, StickyNote, BarChart3, Sparkles } from 'lucide-react'
+import { MessageCircle, StickyNote, Link2, BarChart3, Sparkles } from 'lucide-react'
 import CollabChat from './CollabChat'
 import CollabNotes from './CollabNotes'
 import CollabPolls from './CollabPolls'
 import WhatsNextWidget from './WhatsNextWidget'
+import CollabLinks from './CollabLinks'
 
 function useIsDesktop(breakpoint = 1024) {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= breakpoint)
@@ -28,6 +29,7 @@ interface TripMember {
 interface CollabFeatures {
   chat: boolean
   notes: boolean
+  links?: boolean
   polls: boolean
   whatsnext: boolean
 }
@@ -39,10 +41,11 @@ interface CollabPanelProps {
 }
 
 const ALL_TABS = [
-  { id: 'chat', featureKey: 'chat' as const, labelKey: 'collab.tabs.chat', icon: MessageCircle },
-  { id: 'notes', featureKey: 'notes' as const, labelKey: 'collab.tabs.notes', icon: StickyNote },
-  { id: 'polls', featureKey: 'polls' as const, labelKey: 'collab.tabs.polls', icon: BarChart3 },
-  { id: 'next', featureKey: 'whatsnext' as const, labelKey: 'collab.whatsNext.title', icon: Sparkles },
+  { id: 'chat', featureKey: 'chat' as const, labelKey: 'collab.tabs.chat', fallback: 'Chat', icon: MessageCircle },
+  { id: 'notes', featureKey: 'notes' as const, labelKey: 'collab.tabs.notes', fallback: 'Notes', icon: StickyNote },
+  { id: 'links', featureKey: 'links' as const, labelKey: 'collab.tabs.links', fallback: 'Links', icon: Link2 },
+  { id: 'polls', featureKey: 'polls' as const, labelKey: 'collab.tabs.polls', fallback: 'Polls', icon: BarChart3 },
+  { id: 'next', featureKey: 'whatsnext' as const, labelKey: 'collab.whatsNext.title', fallback: "What's Next", icon: Sparkles },
 ]
 
 export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }: CollabPanelProps) {
@@ -50,12 +53,14 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
   const { t } = useTranslation()
   const isDesktop = useIsDesktop()
 
-  const features = collabFeatures || { chat: true, notes: true, polls: true, whatsnext: true }
+  // Older server/admin configs predate the Links feature; merge defaults so a
+  // missing `links` key does not silently hide the new panel.
+  const features = { chat: true, notes: true, links: true, polls: true, whatsnext: true, ...(collabFeatures || {}) }
 
   const tabs = useMemo(() =>
     ALL_TABS.filter(tab => features[tab.featureKey]).map(tab => ({
       ...tab,
-      label: t(tab.labelKey),
+      label: t(tab.labelKey) || tab.fallback,
     })),
   [features, t])
 
@@ -70,7 +75,7 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
 
   const chatOn = features.chat
   const rightPanels = [
-    features.notes && 'notes',
+    features.notes && 'notes', features.links && 'links',
     features.polls && 'polls',
     features.whatsnext && 'whatsnext',
   ].filter(Boolean) as string[]
@@ -102,32 +107,33 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
             {rightPanels.length === 1 && (
               <div className={cardClass} style={{ flex: 1 }}>
                 {rightPanels[0] === 'notes' && <CollabNotes tripId={tripId} currentUser={user} />}
+                {rightPanels[0] === 'links' && <CollabLinks tripId={tripId} />}
                 {rightPanels[0] === 'polls' && <CollabPolls tripId={tripId} currentUser={user} />}
                 {rightPanels[0] === 'whatsnext' && <WhatsNextWidget tripMembers={tripMembers} />}
               </div>
             )}
-            {rightPanels.length === 2 && rightPanels.map(p => (
-              <div key={p} className={cardClass} style={{ flex: 1 }}>
+            {rightPanels.length === 2 && <div style={{ flex: 1, display: 'flex', gap: 12, minHeight: 0 }}>
+              {rightPanels.map(p => (
+              <div key={p} className={cardClass} style={{ flex: 1, minWidth: 0 }}>
                 {p === 'notes' && <CollabNotes tripId={tripId} currentUser={user} />}
+                {p === 'links' && <CollabLinks tripId={tripId} />}
                 {p === 'polls' && <CollabPolls tripId={tripId} currentUser={user} />}
                 {p === 'whatsnext' && <WhatsNextWidget tripMembers={tripMembers} />}
               </div>
-            ))}
-            {rightPanels.length === 3 && (
-              <>
-                <div className={cardClass} style={{ flex: 1 }}>
-                  <CollabNotes tripId={tripId} currentUser={user} />
-                </div>
-                <div style={{ flex: 1, display: 'flex', gap: 12, overflow: 'hidden', minHeight: 0 }}>
-                  <div className={cardClass} style={{ flex: 1 }}>
-                    <CollabPolls tripId={tripId} currentUser={user} />
-                  </div>
-                  <div className={cardClass} style={{ flex: 1 }}>
-                    <WhatsNextWidget tripMembers={tripMembers} />
-                  </div>
-                </div>
-              </>
-            )}
+              ))}
+            </div>}
+            {rightPanels.length >= 3 && <>
+              {rightPanels.includes('notes') && rightPanels.includes('links') && <div style={{ flex: 1, display: 'flex', gap: 12, minHeight: 0 }}>
+                <div className={cardClass} style={{ flex: 1, minWidth: 0 }}><CollabNotes tripId={tripId} currentUser={user} /></div>
+                <div className={cardClass} style={{ flex: 1, minWidth: 0 }}><CollabLinks tripId={tripId} /></div>
+              </div>}
+              <div style={{ flex: 1, display: 'flex', gap: 12, minHeight: 0 }}>
+                {rightPanels.filter(p => !(p === 'notes' || p === 'links')).map(p => <div key={p} className={cardClass} style={{ flex: 1, minWidth: 0 }}>
+                  {p === 'polls' && <CollabPolls tripId={tripId} currentUser={user} />}
+                  {p === 'whatsnext' && <WhatsNextWidget tripMembers={tripMembers} />}
+                </div>)}
+              </div>
+            </>}
           </div>
         </div>
       )
@@ -140,6 +146,7 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
         <div style={{ height: '100%', display: 'flex', gap: 12, padding: 12, overflow: 'hidden', minHeight: 0 }}>
           <div className={cardClass} style={{ flex: 1 }}>
             {panels[0] === 'notes' && <CollabNotes tripId={tripId} currentUser={user} />}
+            {panels[0] === 'links' && <CollabLinks tripId={tripId} />}
             {panels[0] === 'polls' && <CollabPolls tripId={tripId} currentUser={user} />}
             {panels[0] === 'whatsnext' && <WhatsNextWidget tripMembers={tripMembers} />}
           </div>
@@ -152,6 +159,7 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
         {panels.map(p => (
           <div key={p} className={cardClass} style={{ flex: 1 }}>
             {p === 'notes' && <CollabNotes tripId={tripId} currentUser={user} />}
+            {p === 'links' && <CollabLinks tripId={tripId} />}
             {p === 'polls' && <CollabPolls tripId={tripId} currentUser={user} />}
             {p === 'whatsnext' && <WhatsNextWidget tripMembers={tripMembers} />}
           </div>
@@ -170,7 +178,7 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
         {tabs.map(tab => {
           const active = mobileTab === tab.id
           return (
-            <button type="button" key={tab.id} onClick={() => setMobileTab(tab.id)} style={{
+            <button key={tab.id} onClick={() => setMobileTab(tab.id)} style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               padding: '8px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
               background: active ? 'var(--accent)' : 'transparent',
@@ -187,6 +195,7 @@ export default function CollabPanel({ tripId, tripMembers = [], collabFeatures }
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
         {mobileTab === 'chat' && features.chat && <CollabChat tripId={tripId} currentUser={user} />}
         {mobileTab === 'notes' && features.notes && <CollabNotes tripId={tripId} currentUser={user} />}
+        {mobileTab === 'links' && features.links && <CollabLinks tripId={tripId} />}
         {mobileTab === 'polls' && features.polls && <CollabPolls tripId={tripId} currentUser={user} />}
         {mobileTab === 'next' && features.whatsnext && <WhatsNextWidget tripMembers={tripMembers} />}
       </div>
