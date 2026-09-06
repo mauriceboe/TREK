@@ -201,11 +201,16 @@ export class PluginOAuthService {
     // pinning the connection to the resolved IP, so a token_url that is a DNS name
     // (or IPv6 literal) pointing at metadata can't reach it and can't DNS-rebind.
     // Loopback/LAN stay reachable so a self-hosted internal IdP keeps working.
+    // maxRedirects 0, same as the OIDC twin: following one would hand
+    // client_secret to a second host, and a token endpoint has no legitimate
+    // reason to redirect. The timeout is not optional either — without it a
+    // hanging provider pins the request handler open indefinitely.
     const resp = await safeFetchAdminConfigured(cfg.tokenUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body: body.toString(),
-    });
+      signal: AbortSignal.timeout(15000),
+    }, 0);
     if (!resp.ok) throw new Error(`token endpoint returned ${resp.status}`);
     const json = (await resp.json()) as Record<string, unknown>;
     return {
