@@ -210,7 +210,7 @@ describe('MReservationSheet', () => {
       reservation_time: null, reservation_end_time: null,
       location: '', confirmation_number: '', notes: '', url: '',
       assignment_id: null, accommodation_id: null, place_id: null,
-      metadata: null, endpoints: [], needs_review: false,
+      metadata: {}, endpoints: [], needs_review: false,
     })
   })
 
@@ -447,7 +447,7 @@ describe('MReservationSheet', () => {
     setup(makePlanner({
       editingReservation: {
         id: 57, title: 'Museum', type: undefined, status: undefined,
-        reservation_time: null, reservation_end_time: null, metadata: null,
+        reservation_time: null, reservation_end_time: null, metadata: {},
       } as unknown as Reservation,
     }))
     expect(titleField()).toHaveValue('Museum')
