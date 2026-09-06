@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Somma delle quote: {sum} di {total} (mancano {diff})',
   'costs.splitSumOver': 'Somma delle quote: {sum} di {total} ({diff} in più)',
   'costs.toggleSign': 'Passa da spesa a rimborso',
+  'costs.receipts': 'Ricevute',
+  'costs.receiptsTitle': 'Ricevute e fatture',
+  'costs.attachReceipt': 'Allega ricevuta / fattura',
+  'costs.noReceipts': 'Nessuna ricevuta allegata',
+  'costs.deleteReceipt': 'Rimuovi ricevuta',
+  'costs.viewReceipt': 'Visualizza ricevuta',
 };
 export default budget;

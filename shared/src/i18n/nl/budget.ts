@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Som van de delen: {sum} van {total} ({diff} te weinig)',
   'costs.splitSumOver': 'Som van de delen: {sum} van {total} ({diff} te veel)',
   'costs.toggleSign': 'Wisselen tussen uitgave en terugbetaling',
+  'costs.receipts': 'Bonnetjes',
+  'costs.receiptsTitle': 'Bonnetjes & facturen',
+  'costs.attachReceipt': 'Bon / factuur bijvoegen',
+  'costs.noReceipts': 'Geen bonnetjes bijgevoegd',
+  'costs.deleteReceipt': 'Bonnetje verwijderen',
+  'costs.viewReceipt': 'Bonnetje bekijken',
 };
 export default budget;

@@ -108,6 +108,25 @@ describe('FilesController (parity with the legacy /api/trips/:tripId/files route
       expect(await rejected(fc(fsvc({ can: vi.fn().mockReturnValue(false) })).upload(user, '5', withPath, {}))).toEqual({ status: 403, body: { error: 'No permission to upload files' } });
     });
 
+    it('passes budget_item_id to assertLinkTargets and createFile on upload, rejecting foreign targets', async () => {
+      const file = { filename: 'a.pdf' } as Express.Multer.File;
+      const rejectSvc = fsvc({ findForeignLinkTarget: vi.fn().mockReturnValue('budget_item_id') });
+      expect(await rejected(fc(rejectSvc).upload(user, '5', file, { budget_item_id: '99' }))).toEqual({
+        status: 400,
+        body: { error: 'Linked item does not belong to this trip' },
+      });
+
+      const createFile = vi.fn().mockReturnValue({ id: 10 });
+      const okSvc = fsvc({ createFile, broadcast: vi.fn() });
+      await fc(okSvc).upload(user, '5', file, { budget_item_id: '12' });
+      expect(createFile).toHaveBeenCalledWith('5', file, 1, {
+        place_id: undefined,
+        description: undefined,
+        reservation_id: undefined,
+        budget_item_id: '12',
+      });
+    });
+
     it('500 with cleanup when the storage commit fails', async () => {
       vi.mocked(storageStub.put).mockRejectedValueOnce(new Error('disk full'));
       const withPath = { filename: 'a.pdf', path: '/nonexistent/zzz.pdf' } as Express.Multer.File;
@@ -121,6 +140,31 @@ describe('FilesController (parity with the legacy /api/trips/:tripId/files route
     const updateFile = vi.fn().mockReturnValue({ id: 9 });
     const s = fsvc({ getFileById: vi.fn().mockReturnValue({ id: 9, description: 'x' }), updateFile, broadcast: vi.fn() } as Partial<FilesService>);
     expect(fc(s).update(user, trip, '5', '9', { description: 'new' })).toEqual({ file: { id: 9 } });
+  });
+
+  it('passes budget_item_id to assertLinkTargets and updateFile on update, rejecting foreign targets', () => {
+    const rejectSvc = fsvc({
+      getFileById: vi.fn().mockReturnValue({ id: 9 }),
+      findForeignLinkTarget: vi.fn().mockReturnValue('budget_item_id'),
+    });
+    expect(thrown(() => fc(rejectSvc).update(user, trip, '5', '9', { budget_item_id: '99' }))).toEqual({
+      status: 400,
+      body: { error: 'Linked item does not belong to this trip' },
+    });
+
+    const updateFile = vi.fn().mockReturnValue({ id: 9 });
+    const okSvc = fsvc({
+      getFileById: vi.fn().mockReturnValue({ id: 9 }),
+      updateFile,
+      broadcast: vi.fn(),
+    });
+    fc(okSvc).update(user, trip, '5', '9', { budget_item_id: '12' });
+    expect(updateFile).toHaveBeenCalledWith('9', { id: 9 }, {
+      description: undefined,
+      place_id: undefined,
+      reservation_id: undefined,
+      budget_item_id: '12',
+    });
   });
 
   it('PATCH /:id/star 403/404, else toggles', () => {

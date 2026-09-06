@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'مجموع الحصص: {sum} من {total} (ناقص {diff})',
   'costs.splitSumOver': 'مجموع الحصص: {sum} من {total} (زائد {diff})',
   'costs.toggleSign': 'التبديل بين المصروف والاسترداد',
+  'costs.receipts': 'الإيصالات',
+  'costs.receiptsTitle': 'الإيصالات والفواتير',
+  'costs.attachReceipt': 'إرفاق إيصال / فاتورة',
+  'costs.noReceipts': 'لا توجد إيصالات مرفقة',
+  'costs.deleteReceipt': 'حذف الإيصال',
+  'costs.viewReceipt': 'عرض الإيصال',
 };
 export default budget;

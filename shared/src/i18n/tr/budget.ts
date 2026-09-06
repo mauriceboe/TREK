@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Payların toplamı: {total} tutarın {sum} kadarı ({diff} eksik)',
   'costs.splitSumOver': 'Payların toplamı: {total} tutarın {sum} kadarı ({diff} fazla)',
   'costs.toggleSign': 'Gider ve iade arasında geçiş yap',
+  'costs.receipts': 'Fişler',
+  'costs.receiptsTitle': 'Fişler ve Faturalar',
+  'costs.attachReceipt': 'Fiş / fatura ekle',
+  'costs.noReceipts': 'Ekli fiş yok',
+  'costs.deleteReceipt': 'Fişi kaldır',
+  'costs.viewReceipt': 'Fişi görüntüle',
 };
 export default budget;

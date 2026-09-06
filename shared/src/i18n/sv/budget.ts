@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Summan av delarna: {sum} av {total} ({diff} saknas)',
   'costs.splitSumOver': 'Summan av delarna: {sum} av {total} ({diff} för mycket)',
   'costs.toggleSign': 'Växla mellan utgift och återbetalning',
+  'costs.receipts': 'Kvitton',
+  'costs.receiptsTitle': 'Kvitton & fakturor',
+  'costs.attachReceipt': 'Bifoga kvitto / faktura',
+  'costs.noReceipts': 'Inga bifogade kvitton',
+  'costs.deleteReceipt': 'Ta bort kvitto',
+  'costs.viewReceipt': 'Visa kvitto',
 };
 export default budget;

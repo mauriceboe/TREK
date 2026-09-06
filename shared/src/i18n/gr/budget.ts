@@ -148,5 +148,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Άθροισμα μεριδίων: {sum} από {total} (λείπουν {diff})',
   'costs.splitSumOver': 'Άθροισμα μεριδίων: {sum} από {total} ({diff} παραπάνω)',
   'costs.toggleSign': 'Εναλλαγή μεταξύ εξόδου και επιστροφής',
+  'costs.receipts': 'Αποδείξεις',
+  'costs.receiptsTitle': 'Αποδείξεις & Τιμολόγια',
+  'costs.attachReceipt': 'Επισύναψη απόδειξης / τιμολογίου',
+  'costs.noReceipts': 'Δεν υπάρχουν συνημμένες αποδείξεις',
+  'costs.deleteReceipt': 'Αφαίρεση απόδειξης',
+  'costs.viewReceipt': 'Προβολή απόδειξης',
 };
 export default budget;

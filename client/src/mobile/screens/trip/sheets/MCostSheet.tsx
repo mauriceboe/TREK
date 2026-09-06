@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, Plus, Trash2, Wallet } from 'lucide-react'
+import { Check, ChevronDown, Plus, Trash2, Wallet, Receipt, Paperclip } from 'lucide-react'
 import MSheet from '../../../components/MSheet'
 import CustomSelect from '../../../../components/shared/CustomSelect'
 import { CustomDatePicker } from '../../../../components/shared/CustomDateTimePicker'
@@ -10,6 +10,8 @@ import { useToast } from '../../../../components/shared/Toast'
 import { useTripStore } from '../../../../store/tripStore'
 import { useExchangeRates } from '../../../../hooks/useExchangeRates'
 import { formatMoney, localizeAmountInput, amountToInputString } from '../../../../utils/formatters'
+import { openFile } from '../../../../utils/fileDownload'
+import { filesApi } from '../../../../api/client'
 import { SYMBOLS, SPLIT_COLORS, currenciesWith } from '../../../../components/Budget/BudgetPanel.constants'
 import { COST_CATEGORY_LIST, catMeta } from '../../../../components/Budget/costsCategories'
 import { localToday } from '../../../../components/Planner/today'
@@ -18,7 +20,8 @@ import type { ExpensePrefill } from '../../../../components/Budget/CostsPanel'
 import { payersBalanced, rebalancePayers } from '../../../../components/Budget/CostsPanel.helpers'
 import GuestBadge from '../../../../components/shared/GuestBadge'
 import type { TripMember } from '../../../../components/Budget/BudgetPanelMemberChips'
-import type { BudgetItem } from '../../../../types'
+import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
+import type { BudgetItem, BudgetItemReceipt } from '../../../../types'
 
 export interface MCostSheetProps {
   tripId: number
@@ -122,6 +125,24 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
     }
     return m
   })
+
+  const [receipts, setReceipts] = useState<BudgetItemReceipt[]>(() => editing?.receipts || [])
+  const [pendingReceiptFiles, setPendingReceiptFiles] = useState<File[]>([])
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [previewReceipts, setPreviewReceipts] = useState<{ receipts: BudgetItemReceipt[]; initialIndex: number } | null>(null)
+
+  const handleReceiptFileSelect = (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return
+    setPendingReceiptFiles(prev => [...prev, ...Array.from(files)])
+  }
+
+  const handleRemoveReceipt = (receiptId: number) => {
+    setReceipts(prev => prev.filter(r => r.id !== receiptId))
+  }
+
+  const handleRemovePendingReceipt = (index: number) => {
+    setPendingReceiptFiles(prev => prev.filter((_, i) => i !== index))
+  }
 
   const [saving, setSaving] = useState(false)
   const [deleteArmed, setDeleteArmed] = useState(false)
@@ -270,8 +291,52 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
       ...(!editing && prefill?.placeId ? { place_id: prefill.placeId } : {}),
     }
     try {
-      if (editing) await updateBudgetItem(tripId, editing.id, data)
-      else await addBudgetItem(tripId, data)
+      // Upload any pending receipt files
+      const uploadedFileIds: number[] = []
+      try {
+        for (const f of pendingReceiptFiles) {
+          const fd = new FormData()
+          fd.append('file', f)
+          if (editing) {
+            fd.append('budget_item_id', String(editing.id))
+          }
+          const res = await filesApi.upload(tripId, fd)
+          if (res?.file?.id) {
+            uploadedFileIds.push(res.file.id)
+          }
+        }
+      } catch (err) {
+        for (const fid of uploadedFileIds) {
+          try { await filesApi.permanentDelete(tripId, fid) } catch {}
+        }
+        throw err
+      }
+
+      if (editing) {
+        try {
+          await updateBudgetItem(tripId, editing.id, {
+            ...data,
+            receipt_file_ids: [...receipts.map(r => r.id), ...uploadedFileIds],
+          })
+        } catch (err) {
+          for (const fid of uploadedFileIds) {
+            try { await filesApi.permanentDelete(tripId, fid) } catch {}
+          }
+          throw err
+        }
+      } else {
+        try {
+          await addBudgetItem(tripId, {
+            ...data,
+            receipt_file_ids: uploadedFileIds,
+          })
+        } catch (err) {
+          for (const fid of uploadedFileIds) {
+            try { await filesApi.permanentDelete(tripId, fid) } catch {}
+          }
+          throw err
+        }
+      }
       onSaved()
     } catch {
       toast.error(t('common.unknownError'))
@@ -641,6 +706,77 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
           placeholder={t('costs.notePlaceholder')}
           className={FIELD_AREA_CLS}
         />
+
+        {/* RECEIPTS */}
+        <div className="mb-[6px] mt-4 flex items-center justify-between">
+          <Eyebrow className="uppercase">{t('costs.receiptsTitle') || t('costs.receipts')}</Eyebrow>
+          <label className="flex cursor-pointer items-center gap-1 text-[0.75rem] font-semibold text-m-ink">
+            <input
+              type="file"
+              multiple
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={e => {
+                handleReceiptFileSelect(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <span className="flex items-center gap-1 rounded-full border border-[color:var(--m-rowbr)] bg-[color:var(--m-ic)] px-2.5 py-1 text-m-muted">
+              <Plus size={12} /> {t('costs.attachReceipt')}
+            </span>
+          </label>
+        </div>
+
+        {uploadingReceipt && (
+          <div className="mb-2 text-[0.75rem] text-m-faint">
+            {t('common.saving')}...
+          </div>
+        )}
+
+        {receipts.length === 0 && pendingReceiptFiles.length === 0 ? (
+          <div className="py-1 text-[0.75rem] text-m-faint">
+            {t('costs.noReceipts')}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 pb-2">
+            {receipts.map((r, rIdx) => (
+              <div key={r.id} className={ROW_CLS}>
+                <button
+                  type="button"
+                  onClick={() => setPreviewReceipts({ receipts, initialIndex: rIdx })}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <Receipt size={14} className="flex-none text-m-faint" />
+                  <span className="truncate text-[0.8125rem] font-medium text-m-ink">{r.original_name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveReceipt(r.id)}
+                  title={t('costs.deleteReceipt')}
+                  className="flex-none p-1 text-m-muted hover:text-red-500"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {pendingReceiptFiles.map((file, idx) => (
+              <div key={idx} className={ROW_CLS}>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <Paperclip size={14} className="flex-none text-m-faint" />
+                  <span className="truncate text-[0.8125rem] font-medium text-m-ink">{file.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemovePendingReceipt(idx)}
+                  title={t('costs.deleteReceipt')}
+                  className="flex-none p-1 text-m-muted hover:text-red-500"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <FormSheetFooter
@@ -653,6 +789,14 @@ export default function MCostSheet({ tripId, base, people, me, editing, prefill,
         submitLabel={submitLabel}
         submitDisabled={!valid || saving}
       />
+
+      {previewReceipts && (
+        <ReceiptPreviewModal
+          receipts={previewReceipts.receipts}
+          initialIndex={previewReceipts.initialIndex}
+          onClose={() => setPreviewReceipts(null)}
+        />
+      )}
     </MSheet>
   )
 }
