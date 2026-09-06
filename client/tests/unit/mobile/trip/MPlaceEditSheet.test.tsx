@@ -5,7 +5,9 @@ import type { TripPlanner } from '../../../../src/mobile/screens/trip/MTripShell
 import type { Assignment, Category, Place } from '../../../../src/types'
 import { buildPlanner } from '../../../helpers/mobileTrip'
 import { useAddonStore } from '../../../../src/store/addonStore'
+import { useTripStore } from '../../../../src/store/tripStore'
 import { server } from '../../../helpers/msw/server'
+import { resetAllStores, seedStore } from '../../../helpers/store'
 import { fireEvent, render, screen, waitFor } from '../../../helpers/render'
 
 // FE-MOB-PLEDIT-001 to FE-MOB-PLEDIT-024, plus FE-MOB-PLEDIT-033 to -035
@@ -38,6 +40,7 @@ const submit = () => screen.getByRole('button', { name: /^(common\.add|common\.s
 
 describe('MPlaceEditSheet', () => {
   beforeEach(() => {
+    resetAllStores()
     server.use(
       http.post('/api/maps/search', () => HttpResponse.json({
         source: 'osm',
@@ -354,32 +357,57 @@ describe('MPlaceEditSheet', () => {
     expect(screen.queryByText('ticket.png')).not.toBeInTheDocument()
   })
 
-  /** Types into the search row and returns the bias the autocomplete request carried. */
-  async function capturedBias(places: Place[]) {
+  /**
+   * Types into the search row and returns the bias the autocomplete request
+   * carried. The hint comes from useLocationBias, which reads the trip store,
+   * not the planner prop, so both are seeded the way the running app has them.
+   */
+  async function capturedBias(places: Place[], day?: { id: number; placeIds: number[] }) {
     const bodies: Record<string, unknown>[] = []
     server.use(http.post('/api/maps/autocomplete', async ({ request }) => {
       bodies.push(await request.json() as Record<string, unknown>)
       return HttpResponse.json({ source: 'osm', suggestions: [] })
     }))
+    seedStore(useTripStore, {
+      places,
+      assignments: day ? { [String(day.id)]: day.placeIds.map(id => ({ place_id: id })) } : {},
+      selectedDayId: day?.id ?? null,
+    })
     setup({ places })
     fireEvent.change(screen.getByPlaceholderText('places.mapsSearchPlaceholder'), { target: { value: 'ueno' } })
     await waitFor(() => expect(bodies).toHaveLength(1))
     return bodies[0].locationBias
   }
 
-  it('FE-MOB-PLEDIT-029: biases the maps search on the trip bounding box', async () => {
+  it('FE-MOB-PLEDIT-029: biases the maps search on the trip box while the trip fits one region', async () => {
     const places = [
       { id: 1, name: 'A', lat: 35.6, lng: 139.7 },
       { id: 2, name: 'B', lat: 35.8, lng: 139.9 },
       { id: 3, name: 'C', lat: null, lng: null },
     ] as unknown as Place[]
+    // 25km across and no day open, so the trip is the best hint there is.
     expect(await capturedBias(places)).toEqual({ low: { lat: 35.6, lng: 139.7 }, high: { lat: 35.8, lng: 139.9 } })
   })
 
-  it('FE-MOB-PLEDIT-030: drops the bias for a trip that spans more than 500 km', async () => {
+  it('FE-MOB-PLEDIT-029b: narrows the bias to the open day when the trip is too wide for one', async () => {
+    const places = [
+      { id: 1, name: 'Ueno', lat: 35.71, lng: 139.77 },
+      { id: 2, name: 'Asakusa', lat: 35.71, lng: 139.8 },
+      { id: 3, name: 'Nagoya', lat: 35.18, lng: 136.91 },
+    ] as unknown as Place[]
+    // The trip reaches Nagoya and is dropped, but the day being planned still
+    // gets a hint. That is what preferring the day buys.
+    expect(await capturedBias(places, { id: 7, placeIds: [1, 2] })).toEqual({
+      low: { lat: 35.71, lng: 139.77 }, high: { lat: 35.71, lng: 139.8 },
+    })
+  })
+
+  it('FE-MOB-PLEDIT-030: drops the bias for a trip that outgrows one region', async () => {
+    // Tokyo to Nagoya, 264km across: inside the old 500km diagonal rule, outside
+    // the 60km radius one. A box that wide has its centre in open country.
     const places = [
       { id: 1, name: 'Tokyo', lat: 35.68, lng: 139.76 },
-      { id: 2, name: 'Sapporo', lat: 43.06, lng: 141.35 },
+      { id: 2, name: 'Nagoya', lat: 35.18, lng: 136.91 },
     ] as unknown as Place[]
     expect(await capturedBias(places)).toBeUndefined()
   })
