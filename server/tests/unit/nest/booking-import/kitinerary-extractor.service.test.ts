@@ -8,7 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * at all, and every branch that resolves it is a filesystem lookup that behaves
  * differently on the three platforms TREK ships to.
  */
-const { existsSync, readdirSync, readEnv, execFileSync, execFile } = vi.hoisted(() => ({
+const { existsSync, readdirSync, readEnv, execFileSync, execFile, logDebug } = vi.hoisted(() => ({
+  logDebug: vi.fn(),
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
   readEnv: vi.fn(),
@@ -29,6 +30,11 @@ vi.mock('node:fs', () => ({
 // installed.
 vi.mock('node:child_process', () => ({ execFileSync, execFile }));
 vi.mock('../../../../src/app-config', () => ({ readEnv }));
+// The logger reads readEnv().app.logLevel while its module is evaluated, so it
+// has to be mocked rather than imported for real.
+vi.mock('../../../../src/nest/audit/audit-log.logger', () => ({
+  logDebug, logInfo: vi.fn(), logWarn: vi.fn(), logError: vi.fn(),
+}));
 
 import { join } from 'node:path';
 import { KitineraryExtractorService } from '../../../../src/nest/booking-import/kitinerary-extractor.service';
@@ -122,5 +128,93 @@ describe('KitineraryExtractorService binary probe', () => {
     expect(execFileSync).toHaveBeenLastCalledWith(
       onPath('/good'), ['--version'], expect.anything(),
     );
+  });
+});
+
+// #2261 — the extractor's age decides which providers parse at all, and a stale
+// one is indistinguishable from an unsupported provider without this.
+describe('KitineraryExtractorService diagnostics', () => {
+  it('KIT-EXT-010: reports the version the binary prints', () => {
+    existsSync.mockImplementation((p: string) => p === '/opt/ki');
+    execFileSync.mockReturnValue(Buffer.from('kitinerary-extractor 6.3.3
+'));
+
+    expect(boot({ kitineraryExtractorPath: '/opt/ki' }).describe()).toEqual({
+      available: true, path: '/opt/ki', version: '6.3.3', configuredPath: '/opt/ki',
+    });
+  });
+
+  it('KIT-EXT-011: a binary that will not answer --version stays usable', () => {
+    existsSync.mockImplementation((p: string) => p === '/opt/ki');
+    execFileSync.mockImplementation(() => { throw new Error('nope'); });
+
+    const described = boot({ kitineraryExtractorPath: '/opt/ki' }).describe();
+    expect(described.available).toBe(true);
+    expect(described.version).toBeNull();
+  });
+
+  it('KIT-EXT-012: a configured path that does not exist is reported as such', () => {
+    existsSync.mockReturnValue(false);
+
+    expect(boot({ kitineraryExtractorPath: '/nope/ki' }).describe()).toEqual({
+      available: false, path: null, version: null, configuredPath: '/nope/ki',
+    });
+  });
+
+  it('KIT-EXT-013: nothing found at all reads as nothing configured', () => {
+    expect(boot().describe()).toEqual({
+      available: false, path: null, version: null, configuredPath: null,
+    });
+  });
+
+  it('KIT-EXT-014: the version is probed for the /usr/lib branch too, not only for PATH', () => {
+    const found = join('/usr/lib', 'x86_64-linux-gnu', 'libexec', 'kf6', 'kitinerary-extractor');
+    readdirSync.mockReturnValue(['x86_64-linux-gnu']);
+    existsSync.mockImplementation((p: string) => p === found);
+    execFileSync.mockReturnValue(Buffer.from('kitinerary-extractor 6.3.3'));
+
+    expect(boot().describe().version).toBe('6.3.3');
+  });
+});
+
+describe('KitineraryExtractorService stderr handling', () => {
+  /** Drive one extraction with a canned stderr. */
+  async function extractWith(stderr: string) {
+    existsSync.mockImplementation((p: string) => p === '/opt/ki');
+    execFileSync.mockReturnValue(Buffer.from('kitinerary-extractor 6.3.3'));
+    execFile.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: (e: unknown, r: unknown) => void) => {
+      cb(null, { stdout: '[]', stderr });
+    });
+    await boot({ kitineraryExtractorPath: '/opt/ki' }).extract(Buffer.from(''), 'booking.eml');
+  }
+
+  it('KIT-EXT-015: passes every raw line to the debug log, script errors included', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await extractWith('JS ERROR: lufthansa.js failed
+Invalid result type from script
+');
+
+    const logged = logDebug.mock.calls.map(c => String(c[0]));
+    expect(logged.some(l => l.includes('JS ERROR: lufthansa.js failed'))).toBe(true);
+    expect(logged.some(l => l.includes('Invalid result type from script'))).toBe(true);
+    // And the default level still says nothing about them.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('KIT-EXT-016: an unexpected line still reaches console.warn', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await extractWith('JS ERROR: noise
+something genuinely odd
+');
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('booking.eml'), 'something genuinely odd');
+    warn.mockRestore();
+  });
+
+  it('KIT-EXT-017: the debug dump is capped so one document cannot flood the log', async () => {
+    await extractWith(Array.from({ length: 500 }, (_, i) => `line ${i}`).join('
+'));
+    expect(logDebug.mock.calls.length).toBe(200);
   });
 });

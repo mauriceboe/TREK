@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readEnv } from '../../app-config';
+import { logDebug } from '../audit/audit-log.logger';
 import { execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { KiReservation } from './kitinerary.types';
@@ -15,15 +16,26 @@ const execFileAsync = promisify(execFile);
 const BINARY_NAME = 'kitinerary-extractor';
 const TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024;
+/** Ceiling on the raw stderr dump under LOG_LEVEL=debug. */
+const DEBUG_STDERR_LINES = 200;
 
 @Injectable()
 export class KitineraryExtractorService implements OnModuleInit {
   private binaryPath: string | null = null;
+  /** Frozen for the process: the binary cannot change under a running container,
+   *  so it is read once at boot and never probed again. */
+  private binaryVersion: string | null = null;
+  /** The configured path, kept even when it did not resolve — a typo there is the
+   *  one failure that otherwise looks exactly like "not installed". */
+  private configuredPath: string | null = null;
 
   onModuleInit() {
+    this.configuredPath = readEnv().integrations.kitineraryExtractorPath || null;
     this.binaryPath = this.findBinary();
     if (this.binaryPath) {
-      console.log(`[KItinerary] extractor found at: ${this.binaryPath}`);
+      this.binaryVersion = this.probeVersion(this.binaryPath);
+      const version = this.binaryVersion ? ` (${this.binaryVersion})` : '';
+      console.log(`[KItinerary] extractor found at: ${this.binaryPath}${version}`);
     } else {
       console.info('[KItinerary] extractor not found — booking import feature disabled');
     }
@@ -31,6 +43,34 @@ export class KitineraryExtractorService implements OnModuleInit {
 
   isAvailable(): boolean {
     return this.binaryPath !== null;
+  }
+
+  /**
+   * What the operator needs to tell three failure modes apart, which look
+   * identical from the UI today: nothing imported and no reason given (#2261).
+   * A stale extractor is missing years of vendor scripts and returns an empty
+   * list; a mistyped KITINERARY_EXTRACTOR_PATH disables the feature entirely;
+   * and a genuinely unsupported provider also returns nothing. `version: null`
+   * with `available: true` means the binary ran but did not answer `--version`.
+   */
+  describe(): { available: boolean; path: string | null; version: string | null; configuredPath: string | null } {
+    return {
+      available: this.binaryPath !== null,
+      path: this.binaryPath,
+      version: this.binaryVersion,
+      configuredPath: this.configuredPath,
+    };
+  }
+
+  /** `kitinerary-extractor 6.3.3` → `6.3.3`. Never throws: a binary that cannot
+   *  answer --version can still extract, so this must not disable the feature. */
+  private probeVersion(path: string): string | null {
+    try {
+      const out = execFileSync(path, ['--version'], { stdio: 'pipe', timeout: 3000 }).toString();
+      return out.trim().split(/\s+/).pop() || null;
+    } catch {
+      return null;
+    }
   }
 
   async extract(buffer: Buffer, fileName: string): Promise<KiReservation[]> {
@@ -50,12 +90,21 @@ export class KitineraryExtractorService implements OnModuleInit {
       });
 
       if (stderr?.trim()) {
-        // Filter expected noise: currency-symbol ambiguity warnings and vendor
-        // extractor script errors are normal (every matching script is tried;
-        // most won't match the current document).
-        const unexpected = stderr
-          .split('\n')
-          .filter(l => l.trim())
+        const lines = stderr.split('\n').filter(l => l.trim());
+
+        // LOG_LEVEL=debug passes the raw stderr through. The lines the filter
+        // below drops are the only signal that a vendor extractor script is
+        // missing or failing in the installed KItinerary build — without them an
+        // outdated extractor and a genuinely unsupported provider look identical
+        // from outside: nothing imported, no reason given (#2261). Capped so one
+        // pathological document cannot flood the log file, and opt-in because the
+        // raw lines can carry document fragments.
+        for (const l of lines.slice(0, DEBUG_STDERR_LINES)) logDebug(`[KItinerary] ${fileName}: ${l}`);
+
+        // At the default level, filter expected noise: currency-symbol ambiguity
+        // warnings and vendor extractor script errors are normal (every matching
+        // script is tried; most won't match the current document).
+        const unexpected = lines
           .filter(l => !l.includes('Ambig') && !l.includes('JS ERROR') && !l.includes('Invalid result type from script'));
         if (unexpected.length) {
           console.warn(`[KItinerary] stderr for "${fileName}":`, unexpected.join('\n'));
