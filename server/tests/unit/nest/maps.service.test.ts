@@ -120,6 +120,18 @@ vi.mock('../../../src/config', () => ({
   ENCRYPTION_KEY: '0'.repeat(64),
 }));
 
+// pois() asks the index before Overpass and trekPlacesEnabled fails open, so a
+// case that reaches it with no fetch stub in place leaves the runner for
+// places.liketrek.com. Only the one export pois() calls is replaced; the rest of
+// the client stays real. The index path itself is covered in maps.pois.test.ts.
+const { mockNearby } = vi.hoisted(() => ({
+  mockNearby: vi.fn(async (): Promise<unknown[]> => []),
+}));
+vi.mock('../../../src/nest/maps/trek-places.client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/nest/maps/trek-places.client')>()),
+  trekPlacesNearby: mockNearby,
+}));
+
 // Injected stub since the photo-cache fold (was a path mock of the module).
 // Same seven seams, same mock functions behind them.
 const photoCacheStub = {
@@ -2583,6 +2595,8 @@ describe('controller-facing wrappers delegate to the folded methods', () => {
       expect(spies.resolveGoogleMapsUrl).toHaveBeenCalledWith('https://maps.app.goo.gl/x');
 
       const bbox = { south: 1, west: 2, north: 3, east: 4 };
+      // The index answers with an empty page (see the mock above), so what this
+      // measures is the wrapper's own delegation.
       await svc.pois('cafe', bbox, 'de');
       expect(spies.searchOverpassPois).toHaveBeenCalledWith('cafe', bbox, 'de');
     } finally {

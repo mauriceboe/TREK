@@ -643,18 +643,13 @@ export class MapsService {
         const lng = (bbox.west + bbox.east) / 2;
         // Half the diagonal, so the circle covers the viewport corners rather
         // than leaving the edges of the map empty.
-        const radius = Math.min(
-          20000,
-          Math.max(
-            300,
-            Math.round(
-              (Math.hypot(
-                (bbox.north - bbox.south) * 111_320,
-                (bbox.east - bbox.west) * 111_320 * Math.cos((lat * Math.PI) / 180),
-              ) / 2),
-            ),
-          ),
+        const wanted = Math.round(
+          Math.hypot(
+            (bbox.north - bbox.south) * 111_320,
+            (bbox.east - bbox.west) * 111_320 * Math.cos((lat * Math.PI) / 180),
+          ) / 2,
         );
+        const radius = Math.min(20000, Math.max(300, wanted));
         const found = await trekPlacesNearby(lat, lng, {
           radius,
           limit: 50,
@@ -677,13 +672,17 @@ export class MapsService {
               address: p.address?.freeform ?? null,
               website: p.contact?.website ?? null,
               phone: p.contact?.phone ?? null,
-              opening_hours: null,
+              opening_hours: p.hours?.osm ?? null,
+              // The index has no cuisine field, so this null is the truth
+              // rather than a field being dropped on the way through.
               cuisine: null,
               source: 'openstreetmap' as const,
             })),
             source: 'openstreetmap' as const,
             truncated: found.length >= 50,
-            clamped: false,
+            // A wide viewport is narrowed here too, and the caller is told so
+            // for the same reason the Overpass path tells it.
+            clamped: radius < wanted,
           };
         }
       } catch (err: unknown) {
