@@ -17,6 +17,7 @@ import { useTranslation } from '../../i18n'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import { DEFAULT_FORM, isGoogleMapsUrl, mergeResult, type PlaceFormData, type ResultField } from './PlaceFormModal.helpers'
 import { getApiErrorMessage } from '../../utils/apiError'
+import { useLocationBias } from '../../hooks/useLocationBias'
 import { BookingCostsSection } from './BookingCostsSection'
 import type { BookingExpenseRequest } from './BookingCostsSection.types'
 import type { Place, Category, Assignment, BudgetItem } from '../../types'
@@ -222,32 +223,11 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     }
   }, [isOpen])
 
-  // Derive location bias bounding box from the trip's existing places
   const places = useTripStore((s) => s.places)
-  const locationBias = useMemo(() => {
-    const withCoords = (places || []).filter((p) => p.lat != null && p.lng != null)
-    if (withCoords.length === 0) return undefined
-
-    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
-    for (const p of withCoords) {
-      const lat = Number(p.lat), lng = Number(p.lng)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
-      if (lat < minLat) minLat = lat
-      if (lat > maxLat) maxLat = lat
-      if (lng < minLng) minLng = lng
-      if (lng > maxLng) maxLng = lng
-    }
-    if (!Number.isFinite(minLat)) return undefined
-
-    // Skip bias if the bounding box is too large (~500 km diagonal)
-    const dlat = maxLat - minLat
-    const dlng = maxLng - minLng
-    const avgLatRad = ((minLat + maxLat) / 2) * (Math.PI / 180)
-    const diagKm = Math.sqrt((dlat * 111) ** 2 + (dlng * 111 * Math.cos(avgLatRad)) ** 2)
-    if (diagKm > 500) return undefined
-
-    return { low: { lat: minLat, lng: minLng }, high: { lat: maxLat, lng: maxLng } }
-  }, [places])
+  // Where the trip is happening — the hint that tells the search which of a
+  // thousand identically named places is meant. Autocomplete wants a box, the
+  // search wants a point; useLocationBias derives both from the same places.
+  const { box: locationBias, point: locationBiasPoint } = useLocationBias()
 
   // Autocomplete fetch — aborts any in-flight request before starting a new one
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -320,7 +300,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
           return
         }
       }
-      const result = await mapsApi.search(mapsSearch, language)
+      const result = await mapsApi.search(mapsSearch, language, locationBiasPoint)
       searchMetaRef.current = { query: mapsSearch.trim(), source: result.source || 'unknown' }
       setMapsResults(result.places || [])
     } catch (err: unknown) {
@@ -409,7 +389,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
       }
       if (!place) {
         const query = [suggestion.mainText, suggestion.secondaryText].filter(Boolean).join(', ')
-        const search = await mapsApi.search(query, language)
+        const search = await mapsApi.search(query, language, locationBiasPoint)
         place = search.places?.[0] ?? null
       }
       if (place) {

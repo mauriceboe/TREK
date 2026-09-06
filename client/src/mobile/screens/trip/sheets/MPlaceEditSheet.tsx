@@ -16,6 +16,7 @@ import PlTimeFields from './PlTimeFields'
 import PlFileAttach from './PlFileAttach'
 import type { Place } from '../../../../types'
 import type { TripPlanner } from '../MTripShell'
+import { useLocationBias } from '../../../../hooks/useLocationBias'
 
 export interface MPlaceEditSheetProps {
   planner: TripPlanner
@@ -146,25 +147,10 @@ export default function MPlaceEditSheet({ planner, onOpenExpense }: MPlaceEditSh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPlaceForm, editingPlace, prefillCoords, editingAssignmentId])
 
-  // Trip-centre bias for search/autocomplete, skipped past ~500 km diagonal.
-  const locationBias = useMemo(() => {
-    const withCoords = (places || []).filter(p => p.lat != null && p.lng != null)
-    if (withCoords.length === 0) return undefined
-    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
-    for (const p of withCoords) {
-      const lat = Number(p.lat), lng = Number(p.lng)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
-      if (lat < minLat) minLat = lat
-      if (lat > maxLat) maxLat = lat
-      if (lng < minLng) minLng = lng
-      if (lng > maxLng) maxLng = lng
-    }
-    if (!Number.isFinite(minLat)) return undefined
-    const avgLatRad = ((minLat + maxLat) / 2) * (Math.PI / 180)
-    const diagKm = Math.sqrt(((maxLat - minLat) * 111) ** 2 + ((maxLng - minLng) * 111 * Math.cos(avgLatRad)) ** 2)
-    if (diagKm > 500) return undefined
-    return { low: { lat: minLat, lng: minLng }, high: { lat: maxLat, lng: maxLng } }
-  }, [places])
+  // The area being planned, as a hint for search and autocomplete. Same helper
+  // as the desktop dialog: the day currently open first, the whole trip only
+  // while it still fits inside one region.
+  const { box: locationBias } = useLocationBias()
 
   const handleChange = (field: keyof PlaceFormData, value: string) => {
     // Typed by hand, so the next pick must leave it alone.

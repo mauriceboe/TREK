@@ -1072,9 +1072,18 @@ async function withCachedPlaces<T>(
 }
 
 export const mapsApi = {
-  search: (query: string, lang?: string) =>
+  /**
+   * `locationBias` is what tells the search which "Hase-dera" is meant, and it
+   * is the difference between finding the temple the user stands next to and
+   * one 400km away. The route has always accepted it; nothing passed it.
+   *
+   * It also decides whether the index answers at all: a common single word
+   * without coordinates is refused upstream as too expensive, and the search
+   * then falls back to Nominatim alone.
+   */
+  search: (query: string, lang?: string, locationBias?: { lat: number; lng: number; radius?: number }) =>
     withCachedPlaces(query, (places) => ({ places, source: 'offline-cache' }), () =>
-      apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search'))),
+      apiClient.post(`/maps/search?lang=${lang || 'en'}`, { query, locationBias }).then(r => checkInDev(mapsSearchResultSchema, r.data, 'maps.search'))),
   autocomplete: (input: string, lang?: string, locationBias?: { low: { lat: number; lng: number }; high: { lat: number; lng: number } }, signal?: AbortSignal, sessionToken?: string) =>
     withCachedPlaces(
       input,

@@ -5,6 +5,7 @@ import { recordPlacePick } from '../../../../api/placeShadow'
 import { PlacesSession } from '../../../../utils/placesSession'
 import { isGoogleMapsUrl } from '../../../../components/Planner/PlaceFormModal.helpers'
 import { getApiErrorMessage } from '../../../../utils/apiError'
+import { pointFromBox } from '../../../../hooks/useLocationBias'
 import { FIELD_CLS } from './PlSheetChrome'
 import type { TripPlanner } from '../MTripShell'
 
@@ -177,7 +178,9 @@ export default function PlPlaceSearch({ planner, locationBias, onPick, onResolvi
           return
         }
       }
-      const result = await mapsApi.search(trimmed, language)
+      // Derselbe Hinweis, den die Vervollstaendigung schon bekommt: die Suche
+      // braucht ihn genauso, nur als Punkt statt als Kasten.
+      const result = await mapsApi.search(trimmed, language, pointFromBox(locationBias))
       searchMetaRef.current = { query: trimmed, source: result.source || 'unknown' }
       setResults(result.places || [])
     } catch (err: unknown) {
