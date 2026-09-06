@@ -304,6 +304,11 @@ export function CustomDatePicker({
             aria-haspopup="dialog"
             style={{
               flex: 1,
+              // Without this the trigger never goes below its text width, so the
+              // ellipsis on the label below is unreachable and the button
+              // overflows its column instead. A long locale date ("12. Sept.
+              // 2026") in a two-column grid is exactly that case (#2267).
+              minWidth: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
