@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Μέρος',
   'mobileTrip.addToDayQuestion': 'Προσθήκη σε ημέρα;',
   'mobileTrip.addTransportShort': 'Μεταφορά',
+  'mobileTrip.allDays': 'Όλες οι Ημέρες',
   'mobileTrip.assignedDays': 'Ανατεθειμένες ημέρες',
   'mobileTrip.assignmentNotes': 'Σημειώσεις ημέρας',
   'mobileTrip.bookingsEmpty': 'Δεν υπάρχουν κρατήσεις ακόμη',

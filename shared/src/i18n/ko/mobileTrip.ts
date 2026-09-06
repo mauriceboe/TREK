@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': '장소',
   'mobileTrip.addToDayQuestion': '하루에 추가할까요?',
   'mobileTrip.addTransportShort': '교통',
+  'mobileTrip.allDays': '모든 날',
   'mobileTrip.assignedDays': '배정된 날짜',
   'mobileTrip.assignmentNotes': '날짜별 메모',
   'mobileTrip.bookingsEmpty': '아직 예약이 없습니다',
