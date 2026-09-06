@@ -19,7 +19,7 @@ import ErrorBoundary from './components/shared/ErrorBoundary'
 import { lazyWithRetry } from './utils/lazyWithRetry'
 import { useIsPhone } from './mobile/useIsPhone'
 import { TranslationProvider, useTranslation } from './i18n'
-import { authApi } from './api/client'
+import { authApi, isAuthPublicPath } from './api/client'
 import { tripRepo } from './repo/tripRepo'
 import { readStartDestination, tripStartPath, DEFAULT_START_PAGE, DEFAULT_START_TRIP_TAB, SETTINGS_WAIT_MS, START_DESTINATION_ROUTE } from './utils/startDestination'
 import { usePermissionsStore, PermissionLevel } from './store/permissionsStore'
@@ -402,11 +402,15 @@ export default function App() {
     || location.pathname.startsWith('/register')
     || location.pathname.startsWith('/forgot-password')
     || location.pathname.startsWith('/reset-password')
-  // Anonymous visitor routes: no session, so authenticated-only widgets (system
-  // notices, background tasks, save-to-collection) have nothing to do here and
-  // would otherwise fire a doomed authenticated request on mount.
-  const isPublicVisitorPage = isSharedPage || location.pathname.startsWith('/public/journey/')
-  const hideAuthedWidgets = isAuthPage || isPublicVisitorPage
+  // No session on these, so authenticated-only widgets (system notices,
+  // background tasks, save-to-collection) have nothing to do and would only fire
+  // a doomed authenticated request on mount.
+  //
+  // Off isAuthPublicPath rather than a second hand-kept list: the two had already
+  // drifted, this one naming only /public/journey/ while the response
+  // interceptor's covers all of /public/. A route that is public to one and not
+  // to the other is exactly the seam that puts a 401 back.
+  const hideAuthedWidgets = isAuthPage || isAuthPublicPath(location.pathname)
 
   return (
     <TranslationProvider>

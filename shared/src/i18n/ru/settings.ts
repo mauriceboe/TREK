@@ -496,7 +496,7 @@ const settings: TranslationStrings = {
   'settings.offline.storage.tripsTitle': 'Поездки',
   'settings.offline.storage.tripOn': 'Хранится офлайн',
   'settings.offline.storage.tripOff': 'Не хранится',
-  'settings.offline.storage.tripFinished': 'Завершёна. Сохраняется, только если вы её включите.',
+  'settings.offline.storage.tripFinished': 'Завершена. Сохраняется, только если вы её включите.',
   'settings.offline.notice.stored': 'На этом устройстве сохранено поездок: {count}',
   'settings.offline.notice.nothing': 'Сохранять нечего. Включите поездки, которые хотите оставить.',
   'settings.offline.notice.busy': 'Синхронизация уже идёт. Повторите попытку через мгновение.',

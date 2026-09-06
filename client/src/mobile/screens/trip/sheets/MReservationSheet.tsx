@@ -259,7 +259,12 @@ export default function MReservationSheet({ planner, onOpenExpense }: MReservati
         assignment_id: (isHotel && !form.accommodation_id) ? null : (assignmentId || null),
         accommodation_id: isHotel ? (form.accommodation_id || null) : null,
         place_id: isHotel ? null : (form.place_id || null),
-        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        // An empty object, not null: null clears the column outright, and that
+        // took the mirrored booking price with it on every edit of a type that
+        // fills no metadata of its own — restaurant, event, tour, parking, other,
+        // a hotel without check-in times (#2233). An object still clears what the
+        // form dropped, and lets the server carry the price across.
+        metadata,
         // Omitted on an edit for the same reason as the desktop dialog: the
         // server swaps the whole endpoint set when the key is present, and this
         // sheet never edits endpoints (#2216).

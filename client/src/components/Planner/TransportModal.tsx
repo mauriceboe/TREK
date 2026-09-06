@@ -543,7 +543,12 @@ export function TransportModal({ isOpen, onClose, onSave, reservation, days, sel
         location: null,
         confirmation_number: form.confirmation_number || null,
         notes: form.notes || null,
-        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        // An empty object, not null: null clears the column outright, and that
+        // took the mirrored booking price with it on every edit of a type that
+        // fills no metadata of its own — restaurant, event, tour, parking, other,
+        // a hotel without check-in times (#2233). An object still clears what the
+        // form dropped, and lets the server carry the price across.
+        metadata,
         endpoints,
         needs_review: false,
       }
