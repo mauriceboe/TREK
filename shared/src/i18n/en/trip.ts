@@ -63,6 +63,7 @@ const trip: TranslationStrings = {
   'transit.search': 'Search',
   'transit.searching': 'Searching…',
   'transit.searchError': 'Route search failed. Please try again.',
+  'transit.noResultsVia': 'No connections found via {provider}. Try a different time or filters.',
   'transit.noResults': 'No connections found. Try a different time or filters.',
   'transit.direct': 'Direct',
   'transit.transfers': '{count} transfers',

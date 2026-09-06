@@ -21,6 +21,8 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
     placesAutocompleteEnabled, setPlacesAutocompleteEnabledState,
     placesDetailsEnabled, setPlacesDetailsEnabledState,
     placesEnrichEnabled, setPlacesEnrichEnabledState,
+    transitProvider, setTransitProviderState,
+    transitGoogleKeySource, setTransitGoogleKeySource,
     oidcConfig, setOidcConfig, savingOidc, setSavingOidc,
     passwordLogin, setPasswordLogin, passwordRegistration, setPasswordRegistration,
     oidcLogin, setOidcLogin, oidcRegistration, setOidcRegistration,
@@ -418,6 +420,52 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
                 try { await adminApi.updatePlacesEnrich(next) } catch { setPlacesEnrichEnabledState(!next); setPlacesEnrichEnabled(!next) }
               }}
             />
+          </div>
+
+          {/* Transit Backend (#1699) — Transitous has no GTFS for much of Asia,
+              so an install can point transit search at Google instead, on the
+              same key. Falls back to Transitous when no key resolves. */}
+          <div className="py-3 border-t border-slate-100">
+            <p className="text-sm font-medium text-slate-700">{t('admin.transitProvider.title')}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{t('admin.transitProvider.subtitle')}</p>
+            <select
+              value={transitProvider}
+              aria-label={t('admin.transitProvider.title')}
+              onChange={async e => {
+                const next = e.target.value === 'google' ? 'google' : 'transitous'
+                const previous = transitProvider
+                setTransitProviderState(next)
+                try {
+                  const saved = await adminApi.updateTransitProvider(next)
+                  setTransitGoogleKeySource(saved.googleKeySource)
+                } catch { setTransitProviderState(previous) }
+              }}
+              className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+            >
+              <option value="transitous">{t('admin.transitProvider.transitous')}</option>
+              <option value="google">{t('admin.transitProvider.google')}</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              {transitProvider === 'google' ? t('admin.transitProvider.googleHint') : t('admin.transitProvider.transitousHint')}
+            </p>
+
+            {/* Picking Google without a key that resolves changes nothing — the
+                request-time fallback is silent, so this is the only place it can
+                be said. 'user-row' is the subtler half: the resolver's last step
+                is the caller's own row, so a personal key serves this admin and
+                nobody else. */}
+            {transitProvider === 'google' && transitGoogleKeySource === null && (
+              <p className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                {t('admin.transitProvider.noKeyWarning')}
+              </p>
+            )}
+            {transitProvider === 'google' && transitGoogleKeySource === 'user-row' && (
+              <p className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                {t('admin.transitProvider.personalKeyWarning')}
+              </p>
+            )}
           </div>
 
           {/* Open-Meteo Weather Info */}

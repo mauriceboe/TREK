@@ -62,6 +62,7 @@ const trip: TranslationStrings = {
   'transit.search': '搜尋',
   'transit.searching': '搜尋中…',
   'transit.searchError': '路線搜尋失敗，請重試。',
+  'transit.noResultsVia': '透過 {provider} 找不到路線。請嘗試其他時間或篩選條件。',
   'transit.noResults': '找不到路線。請嘗試其他時間或篩選條件。',
   'transit.direct': '直達',
   'transit.transfers': '轉乘 {count} 次',

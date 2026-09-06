@@ -175,6 +175,29 @@ describe('TransitSearchPanel', () => {
     await user.click(await screen.findByText(/London Victoria/))
   }
 
+  /**
+   * An empty result is ambiguous without the backend's name: the fallback to
+   * Transitous is silent, so "no connections" could mean the provider has no
+   * data here or that the provider you picked never ran (#1699).
+   */
+  it('FE-PLANNER-TRANSIT-006b: the empty state names the backend that answered', async () => {
+    const user = userEvent.setup()
+    transitApiMock.plan.mockResolvedValueOnce({ itineraries: [], provider: 'transitous' })
+    render(<TransitSearchPanel {...makeProps()} />)
+    await pickFromAndLondon(user)
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+    expect(await screen.findByText(/No connections found via Transitous/)).toBeInTheDocument()
+  })
+
+  it('FE-PLANNER-TRANSIT-006c: falls back to the unnamed message when the server sends no provider', async () => {
+    const user = userEvent.setup()
+    transitApiMock.plan.mockResolvedValueOnce({ itineraries: [] })
+    render(<TransitSearchPanel {...makeProps()} />)
+    await pickFromAndLondon(user)
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+    expect(await screen.findByText(/^No connections found\./)).toBeInTheDocument()
+  })
+
   it('FE-PLANNER-TRANSIT-007: depart-by anchors the entered time to the origin timezone', async () => {
     const user = userEvent.setup()
     transitApiMock.plan.mockResolvedValueOnce({ itineraries: [] })

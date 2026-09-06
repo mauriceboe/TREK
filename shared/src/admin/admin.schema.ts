@@ -110,3 +110,28 @@ export const adminTestNotificationRequestSchema = z.object({
   inApp: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
 });
 export type AdminTestNotificationRequest = z.infer<typeof adminTestNotificationRequestSchema>;
+
+// Which backend answers /api/transit (#1699). Transitous stays the default and
+// the fallback: it is free and keyless, so an install that never opens this
+// switch — or that picks Google without a key — keeps costing nothing.
+export const TRANSIT_PROVIDERS = ['transitous', 'google'] as const;
+export type TransitProvider = (typeof TRANSIT_PROVIDERS)[number];
+
+export const adminTransitProviderRequestSchema = z.object({
+  provider: z.enum(TRANSIT_PROVIDERS),
+});
+export type AdminTransitProviderRequest = z.infer<typeof adminTransitProviderRequestSchema>;
+
+/**
+ * Which of the three credential slots a third-party key resolved out of —
+ * operator env, the instance-wide row, or the caller's own. The server's
+ * ApiKeySource aliases this rather than restating it: the admin transit
+ * response puts the value on the wire, and two copies of the union would be
+ * exactly the hand-mirrored contract the project forbids.
+ *
+ * `null` on the wire means no key resolved at all.
+ */
+export const API_KEY_SOURCES = ['operator-env', 'instance', 'user-row'] as const;
+export type ApiKeySource = (typeof API_KEY_SOURCES)[number];
+/** The nullable form the admin transit-provider response carries. */
+export type TransitKeySource = ApiKeySource | null;

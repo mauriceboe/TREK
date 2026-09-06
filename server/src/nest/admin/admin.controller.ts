@@ -19,6 +19,7 @@ import {
   AdminNotificationPreferencesDto,
   AdminDefaultUserSettingsDto,
   AdminTestNotificationDto,
+  AdminTransitProviderDto,
 } from './admin.dto';
 import { PluginRuntimeService } from '../plugins/plugin-runtime.service';
 import { AddonsService } from '../addons/addons.service';
@@ -253,6 +254,18 @@ export class AdminController {
     if (changed) this.admin.invalidateMcpSessions();
     this.audit.writeAudit({ userId: user.id, action: 'admin.collab_features', ip: getClientIp(req), details: features });
     return features;
+  }
+
+  // Which backend answers /api/transit (#1699). Transitous unless an admin
+  // says otherwise, and still Transitous if Google is picked without a key.
+  @Get('transit-provider')
+  getTransitProvider(@CurrentUser() user: User) { return this.addons.getTransitProvider(user.id); }
+
+  @Put('transit-provider')
+  updateTransitProvider(@CurrentUser() user: User, @Body() body: AdminTransitProviderDto, @Req() req: Request) {
+    const result = this.addons.updateTransitProvider(body.provider, user.id);
+    this.audit.writeAudit({ userId: user.id, action: 'admin.transit_provider', ip: getClientIp(req), details: { provider: result.provider } });
+    return result;
   }
 
   // ── Addons ──

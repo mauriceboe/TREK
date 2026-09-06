@@ -63,6 +63,7 @@ const trip: TranslationStrings = {
   'transit.search': 'Αναζήτηση',
   'transit.searching': 'Αναζήτηση…',
   'transit.searchError': 'Η αναζήτηση διαδρομής απέτυχε. Δοκιμάστε ξανά.',
+  'transit.noResultsVia': 'Δεν βρέθηκαν συνδέσεις μέσω {provider}. Δοκιμάστε άλλη ώρα ή άλλα φίλτρα.',
   'transit.noResults': 'Δεν βρέθηκαν συνδέσεις. Δοκιμάστε άλλη ώρα ή φίλτρα.',
   'transit.direct': 'Απευθείας',
   'transit.transfers': '{count} μετεπιβιβάσεις',

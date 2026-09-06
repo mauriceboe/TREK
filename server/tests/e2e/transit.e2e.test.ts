@@ -76,18 +76,20 @@ describe('Transit proxy e2e (real auth guard + temp SQLite)', () => {
     const res = await request(server).get('/api/transit/geocode?q=alex&lang=de&near=52.5,13.4').set('Cookie', sessionCookie(1));
     expect(res.status).toBe(200);
     expect(res.body.results[0].name).toBe('Alexanderplatz');
-    expect(geocodeSpy).toHaveBeenCalledWith('alex', 'de', '52.5,13.4');
+    // The caller's id trails the query so the Google backend (#1699) can resolve
+    // the install's Places key; the Transitous path ignores it.
+    expect(geocodeSpy).toHaveBeenCalledWith('alex', 'de', '52.5,13.4', 1);
   });
 
   it('plan passes all params through (arriveBy + maxTransfers coerced)', async () => {
     planSpy.mockResolvedValueOnce({ itineraries: [] });
     const res = await request(server)
-      .get('/api/transit/plan?from=52.5,13.4&to=52.6,13.5&time=2026-07-13T09:00:00Z&arriveBy=true&modes=BUS&maxTransfers=2')
+      .get('/api/transit/plan?from=52.5,13.4&to=52.6,13.5&time=2026-07-13T09:00:00Z&arriveBy=true&modes=BUS&maxTransfers=2&lang=de')
       .set('Cookie', sessionCookie(1));
     expect(res.status).toBe(200);
     expect(planSpy).toHaveBeenCalledWith({
       from: '52.5,13.4', to: '52.6,13.5', time: '2026-07-13T09:00:00Z', arriveBy: true, modes: 'BUS', maxTransfers: 2,
-    });
+    }, 'de', 1);
   });
 
   it('service validation errors propagate with their status', async () => {

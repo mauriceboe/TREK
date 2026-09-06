@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { getAppUrl, readEnv } from '../../app-config';
 import { buildUserAgent } from '../maps/maps.helpers';
+import { GoogleTransitProvider } from './google-transit.provider';
+import type { TransitProvider } from '@trek/shared';
 import {
   deriveTransitStats,
   SCHEDULED_TRANSIT_MODES,
@@ -16,6 +18,19 @@ import {
  * community-run MOTIS instance over public GTFS feeds — free, no API key, fits
  * TREK's no-paid-providers rule. Self-hosters can point TRANSIT_API_URL at their
  * own MOTIS instance instead.
+ *
+ * Since #1699 an admin can point the two routes at Google instead, for the
+ * regions Transitous has no feed for. This class stays the entry point and the
+ * validator either way: the request is checked here, then dispatched, so both
+ * backends are held to the same coordinate/mode/transfer contract and answer in
+ * the same compact shape. Transitous remains the default and the fallback —
+ * see GoogleTransitProvider.isActive.
+ *
+ * Both responses name the backend that answered. The fallback is silent by
+ * design, so without this an empty result is indistinguishable between "this
+ * provider has no data here" and "the provider you picked never ran" — which is
+ * exactly the guessing game a Paris search ran into when the Île-de-France feed
+ * ended before the trip date.
  *
  * This service is a thin, validating proxy: the browser never talks to
  * Transitous directly (their usage policy wants an identifying User-Agent with
@@ -139,14 +154,34 @@ function mapStop(p: MotisPlaceRaw | undefined, kind: 'departure' | 'arrival'): T
 
 @Injectable()
 export class TransitService {
-  /** Station/place search for the from/to pickers. `near` biases results. */
-  async geocode(query: string, language?: string, near?: string): Promise<{ results: TransitPlace[] }> {
+  constructor(private readonly google: GoogleTransitProvider) {}
+
+  /**
+   * Station/place search for the from/to pickers. `near` biases results.
+   *
+   * `userId` resolves the Google key (operator env → instance → own row) and is
+   * only read when Google is the active backend; the Transitous path is keyless
+   * and identical for every caller.
+   */
+  async geocode(
+    query: string,
+    language?: string,
+    near?: string,
+    userId = 0,
+  ): Promise<{ results: TransitPlace[]; provider: TransitProvider }> {
     const text = (query || '').trim();
-    if (text.length < 2) return { results: [] };
+    // Answered before either backend is consulted, so it reports the one that
+    // WOULD have been asked rather than claiming nobody was.
+    const provider: TransitProvider = this.google.isActive(userId) ? 'google' : 'transitous';
+    if (text.length < 2) return { results: [], provider };
     if (text.length > 200) {
       const e = new Error('Query too long') as Error & { status: number };
       e.status = 400;
       throw e;
+    }
+
+    if (provider === 'google') {
+      return { ...(await this.google.geocode(text, language, near && isCoord(near) ? near : undefined, userId)), provider };
     }
 
     const params = new URLSearchParams({ text });
@@ -155,7 +190,7 @@ export class TransitService {
 
     const key = `geo:${params.toString()}`;
     const cached = cacheGet(key);
-    if (cached) return cached as { results: TransitPlace[] };
+    if (cached) return { ...(cached as { results: TransitPlace[] }), provider };
 
     const raw = (await upstream('/api/v1/geocode', params)) as Array<{
       name?: string;
@@ -173,11 +208,15 @@ export class TransitService {
 
     const data = { results };
     cacheSet(key, data);
-    return data;
+    return { ...data, provider };
   }
 
   /** Route search between two coordinates. Returns compact itineraries for the picker. */
-  async plan(q: PlanQuery): Promise<{ itineraries: TransitItinerary[] }> {
+  async plan(
+    q: PlanQuery,
+    language?: string,
+    userId = 0,
+  ): Promise<{ itineraries: TransitItinerary[]; provider: TransitProvider }> {
     const bad = (msg: string) => {
       const e = new Error(msg) as Error & { status: number };
       e.status = 400;
@@ -212,9 +251,15 @@ export class TransitService {
     // "direct" connection is what the existing OSRM footpath routing is for.
     params.set('directModes', 'WALK');
 
+    // After validation on purpose: whichever backend answers, the caller is held
+    // to the same coordinate/mode/transfer contract and gets the same 400s.
+    if (this.google.isActive(userId)) {
+      return { ...(await this.google.plan(q, language, userId)), provider: 'google' };
+    }
+
     const key = `plan:${params.toString()}`;
     const cached = cacheGet(key);
-    if (cached) return cached as { itineraries: TransitItinerary[] };
+    if (cached) return { ...(cached as { itineraries: TransitItinerary[] }), provider: 'transitous' };
 
     const raw = (await upstream('/api/v6/plan', params)) as {
       itineraries?: Array<{
@@ -276,6 +321,6 @@ export class TransitService {
 
     const data = { itineraries };
     cacheSet(key, data);
-    return data;
+    return { ...data, provider: 'transitous' };
   }
 }

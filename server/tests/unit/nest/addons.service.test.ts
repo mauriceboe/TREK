@@ -421,3 +421,64 @@ describe('AddonsService places enrichment flag', () => {
     expect(dbMock._stmt.run).toHaveBeenLastCalledWith('places_enrich_enabled', 'true');
   });
 });
+
+/**
+ * The transit backend (#1699) is a name, not a flag, so it needs the
+ * unrecognised-value case the booleans get for free: anything that is not a
+ * known provider must read as Transitous rather than silently billing the
+ * install's Google key.
+ */
+describe('AddonsService transit provider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('ADDONS-SVC-086 an unset provider reads as Transitous, with no key anywhere', () => {
+    dbMock._stmt.get.mockReturnValue(undefined);
+    expect(svc().getTransitProvider()).toEqual({ provider: 'transitous', googleKeySource: null });
+  });
+
+  it('ADDONS-SVC-087 only a known provider name is honoured', () => {
+    dbMock._stmt.get.mockReturnValueOnce({ value: 'google' }).mockReturnValue(undefined);
+    expect(svc().getTransitProvider().provider).toBe('google');
+
+    for (const value of ['someday-maps', '', 'GOOGLE']) {
+      dbMock._stmt.get.mockReset();
+      dbMock._stmt.get.mockReturnValueOnce({ value }).mockReturnValue(undefined);
+      expect(svc().getTransitProvider().provider).toBe('transitous');
+    }
+  });
+
+  it('ADDONS-SVC-088 the setter persists the name and echoes it back', () => {
+    dbMock._stmt.get.mockReturnValue(undefined);
+    expect(svc().updateTransitProvider('google').provider).toBe('google');
+    expect(dbMock._stmt.run).toHaveBeenLastCalledWith('transit_provider', 'google');
+    expect(svc().updateTransitProvider('transitous').provider).toBe('transitous');
+    expect(dbMock._stmt.run).toHaveBeenLastCalledWith('transit_provider', 'transitous');
+  });
+
+  /**
+   * The warning the admin panel renders is driven entirely by this field, so
+   * the instance/user-row split is the part worth pinning: only 'user-row'
+   * means "works for this admin, Transitous for everybody else".
+   */
+  it('ADDONS-SVC-089 reports where the Google key resolved from', () => {
+    // provider row, then the instance maps_api_key row.
+    dbMock._stmt.get.mockReset();
+    dbMock._stmt.get.mockReturnValueOnce({ value: 'google' }).mockReturnValueOnce({ value: 'instance-key' });
+    expect(svc().getTransitProvider(7).googleKeySource).toBe('instance');
+
+    // No instance row, but the caller's own users column has one.
+    dbMock._stmt.get.mockReset();
+    dbMock._stmt.get
+      .mockReturnValueOnce({ value: 'google' })
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce({ maps_api_key: 'personal-key' });
+    expect(svc().getTransitProvider(7).googleKeySource).toBe('user-row');
+
+    // Nothing anywhere.
+    dbMock._stmt.get.mockReset();
+    dbMock._stmt.get.mockReturnValue(undefined);
+    expect(svc().getTransitProvider(7).googleKeySource).toBeNull();
+  });
+});

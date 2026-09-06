@@ -90,7 +90,7 @@ export class TransitMcp {
     const limited = rateLimit(ctx.userId, 'mcp_transit_geocode', 300);
     if (limited) return limited;
     try {
-      return ok(await this.transit.geocode(query, language, near ? `${near.lat},${near.lng}` : undefined));
+      return ok(await this.transit.geocode(query, language, near ? `${near.lat},${near.lng}` : undefined, ctx.userId));
     } catch (err) {
       return errorResult(err, 'Transit stop search failed.');
     }
@@ -99,7 +99,7 @@ export class TransitMcp {
   @Tool({
     name: 'search_transit_routes',
     description:
-      'Search scheduled public-transit routes via Transitous between two coordinates. Returns itineraries that can be passed unchanged to create_transit_journey. `dropped` counts provider itineraries that failed validation and are therefore absent from the results — a non-zero value means the provider offered routes this tool could not represent.',
+      'Search scheduled public-transit routes between two coordinates, via whichever backend the instance is configured for. Returns itineraries that can be passed unchanged to create_transit_journey. `dropped` counts provider itineraries that failed validation and are therefore absent from the results — a non-zero value means the provider offered routes this tool could not represent.',
     inputSchema: {
       from: transitPlaceSchema,
       to: transitPlaceSchema,
@@ -136,7 +136,7 @@ export class TransitMcp {
         arriveBy,
         modes: modes?.join(','),
         maxTransfers,
-      });
+      }, undefined, ctx.userId);
       const itineraries = result.itineraries.flatMap((itinerary) => {
         const parsed = transitItinerarySchema.safeParse(cleanTransitItineraryNames(itinerary, from.name, to.name));
         if (!parsed.success) return [];

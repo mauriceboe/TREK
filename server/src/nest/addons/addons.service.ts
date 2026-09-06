@@ -3,6 +3,10 @@ import { ADDON_IDS } from '../../addons';
 import { DatabaseService } from '../database/database.service';
 import type { Addon } from '../../types';
 import { getPhotoProviderConfig } from '../memories/memories.helpers';
+import { readTransitProvider, writeTransitProvider } from '../transit/transit-provider';
+import { resolveApiKey, type ApiKeySource } from '../settings/instance-api-keys';
+import { readEnv } from '../../app-config';
+import type { TransitProvider } from '@trek/shared';
 
 /**
  * Thin wrapper around the enabled-addons + photo-provider read that the legacy
@@ -203,4 +207,35 @@ export class AddonsService {
   }
 
   updatePlacesEnrich(enabled: boolean) { return this.writeFlag('places_enrich_enabled', enabled); }
+
+  // ── Transit backend (#1699) ────────────────────────────────────────────────
+  // Not a flag: two named backends, so it stores the name rather than a
+  // boolean. The read/write pair lives in transit/transit-provider.ts because
+  // TransitService reads the same row on every request — one key, one reader,
+  // one writer.
+
+  /**
+   * Where the Google key would come from for this caller, or null if nowhere.
+   *
+   * Reported alongside the provider so the admin panel can say that picking
+   * Google changed nothing. The fallback to Transitous is deliberate and
+   * silent at request time (GoogleTransitProvider.isActive), which means the
+   * only place it can be surfaced is here, before a search is ever run.
+   *
+   * The distinction between 'instance' and 'user-row' is the one that matters:
+   * the resolver's last step is the caller's OWN row, so an admin holding a
+   * personal key gets Google while every other member silently gets Transitous
+   * — the #1939 shape, one layer up.
+   */
+  private googleKeySource(userId: number): ApiKeySource | null {
+    return resolveApiKey(this.dbs, 'maps_api_key', userId, readEnv().maps.placesApiKey).source;
+  }
+
+  getTransitProvider(userId = 0) {
+    return { provider: readTransitProvider(this.dbs), googleKeySource: this.googleKeySource(userId) };
+  }
+
+  updateTransitProvider(provider: TransitProvider, userId = 0) {
+    return { provider: writeTransitProvider(this.dbs, provider), googleKeySource: this.googleKeySource(userId) };
+  }
 }

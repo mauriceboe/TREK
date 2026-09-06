@@ -1,5 +1,6 @@
 import { DatabaseService } from '../database/database.service';
 import { decrypt_api_key, maybe_encrypt_api_key } from '../common/crypto/apiKeyCrypto';
+import type { ApiKeySource } from '@trek/shared';
 
 /**
  * The third-party keys that belong to the instance rather than to a person.
@@ -26,8 +27,11 @@ export const INSTANCE_API_KEY_NAMES: readonly InstanceApiKeyName[] = ['maps_api_
  * Where a resolved key came from. Logged beside a provider error so "works for
  * the admin, 403 for everyone else" is one line in the log rather than a
  * guessing game; the key itself is never logged.
+ *
+ * Defined in @trek/shared because the admin transit-provider response (#1699)
+ * puts it on the wire — re-declaring the union here would fork the contract.
  */
-export type ApiKeySource = 'operator-env' | 'instance' | 'user-row';
+export type { ApiKeySource };
 
 // Full statements rather than an interpolated column: the name doubles as the
 // users column AND the app_settings key, and identifiers only ever come from a

@@ -63,6 +63,7 @@ const trip: TranslationStrings = {
   'transit.search': 'Tìm kiếm',
   'transit.searching': 'Đang tìm…',
   'transit.searchError': 'Tìm tuyến thất bại. Vui lòng thử lại.',
+  'transit.noResultsVia': 'Không tìm thấy tuyến nào qua {provider}. Hãy thử giờ khác hoặc bộ lọc khác.',
   'transit.noResults': 'Không tìm thấy tuyến. Hãy thử thời gian hoặc bộ lọc khác.',
   'transit.direct': 'Trực tiếp',
   'transit.transfers': '{count} lần chuyển tuyến',

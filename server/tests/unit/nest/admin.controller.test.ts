@@ -47,6 +47,8 @@ const addonsStub = () => ({
   updatePlacesEnrich: vi.fn((enabled: boolean) => ({ enabled })),
   getCollabFeatures: vi.fn(() => ({ chat: false })),
   updateCollabFeatures: vi.fn(() => ({ features: { chat: true }, changed: true })),
+  getTransitProvider: vi.fn(() => ({ provider: 'transitous', googleKeySource: null })),
+  updateTransitProvider: vi.fn((provider: string) => ({ provider, googleKeySource: null })),
 }) as unknown as AddonsService;
 
 // The MCP-token routes read TokenService now, not AdminService. Stubbed via a
@@ -276,6 +278,20 @@ describe('AdminController feature toggles', () => {
     const c = adminCtl(svc());
     expect(c.updatePlacesEnrich(user, { enabled: false }, req)).toEqual({ enabled: false });
     expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'admin.places_enrich' }));
+  });
+
+  it('ADMIN-TOGGLE-002c transit-provider reads and writes through the addons domain and is audited (#1699)', () => {
+    const addons = addonsStub();
+    const c = adminCtl(svc(), undefined, addons);
+    expect(c.getTransitProvider(user)).toEqual({ provider: 'transitous', googleKeySource: null });
+    expect(c.updateTransitProvider(user, { provider: 'google' }, req)).toEqual({ provider: 'google', googleKeySource: null });
+    // The acting admin's id drives key resolution — the panel warns about the
+    // key THEY would search with.
+    expect(addons.getTransitProvider).toHaveBeenCalledWith(user.id);
+    expect(addons.updateTransitProvider).toHaveBeenCalledWith('google', user.id);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'admin.transit_provider', details: { provider: 'google' } }),
+    );
   });
 
   it('ADMIN-TOGGLE-003 collab-features invalidates MCP sessions only when a flag flipped (#1414)', () => {

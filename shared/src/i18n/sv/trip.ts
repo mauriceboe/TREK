@@ -63,6 +63,7 @@ const trip: TranslationStrings = {
   'transit.search': 'Sök',
   'transit.searching': 'Söker…',
   'transit.searchError': 'Reseökningen misslyckades. Försök igen.',
+  'transit.noResultsVia': 'Inga förbindelser hittades via {provider}. Prova en annan tid eller andra filter.',
   'transit.noResults': 'Inga förbindelser hittades. Prova en annan tid eller andra filter.',
   'transit.direct': 'Direkt',
   'transit.transfers': '{count} byten',

@@ -517,6 +517,65 @@ describe('AdminPage', () => {
     });
   });
 
+  describe('FE-PAGE-ADMIN-023b: Transit provider select in Settings tab (#1699)', () => {
+    it('choosing Google calls PUT /api/admin/transit-provider', async () => {
+      let capturedBody: Record<string, unknown> | null = null;
+      server.use(
+        http.get('/api/admin/transit-provider', () =>
+          HttpResponse.json({ provider: 'transitous', googleKeySource: 'instance' })),
+        http.put('/api/admin/transit-provider', async ({ request }) => {
+          capturedBody = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ provider: 'google', googleKeySource: 'instance' });
+        })
+      );
+
+      seedStore(useAuthStore, { isAuthenticated: true, user: buildAdmin() });
+      render(<AdminPage />);
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /^users$/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /settings/i }));
+
+      const select = await screen.findByRole('combobox', { name: /transit provider/i });
+      await waitFor(() => expect(select).toHaveValue('transitous'));
+      fireEvent.change(select, { target: { value: 'google' } });
+
+      await waitFor(() => expect(capturedBody).toEqual({ provider: 'google' }));
+      expect(select).toHaveValue('google');
+    });
+  });
+
+  describe('FE-PAGE-ADMIN-023c: Transit provider key warnings (#1699)', () => {
+    async function openSettingsWith(googleKeySource: string | null) {
+      server.use(
+        http.get('/api/admin/transit-provider', () =>
+          HttpResponse.json({ provider: 'google', googleKeySource })),
+      );
+      seedStore(useAuthStore, { isAuthenticated: true, user: buildAdmin() });
+      render(<AdminPage />);
+      await waitFor(() => expect(screen.getByRole('button', { name: /^users$/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /settings/i }));
+      await screen.findByRole('combobox', { name: /transit provider/i });
+    }
+
+    it('warns that Google is selected but no key is configured', async () => {
+      await openSettingsWith(null);
+      expect(await screen.findByText(/no google api key is configured/i)).toBeInTheDocument();
+    });
+
+    it('warns that only the admin\'s own key is set, so others fall back', async () => {
+      await openSettingsWith('user-row');
+      expect(await screen.findByText(/only your own google key is set/i)).toBeInTheDocument();
+    });
+
+    it('stays quiet when an instance-wide key resolves', async () => {
+      await openSettingsWith('instance');
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: /transit provider/i })).toHaveValue('google'));
+      expect(screen.queryByText(/no google api key is configured/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/only your own google key is set/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe('FE-PAGE-ADMIN-024: JWT rotation modal opens from Danger Zone', () => {
     it('clicking Rotate in Danger Zone opens the JWT rotation confirmation modal', async () => {
       seedStore(useAuthStore, { isAuthenticated: true, user: buildAdmin() });

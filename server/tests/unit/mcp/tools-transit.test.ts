@@ -169,8 +169,9 @@ describe('MCP transit tools', () => {
     // `from` is a tool-input place (name/lat/lng). A geocode result is a TransitPlace,
     // which also carries `type` and `area`; the stop search only reads the name back out,
     // so the fixture stays as it is instead of growing fields nothing here looks at.
-    geocodeMock.mockResolvedValue({ results: [from as TransitPlace] });
+    geocodeMock.mockResolvedValue({ results: [from as TransitPlace], provider: 'transitous' });
     planMock.mockResolvedValue({
+      provider: 'transitous',
       itineraries: [
         itinerary,
         { ...itinerary, legs: [itinerary.legs[0]] },
@@ -188,7 +189,9 @@ describe('MCP transit tools', () => {
         }),
       ) as any;
       expect(stops.results[0].name).toBe('Namba');
-      expect(geocodeMock).toHaveBeenCalledWith('Namba', 'ja', '34.67,135.5');
+      // The caller's id trails the query so the Google backend (#1699) can
+      // resolve the install's key; the Transitous path ignores it.
+      expect(geocodeMock).toHaveBeenCalledWith('Namba', 'ja', '34.67,135.5', user.id);
 
       const routes = parseToolResult(
         await harness.client.callTool({
@@ -199,7 +202,7 @@ describe('MCP transit tools', () => {
       expect(routes.itineraries[0].legs[0].from.name).toBe('Namba');
       expect(routes.itineraries[0].legs[1].to.name).toBe('Umeda');
       expect(routes.itineraries).toHaveLength(1);
-      expect(planMock).toHaveBeenCalledWith(expect.objectContaining({ modes: 'SUBWAY' }));
+      expect(planMock).toHaveBeenCalledWith(expect.objectContaining({ modes: 'SUBWAY' }), undefined, user.id);
 
       const invalidNear = await harness.client.callTool({
         name: 'search_transit_stops',
@@ -496,7 +499,7 @@ describe('MCP transit tools', () => {
       ...itinerary,
       legs: itinerary.legs.map((leg) => (leg.mode === 'WALK' ? leg : { ...leg, mode: 'AIRPLANE' })),
     };
-    planMock.mockResolvedValue({ itineraries: [flying] });
+    planMock.mockResolvedValue({ itineraries: [flying], provider: 'transitous' });
 
     await withHarness(user.id, ['geo:read'], async (harness) => {
       const routes = parseToolResult(
@@ -523,7 +526,7 @@ describe('MCP transit tools', () => {
   it('reports how many provider itineraries failed validation', async () => {
     const { user } = createUser(testDb);
     const walkOnly = { ...itinerary, legs: [itinerary.legs[0]] };
-    planMock.mockResolvedValue({ itineraries: [itinerary, walkOnly] });
+    planMock.mockResolvedValue({ itineraries: [itinerary, walkOnly], provider: 'transitous' });
 
     await withHarness(user.id, ['geo:read'], async (harness) => {
       const routes = parseToolResult(

@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios'
 import type { z } from 'zod'
 import type { Place } from '../types'
+import type { TransitProvider } from '@trek/shared'
 import { randomId } from '../utils/randomId'
 import {
   weatherResultSchema, type WeatherResult,
@@ -652,6 +653,8 @@ export const adminApi = {
   updatePlacesDetails: (enabled: boolean) => apiClient.put('/admin/places-details', { enabled }).then(r => r.data),
   getPlacesEnrich: () => apiClient.get('/admin/places-enrich').then(r => r.data),
   updatePlacesEnrich: (enabled: boolean) => apiClient.put('/admin/places-enrich', { enabled }).then(r => r.data),
+  getTransitProvider: () => apiClient.get('/admin/transit-provider').then(r => r.data),
+  updateTransitProvider: (provider: TransitProvider) => apiClient.put('/admin/transit-provider', { provider }).then(r => r.data),
   getCollabFeatures: () => apiClient.get('/admin/collab-features').then(r => r.data),
   updateCollabFeatures: (features: Record<string, boolean>) => apiClient.put('/admin/collab-features', features).then(r => r.data),
   packingTemplates: () => apiClient.get('/admin/packing-templates').then(r => r.data),
@@ -1230,11 +1233,13 @@ export const shareApi = {
   getSharedTrip: (token: string) => apiClient.get(`/shared/${token}`).then(r => r.data),
 }
 
-// Public transit routing (#1065) — Transitous/MOTIS proxied through the server.
+// Public transit routing (#1065) — proxied through the server, which picks the
+// backend (Transitous/MOTIS, or Google since #1699). `lang` reaches the Google
+// backend as the languageCode, so station names come back in the user's script.
 export const transitApi = {
   geocode: (q: string, opts?: { lang?: string; near?: string }) =>
     apiClient.get('/transit/geocode', { params: { q, lang: opts?.lang, near: opts?.near } }).then(r => r.data),
-  plan: (params: { from: string; to: string; time?: string; arriveBy?: boolean; modes?: string; maxTransfers?: number }) =>
+  plan: (params: { from: string; to: string; time?: string; arriveBy?: boolean; modes?: string; maxTransfers?: number; lang?: string }) =>
     apiClient.get('/transit/plan', { params }).then(r => r.data),
 }
 

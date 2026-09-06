@@ -9,6 +9,7 @@ import { getApiErrorMessage } from '../../types'
 import { useToast } from '../../components/shared/Toast'
 import { managedAdminTabs } from '../../managed'
 import type { AdminUser, AdminStats, OidcConfig, UpdateInfo } from './adminModel'
+import type { TransitProvider, TransitKeySource } from '@trek/shared'
 
 /**
  * Every tab id AdminPage can render a panel for, whatever this install offers.
@@ -98,6 +99,17 @@ export function useAdmin() {
   const [placesEnrichEnabled, setPlacesEnrichEnabledState] = useState<boolean>(true)
   useEffect(() => { adminApi.getPlacesDetails().then(d => setPlacesDetailsEnabledState(d.enabled)).catch(() => {}) }, [])
   useEffect(() => { adminApi.getPlacesEnrich().then(d => setPlacesEnrichEnabledState(d.enabled)).catch(() => {}) }, [])
+
+  // Transit backend (#1699). googleKeySource says where a Google key would come
+  // from for this admin — null means picking Google changes nothing, since the
+  // request-time fallback to Transitous is silent by design.
+  const [transitProvider, setTransitProviderState] = useState<TransitProvider>('transitous')
+  const [transitGoogleKeySource, setTransitGoogleKeySource] = useState<TransitKeySource>(null)
+  useEffect(() => {
+    adminApi.getTransitProvider()
+      .then(d => { setTransitProviderState(d.provider); setTransitGoogleKeySource(d.googleKeySource) })
+      .catch(() => {})
+  }, [])
 
   // Collab features
   const [collabFeatures, setCollabFeatures] = useState<{ chat: boolean; notes: boolean; polls: boolean; whatsnext: boolean }>({ chat: true, notes: true, polls: true, whatsnext: true })
@@ -430,6 +442,8 @@ export function useAdmin() {
     placesAutocompleteEnabled, setPlacesAutocompleteEnabledState,
     placesDetailsEnabled, setPlacesDetailsEnabledState,
     placesEnrichEnabled, setPlacesEnrichEnabledState,
+    transitProvider, setTransitProviderState,
+    transitGoogleKeySource, setTransitGoogleKeySource,
     collabFeatures, setCollabFeatures,
     oidcConfig, setOidcConfig, savingOidc, setSavingOidc,
     passwordLogin, setPasswordLogin, passwordRegistration, setPasswordRegistration,

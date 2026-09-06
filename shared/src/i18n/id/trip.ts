@@ -63,6 +63,7 @@ const trip: TranslationStrings = {
   'transit.search': 'Cari',
   'transit.searching': 'Mencari…',
   'transit.searchError': 'Pencarian rute gagal. Silakan coba lagi.',
+  'transit.noResultsVia': 'Tidak ada koneksi yang ditemukan via {provider}. Coba waktu atau filter lain.',
   'transit.noResults': 'Tidak ada koneksi ditemukan. Coba waktu atau filter lain.',
   'transit.direct': 'Langsung',
   'transit.transfers': '{count} transit',

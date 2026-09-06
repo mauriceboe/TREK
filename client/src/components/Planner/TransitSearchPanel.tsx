@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
 import type { Day, Place, Accommodation } from '../../types'
+import type { TransitProvider } from '@trek/shared'
 
 /**
  * Public transit route search (#1065), backed by Transitous (MOTIS) through the
@@ -35,6 +36,14 @@ export interface TransitItinerary {
 interface TransitPlaceResult { name: string; lat: number; lng: number; type: string; area: string | null }
 
 export interface PickedPlace { name: string; lat: number; lng: number }
+
+// Backend names as they are written, not translated — the empty state says
+// which one answered so "nothing here" can be told apart from "not the one you
+// picked" (#1699).
+const PROVIDER_NAMES: Record<TransitProvider, string> = {
+  transitous: 'Transitous',
+  google: 'Google',
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -340,7 +349,7 @@ interface TransitSearchPanelProps {
 }
 
 export default function TransitSearchPanel({ day, days, places, accommodations = [], onAdd, initialFrom = null, initialTo = null, initialTime = null }: TransitSearchPanelProps) {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const toast = useToast()
   const is12h = useSettingsStore(s => s.settings.time_format) === '12h'
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -355,6 +364,7 @@ export default function TransitSearchPanel({ day, days, places, accommodations =
   const [loading, setLoading] = useState(false)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const [addingIdx, setAddingIdx] = useState<number | null>(null)
+  const [provider, setProvider] = useState<TransitProvider | null>(null)
 
   // Quick picks: the day's located places, plus the trip's located accommodations.
   const quickPicks = useMemo<PickedPlace[]>(() => {
@@ -387,6 +397,7 @@ export default function TransitSearchPanel({ day, days, places, accommodations =
     setLoading(true)
     setItineraries(null)
     setExpandedIdx(null)
+    setProvider(null)
     try {
       const tzFrom = tzAt(from.lat, from.lng)
       const tzTo = tzAt(to.lat, to.lng)
@@ -395,7 +406,11 @@ export default function TransitSearchPanel({ day, days, places, accommodations =
       const timeIso = localToUtcIso(day.date, time, arriveBy ? tzTo : tzFrom)
       const allModes = activeModes.size === MODE_GROUPS.length
       const modes = allModes ? undefined : MODE_GROUPS.filter(m => activeModes.has(m.key)).map(m => m.modes).join(',')
-      const d = await transitApi.plan({ from: `${from.lat},${from.lng}`, to: `${to.lat},${to.lng}`, time: timeIso, arriveBy, modes })
+      const d = await transitApi.plan({ from: `${from.lat},${from.lng}`, to: `${to.lat},${to.lng}`, time: timeIso, arriveBy, modes, lang: language })
+      // Which backend actually answered (#1699). Named in the empty state so
+      // "nothing found" can be told apart from "the provider you picked never
+      // ran" — the fallback to Transitous is silent by design.
+      setProvider(d.provider ?? null)
       // MOTIS names the request coordinates START/END — swap in the places the
       // user actually picked so walks read "Walk to Zoologischer Garten".
       const cleanStop = (n: string) => (n === 'START' ? from.name : n === 'END' ? to.name : n)
@@ -606,7 +621,9 @@ export default function TransitSearchPanel({ day, days, places, accommodations =
         )}
         {!loading && ranked && ranked.length === 0 && (
           <div className="text-content-faint" style={{ textAlign: 'center', padding: '24px 0', fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>
-            {t('transit.noResults')}
+            {provider
+              ? t('transit.noResultsVia', { provider: PROVIDER_NAMES[provider] })
+              : t('transit.noResults')}
           </div>
         )}
         {!loading && ranked && ranked.length > 0 && (
