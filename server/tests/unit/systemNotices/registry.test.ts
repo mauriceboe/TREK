@@ -82,6 +82,14 @@ describe('registry integrity', () => {
     expect(isNoticeVersionActive(release!, '5.0.0')).toBe(false);
   });
 
+  it('the 4.0.0 release notice comes back on each upgrade inside that line', () => {
+    const release = SYSTEM_NOTICES.find(n => n.id === 'release-4-0-0')!;
+    // The version window above is only half of "covers the whole 4.x line". Without
+    // this, the default one-time dismissal retired the notice for everyone who
+    // closed it on 4.0.0, so none of them saw it again on 4.1, 4.2 or later.
+    expect(release.recurring).toBe('per-version');
+  });
+
   it('the thank-you notice hands over to the release modal at 4.0.0', () => {
     const thankYou = SYSTEM_NOTICES.find(n => n.id === 'thank-you-support');
     expect(thankYou).toBeDefined();

@@ -36,10 +36,13 @@ export const RETIRED_NOTICE_IDS = [
 export const SYSTEM_NOTICES: SystemNotice[] = [
   // ── 4.0.0 release — what shipped, and a note from the maintainer ────────────
   // Carries `release`, so it renders as the two-column release modal rather than
-  // the generic notice body. Shown once, not per-version: the copy is about this
-  // release. The next one gets its own entry with its own id.
+  // the generic notice body. 4.0.0 was big enough that the whole 4.x line should
+  // carry it, so `recurring: 'per-version'` brings it back on each upgrade inside
+  // the window rather than the default one-time dismissal, which retired it for
+  // everyone who closed it once on 4.0.0. A 5.x release gets its own entry.
   {
     id: 'release-4-0-0',
+    recurring: 'per-version',
     display: 'modal',
     severity: 'info',
     titleKey: 'system_notice.release_400.headline',
