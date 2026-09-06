@@ -169,6 +169,18 @@ resources:
     memory: 512Mi
 ```
 
+### Health Probes
+
+Liveness and readiness probes are configurable under `probes`. The defaults hit `/api/health` on port 3000 and match what the chart shipped before, so an existing install renders the same manifest.
+
+```bash
+helm install trek trek/trek   --set probes.liveness.initialDelaySeconds=60   --set probes.readiness.periodSeconds=20
+```
+
+Raise `initialDelaySeconds` on slow storage or after a large migration, where the first start can outlast the default and leave the pod restarting in a loop. Overrides are merged over the defaults, so setting one key keeps the rest. To switch a probe to `exec` or `tcpSocket`, clear the shipped handler in the same override (`--set probes.liveness.httpGet=null`), otherwise Kubernetes rejects the pod with "may not specify more than 1 handler type". Set `probes.liveness=null` to drop a probe entirely.
+
+If you change `env.PORT`, update `service.port` and `probes.*.httpGet.port` to match.
+
 ### Ingress
 
 ```yaml

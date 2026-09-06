@@ -134,7 +134,11 @@ persistence:
     existingClaim: ""
     annotations: {}
 
-# Readiness and liveness probes
+# Readiness and liveness probes. Overrides are merged over these defaults, so a key you
+# do not set stays as shipped: --set probes.liveness.initialDelaySeconds=60 keeps the
+# httpGet handler. Switching handler means clearing the old one in the same override
+# (httpGet: null together with tcpSocket), otherwise the API rejects the pod with
+# "may not specify more than 1 handler type". Set probes.liveness to null to drop a probe.
 probes:
   liveness:
     httpGet:
