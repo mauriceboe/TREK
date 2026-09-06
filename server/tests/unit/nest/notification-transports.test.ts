@@ -18,16 +18,37 @@ vi.mock('../../../src/nest/audit/audit-log.logger', () => ({
 vi.mock('nodemailer', () => ({ default: { createTransport: vi.fn(() => ({ sendMail: vi.fn() })) } }));
 vi.stubGlobal('fetch', vi.fn());
 
-// ssrfGuard is mocked per-test in the SSRF describe block; default passes all
-vi.mock('../../../src/utils/ssrfGuard', () => ({
-  checkSsrf: vi.fn(async () => ({ allowed: true, isPrivate: false, resolvedIp: '1.2.3.4' })),
-  createPinnedDispatcher: vi.fn(() => ({})),
-}));
+// ssrfGuard is mocked per-test in the SSRF describe block; default passes all.
+// safeFetchFollow is modelled rather than stubbed away: the transports call it
+// instead of fetch now, and the assertions below still speak in terms of the
+// stubbed global fetch, so the fake has to guard first and then hand the request
+// over exactly like the real one does.
+vi.mock('../../../src/utils/ssrfGuard', () => {
+  class SsrfBlockedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'SsrfBlockedError';
+    }
+  }
+  const checkSsrf = vi.fn(async (_url: string) => ({ allowed: true, isPrivate: false, resolvedIp: '1.2.3.4' }));
+  return {
+    checkSsrf,
+    createPinnedDispatcher: vi.fn(() => ({})),
+    SsrfBlockedError,
+    safeFetchFollow: vi.fn(async (url: string, init?: RequestInit) => {
+      const verdict = await checkSsrf(url);
+      if (!verdict.allowed) {
+        throw new SsrfBlockedError((verdict as { error?: string }).error ?? 'Request blocked by SSRF guard');
+      }
+      return fetch(url, init);
+    }),
+  };
+});
 
 import { DatabaseService } from '../../../src/nest/database/database.service';
 import { getEventText, buildEmailHtml } from '../../../src/nest/notifications/mailer/email-html';
 import { WebhookService, buildWebhookBody } from '../../../src/nest/notifications/transports/webhook.service';
-import { NtfyService, resolveNtfyUrl, resolveAdminNtfyUrl, type NtfyConfig } from '../../../src/nest/notifications/transports/ntfy.service';
+import { NtfyService, resolveNtfyUrl, resolveAdminNtfyUrl, resolveNtfyToken, type NtfyConfig } from '../../../src/nest/notifications/transports/ntfy.service';
 
 // The transports are providers now; the db stub below is the same one the
 // module-level `db` mock used to supply, handed in instead of imported.
@@ -332,6 +353,49 @@ describe('sendWebhook SSRF protection (SEC-017)', () => {
 afterAll(() => vi.unstubAllGlobals());
 
 // ── resolveNtfyUrl ────────────────────────────────────────────────────────────
+
+// GHSA-7pqc-fj3c-9346 — this is the live send path, reachable with no test route
+// involved at all: anyone can save their own ntfy_server, and the token used to
+// fall back to the operator's whatever host that named.
+describe('resolveNtfyToken', () => {
+  const adminCfg: NtfyConfig = { server: 'https://ntfy.operator.example', topic: 'ops', token: 'operator-token' };
+
+  it('withholds the operator token when the user points at their own server', () => {
+    const user: NtfyConfig = { server: 'https://listener.attacker.example', topic: 't', token: null };
+    expect(resolveNtfyToken(adminCfg, user)).toBeNull();
+  });
+
+  it('sends it when the user rides the operator server, which is the shared setup', () => {
+    const user: NtfyConfig = { server: null, topic: 't', token: null };
+    expect(resolveNtfyToken(adminCfg, user)).toBe('operator-token');
+  });
+
+  it('matches on a trailing slash, which either side may carry', () => {
+    const user: NtfyConfig = { server: 'https://ntfy.operator.example/', topic: 't', token: null };
+    expect(resolveNtfyToken(adminCfg, user)).toBe('operator-token');
+  });
+
+  it('does not treat the http twin as the same server', () => {
+    const user: NtfyConfig = { server: 'http://ntfy.operator.example', topic: 't', token: null };
+    expect(resolveNtfyToken(adminCfg, user)).toBeNull();
+  });
+
+  it("the user's own token always wins, wherever it is going", () => {
+    const user: NtfyConfig = { server: 'https://elsewhere.example', topic: 't', token: 'mine' };
+    expect(resolveNtfyToken(adminCfg, user)).toBe('mine');
+  });
+
+  it('both sides unset means ntfy.sh against ntfy.sh, still a match', () => {
+    const noServer: NtfyConfig = { server: null, topic: 'ops', token: 'operator-token' };
+    expect(resolveNtfyToken(noServer, { server: null, topic: 't', token: null })).toBe('operator-token');
+  });
+
+  it('honours an explicit server override, which is what the test route passes', () => {
+    const user: NtfyConfig = { server: null, topic: 't', token: null };
+    expect(resolveNtfyToken(adminCfg, user, 'https://listener.attacker.example')).toBeNull();
+    expect(resolveNtfyToken(adminCfg, user, 'https://ntfy.operator.example')).toBe('operator-token');
+  });
+});
 
 describe('resolveNtfyUrl', () => {
   const adminCfg: NtfyConfig = { server: 'https://ntfy.sh', topic: 'admin-topic', token: null };

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { logDebug, logError, logInfo } from '../../audit/audit-log.logger';
 import { decrypt_api_key } from '../../common/crypto/apiKeyCrypto';
 import { DatabaseService } from '../../database/database.service';
-import { checkSsrf, createPinnedDispatcher } from '../../../utils/ssrfGuard';
+import { safeFetchFollow, SsrfBlockedError } from '../../../utils/ssrfGuard';
 import type { NotifEventType } from '../notification-events';
 
 export interface NtfyConfig {
@@ -42,6 +42,46 @@ export function resolveNtfyUrl(adminCfg: NtfyConfig, userCfg: NtfyConfig | null)
   // configured server of nothing but slashes retries from every one of them.
   const base = (userCfg?.server || adminCfg.server || 'https://ntfy.sh').replace(/(?<!\/)\/+$/, '');
   return `${base}/${encodeURIComponent(topic)}`;
+}
+
+/**
+ * Whether an ntfy target is the operator's own server.
+ *
+ * The admin token is the operator's credential for the operator's server, so it
+ * may only travel there. Anyone can save their own `ntfy_server`, and without
+ * this the decrypted admin token went out as `Authorization: Bearer` to whatever
+ * host they named — on the test route and on every ordinary send
+ * (GHSA-7pqc-fj3c-9346). The scheme is part of the comparison: an http:// twin
+ * of an https:// server would put the token on the wire in the clear.
+ * Both sides empty means ntfy.sh against ntfy.sh, which is still a match.
+ */
+export function isOperatorNtfyServer(server: string | null | undefined, adminServer: string | null): boolean {
+  const normalize = (value: string | null | undefined): string => {
+    const raw = (value || 'https://ntfy.sh').replace(/(?<!\/)\/+$/, '');
+    try {
+      const parsed = new URL(raw);
+      return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    } catch {
+      return raw.toLowerCase();
+    }
+  };
+  return normalize(server) === normalize(adminServer);
+}
+
+/**
+ * The token to send with a per-user ntfy request. The user's own token always
+ * wins; the operator's is only reachable when the request is actually going to
+ * the operator's server. Shared by the test route and the live send path so the
+ * two cannot drift — closing only one of them closes nothing.
+ */
+export function resolveNtfyToken(
+  adminCfg: NtfyConfig,
+  userCfg: NtfyConfig | null,
+  serverOverride?: string | null,
+): string | null {
+  if (userCfg?.token) return userCfg.token;
+  const target = serverOverride ?? userCfg?.server ?? adminCfg.server;
+  return isOperatorNtfyServer(target, adminCfg.server) ? adminCfg.token : null;
 }
 
 /** Resolve the ntfy POST URL for admin-scoped sends. Returns null if no admin topic. */
@@ -106,12 +146,6 @@ export class NtfyService {
   ): Promise<boolean> {
     if (!url) return false;
 
-    const ssrf = await checkSsrf(url);
-    if (!ssrf.allowed) {
-      logError(`Ntfy blocked by SSRF guard event=${payload.event} url=${url} reason=${ssrf.error}`);
-      return false;
-    }
-
     const meta = NTFY_EVENT_META[payload.event as NotifEventType] ?? NTFY_DEFAULT_META;
 
     // ntfy header-based API: POST to topic URL, body = plain text message, metadata in headers
@@ -124,13 +158,17 @@ export class NtfyService {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     try {
-      const res = await fetch(url, {
+      // Every hop re-checked and re-pinned. Checking only the first URL was not
+      // enough: Node skips the pinned lookup for an IP-literal host, so a 307 to
+      // 127.0.0.1 or 169.254.169.254 connected straight through
+      // (GHSA-8mw6-xphx-886m). No dispatcher or redirect here — safeFetchFollow
+      // sets both per hop and would overwrite them.
+      const res = await safeFetchFollow(url, {
         method: 'POST',
         headers,
         body: payload.body,
         signal: AbortSignal.timeout(10000),
-        dispatcher: createPinnedDispatcher(ssrf.resolvedIp!),
-      } as RequestInit);
+      });
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
@@ -142,6 +180,13 @@ export class NtfyService {
       logDebug(`Ntfy url=${url} priority=${meta.priority} tags=${meta.tags.join(',')}`);
       return true;
     } catch (err) {
+      // The guard used to run before the try, with its own line and its own
+      // `return false`. safeFetchFollow throws instead, so the same line and the
+      // same result are reproduced here rather than changing what callers see.
+      if (err instanceof SsrfBlockedError) {
+        logError(`Ntfy blocked by SSRF guard event=${payload.event} url=${url} reason=${err.message}`);
+        return false;
+      }
       logError(`Ntfy failed event=${payload.event}: ${err instanceof Error ? err.message : err}`);
       return false;
     }

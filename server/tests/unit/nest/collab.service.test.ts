@@ -52,10 +52,28 @@ const { mockCheckSsrf, mockCreatePinnedDispatcher } = vi.hoisted(() => ({
   ),
   mockCreatePinnedDispatcher: vi.fn(() => ({})),
 }));
-vi.mock('../../../src/utils/ssrfGuard', () => ({
-  checkSsrf: mockCheckSsrf,
-  createPinnedDispatcher: mockCreatePinnedDispatcher,
-}));
+vi.mock('../../../src/utils/ssrfGuard', () => {
+  class SsrfBlockedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'SsrfBlockedError';
+    }
+  }
+  return {
+    checkSsrf: mockCheckSsrf,
+    createPinnedDispatcher: mockCreatePinnedDispatcher,
+    SsrfBlockedError,
+    // The notification transports go through safeFetchFollow now, so the fake
+    // has to guard and then hand over to the stubbed fetch the way it does.
+    safeFetchFollow: vi.fn(async (url: string, init?: RequestInit) => {
+      const verdict = await (mockCheckSsrf)(url);
+      if (!verdict.allowed) {
+        throw new SsrfBlockedError((verdict as { error?: string }).error ?? 'Request blocked by SSRF guard');
+      }
+      return fetch(url, init);
+    }),
+  };
+});
 
 import { createTables } from '../../../src/db/schema';
 import { runMigrations } from '../../../src/db/migrations';
