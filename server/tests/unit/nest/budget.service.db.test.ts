@@ -946,4 +946,112 @@ describe('an expense whose split leaves a remainder', () => {
 
     expect(totalOf(item.id)).toBe(25);
   });
-})
+
+  it('attaches receipts created with receipt_file_ids and lists them', () => {
+    const { user: alice } = createUser(testDb);
+    const trip = createTrip(testDb, alice.id);
+
+    // Insert a file for this trip
+    const res = testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name, mime_type, file_size) VALUES (?, ?, ?, ?, ?)').run(
+      trip.id, 'receipt-123.jpg', 'receipt.jpg', 'image/jpeg', 1024
+    );
+    const fileId = Number(res.lastInsertRowid);
+
+    const item = budget.createBudgetItem(trip.id, {
+      name: 'Restaurant with receipt',
+      total_price: 45,
+      receipt_file_ids: [fileId],
+    });
+
+    expect(item.receipts).toBeDefined();
+    expect(item.receipts!.length).toBe(1);
+    expect(item.receipts![0].id).toBe(fileId);
+    expect(item.receipts![0].original_name).toBe('receipt.jpg');
+
+    const listed = budget.listBudgetItems(trip.id);
+    const found = listed.find(i => i.id === item.id);
+    expect(found?.receipts?.length).toBe(1);
+    expect(found?.receipts?.[0].id).toBe(fileId);
+  });
+
+  it('updates receipts on updateBudgetItem, trashing orphans and keeping shared receipts', () => {
+    const { user: alice } = createUser(testDb);
+    const trip = createTrip(testDb, alice.id);
+
+    // File 1: will be removed and is orphan -> should be trashed
+    const f1 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'f1.jpg', 'f1.jpg').lastInsertRowid);
+    // File 2: will be kept
+    const f2 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'f2.jpg', 'f2.jpg').lastInsertRowid);
+    // File 3: will be added
+    const f3 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'f3.jpg', 'f3.jpg').lastInsertRowid);
+    // File 4: will be removed but is shared with another budget item -> should NOT be trashed
+    const f4 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'f4.jpg', 'f4.jpg').lastInsertRowid);
+
+    budget.createBudgetItem(trip.id, { name: 'Other', receipt_file_ids: [f4] });
+    const item = budget.createBudgetItem(trip.id, { name: 'Dinner', receipt_file_ids: [f1, f2, f4] });
+
+    // Update item: remove f1 and f4, keep f2, add f3
+    const updated = budget.updateBudgetItem(item.id, trip.id, { receipt_file_ids: [f2, f3] });
+    expect(updated?.receipts?.map(r => r.id).sort()).toEqual([f2, f3].sort());
+
+    // Check database state
+    const f1Row = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(f1) as { deleted_at: string | null };
+    expect(f1Row.deleted_at).not.toBeNull();
+
+    const f4Row = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(f4) as { deleted_at: string | null };
+    expect(f4Row.deleted_at).toBeNull();
+
+    const f2Row = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(f2) as { deleted_at: string | null };
+    expect(f2Row.deleted_at).toBeNull();
+  });
+
+  it('trashes orphan receipts on deleteBudgetItem, but preserves shared files', () => {
+    const { user: alice } = createUser(testDb);
+    const trip = createTrip(testDb, alice.id);
+
+    // File 1: orphan receipt
+    const f1 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'del1.jpg', 'del1.jpg').lastInsertRowid);
+    // File 2: linked to a place directly
+    const place = testDb.prepare('INSERT INTO places (trip_id, name) VALUES (?, ?)').run(trip.id, 'Hotel').lastInsertRowid;
+    const f2 = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name, place_id) VALUES (?, ?, ?, ?)').run(trip.id, 'del2.jpg', 'del2.jpg', place).lastInsertRowid);
+
+    const item = budget.createBudgetItem(trip.id, { name: 'Lunch', receipt_file_ids: [f1, f2] });
+    const deleted = budget.deleteBudgetItem(item.id, trip.id);
+    expect(deleted).toBe(true);
+
+    const f1Row = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(f1) as { deleted_at: string | null };
+    expect(f1Row.deleted_at).not.toBeNull();
+
+    const f2Row = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(f2) as { deleted_at: string | null };
+    expect(f2Row.deleted_at).toBeNull();
+
+    const linkRows = testDb.prepare('SELECT * FROM file_links WHERE budget_item_id = ?').all(item.id);
+    expect(linkRows).toHaveLength(0);
+  });
+
+  it('handles all branches of trashOrphanReceipt safely', () => {
+    const { user: alice } = createUser(testDb);
+    const trip = createTrip(testDb, alice.id);
+
+    // Branch 1: non-existent file or already deleted
+    const item = budget.createBudgetItem(trip.id, { name: 'BranchTest' });
+    expect(() => budget.updateBudgetItem(item.id, trip.id, { receipt_file_ids: [] })).not.toThrow();
+
+    // Branch 2: file linked to reservation
+    const resId = Number(testDb.prepare('INSERT INTO reservations (trip_id, title) VALUES (?, ?)').run(trip.id, 'Flight').lastInsertRowid);
+    const fRes = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name, reservation_id) VALUES (?, ?, ?, ?)').run(trip.id, 'res.pdf', 'res.pdf', resId).lastInsertRowid);
+    const item2 = budget.createBudgetItem(trip.id, { name: 'ResItem', receipt_file_ids: [fRes] });
+    budget.deleteBudgetItem(item2.id, trip.id);
+    const fResRow = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(fRes) as { deleted_at: string | null };
+    expect(fResRow.deleted_at).toBeNull();
+
+    // Branch 3: file linked via file_links to a place or assignment
+    const place2 = Number(testDb.prepare('INSERT INTO places (trip_id, name) VALUES (?, ?)').run(trip.id, 'Cafe').lastInsertRowid);
+    const fLink = Number(testDb.prepare('INSERT INTO trip_files (trip_id, filename, original_name) VALUES (?, ?, ?)').run(trip.id, 'link.pdf', 'link.pdf').lastInsertRowid);
+    testDb.prepare('INSERT INTO file_links (file_id, place_id) VALUES (?, ?)').run(fLink, place2);
+    const item3 = budget.createBudgetItem(trip.id, { name: 'LinkItem', receipt_file_ids: [fLink] });
+    budget.deleteBudgetItem(item3.id, trip.id);
+    const fLinkRow = testDb.prepare('SELECT deleted_at FROM trip_files WHERE id = ?').get(fLink) as { deleted_at: string | null };
+    expect(fLinkRow.deleted_at).toBeNull();
+  });
+});

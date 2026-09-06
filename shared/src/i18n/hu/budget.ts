@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'A részek összege: {sum} / {total} (hiányzik {diff})',
   'costs.splitSumOver': 'A részek összege: {sum} / {total} ({diff} a többlet)',
   'costs.toggleSign': 'Váltás kiadás és visszatérítés között',
+  'costs.receipts': 'Nyugták',
+  'costs.receiptsTitle': 'Nyugták és számlák',
+  'costs.attachReceipt': 'Nyugta / számla csatolása',
+  'costs.noReceipts': 'Nincsenek csatolt nyugták',
+  'costs.deleteReceipt': 'Nyugta eltávolítása',
+  'costs.viewReceipt': 'Nyugta megtekintése',
 };
 export default budget;

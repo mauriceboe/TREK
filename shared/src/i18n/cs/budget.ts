@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Součet podílů: {sum} z {total} (chybí {diff})',
   'costs.splitSumOver': 'Součet podílů: {sum} z {total} (o {diff} více)',
   'costs.toggleSign': 'Přepnout mezi výdajem a vratkou',
+  'costs.receipts': 'Účtenky',
+  'costs.receiptsTitle': 'Účtenky a faktury',
+  'costs.attachReceipt': 'Připojit účtenku / fakturu',
+  'costs.noReceipts': 'Žádné připojené účtenky',
+  'costs.deleteReceipt': 'Odebrat účtenku',
+  'costs.viewReceipt': 'Zobrazit účtenku',
 };
 export default budget;

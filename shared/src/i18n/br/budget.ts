@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Soma das partes: {sum} de {total} (faltam {diff})',
   'costs.splitSumOver': 'Soma das partes: {sum} de {total} (sobram {diff})',
   'costs.toggleSign': 'Alternar entre despesa e reembolso',
+  'costs.receipts': 'Comprovantes',
+  'costs.receiptsTitle': 'Comprovantes e notas',
+  'costs.attachReceipt': 'Anexar comprovante / nota',
+  'costs.noReceipts': 'Nenhum comprovante anexado',
+  'costs.deleteReceipt': 'Remover comprovante',
+  'costs.viewReceipt': 'Ver comprovante',
 };
 export default budget;

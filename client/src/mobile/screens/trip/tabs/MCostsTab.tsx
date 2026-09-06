@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle, ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, ChevronDown, ChevronUp,
-  Layers, Pencil, Plus, StickyNote, Trash2,
+  Layers, Pencil, Plus, StickyNote, Trash2, Receipt,
 } from 'lucide-react'
 import MDancingTrek from '../../../components/MDancingTrek'
 import { useAuthStore } from '../../../../store/authStore'
@@ -9,9 +9,10 @@ import { useSettingsStore } from '../../../../store/settingsStore'
 import { useExchangeRates } from '../../../../hooks/useExchangeRates'
 import { useTranslation } from '../../../../i18n'
 import { formatMoney } from '../../../../utils/formatters'
-import { downloadBlob } from '../../../../utils/fileDownload'
+import { downloadBlob, openFile } from '../../../../utils/fileDownload'
 import { budgetApi } from '../../../../api/client'
 import MCostSheet from '../sheets/MCostSheet'
+import { ReceiptPreviewModal } from '../../../../components/Budget/ReceiptPreviewModal'
 import { readUserNote } from '../../../../components/Budget/CostsPanel.helpers'
 import { catMeta, COST_CAT_META } from '../../../../components/Budget/costsCategories'
 import MConfirmSheet from '../../settings/MConfirmSheet'
@@ -25,7 +26,7 @@ import {
   dayFilterKeys, filterBudgetItems, filterSettlements, groupLedgerByDay, isUnfinished, memberShareOf, tint,
   type CostsCtx, type CostsSegment, type CostsSettlement, type CostsSettlementResponse,
 } from './costsModel'
-import type { BudgetItem, TripMember } from '../../../../types'
+import type { BudgetItem, BudgetItemReceipt, TripMember } from '../../../../types'
 
 type TFn = (key: string, params?: Record<string, string | number>) => string
 
@@ -78,6 +79,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<BudgetItem | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<BudgetItem | null>(null)
+  const [previewReceipts, setPreviewReceipts] = useState<{ receipts: BudgetItemReceipt[]; initialIndex: number } | null>(null)
 
   const flows = useMemo(() => settlement?.flows || [], [settlement])
   const totals = useMemo(() => computeTotals(budgetItems, flows, ctx), [budgetItems, flows, ctx])
@@ -455,6 +457,7 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
                 }}
                 onDelete={() => setConfirmDelete(en.item)}
                 onTogglePaid={(userId, paid) => handleTogglePaid(en.item.id, userId, paid)}
+                onPreviewReceipts={(receipts) => setPreviewReceipts({ receipts, initialIndex: 0 })}
               />
             ) : (
               <PaymentRow
@@ -528,12 +531,20 @@ export default function MCostsTab({ planner, shell }: MTabScreenProps) {
           if (item) handleDeleteExpense(item)
         }}
       />
+
+      {previewReceipts && (
+        <ReceiptPreviewModal
+          receipts={previewReceipts.receipts}
+          initialIndex={previewReceipts.initialIndex}
+          onClose={() => setPreviewReceipts(null)}
+        />
+      )}
     </TabScroller>
   )
 }
 
 /** One expense card (spec 03 §3.7): category ribbon, optional unfinished ribbon, member chips, total pill, edit/delete stack. */
-function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onTogglePaid }: {
+function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onTogglePaid, onPreviewReceipts }: {
   item: BudgetItem
   ctx: CostsCtx
   base: string
@@ -543,6 +554,7 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
   onEdit: () => void
   onDelete: () => void
   onTogglePaid: (userId: number, paid: boolean) => void
+  onPreviewReceipts: (receipts: BudgetItemReceipt[]) => void
 }) {
   const meta = catMeta(item.category)
   const Icon = meta.Icon
@@ -577,7 +589,23 @@ function ExpenseRow({ item, ctx, base, locale, t, canEdit, onEdit, onDelete, onT
 
         <div className="flex items-center gap-[10px]">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[0.8125rem] font-bold text-m-ink">{item.name}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="truncate text-[0.8125rem] font-bold text-m-ink">{item.name}</span>
+              {(item.receipts || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    onPreviewReceipts(item.receipts!)
+                  }}
+                  title={t('costs.viewReceipt')}
+                  className="inline-flex items-center gap-1 rounded-full border border-[color:var(--m-rowbr)] bg-[color:var(--m-ic)] px-2 py-0.5 text-[0.625rem] font-semibold text-m-muted active:scale-95 transition-all"
+                >
+                  <Receipt size={11} className="text-m-faint" />
+                  <span>{t('costs.receipts') || 'Beleg'}{item.receipts!.length > 1 ? ` (${item.receipts!.length})` : ''}</span>
+                </button>
+              )}
+            </div>
             {cur !== base && (
               <div className="mt-[1px] truncate font-geist text-[0.59375rem] text-m-faint">
                 {formatMoney(item.total_price, cur, locale)} {'→'} {formatMoney(total, base, locale)}

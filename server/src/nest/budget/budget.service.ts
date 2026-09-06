@@ -4,7 +4,7 @@ import type { TrekWsPayload, TrekWsTripEventName } from '@trek/shared';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { avatarUrl } from '../common/avatarUrl';
-import type { User, BudgetItem, BudgetItemMember, BudgetItemPayer } from '../../types';
+import type { User, BudgetItem, BudgetItemMember, BudgetItemPayer, BudgetItemReceipt } from '../../types';
 import { ExchangeRatesService } from './exchange-rates.service';
 
 type Trip = TripAccess;
@@ -143,6 +143,32 @@ export class BudgetService {
     return rows.map(p => ({ ...p, avatar_url: avatarUrl(p) }));
   }
 
+  private loadItemReceipts(itemId: number | string): BudgetItemReceipt[] {
+    const rows = this.db.all<{
+      id: number;
+      filename: string;
+      original_name: string;
+      file_size: number | null;
+      mime_type: string | null;
+      trip_id: number;
+    }>(`
+      SELECT f.id, f.filename, f.original_name, f.file_size, f.mime_type, f.trip_id
+      FROM trip_files f
+      JOIN file_links fl ON fl.file_id = f.id
+      WHERE f.deleted_at IS NULL AND fl.budget_item_id = ?
+      ORDER BY f.created_at ASC
+    `, itemId);
+
+    return rows.map(f => ({
+      id: f.id,
+      filename: f.filename,
+      original_name: f.original_name,
+      file_size: f.file_size,
+      mime_type: f.mime_type,
+      url: `/api/trips/${f.trip_id}/files/${f.id}/download`,
+    }));
+  }
+
   /**
    * The subset of `userIds` that is actually on this trip. Used to be a plain
    * existence check against `users`, which let any id on the instance become a
@@ -175,6 +201,37 @@ export class BudgetService {
     const total = sumMoney(accepted);
     this.db.run('UPDATE budget_items SET total_price = ? WHERE id = ?', total, itemId);
     return total;
+  }
+
+  /**
+   * Move a receipt file to trash if it is only linked to this budget item and
+   * not referenced by any other reservation, place, or day assignment.
+   */
+  private trashOrphanReceipt(fileId: number | string, budgetItemId: number | string) {
+    const file = this.db.get<{ id: number; place_id: number | null; reservation_id: number | null }>(
+      'SELECT id, place_id, reservation_id FROM trip_files WHERE id = ? AND deleted_at IS NULL',
+      fileId,
+    );
+    if (!file) return;
+
+    // Check if file is tied directly to another entity via legacy columns
+    if (file.place_id || file.reservation_id) return;
+
+    // Check if file is linked via file_links to another reservation, place, assignment, or other budget item
+    const otherLinks = this.db.get<{ count: number }>(`
+      SELECT COUNT(*) as count FROM file_links
+      WHERE file_id = ? AND (
+        reservation_id IS NOT NULL OR
+        place_id IS NOT NULL OR
+        assignment_id IS NOT NULL OR
+        (budget_item_id IS NOT NULL AND budget_item_id != ?)
+      )
+    `, fileId, budgetItemId);
+
+    if (otherLinks && otherLinks.count > 0) return;
+
+    // It is an orphan receipt solely belonging to this budget item: move to trash
+    this.db.run('UPDATE trip_files SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', fileId);
   }
 
   // -------------------------------------------------------------------------
@@ -225,9 +282,42 @@ export class BudgetService {
       }
     }
 
+    const receiptsByItem: Record<number, BudgetItemReceipt[]> = {};
+    if (itemIds.length > 0) {
+      const placeholders = itemIds.map(() => '?').join(',');
+      const allReceipts = this.db.all<{
+        id: number;
+        filename: string;
+        original_name: string;
+        file_size: number | null;
+        mime_type: string | null;
+        trip_id: number;
+        budget_item_id: number;
+      }>(`
+        SELECT f.id, f.filename, f.original_name, f.file_size, f.mime_type, f.trip_id, fl.budget_item_id
+        FROM trip_files f
+        JOIN file_links fl ON fl.file_id = f.id
+        WHERE f.deleted_at IS NULL AND fl.budget_item_id IN (${placeholders})
+        ORDER BY f.created_at ASC
+      `, ...itemIds);
+
+      for (const r of allReceipts) {
+        if (!receiptsByItem[r.budget_item_id]) receiptsByItem[r.budget_item_id] = [];
+        receiptsByItem[r.budget_item_id].push({
+          id: r.id,
+          filename: r.filename,
+          original_name: r.original_name,
+          file_size: r.file_size,
+          mime_type: r.mime_type,
+          url: `/api/trips/${r.trip_id}/files/${r.id}/download`,
+        });
+      }
+    }
+
     items.forEach(item => {
       item.members = membersByItem[item.id] || [];
       item.payers = payersByItem[item.id] || [];
+      item.receipts = receiptsByItem[item.id] || [];
     });
     return items;
   }
@@ -352,6 +442,7 @@ export class BudgetService {
       ticket_json?: string | null;
       reservation_id?: number | null;
       place_id?: number | null;
+      receipt_file_ids?: number[];
     },
   ) {
     return this.db.transaction(() => {
@@ -409,19 +500,32 @@ export class BudgetService {
         for (const uid of memberIds) insert.run(itemId, uid);
       }
 
+      if (data.receipt_file_ids && data.receipt_file_ids.length > 0) {
+        const insertLink = this.db.prepare('INSERT OR IGNORE INTO file_links (file_id, budget_item_id) VALUES (?, ?)');
+        for (const fid of data.receipt_file_ids) {
+          // Verify file belongs to this trip
+          const belongs = this.db.get('SELECT id FROM trip_files WHERE id = ? AND trip_id = ? AND deleted_at IS NULL', fid, tripId);
+          if (belongs) {
+            insertLink.run(fid, itemId);
+          }
+        }
+      }
+
       const item = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', itemId)!;
       item.members = this.loadItemMembers(itemId);
       item.payers = this.loadItemPayers(itemId);
+      item.receipts = this.loadItemReceipts(itemId);
       return item;
     });
   }
 
-  /** Fetch a single budget item hydrated with its members and payers, scoped to the trip. */
+  /** Fetch a single budget item hydrated with its members, payers, and receipts, scoped to the trip. */
   getBudgetItem(id: string | number, tripId: string | number): BudgetItem | null {
     const item = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ? AND trip_id = ?', id, tripId);
     if (!item) return null;
     item.members = this.loadItemMembers(id);
     item.payers = this.loadItemPayers(id);
+    item.receipts = this.loadItemReceipts(id);
     return item;
   }
 
@@ -445,6 +549,7 @@ export class BudgetService {
       members?: { user_id: number; amount?: number | null }[];
       persons?: number | null; days?: number | null; note?: string | null; sort_order?: number; expense_date?: string | null;
       ticket_json?: string | null;
+      receipt_file_ids?: number[];
     },
   ) {
     return this.db.transaction(() => {
@@ -522,9 +627,39 @@ export class BudgetService {
         }
       }
 
+      if (data.receipt_file_ids !== undefined) {
+        // Find existing receipt file IDs for this budget item
+        const oldReceiptFiles = this.db.all<{ id: number }>(`
+          SELECT f.id FROM trip_files f
+          JOIN file_links fl ON fl.file_id = f.id
+          WHERE f.deleted_at IS NULL AND fl.budget_item_id = ?
+        `, id).map(r => r.id);
+
+        // Sync receipts: delete previous links and add new ones
+        this.db.run('DELETE FROM file_links WHERE budget_item_id = ?', id);
+        if (data.receipt_file_ids.length > 0) {
+          const insertLink = this.db.prepare('INSERT OR IGNORE INTO file_links (file_id, budget_item_id) VALUES (?, ?)');
+          for (const fid of data.receipt_file_ids) {
+            const belongs = this.db.get('SELECT id FROM trip_files WHERE id = ? AND trip_id = ? AND deleted_at IS NULL', fid, tripId);
+            if (belongs) {
+              insertLink.run(fid, id);
+            }
+          }
+        }
+
+        // Any previously attached receipt that was unlinked now moves to trash if orphan
+        const newSet = new Set(data.receipt_file_ids);
+        for (const oldFid of oldReceiptFiles) {
+          if (!newSet.has(oldFid)) {
+            this.trashOrphanReceipt(oldFid, id);
+          }
+        }
+      }
+
       const updated = this.db.get<BudgetItem>('SELECT * FROM budget_items WHERE id = ?', id)!;
       updated.members = this.loadItemMembers(id);
       updated.payers = this.loadItemPayers(id);
+      updated.receipts = this.loadItemReceipts(id);
       return updated;
     });
   }
@@ -551,7 +686,21 @@ export class BudgetService {
     );
     if (!item) return false;
     return this.db.transaction(() => {
+      // Find all receipts attached to this item before deleting it
+      const receiptFiles = this.db.all<{ id: number }>(`
+        SELECT f.id FROM trip_files f
+        JOIN file_links fl ON fl.file_id = f.id
+        WHERE f.deleted_at IS NULL AND fl.budget_item_id = ?
+      `, id).map(r => r.id);
+
+      // Move exclusively attached receipts to trash
+      for (const fid of receiptFiles) {
+        this.trashOrphanReceipt(fid, id);
+      }
+
+      this.db.run('DELETE FROM file_links WHERE budget_item_id = ?', id);
       this.db.run('DELETE FROM budget_items WHERE id = ?', id);
+
       // The booking keeps a copy of this expense's total in its metadata, and
       // the reservation update path preserves that copy across edits. With the
       // expense gone there is nothing left to mirror, so drop it here rather

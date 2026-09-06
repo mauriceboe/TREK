@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Summe der Anteile: {sum} von {total} (es fehlen {diff})',
   'costs.splitSumOver': 'Summe der Anteile: {sum} von {total} ({diff} zu viel)',
   'costs.toggleSign': 'Zwischen Ausgabe und Erstattung wechseln',
+  'costs.receipts': 'Belege',
+  'costs.receiptsTitle': 'Belege & Rechnungen',
+  'costs.attachReceipt': 'Beleg / Rechnung anhängen',
+  'costs.noReceipts': 'Keine Belege angehängt',
+  'costs.deleteReceipt': 'Beleg entfernen',
+  'costs.viewReceipt': 'Beleg ansehen',
 };
 export default budget;

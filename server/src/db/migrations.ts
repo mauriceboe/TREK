@@ -4257,6 +4257,18 @@ function runMigrations(db: Database.Database): void {
         db.exec('ALTER TABLE journey_entries ADD COLUMN stats_excluded INTEGER NOT NULL DEFAULT 0');
       }
     },
+    /**
+     * Allow files to be linked to expenses (budget items) for receipt
+     * and invoice uploads via file_links.
+     */
+    () => {
+      const flCols = db.prepare("SELECT name FROM pragma_table_info('file_links')").all() as Array<{ name: string }>;
+      if (!flCols.some((c) => c.name === 'budget_item_id')) {
+        db.exec('ALTER TABLE file_links ADD COLUMN budget_item_id INTEGER REFERENCES budget_items(id) ON DELETE CASCADE');
+      }
+      db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_file_links_file_budget ON file_links(file_id, budget_item_id)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_file_links_budget_item_id ON file_links(budget_item_id)');
+    },
   ];
 
   if (currentVersion < migrations.length) {

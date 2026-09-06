@@ -1,17 +1,17 @@
 import { Fragment, useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router'
-import { ArrowDown, ArrowUp, BarChart3, Plus, Search, ArrowRight, ArrowLeftRight, Check, RotateCcw, Pencil, Trash2, AlertCircle, Download, StickyNote, ChevronDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, BarChart3, Plus, Search, ArrowRight, ArrowLeftRight, Check, RotateCcw, Pencil, Trash2, AlertCircle, Download, StickyNote, ChevronDown, Receipt, Paperclip } from 'lucide-react'
 import { useTripStore } from '../../store/tripStore'
 import { useAuthStore } from '../../store/authStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useCanDo } from '../../store/permissionsStore'
 import { useToast } from '../shared/Toast'
 import { useTranslation } from '../../i18n'
-import { budgetApi } from '../../api/client'
+import { budgetApi, filesApi } from '../../api/client'
 import { useExchangeRates } from '../../hooks/useExchangeRates'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { formatMoney, currencyDecimals, currencyLocale, localizeAmountInput, amountToInputString } from '../../utils/formatters'
-import { downloadBlob } from '../../utils/fileDownload'
+import { downloadBlob, openFile } from '../../utils/fileDownload'
 import Modal from '../shared/Modal'
 import CustomSelect from '../shared/CustomSelect'
 import { CustomDatePicker } from '../shared/CustomDateTimePicker'
@@ -19,7 +19,8 @@ import { localToday } from '../Planner/today'
 import { SYMBOLS, currenciesWith, SPLIT_COLORS } from './BudgetPanel.constants'
 import { amountPattern, calculateTicketShares, hasTicketSplit, NOTE_MAX, payersBalanced, readTicketItems, readUserNote, rebalancePayers, splitEqualShares, writeTicketItems, type TicketItem } from './CostsPanel.helpers'
 import { COST_CATEGORY_LIST, catMeta } from './costsCategories'
-import type { BudgetItem } from '../../types'
+import { ReceiptPreviewModal } from './ReceiptPreviewModal'
+import type { BudgetItem, BudgetItemReceipt } from '../../types'
 import type { TripMember } from './BudgetPanelMemberChips'
 import GuestBadge from '../shared/GuestBadge'
 import { NumericInput } from '../shared/NumericInput'
@@ -84,6 +85,7 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
   const [dayFilter, setDayFilter] = useState('')   // '' = all days, else YYYY-MM-DD
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<BudgetItem | null>(null)
+  const [previewReceipts, setPreviewReceipts] = useState<{ receipts: BudgetItemReceipt[]; initialIndex: number } | null>(null)
   // One note open at a time: two expanded rows next to each other read as a mess,
   // and the point of the collapse is that the list stays scannable.
   const [expandedNoteId, setExpandedNoteId] = useState<number | null>(null)
@@ -492,6 +494,14 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
           onSaved={() => { setEditingSettlement(null); setAddingPayment(false); loadSettlement() }} />
       )}
 
+      {previewReceipts && (
+        <ReceiptPreviewModal
+          receipts={previewReceipts.receipts}
+          initialIndex={previewReceipts.initialIndex}
+          onClose={() => setPreviewReceipts(null)}
+        />
+      )}
+
       <style>{`
         .costs-root {
           --c-bg: #f8fafc; --c-bg2: oklch(0.965 0.01 70);
@@ -761,6 +771,32 @@ export default function CostsPanel({ tripId, tripMembers = [] }: CostsPanelProps
                 <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#d97706', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 'calc(10px * var(--fs-scale-caption, 1))', fontWeight: 800 }}>!</span>
                 {t('costs.unfinished')}
               </span>
+            )}
+            {(e.receipts || []).length > 0 && (
+              <button
+                type="button"
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  setPreviewReceipts({ receipts: e.receipts!, initialIndex: 0 })
+                }}
+                title={t('costs.viewReceipt')}
+                className="bg-surface-secondary border border-edge text-content-muted hover:text-content hover:border-content-faint transition-all"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  fontSize: 'calc(11px * var(--fs-scale-caption, 1))',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <Receipt size={12} className="text-content-muted" />
+                <span>{t('costs.receipts') || 'Beleg'}{e.receipts!.length > 1 ? ` (${e.receipts!.length})` : ''}</span>
+              </button>
             )}
           </div>
           {cur !== base && (
@@ -1122,6 +1158,24 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
     return m
   })
 
+  const [receipts, setReceipts] = useState<BudgetItemReceipt[]>(() => editing?.receipts || [])
+  const [pendingReceiptFiles, setPendingReceiptFiles] = useState<File[]>([])
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [modalPreviewReceipts, setModalPreviewReceipts] = useState<{ receipts: BudgetItemReceipt[]; initialIndex: number } | null>(null)
+
+  const handleReceiptFileSelect = (files: FileList | File[] | null) => {
+    if (!files || files.length === 0) return
+    setPendingReceiptFiles(prev => [...prev, ...Array.from(files)])
+  }
+
+  const handleRemoveReceipt = (receiptId: number) => {
+    setReceipts(prev => prev.filter(r => r.id !== receiptId))
+  }
+
+  const handleRemovePendingReceipt = (index: number) => {
+    setPendingReceiptFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
   const [saving, setSaving] = useState(false)
 
   const isTicketMode = splitMode === 'ticket'
@@ -1318,8 +1372,53 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
       ...(!editing && prefill?.placeId ? { place_id: prefill.placeId } : {}),
     }
     try {
-      if (editing) await updateBudgetItem(tripId, editing.id, data)
-      else await addBudgetItem(tripId, data)
+      // Upload any pending receipt files
+      const uploadedFileIds: number[] = []
+      try {
+        for (const f of pendingReceiptFiles) {
+          const fd = new FormData()
+          fd.append('file', f)
+          if (editing) {
+            fd.append('budget_item_id', String(editing.id))
+          }
+          const res = await filesApi.upload(tripId, fd)
+          if (res?.file?.id) {
+            uploadedFileIds.push(res.file.id)
+          }
+        }
+      } catch (err) {
+        for (const fid of uploadedFileIds) {
+          try { await filesApi.permanentDelete(tripId, fid) } catch {}
+        }
+        throw err
+      }
+
+      let createdOrUpdated: BudgetItem
+      if (editing) {
+        try {
+          createdOrUpdated = await updateBudgetItem(tripId, editing.id, {
+            ...data,
+            receipt_file_ids: [...receipts.map(r => r.id), ...uploadedFileIds],
+          })
+        } catch (err) {
+          for (const fid of uploadedFileIds) {
+            try { await filesApi.permanentDelete(tripId, fid) } catch {}
+          }
+          throw err
+        }
+      } else {
+        try {
+          createdOrUpdated = await addBudgetItem(tripId, {
+            ...data,
+            receipt_file_ids: uploadedFileIds,
+          })
+        } catch (err) {
+          for (const fid of uploadedFileIds) {
+            try { await filesApi.permanentDelete(tripId, fid) } catch {}
+          }
+          throw err
+        }
+      }
       onSaved()
     } catch {
       toast.error(t('common.unknownError'))
@@ -1633,8 +1732,91 @@ export function ExpenseModal({ tripId, base, people, me, editing, prefill, onClo
             placeholder={t('costs.notePlaceholder')} maxLength={NOTE_MAX}
             className={inputCls} style={{ borderRadius: 10, padding: '10px 13px', fontSize: 'calc(13.5px * var(--fs-scale-body, 1))', outline: 'none', resize: 'vertical', minHeight: 68, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.5 }} />
         </div>
+
+        <div className={panelCls}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <label className={labelCls} style={{ marginBottom: 0 }}>{t('costs.receiptsTitle') || t('costs.receipts')}</label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 'calc(12px * var(--fs-scale-caption, 1))', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <input
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  handleReceiptFileSelect(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              <span className="bg-surface-card border border-edge text-content-muted hover:text-content transition-colors" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999 }}>
+                <Plus size={13} /> {t('costs.attachReceipt')}
+              </span>
+            </label>
+          </div>
+
+          {uploadingReceipt && (
+            <div className="text-content-faint" style={{ fontSize: 'calc(12px * var(--fs-scale-caption, 1))', marginBottom: 8 }}>
+              {t('common.saving')}...
+            </div>
+          )}
+
+          {receipts.length === 0 && pendingReceiptFiles.length === 0 ? (
+            <div className="text-content-faint" style={{ fontSize: 'calc(12.5px * var(--fs-scale-body, 1))', padding: '6px 0' }}>
+              {t('costs.noReceipts')}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {receipts.map((r, rIdx) => (
+                <div key={r.id} className="bg-surface-secondary border border-edge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 11px', borderRadius: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setModalPreviewReceipts({ receipts, initialIndex: rIdx })}
+                    className="text-content hover:underline"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0, background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}
+                  >
+                    <Receipt size={14} className="text-content-faint flex-shrink-0" />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.original_name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveReceipt(r.id)}
+                    title={t('costs.deleteReceipt')}
+                    className="text-content-muted hover:text-red-500 transition-colors"
+                    style={{ background: 'none', border: 0, padding: 3, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {pendingReceiptFiles.map((file, idx) => (
+                <div key={idx} className="bg-surface-secondary border border-edge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 11px', borderRadius: 10 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0, fontSize: 'calc(13px * var(--fs-scale-body, 1))' }}>
+                    <Paperclip size={14} className="text-content-faint flex-shrink-0" />
+                    <span className="text-content" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePendingReceipt(idx)}
+                    title={t('costs.deleteReceipt')}
+                    className="text-content-muted hover:text-red-500 transition-colors"
+                    style={{ background: 'none', border: 0, padding: 3, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         </div>
       </div>
+
+      {modalPreviewReceipts && (
+        <ReceiptPreviewModal
+          receipts={modalPreviewReceipts.receipts}
+          initialIndex={modalPreviewReceipts.initialIndex}
+          onClose={() => setModalPreviewReceipts(null)}
+        />
+      )}
     </Modal>
   )
 }

@@ -147,5 +147,11 @@ const budget: TranslationStrings = {
   'costs.splitSumUnder': 'Suma podziałów: {sum} z {total} (brakuje {diff})',
   'costs.splitSumOver': 'Suma podziałów: {sum} z {total} (o {diff} za dużo)',
   'costs.toggleSign': 'Przełącz między wydatkiem a zwrotem',
+  'costs.receipts': 'Paragony',
+  'costs.receiptsTitle': 'Paragony i faktury',
+  'costs.attachReceipt': 'Załącz paragon / fakturę',
+  'costs.noReceipts': 'Brak załączonych paragonów',
+  'costs.deleteReceipt': 'Usuń paragon',
+  'costs.viewReceipt': 'Zobacz paragon',
 };
 export default budget;

@@ -37,6 +37,7 @@ export interface FileLink {
   file_id: number;
   reservation_id: number | null;
   place_id: number | null;
+  budget_item_id: number | null;
 }
 
 /**
@@ -137,8 +138,8 @@ export class FilesService {
    */
   findForeignLinkTarget(
     tripId: string | number,
-    opts: { reservation_id?: string | number | null; assignment_id?: string | number | null; place_id?: string | number | null }
-  ): 'reservation_id' | 'assignment_id' | 'place_id' | null {
+    opts: { reservation_id?: string | number | null; assignment_id?: string | number | null; place_id?: string | number | null; budget_item_id?: string | number | null }
+  ): 'reservation_id' | 'assignment_id' | 'place_id' | 'budget_item_id' | null {
     if (opts.reservation_id && !this.db.get('SELECT 1 FROM reservations WHERE id = ? AND trip_id = ?', opts.reservation_id, tripId)) {
       return 'reservation_id';
     }
@@ -147,6 +148,9 @@ export class FilesService {
     }
     if (opts.assignment_id && !this.db.get('SELECT 1 FROM day_assignments a JOIN days d ON a.day_id = d.id WHERE a.id = ? AND d.trip_id = ?', opts.assignment_id, tripId)) {
       return 'assignment_id';
+    }
+    if (opts.budget_item_id && !this.db.get('SELECT 1 FROM budget_items WHERE id = ? AND trip_id = ?', opts.budget_item_id, tripId)) {
+      return 'budget_item_id';
     }
     return null;
   }
@@ -229,7 +233,7 @@ export class FilesService {
     const linksMap: Record<number, FileLink[]> = {};
     if (fileIds.length > 0) {
       const placeholders = fileIds.map(() => '?').join(',');
-      const links = this.db.all<FileLink>(`SELECT file_id, reservation_id, place_id FROM file_links WHERE file_id IN (${placeholders})`, ...fileIds);
+      const links = this.db.all<FileLink>(`SELECT file_id, reservation_id, place_id, budget_item_id FROM file_links WHERE file_id IN (${placeholders})`, ...fileIds);
       for (const link of links) {
         if (!linksMap[link.file_id]) linksMap[link.file_id] = [];
         linksMap[link.file_id].push(link);
@@ -242,6 +246,7 @@ export class FilesService {
         ...formatFile(f),
         linked_reservation_ids: fileLinks.filter(l => l.reservation_id).map(l => l.reservation_id),
         linked_place_ids: fileLinks.filter(l => l.place_id).map(l => l.place_id),
+        linked_budget_item_ids: fileLinks.filter(l => l.budget_item_id).map(l => l.budget_item_id),
       };
     });
   }
@@ -250,7 +255,7 @@ export class FilesService {
     tripId: string | number,
     file: { filename: string; originalname: string; size: number; mimetype: string },
     uploadedBy: number,
-    opts: { place_id?: string | number | null; reservation_id?: string | number | null; description?: string | null }
+    opts: { place_id?: string | number | null; reservation_id?: string | number | null; budget_item_id?: string | number | null; description?: string | null }
   ) {
     const result = this.db.run(`
       INSERT INTO trip_files (trip_id, place_id, reservation_id, filename, original_name, file_size, mime_type, description, uploaded_by)
@@ -267,6 +272,10 @@ export class FilesService {
       uploadedBy
     );
 
+    if (opts.budget_item_id) {
+      this.db.run('INSERT OR IGNORE INTO file_links (file_id, budget_item_id) VALUES (?, ?)', result.lastInsertRowid, opts.budget_item_id);
+    }
+
     const created = this.db.get<TripFile>(`${FILE_SELECT} WHERE f.id = ?`, result.lastInsertRowid)!;
     return formatFile(created);
   }
@@ -274,7 +283,7 @@ export class FilesService {
   updateFile(
     id: string | number,
     current: TripFile,
-    updates: { description?: string; place_id?: string | number | null; reservation_id?: string | number | null }
+    updates: { description?: string; place_id?: string | number | null; reservation_id?: string | number | null; budget_item_id?: string | number | null }
   ) {
     this.db.run(`
       UPDATE trip_files SET
@@ -288,6 +297,14 @@ export class FilesService {
       updates.reservation_id !== undefined ? (updates.reservation_id || null) : current.reservation_id,
       id
     );
+
+    if (updates.budget_item_id !== undefined) {
+      if (updates.budget_item_id) {
+        this.db.run('INSERT OR IGNORE INTO file_links (file_id, budget_item_id) VALUES (?, ?)', id, updates.budget_item_id);
+      } else {
+        this.db.run('DELETE FROM file_links WHERE file_id = ? AND budget_item_id IS NOT NULL', id);
+      }
+    }
 
     const updated = this.db.get<TripFile>(`${FILE_SELECT} WHERE f.id = ?`, id)!;
     return formatFile(updated);
@@ -355,10 +372,10 @@ export class FilesService {
   // of returning a success-shaped links list (the legacy catch swallowed it).
   createFileLink(
     fileId: string | number,
-    opts: { reservation_id?: string | number | null; assignment_id?: string | number | null; place_id?: string | number | null }
+    opts: { reservation_id?: string | number | null; assignment_id?: string | number | null; place_id?: string | number | null; budget_item_id?: string | number | null }
   ) {
-    this.db.run('INSERT OR IGNORE INTO file_links (file_id, reservation_id, assignment_id, place_id) VALUES (?, ?, ?, ?)',
-      fileId, opts.reservation_id || null, opts.assignment_id || null, opts.place_id || null
+    this.db.run('INSERT OR IGNORE INTO file_links (file_id, reservation_id, assignment_id, place_id, budget_item_id) VALUES (?, ?, ?, ?, ?)',
+      fileId, opts.reservation_id || null, opts.assignment_id || null, opts.place_id || null, opts.budget_item_id || null
     );
     return this.db.all('SELECT * FROM file_links WHERE file_id = ?', fileId);
   }

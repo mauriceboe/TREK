@@ -125,6 +125,15 @@ export interface PackingItem {
   created_at?: string;
 }
 
+export interface BudgetItemReceipt {
+  id: number;
+  filename: string;
+  original_name: string;
+  file_size?: number | null;
+  mime_type?: string | null;
+  url: string;
+}
+
 export interface BudgetItem {
   id: number;
   trip_id: number;
@@ -148,6 +157,7 @@ export interface BudgetItem {
   created_at?: string;
   members?: BudgetItemMember[];
   payers?: BudgetItemPayer[];
+  receipts?: BudgetItemReceipt[];
 }
 
 export interface BudgetItemMember {
