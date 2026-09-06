@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Tempat',
   'mobileTrip.addToDayQuestion': 'Tambahkan ke hari?',
   'mobileTrip.addTransportShort': 'Transportasi',
+  'mobileTrip.allDays': 'Semua Hari',
   'mobileTrip.assignedDays': 'Hari yang ditetapkan',
   'mobileTrip.assignmentNotes': 'Catatan khusus hari',
   'mobileTrip.bookingsEmpty': 'Belum ada reservasi',

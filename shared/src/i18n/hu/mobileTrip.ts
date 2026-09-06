@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Hely',
   'mobileTrip.addToDayQuestion': 'Hozzáadás egy naphoz?',
   'mobileTrip.addTransportShort': 'Közlekedés',
+  'mobileTrip.allDays': 'Minden nap',
   'mobileTrip.assignedDays': 'Hozzárendelt napok',
   'mobileTrip.assignmentNotes': 'Napra szóló jegyzetek',
   'mobileTrip.bookingsEmpty': 'Még nincsenek foglalások',

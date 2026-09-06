@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Địa điểm',
   'mobileTrip.addToDayQuestion': 'Thêm vào một ngày?',
   'mobileTrip.addTransportShort': 'Di chuyển',
+  'mobileTrip.allDays': 'Tất cả các ngày',
   'mobileTrip.assignedDays': 'Ngày được gán',
   'mobileTrip.assignmentNotes': 'Ghi chú theo ngày',
   'mobileTrip.bookingsEmpty': 'Chưa có đặt chỗ nào',

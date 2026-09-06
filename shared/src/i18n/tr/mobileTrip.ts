@@ -6,6 +6,7 @@ const mobileTrip: TranslationStrings = {
   'mobileTrip.addPlaceShort': 'Yer',
   'mobileTrip.addToDayQuestion': 'Bir güne eklensin mi?',
   'mobileTrip.addTransportShort': 'Ulaşım',
+  'mobileTrip.allDays': 'Tüm Günler',
   'mobileTrip.assignedDays': 'Atanan Günler',
   'mobileTrip.assignmentNotes': 'Güne özel notlar',
   'mobileTrip.bookingsEmpty': 'Henüz rezervasyon yok',
