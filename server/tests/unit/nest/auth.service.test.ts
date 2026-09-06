@@ -646,6 +646,22 @@ describe('getAppConfig', () => {
     expect(svc.getAppConfig(null).passkey_configured).toBe(false);
     vi.unstubAllEnvs();
   });
+
+  it('AUTH-DB-052g: place_shadow_enabled fails closed, on the unauthenticated payload', () => {
+    createUser(testDb);
+    const set = testDb.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('place_shadow_enabled', ?)");
+    // No row is the state of every install that never touched the switch.
+    expect(svc.getAppConfig(null).place_shadow_enabled).toBe(false);
+    set.run('false');
+    expect(svc.getAppConfig(null).place_shadow_enabled).toBe(false);
+    // Only the literal 'true' opens it, the mirror image of the fail-open
+    // places_* flags beside it, which close only on the literal 'false'.
+    set.run('1');
+    expect(svc.getAppConfig(null).place_shadow_enabled).toBe(false);
+    expect(svc.getAppConfig(null).places_enrich_enabled).toBe(true);
+    set.run('true');
+    expect(svc.getAppConfig(null).place_shadow_enabled).toBe(true);
+  });
 });
 
 describe('demoLogin', () => {

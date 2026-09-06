@@ -414,4 +414,55 @@ describe("the description on the place's own website", () => {
     const out = await make(mapsStub()).enrich(1, GERS_REQ);
     expect(out.description).toBeNull();
   });
+
+  it('ENRICH-101: a place the index knows, whose site publishes no summary', async () => {
+    // The common answer, not an error: the GERS id resolves, and the place has
+    // no description field at all because its page carried nothing readable.
+    mockTrekPlacesById.mockResolvedValue({ gers: 'abc-123', name: "L'Osteria" });
+
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+
+    expect(mockTrekPlacesById).toHaveBeenCalledWith('abc-123');
+    expect(out.description).toBeNull();
+  });
+
+  it('ENRICH-102: still quotes a summary the API could not name a page for', async () => {
+    // The link is the credit, not the content. Dropping the text for want of a
+    // footnote would lose the only description the place has. The field is
+    // absent rather than null, so `sourceUrl` below is the normalisation and
+    // not the fixture read back.
+    mockTrekPlacesById.mockResolvedValue({ description: { text: 'Pizza in Rostock.' } });
+
+    const out = await make(mapsStub()).enrich(1, GERS_REQ);
+
+    expect(out.description).toEqual({
+      text: 'Pizza in Rostock.',
+      source: 'website',
+      sourceUrl: null,
+      license: null,
+    });
+  });
+
+  it("ENRICH-103: the branch's own words come before the chain's article", async () => {
+    // L'Osteria Rostock carries brand:wikidata and has no article of its own.
+    // The chain article is about the company; the site is about this branch,
+    // and the branch is what was asked about.
+    mockTrekPlacesById.mockResolvedValue({
+      description: { text: 'Unsere Filiale in der Steinstraße.', sourceUrl: 'https://losteria.net/rostock' },
+    });
+    const maps = mapsStub({
+      resolveOsmIdentity: vi.fn(async () => ({
+        tags: { 'brand:wikidata': 'Q17323478', 'brand:wikipedia': 'de:L’Osteria' },
+        osmUrl: null,
+        matchedName: "L'Osteria",
+      })),
+      fetchWikiExtractFor: vi.fn(async () => EXTRACT),
+    });
+
+    const out = await make(maps).enrich(1, GERS_REQ);
+
+    expect(out.description).toMatchObject({ source: 'website', text: 'Unsere Filiale in der Steinstraße.' });
+    // The chain lookup starts at the brand's Wikidata item — it never ran.
+    expect(maps.fetchWikidataSitelinks).not.toHaveBeenCalled();
+  });
 });
