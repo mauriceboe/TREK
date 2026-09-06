@@ -391,16 +391,21 @@ export class PlaceEnrichmentService {
       wikidata: fromPayload('wikidata'),
       wikimedia_commons: fromPayload('wikimedia_commons'),
       osmTags: null,
-      brand: { wikidata: null, wikipedia: null },
+      // The index knows the chain a branch belongs to and hands it over under
+      // the same key OSM uses. It stays out of the three fields above: those
+      // say "this is the article about this place", and a chain's is not.
+      brand: { wikidata: fromPayload('brand:wikidata'), wikipedia: fromPayload('brand:wikipedia') },
     };
     if (carried.wikipedia || carried.wikidata || carried.wikimedia_commons) return carried;
 
     const resolved = await this.maps.resolveOsmIdentity(req.name, req.lat, req.lng, { lang: req.lang });
     if (!resolved) return carried;
+    const brand = readBrandIdentity(resolved.tags);
     return {
       ...readWikiIdentity(resolved.tags),
       osmTags: resolved.tags,
-      brand: readBrandIdentity(resolved.tags),
+      // OSM first, the carried one when OSM has no brand tag for this object.
+      brand: brand.wikidata || brand.wikipedia ? brand : carried.brand,
     };
   }
 

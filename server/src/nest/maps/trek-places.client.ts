@@ -258,7 +258,12 @@ export function toPlaceRecord(p: TrekPlace): Record<string, unknown> {
     email: p.contact?.email ?? null,
     category: p.category ?? null,
     brand: p.brand?.name ?? null,
-    wikidata: p.brand?.wikidata ?? null,
+    // The chain's Wikidata item, under the key that says so. It must NOT go
+    // into `wikidata`: that field means "the article about this place", and the
+    // enrichment ladder reads it as such — a branch would then be illustrated
+    // with the chain's logo and described as the company, which is the failure
+    // readBrandIdentity and WIKI_IDENTITY_TAGS exist to prevent.
+    'brand:wikidata': p.brand?.wikidata ?? null,
     source: 'trek-places',
   };
 }
