@@ -136,8 +136,7 @@ describe('KitineraryExtractorService binary probe', () => {
 describe('KitineraryExtractorService diagnostics', () => {
   it('KIT-EXT-010: reports the version the binary prints', () => {
     existsSync.mockImplementation((p: string) => p === '/opt/ki');
-    execFileSync.mockReturnValue(Buffer.from('kitinerary-extractor 6.3.3
-'));
+    execFileSync.mockReturnValue(Buffer.from('kitinerary-extractor 6.3.3\n'));
 
     expect(boot({ kitineraryExtractorPath: '/opt/ki' }).describe()).toEqual({
       available: true, path: '/opt/ki', version: '6.3.3', configuredPath: '/opt/ki',
@@ -190,9 +189,7 @@ describe('KitineraryExtractorService stderr handling', () => {
 
   it('KIT-EXT-015: passes every raw line to the debug log, script errors included', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await extractWith('JS ERROR: lufthansa.js failed
-Invalid result type from script
-');
+    await extractWith('JS ERROR: lufthansa.js failed\nInvalid result type from script\n');
 
     const logged = logDebug.mock.calls.map(c => String(c[0]));
     expect(logged.some(l => l.includes('JS ERROR: lufthansa.js failed'))).toBe(true);
@@ -204,17 +201,14 @@ Invalid result type from script
 
   it('KIT-EXT-016: an unexpected line still reaches console.warn', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await extractWith('JS ERROR: noise
-something genuinely odd
-');
+    await extractWith('JS ERROR: noise\nsomething genuinely odd\n');
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('booking.eml'), 'something genuinely odd');
     warn.mockRestore();
   });
 
   it('KIT-EXT-017: the debug dump is capped so one document cannot flood the log', async () => {
-    await extractWith(Array.from({ length: 500 }, (_, i) => `line ${i}`).join('
-'));
+    await extractWith(Array.from({ length: 500 }, (_, i) => `line ${i}`).join('\n'));
     expect(logDebug.mock.calls.length).toBe(200);
   });
 });
