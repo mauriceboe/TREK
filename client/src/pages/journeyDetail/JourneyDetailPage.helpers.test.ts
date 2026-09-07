@@ -16,7 +16,15 @@ describe('Journey provider photo ranking', () => {
     ]);
   });
 
-  it('preserves provider order when the selected entry has no valid location', () => {
+  it('falls back to newest-taken-first when the selected entry has no valid location', () => {
+    const photos = [
+      { id: 'older', takenAt: '2026-03-14T09:00:00Z' },
+      { id: 'newer', takenAt: '2026-03-16T09:00:00Z' },
+    ];
+    expect(sortProviderPhotos(photos, { lat: 200, lng: 12 }).map((photo) => photo.id)).toEqual(['newer', 'older']);
+  });
+
+  it('keeps original relative order for photos without a valid location and without takenAt', () => {
     const photos = [{ id: 'first' }, { id: 'second' }];
     expect(sortProviderPhotos(photos, { lat: 200, lng: 12 }).map((photo) => photo.id)).toEqual(['first', 'second']);
   });
