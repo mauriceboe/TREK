@@ -59,6 +59,7 @@ export function ProviderPicker({
   const [customTo, setCustomTo] = useState('');
   const [targetEntryId, setTargetEntryId] = useState<number | null>(initialEntryId ?? null);
   const [addToOpen, setAddToOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -558,25 +559,37 @@ export function ProviderPicker({
             </button>
             <button
               type="button"
-              onClick={() => {
-                const groupMap = new Map<string | undefined, { assetIds: string[]; mediaTypes: string[] }>();
-                for (const [assetId, { passphrase, mediaType }] of selected.entries()) {
-                  const g = groupMap.get(passphrase) || { assetIds: [], mediaTypes: [] };
-                  g.assetIds.push(assetId);
-                  g.mediaTypes.push(mediaType === 'video' ? 'video' : 'image');
-                  groupMap.set(passphrase, g);
+              onClick={async () => {
+                if (adding) return;
+                setAdding(true);
+                try {
+                  const groupMap = new Map<string | undefined, { assetIds: string[]; mediaTypes: string[] }>();
+                  for (const [assetId, { passphrase, mediaType }] of selected.entries()) {
+                    const g = groupMap.get(passphrase) || { assetIds: [], mediaTypes: [] };
+                    g.assetIds.push(assetId);
+                    g.mediaTypes.push(mediaType === 'video' ? 'video' : 'image');
+                    groupMap.set(passphrase, g);
+                  }
+                  const groups = [...groupMap.entries()].map(([passphrase, g]) => ({
+                    assetIds: g.assetIds,
+                    mediaTypes: g.mediaTypes,
+                    passphrase,
+                  }));
+                  await onAdd(groups, targetEntryId);
+                } finally {
+                  setAdding(false);
                 }
-                const groups = [...groupMap.entries()].map(([passphrase, g]) => ({
-                  assetIds: g.assetIds,
-                  mediaTypes: g.mediaTypes,
-                  passphrase,
-                }));
-                onAdd(groups, targetEntryId);
               }}
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || adding}
               className="rounded-lg bg-zinc-900 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
             >
-              {t('common.add')} {selected.size > 0 ? `(${selected.size})` : ''}
+              {adding ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-400 border-t-white dark:border-t-zinc-900" />
+              ) : (
+                <>
+                  {t('common.add')} {selected.size > 0 ? `(${selected.size})` : ''}
+                </>
+              )}
             </button>
           </div>
         </div>
