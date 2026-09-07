@@ -69,6 +69,26 @@ OpenFreeMap instead of drawing watermarked tiles. Save a key and your template i
 Offline pre-download works on OpenFreeMap and on CARTO. It does not work on the OpenStreetMap presets, whose tile
 servers do not permit bulk downloading.
 
+## Amap (高德地图) basemap
+
+Two presets — **高德地图 (Amap)** for the road map and **高德卫星 (Amap Satellite)** for imagery. They need no key and
+no account, and inside mainland China they are far better than anything else in the list: OpenStreetMap and
+OpenFreeMap are sparse there, and the foreign tile CDNs are slow or unreachable.
+
+These tiles are drawn in **GCJ-02**, an offset datum, while every coordinate in TREK is WGS-84. TREK handles that for
+you: a map on an Amap basemap switches to a shifted projection, so markers, routes, clusters and the coordinates you
+get from clicking the map all stay where they belong. Nothing is stored differently — only the drawing changes.
+
+Two consequences worth knowing:
+
+- The **satellite toggle** follows the basemap. On an Amap basemap it shows Amap imagery rather than Esri's, because
+  mixing the two datums on one map would move the photo a few hundred metres out from under the markers.
+- Amap has **no coverage outside China**. A trip to Lisbon on an Amap basemap gets a nearly empty map, so this is a
+  choice for instances whose trips are mostly domestic.
+
+For place *search* via Amap — a separate setting from the basemap — see
+[[Places and Search|Places-and-Search]] and [[Environment Variables|Environment-Variables]].
+
 ## Mapbox GL — access token and style
 
 Enter your **public token** (`pk.*`) from [mapbox.com → Access tokens](https://console.mapbox.com/account/access-tokens/).

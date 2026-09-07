@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     "Zoeken via OpenStreetMap (geen foto's, openingstijden of beoordelingen). Voeg een Google API-sleutel toe in instellingen voor volledige details.",
   'places.osmActive': 'OpenStreetMap wordt gebruikt. Een Google API-sleutel voegt beoordelingen en openingstijden toe.',
+  'places.osmActiveAmap': 'OpenStreetMap is actief. Een Amap (高德地图) API-sleutel voegt beoordelingen en openingstijden toe.',
+  'places.osmActiveAny': 'OpenStreetMap is actief. Een Google- of Amap (高德地图) API-sleutel voegt beoordelingen en openingstijden toe.',
   'places.details.title': 'Plaatsdetails',
   'places.details.empty': 'Kies een zoekresultaat om afbeeldingen en een beschrijving te zien.',
   'places.details.loading': 'Details laden...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Niets gevonden voor deze plaats.',
   'places.details.noKeyTitle': 'Meer details beschikbaar',
   'places.details.noKeyHint': 'Zonder Google API-sleutel gebruikt deze installatie alleen vrije bronnen. Vraag je TREK-beheerder er een toe te voegen voor beoordelingen, openingstijden en foto\'s.',
+  'places.details.noKeyHintAmap': 'Zonder Amap (高德地图) API-sleutel kan deze instantie alleen gratis bronnen gebruiken. Vraag de TREK-beheerder er een toe te voegen voor beoordelingen en openingstijden.',
+  'places.details.noKeyHintAny': 'Zonder Google- of Amap (高德地图) API-sleutel kan deze instantie alleen gratis bronnen gebruiken. Vraag de TREK-beheerder er een toe te voegen voor beoordelingen en openingstijden.',
   'places.details.aboutBrand': 'Over de keten',
   'places.details.aboutBrandNote': 'Beschrijft de keten, niet deze vestiging.',
   'places.details.fact.rating': 'Beoordeling',

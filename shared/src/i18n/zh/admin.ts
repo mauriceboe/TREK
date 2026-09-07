@@ -96,6 +96,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': '用于天气数据。在 openweathermap.org 免费获取',
   'admin.unsplashKey': 'Unsplash API 密钥',
   'admin.unsplashKeyHint': '用于图片搜索。在 unsplash.com/developers 免费获取',
+  'admin.amapKey': '高德地图 API Key',
+  'admin.amapKeyHint':
+    '用于中国大陆境内的地点搜索（Google 无法访问，OpenStreetMap 内容也很少）。需要「Web 服务」类型的 Key，不是 JS API Key。在 console.amap.com 申请。',
+  'admin.placesProvider.title': '地点搜索源',
+  'admin.placesProvider.subtitle':
+    '决定由哪个服务处理地点搜索、输入提示和详情。自动：配了 Google Key 就用 Google，否则用高德，都没有则用 OpenStreetMap。',
+  'admin.placesProvider.auto': '自动',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': '高德地图',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': '所选源还没有配置 API Key，地点搜索会回退到 OpenStreetMap。',
+  'admin.placesProvider.saved': '地点搜索源已保存',
   'admin.validateKey': '测试',
   'admin.keyValid': '已连接',
   'admin.keyInvalid': '无效',

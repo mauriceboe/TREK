@@ -98,6 +98,25 @@ export function isVectorStyle(url: string | null | undefined): boolean {
 }
 
 /**
+ * Tiles drawn in GCJ-02 rather than WGS-84.
+ *
+ * Amap serves its raster tiles from `*.is.autonavi.com`, and they are shifted
+ * from the WGS-84 coordinates everything else in TREK uses — by 100 to 800 m
+ * depending on where in China you are. A map on one of these has to project
+ * through components/Map/gcj02Crs.ts or every marker lands on the wrong street.
+ *
+ * Matched on the host, not on the preset constants, so a self-hosted proxy in
+ * front of the same tiles still gets the right CRS as long as the hostname
+ * survives — and so a template a user typed in by hand does too.
+ */
+const GCJ02_TILE_HOST = /(^|\.)is\.autonavi\.com$/i
+
+export function isGcj02Basemap(url: string | null | undefined): boolean {
+  if (!url) return false
+  return GCJ02_TILE_HOST.test(templateHost(url))
+}
+
+/**
  * What a map should draw, given the user's template and the app's default.
  *
  * `template` is the user's own choice and wins whenever they made one.

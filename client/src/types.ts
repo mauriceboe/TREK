@@ -253,6 +253,10 @@ export interface AppConfig {
   oidc_display_name?: string
   oidc_only_mode?: boolean
   has_maps_key?: boolean
+  /** Amap (高德地图) key present for this caller — the alternative places provider. */
+  has_amap_key?: boolean
+  /** The admin's places provider choice: 'auto' | 'google' | 'amap' | 'openstreetmap'. */
+  places_provider?: string
   allowed_file_types?: string
   timezone?: string
   /** When true, users without MFA cannot use the app until they enable it */

@@ -314,6 +314,43 @@ To get a key: create a free account at [unsplash.com/developers](https://unsplas
 
 ---
 
+## Place Search (Amap / 高德地图)
+
+Google Places is unreachable from most networks inside mainland China, and OpenStreetMap's coverage of Chinese POIs —
+restaurants, shops, the things a trip is actually made of — is thin and rarely in Chinese. TREK can use
+[Amap (高德地图)](https://lbs.amap.com/) instead, as a first-class place provider: search, autocomplete, place details
+and reverse geocoding all go through it, and there is an Amap basemap to match (see [[Map Settings|Map-Settings]]).
+
+| Variable          | Description                                                                                                                                                                                            | Default                     |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------|
+| `AMAP_API_KEY`    | Amap **Web 服务** (web service) key. When set, it takes priority over any key configured in **Admin → Settings → API Keys**, exactly like `PLACES_API_KEY` does for Google.                                | unset                       |
+| `AMAP_API_SECRET` | The private secret (数字签名) of that key. **Required if — and only if** the key was created with signing enabled: such a key rejects every unsigned request. Leave unset otherwise.                        | unset                       |
+| `AMAP_API_BASE`   | Send the calls somewhere other than `https://restapi.amap.com` — an egress proxy, a cache, a gateway that holds the credential. The replacement has to speak the same API. Mirrors `PLACES_API_BASE`.     | `https://restapi.amap.com`  |
+
+**Get a key** at [console.amap.com](https://console.amap.com/dev/key/app): create an application, then add a key of
+type **Web 服务**. A **Web 端 (JS API)** key is a different kind of credential and will be rejected with
+`INVALID_USER_KEY` — this is the single most common misconfiguration.
+
+**Two ways to configure it** — pick one; the env var wins if both are present:
+
+1. **Environment variable** (this page) — instance-wide, ideal for Docker/Helm where you already manage config as env.
+2. **Admin → Settings → API Keys** — paste it into the **高德地图 API Key** field. Stored encrypted at rest.
+
+Setting a key is not enough on its own: **Admin → Settings → API Keys → Place search provider** decides which provider
+answers. `Automatic`, the default, keeps Google when a Google key is configured, then falls back to Amap, then to
+OpenStreetMap — so adding an Amap key never silently moves an existing install off Google. Choose **Amap** explicitly
+to make it the provider.
+
+### Coordinates
+
+Amap speaks **GCJ-02**, the offset datum Chinese law requires published maps to use; everything TREK stores is
+**WGS-84**. The conversion happens at the boundary, in both directions, so what lands in the database, in a GPX export
+or on a map is always WGS-84 — a place added through Amap and opened in OpenStreetMap later is in the right spot. You
+do not need to configure anything for this, but it is worth knowing if you compare raw coordinates against Amap's own
+website, which will differ by a few hundred metres.
+
+---
+
 ## Storage & Paths
 
 Storage backends and category assignment are configured in

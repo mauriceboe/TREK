@@ -89,6 +89,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Do danych pogodowych. Uzyskaj go bezpłatnie na openweathermap.org',
   'admin.unsplashKey': 'Klucz API Unsplash',
   'admin.unsplashKeyHint': 'Do wyszukiwania obrazów. Bezpłatnie na unsplash.com/developers',
+  'admin.amapKey': 'Klucz API Amap (高德地图)',
+  'admin.amapKeyHint':
+    'Do wyszukiwania miejsc w Chinach kontynentalnych, gdzie Google jest nieosiągalny, a OpenStreetMap ma niewiele danych. Wymaga klucza typu „Web 服务" (usługa sieciowa), a nie klucza JS API. Można go uzyskać na console.amap.com.',
+  'admin.placesProvider.title': 'Dostawca wyszukiwania miejsc',
+  'admin.placesProvider.subtitle':
+    'Która usługa obsługuje wyszukiwanie miejsc, podpowiedzi i szczegóły. Automatycznie używa Google, jeśli ustawiono klucz Google, następnie Amap, a potem OpenStreetMap.',
+  'admin.placesProvider.auto': 'Automatycznie',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Wybrany dostawca nie ma ustawionego klucza API, więc wyszukiwanie miejsc wróci do OpenStreetMap.',
+  'admin.placesProvider.saved': 'Zapisano dostawcę wyszukiwania miejsc',
   'admin.validateKey': 'Testuj',
   'admin.keyValid': 'Połączono',
   'admin.keyInvalid': 'Niepoprawny',

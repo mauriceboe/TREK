@@ -63,6 +63,10 @@ export * from './realtime/events.schema';
 // has them ready if rich-text input ever ships.
 export * from './sanitize/sanitize';
 
+// WGS-84 ⇄ GCJ-02. Shared because the two boundaries that need it sit on
+// opposite sides: the Amap provider on the server, the Leaflet CRS on the client.
+export * from './geo/gcj02';
+
 // i18n registry (language list + pure helpers — no locale data)
 export * from './i18n/languages';
 

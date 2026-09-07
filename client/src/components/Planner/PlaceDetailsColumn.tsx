@@ -27,7 +27,18 @@ import { mapsApi } from '../../api/client'
 import { resolveOpenNow, resolvePlaceTimeZone, placeWeekdayIndex } from './placeOpenState'
 import { convertHoursLine, isUnknownHoursLine, splitHoursLine } from './placeHoursFormat'
 import { safeHttpUrl } from '../../utils/safeUrl'
+import type { KeySuggestion } from '../../utils/placesProvider'
 import type { TranslationFn } from '../../types'
+
+/**
+ * The "add a key" hint line, per which key would move search off OpenStreetMap.
+ * The Google variant reuses the long-standing key every locale already carries.
+ */
+const NO_KEY_HINT_KEY: Record<Exclude<KeySuggestion, never>, string> = {
+  google: 'places.details.noKeyHint',
+  amap: 'places.details.noKeyHintAmap',
+  any: 'places.details.noKeyHintAny',
+}
 
 /** The place the column is describing. Null while nothing is selected. */
 export interface PlaceDetailsSelection {
@@ -52,8 +63,12 @@ interface PlaceDetailsColumnProps {
   timeFormat?: string
   /** For grouping the rating count's digits. */
   locale?: string
-  /** False on an instance with no Google key, which is most of them. */
-  hasMapsKey?: boolean
+  /**
+   * Which API key the "more detail available" hint should suggest, or null when
+   * there is nothing to suggest — a configured provider answers, or the admin
+   * chose OpenStreetMap on purpose and the hint would be a nag.
+   */
+  keySuggestion?: KeySuggestion | null
   t: TranslationFn
 }
 
@@ -119,7 +134,7 @@ export default function PlaceDetailsColumn({
   language,
   timeFormat = '24h',
   locale = 'en-US',
-  hasMapsKey = false,
+  keySuggestion = null,
   t,
 }: PlaceDetailsColumnProps): React.ReactElement {
   const [data, setData] = useState<MapsPlaceEnrichmentResult | null>(null)
@@ -229,10 +244,10 @@ export default function PlaceDetailsColumn({
               <ImageOff className="w-4 h-4 shrink-0" />
               {t('places.details.nothing')}
             </div>
-            {/* Only when both are true. With a key configured there is nothing
-                to suggest, and on a place the free sources DID describe the
-                suggestion would be an advert. */}
-            {!hasMapsKey && <NoKeyHint t={t} />}
+            {/* Only when both are true. With a key behind the search there is
+                nothing to suggest, and on a place the free sources DID describe
+                the suggestion would be an advert. */}
+            {keySuggestion && <NoKeyHint t={t} suggestion={keySuggestion} />}
           </div>
         )}
 
@@ -431,7 +446,7 @@ function PhotoCredit({ photo }: { photo: PlacePhotoCandidate }): React.ReactElem
  * It also names who to ask: the key is an instance-wide setting, so on most
  * installs the person reading this cannot act on it themselves.
  */
-function NoKeyHint({ t }: { t: TranslationFn }): React.ReactElement {
+function NoKeyHint({ t, suggestion }: { t: TranslationFn; suggestion: KeySuggestion }): React.ReactElement {
   return (
     <div className="rounded-xl border border-accent/25 bg-accent-subtle p-3">
       <div className="flex items-center gap-2">
@@ -440,7 +455,7 @@ function NoKeyHint({ t }: { t: TranslationFn }): React.ReactElement {
         </span>
         <p className="text-caption font-semibold text-content">{t('places.details.noKeyTitle')}</p>
       </div>
-      <p className="mt-2 text-caption leading-relaxed text-content-secondary">{t('places.details.noKeyHint')}</p>
+      <p className="mt-2 text-caption leading-relaxed text-content-secondary">{t(NO_KEY_HINT_KEY[suggestion])}</p>
     </div>
   )
 }

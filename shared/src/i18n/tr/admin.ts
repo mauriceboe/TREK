@@ -140,6 +140,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': "Hava durumu verileri için. openweathermap.org'da ücretsiz",
   'admin.unsplashKey': 'Unsplash API Anahtarı',
   'admin.unsplashKeyHint': "Görsel araması için. unsplash.com/developers'da ücretsiz",
+  'admin.amapKey': 'Amap (高德地图) API Anahtarı',
+  'admin.amapKeyHint':
+    'Google’ın erişilemediği ve OpenStreetMap verisinin çok az olduğu Çin anakarasında yer arama için. «Web 服务» (web servisi) türünde bir anahtar gerekir, JS API anahtarı değil. console.amap.com adresinden alınır.',
+  'admin.placesProvider.title': 'Yer arama sağlayıcısı',
+  'admin.placesProvider.subtitle':
+    'Yer aramasını, otomatik tamamlamayı ve ayrıntıları hangi servisin yanıtlayacağı. Otomatik, Google anahtarı varsa Google’ı, sonra Amap’i, sonra OpenStreetMap’i kullanır.',
+  'admin.placesProvider.auto': 'Otomatik',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Seçilen sağlayıcı için API anahtarı ayarlanmamış, bu yüzden yer arama OpenStreetMap’e geri döner.',
+  'admin.placesProvider.saved': 'Yer arama sağlayıcısı kaydedildi',
   'admin.validateKey': 'Test et',
   'admin.keyValid': 'Bağlı',
   'admin.keyInvalid': 'Geçersiz',

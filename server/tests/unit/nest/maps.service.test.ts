@@ -48,6 +48,7 @@ const {
   mockCacheGetInFlight,
   mockCacheSetInFlight,
   mockServeFilePath,
+  mockProviderGet,
 } = vi.hoisted(() => ({
   mockDbGet: vi.fn((..._args: unknown[]) => undefined as any),
   mockDbRun: vi.fn(),
@@ -56,6 +57,12 @@ const {
   // row holds a key", and would otherwise have its stub eaten by the
   // app_settings lookup.
   mockInstanceGet: vi.fn((..._args: unknown[]) => undefined as any),
+  // The places_provider row is read before the key chain, so it needs a seam of
+  // its own: routed through mockInstanceGet it would eat the mockReturnValueOnce
+  // that a case meant for the instance-wide KEY, and the service would resolve a
+  // key value as a provider name. Default undefined = the 'auto' choice, which is
+  // what every install that predates Amap has.
+  mockProviderGet: vi.fn((..._args: unknown[]) => undefined as any),
   preparedSql: [] as string[],
   mockCheckSsrf: vi.fn(async (_url: string, _bypassInternalIpAllowed?: boolean): Promise<SsrfCheckStub> => ({
     allowed: true,
@@ -80,7 +87,12 @@ vi.mock('../../../src/db/database', () => ({
     prepare: (sql: string) => {
       preparedSql.push(sql);
       return {
-        get: (...args: unknown[]) => (sql.includes('app_settings') ? mockInstanceGet(...args) : mockDbGet(...args)),
+        get: (...args: unknown[]) => {
+          if (!sql.includes('app_settings')) return mockDbGet(...args);
+          // Keyed by the bound parameter, not just by the table: app_settings
+          // holds both the instance-wide API keys and the provider choice.
+          return args[0] === 'places_provider' ? mockProviderGet(...args) : mockInstanceGet(...args);
+        },
         all: vi.fn(() => []),
         run: mockDbRun,
       };
@@ -150,6 +162,8 @@ afterEach(() => {
   mockDbGet.mockReturnValue(undefined);
   mockInstanceGet.mockReset();
   mockInstanceGet.mockReturnValue(undefined);
+  mockProviderGet.mockReset();
+  mockProviderGet.mockReturnValue(undefined);
   preparedSql.length = 0;
   mockDbRun.mockReset();
   mockCheckSsrf.mockReset();

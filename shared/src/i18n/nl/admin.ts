@@ -98,6 +98,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Voor weergegevens. Gratis op openweathermap.org',
   'admin.unsplashKey': 'Unsplash API-sleutel',
   'admin.unsplashKeyHint': 'Voor het zoeken naar afbeeldingen. Gratis op unsplash.com/developers',
+  'admin.amapKey': 'Amap (高德地图) API-sleutel',
+  'admin.amapKeyHint':
+    'Voor het zoeken naar plaatsen in het Chinese vasteland, waar Google onbereikbaar is en OpenStreetMap weinig gegevens heeft. Vereist een sleutel van het type ‘Web 服务’ (webservice), geen JS API-sleutel. Verkrijgbaar op console.amap.com.',
+  'admin.placesProvider.title': 'Provider voor plaatszoeken',
+  'admin.placesProvider.subtitle':
+    'Welke dienst het zoeken naar plaatsen, de suggesties en de details verzorgt. Automatisch gebruikt Google als er een Google-sleutel is ingesteld, daarna Amap, daarna OpenStreetMap.',
+  'admin.placesProvider.auto': 'Automatisch',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Voor de gekozen provider is geen API-sleutel ingesteld, dus het zoeken naar plaatsen valt terug op OpenStreetMap.',
+  'admin.placesProvider.saved': 'Provider voor plaatszoeken opgeslagen',
   'admin.validateKey': 'Testen',
   'admin.keyValid': 'Verbonden',
   'admin.keyInvalid': 'Ongeldig',

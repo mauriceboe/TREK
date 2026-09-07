@@ -149,6 +149,15 @@ export function useAdmin() {
   const [mapsKey, setMapsKey] = useState<string>('')
   const [weatherKey, setWeatherKey] = useState<string>('')
   const [unsplashKey, setUnsplashKey] = useState<string>('')
+  const [amapKey, setAmapKey] = useState<string>('')
+  /**
+   * Which provider answers place search. Not a key, so it saves through
+   * updateAppSettings rather than with the keys — and it is saved on change
+   * rather than with the Save button, because it is one choice from a list and
+   * the effect is immediate everywhere.
+   */
+  const [placesProvider, setPlacesProvider] = useState<string>('auto')
+  const [savingPlacesProvider, setSavingPlacesProvider] = useState<boolean>(false)
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [savingKeys, setSavingKeys] = useState<boolean>(false)
   const [validating, setValidating] = useState<Record<string, boolean>>({})
@@ -215,6 +224,7 @@ export function useAdmin() {
       setPasskeyLogin(!!config.passkey_login)
       setPasskeyConfigured(!!config.passkey_configured)
       if (config.allowed_file_types) setAllowedFileTypes(config.allowed_file_types)
+      if (config.places_provider) setPlacesProvider(config.places_provider)
     } catch (err: unknown) {
       // ignore
     }
@@ -226,6 +236,7 @@ export function useAdmin() {
       setMapsKey(data.settings?.maps_api_key || '')
       setWeatherKey(data.settings?.openweather_api_key || '')
       setUnsplashKey(data.settings?.unsplash_api_key || '')
+      setAmapKey(data.settings?.amap_api_key || '')
     } catch (err: unknown) {
       // ignore
     }
@@ -281,6 +292,7 @@ export function useAdmin() {
         maps_api_key: mapsKey,
         openweather_api_key: weatherKey,
         unsplash_api_key: unsplashKey,
+        amap_api_key: amapKey,
       })
       toast.success(t('admin.keySaved'))
     } catch (err: unknown) {
@@ -294,7 +306,7 @@ export function useAdmin() {
     setValidating({ maps: true, weather: true })
     try {
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, unsplash_api_key: unsplashKey })
+      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, unsplash_api_key: unsplashKey, amap_api_key: amapKey })
       const result = await authApi.validateKeys()
       setValidation(result)
     } catch (err: unknown) {
@@ -308,13 +320,28 @@ export function useAdmin() {
     setValidating(prev => ({ ...prev, [keyType]: true }))
     try {
       // Save first so validation uses the current values
-      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, unsplash_api_key: unsplashKey })
+      await updateApiKeys({ maps_api_key: mapsKey, openweather_api_key: weatherKey, unsplash_api_key: unsplashKey, amap_api_key: amapKey })
       const result = await authApi.validateKeys()
       setValidation(prev => ({ ...prev, [keyType]: result[keyType] }))
     } catch (err: unknown) {
       toast.error(t('common.error'))
     } finally {
       setValidating(prev => ({ ...prev, [keyType]: false }))
+    }
+  }
+
+  const handleSavePlacesProvider = async (value: string) => {
+    const previous = placesProvider
+    setPlacesProvider(value)
+    setSavingPlacesProvider(true)
+    try {
+      await authApi.updateAppSettings({ places_provider: value })
+      toast.success(t('admin.placesProvider.saved'))
+    } catch (err: unknown) {
+      setPlacesProvider(previous)
+      toast.error(getApiErrorMessage(err, t('common.error')))
+    } finally {
+      setSavingPlacesProvider(false)
     }
   }
 
@@ -442,6 +469,8 @@ export function useAdmin() {
     allowedFileTypes, setAllowedFileTypes, savingFileTypes, setSavingFileTypes,
     smtpValues, setSmtpValues, smtpLoaded,
     mapsKey, setMapsKey, weatherKey, setWeatherKey, unsplashKey, setUnsplashKey,
+    amapKey, setAmapKey,
+    placesProvider, savingPlacesProvider, handleSavePlacesProvider,
     showKeys, setShowKeys, savingKeys, validating, validation,
     updateInfo, setUpdateInfo, showUpdateModal, setShowUpdateModal,
     showRotateJwtModal, setShowRotateJwtModal, rotatingJwt, setRotatingJwt,

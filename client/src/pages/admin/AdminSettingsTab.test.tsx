@@ -253,23 +253,55 @@ describe('AdminSettingsTab', () => {
     expect(admin.toggleKey).toHaveBeenCalledWith('maps');
   });
 
-  it('FE-ADMSET-021: showKeys switches both key inputs to plain text', () => {
-    renderTab({ showKeys: { maps: true, unsplash: true } });
+  // Selected by accessible name rather than by position: the API-keys card has
+  // grown a field before now (Amap), and an index-based lookup silently starts
+  // asserting about a different input when it does.
+  it('FE-ADMSET-021: showKeys switches every key input to plain text', () => {
+    renderTab({ showKeys: { maps: true, unsplash: true, amap: true } });
 
-    const inputs = within(card('API Keys')).getAllByPlaceholderText('Enter key...');
-    expect(inputs[0]).toHaveAttribute('type', 'text');
-    expect(inputs[1]).toHaveAttribute('type', 'text');
+    const keys = within(card('API Keys'));
+    expect(keys.getByLabelText('Google Maps API Key')).toHaveAttribute('type', 'text');
+    expect(keys.getByLabelText('Unsplash API Key')).toHaveAttribute('type', 'text');
+    expect(keys.getByLabelText(/Amap/)).toHaveAttribute('type', 'text');
   });
 
   it('FE-ADMSET-022: unsplash key input and its visibility toggle', () => {
     const admin = renderTab({ unsplashKey: '' });
 
-    const unsplashInput = within(card('API Keys')).getAllByPlaceholderText('Enter key...')[1];
+    const unsplashInput = within(card('API Keys')).getByLabelText('Unsplash API Key');
     fireEvent.change(unsplashInput, { target: { value: 'unsplash-key' } });
     expect(admin.setUnsplashKey).toHaveBeenCalledWith('unsplash-key');
 
     fireEvent.click(unsplashInput.parentElement!.querySelector('button')!);
     expect(admin.toggleKey).toHaveBeenCalledWith('unsplash');
+  });
+
+  it('FE-ADMSET-022b: amap key input and its visibility toggle', () => {
+    const admin = renderTab({ amapKey: '' });
+
+    const amapInput = within(card('API Keys')).getByLabelText(/Amap/);
+    fireEvent.change(amapInput, { target: { value: 'amap-key' } });
+    expect(admin.setAmapKey).toHaveBeenCalledWith('amap-key');
+
+    fireEvent.click(amapInput.parentElement!.querySelector('button')!);
+    expect(admin.toggleKey).toHaveBeenCalledWith('amap');
+  });
+
+  it('FE-ADMSET-022c: warns when the selected provider has no key behind it', () => {
+    // A provider chosen without a key answers with OpenStreetMap rather than
+    // failing, which is quiet enough to be mistaken for the provider working.
+    renderTab({ placesProvider: 'amap', amapKey: '' });
+    expect(
+      within(card('API Keys')).getByText(/falls back to OpenStreetMap/i),
+    ).toBeInTheDocument();
+  });
+
+  it('FE-ADMSET-022d: saving the provider goes through updateAppSettings, not the keys', () => {
+    const admin = renderTab({ placesProvider: 'auto' });
+    fireEvent.change(within(card('API Keys')).getByLabelText('Place search provider'), {
+      target: { value: 'amap' },
+    });
+    expect(admin.handleSavePlacesProvider).toHaveBeenCalledWith('amap');
   });
 
   it('FE-ADMSET-023: the maps Test button is disabled without a key', () => {

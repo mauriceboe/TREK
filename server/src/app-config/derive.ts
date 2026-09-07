@@ -135,6 +135,15 @@ export function deriveMaps(raw: RawEnv) {
   return {
     placesApiBase: raw.PLACES_API_BASE || undefined,
     placesApiKey: raw.PLACES_API_KEY || undefined,
+    /** The same two knobs for Amap (高德), which an install in China uses instead. */
+    amapApiBase: raw.AMAP_API_BASE || undefined,
+    amapApiKey: raw.AMAP_API_KEY || undefined,
+    /**
+     * Amap's optional 数字签名 secret. A key created with one rejects every
+     * unsigned request, so this is not a hardening option — it is required
+     * whenever the operator's key was issued that way.
+     */
+    amapApiSecret: raw.AMAP_API_SECRET || undefined,
     /** Public pk.* token shipped with a managed instance; reaches the browser by design. */
     mapboxToken: raw.MAPBOX_ACCESS_TOKEN || undefined,
     /** CARTO basemap key; without one the tiles come back watermarked (#2054). Public too. */

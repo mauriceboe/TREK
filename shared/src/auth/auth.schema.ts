@@ -77,6 +77,8 @@ export const apiKeysUpdateRequestSchema = z.object({
   maps_api_key: z.string().nullable().optional(),
   openweather_api_key: z.string().nullable().optional(),
   unsplash_api_key: z.string().nullable().optional(),
+  /** Amap (高德) web-service key — the places provider an install in China uses. */
+  amap_api_key: z.string().nullable().optional(),
 });
 export type ApiKeysUpdateRequest = z.infer<typeof apiKeysUpdateRequestSchema>;
 
@@ -84,6 +86,7 @@ export const settingsUpdateRequestSchema = z.object({
   maps_api_key: z.string().nullable().optional(),
   openweather_api_key: z.string().nullable().optional(),
   unsplash_api_key: z.string().nullable().optional(),
+  amap_api_key: z.string().nullable().optional(),
   username: z.string().optional(),
   email: z.string().optional(),
 });

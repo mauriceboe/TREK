@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Busca via OpenStreetMap (sem fotos, horários ou avaliações). Adicione uma chave Google nas configurações para detalhes completos.',
   'places.osmActive': 'Usando o OpenStreetMap. Uma chave de API do Google adiciona avaliações e horários.',
+  'places.osmActiveAmap': 'Usando o OpenStreetMap. Uma chave de API do Amap (高德地图) adiciona avaliações e horários de funcionamento.',
+  'places.osmActiveAny': 'Usando o OpenStreetMap. Uma chave de API do Google ou do Amap (高德地图) adiciona avaliações e horários de funcionamento.',
   'places.details.title': 'Detalhes do lugar',
   'places.details.empty': 'Escolha um resultado para ver imagens e uma descrição.',
   'places.details.loading': 'Carregando detalhes...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Nada encontrado para este lugar.',
   'places.details.noKeyTitle': 'Mais detalhes disponíveis',
   'places.details.noKeyHint': 'Sem uma chave de API do Google, esta instância usa apenas fontes livres. Peça ao administrador do TREK para adicionar uma para avaliações, horários e fotos.',
+  'places.details.noKeyHintAmap': 'Sem uma chave de API do Amap (高德地图), esta instância só pode usar fontes gratuitas. Peça ao administrador do TREK para adicionar uma, para ter avaliações e horários.',
+  'places.details.noKeyHintAny': 'Sem uma chave de API do Google ou do Amap (高德地图), esta instância só pode usar fontes gratuitas. Peça ao administrador do TREK para adicionar uma, para ter avaliações e horários.',
   'places.details.aboutBrand': 'Sobre a rede',
   'places.details.aboutBrandNote': 'Descreve a rede, não esta unidade.',
   'places.details.fact.rating': 'Avaliação',

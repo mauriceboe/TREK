@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'يتم البحث عبر OpenStreetMap (بدون صور أو ساعات عمل أو تقييمات). أضف مفتاح Google API في الإعدادات للحصول على جميع التفاصيل.',
   'places.osmActive': 'يتم استخدام OpenStreetMap. مفتاح Google API يضيف التقييمات وساعات العمل.',
+  'places.osmActiveAmap': 'تجري المشاركة عبر OpenStreetMap. يضيف مفتاح واجهة Amap (高德地图) التقييمات وساعات العمل.',
+  'places.osmActiveAny': 'تجري المشاركة عبر OpenStreetMap. يضيف مفتاح واجهة Google أو Amap (高德地图) التقييمات وساعات العمل.',
   'places.details.title': 'تفاصيل المكان',
   'places.details.empty': 'اختر نتيجة بحث لعرض الصور والوصف.',
   'places.details.loading': 'جارٍ تحميل التفاصيل...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'لم يتم العثور على شيء لهذا المكان.',
   'places.details.noKeyTitle': 'تتوفر تفاصيل أكثر',
   'places.details.noKeyHint': 'بدون مفتاح Google API يستخدم هذا التثبيت المصادر الحرة فقط. اطلب من مسؤول TREK إضافة مفتاح للحصول على التقييمات وساعات العمل والصور.',
+  'places.details.noKeyHintAmap': 'بدون مفتاح واجهة Amap (高德地图) يمكن لهذا المثيل استخدام المصادر المجانية فقط. اطلب من مسؤول TREK إضافة مفتاح للحصول على التقييمات وساعات العمل.',
+  'places.details.noKeyHintAny': 'بدون مفتاح واجهة Google أو Amap (高德地图) يمكن لهذا المثيل استخدام المصادر المجانية فقط. اطلب من مسؤول TREK إضافة مفتاح للحصول على التقييمات وساعات العمل.',
   'places.details.aboutBrand': 'عن السلسلة',
   'places.details.aboutBrandNote': 'يصف السلسلة، لا هذا الفرع.',
   'places.details.fact.rating': 'التقييم',

@@ -64,7 +64,10 @@ export function usePlacesSidebar(props: PlacesSidebarProps) {
   const can = useCanDo()
   const canEditPlaces = can('place_edit', trip)
   const collectionsEnabled = useAddonStore((s) => s.isEnabled('collections'))
-  // Places-API enrichment (#886) needs a Google Maps key; gate the toggle on it.
+  // Places-API enrichment (#886) needs a Google Maps key. Not the places
+  // *provider* choice: enrichment's photos and summary come from Google (and,
+  // keyless, from Wikimedia), which is independent of which provider answers
+  // search — an Amap install with a Google key still enriches through Google.
   const canEnrichImport = useAuthStore((s) => s.hasMapsKey)
 
   const [fileImportOpen, setFileImportOpen] = useState(false)

@@ -17,10 +17,14 @@ import { decrypt_api_key, maybe_encrypt_api_key } from '../common/crypto/apiKeyC
  * apiKeyCrypto, so the format matches what the users columns already hold and
  * a legacy plaintext value still reads back.
  */
-export type InstanceApiKeyName = 'maps_api_key' | 'unsplash_api_key';
+export type InstanceApiKeyName = 'maps_api_key' | 'unsplash_api_key' | 'amap_api_key';
 
 /** Instance names whose per-user column is still honoured as a last resort. */
-export const INSTANCE_API_KEY_NAMES: readonly InstanceApiKeyName[] = ['maps_api_key', 'unsplash_api_key'];
+export const INSTANCE_API_KEY_NAMES: readonly InstanceApiKeyName[] = [
+  'maps_api_key',
+  'unsplash_api_key',
+  'amap_api_key',
+];
 
 /**
  * Where a resolved key came from. Logged beside a provider error so "works for
@@ -35,6 +39,7 @@ export type ApiKeySource = 'operator-env' | 'instance' | 'user-row';
 const USER_ROW_SQL: Record<InstanceApiKeyName, string> = {
   maps_api_key: 'SELECT maps_api_key FROM users WHERE id = ?',
   unsplash_api_key: 'SELECT unsplash_api_key FROM users WHERE id = ?',
+  amap_api_key: 'SELECT amap_api_key FROM users WHERE id = ?',
 };
 
 /** The instance-wide value in cleartext, or null when unset/cleared. */

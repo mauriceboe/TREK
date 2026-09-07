@@ -86,6 +86,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Menggunakan pencarian OpenStreetMap (tanpa foto, jam buka, atau penilaian). Tambahkan Google API key di pengaturan untuk detail lengkap.',
   'places.osmActive': 'Menggunakan OpenStreetMap. Kunci API Google menambahkan rating dan jam buka.',
+  'places.osmActiveAmap': 'Menggunakan OpenStreetMap. Kunci API Amap (高德地图) menambahkan rating dan jam buka.',
+  'places.osmActiveAny': 'Menggunakan OpenStreetMap. Kunci API Google atau Amap (高德地图) menambahkan rating dan jam buka.',
   'places.details.title': 'Detail tempat',
   'places.details.empty': 'Pilih hasil pencarian untuk melihat gambar dan deskripsi.',
   'places.details.loading': 'Memuat detail...',
@@ -100,6 +102,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Tidak ada yang ditemukan untuk tempat ini.',
   'places.details.noKeyTitle': 'Tersedia detail lebih lanjut',
   'places.details.noKeyHint': 'Tanpa kunci API Google, instans ini hanya memakai sumber bebas. Minta administrator TREK menambahkannya untuk rating, jam buka, dan foto.',
+  'places.details.noKeyHintAmap': 'Tanpa kunci API Amap (高德地图), instansi ini hanya bisa memakai sumber gratis. Minta administrator TREK menambahkannya untuk rating dan jam buka.',
+  'places.details.noKeyHintAny': 'Tanpa kunci API Google atau Amap (高德地图), instansi ini hanya bisa memakai sumber gratis. Minta administrator TREK menambahkannya untuk rating dan jam buka.',
   'places.details.aboutBrand': 'Tentang jaringan',
   'places.details.aboutBrandNote': 'Menjelaskan jaringannya, bukan cabang ini.',
   'places.details.fact.rating': 'Peringkat',

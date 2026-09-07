@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Používáte hledání přes OpenStreetMap (bez fotek a hodnocení). Pro plné detaily přidejte Google API klíč v nastavení.',
   'places.osmActive': 'Používá se OpenStreetMap. Klíč Google API přidá hodnocení a otevírací dobu.',
+  'places.osmActiveAmap': 'Používá se OpenStreetMap. Klíč API Amap (高德地图) přidá hodnocení a otevírací dobu.',
+  'places.osmActiveAny': 'Používá se OpenStreetMap. Klíč API Google nebo Amap (高德地图) přidá hodnocení a otevírací dobu.',
   'places.details.title': 'Podrobnosti místa',
   'places.details.empty': 'Vyber výsledek hledání a zobrazí se obrázky a popis.',
   'places.details.loading': 'Načítání podrobností...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Pro toto místo se nic nenašlo.',
   'places.details.noKeyTitle': 'K dispozici je více podrobností',
   'places.details.noKeyHint': 'Bez klíče Google API používá tato instance jen volné zdroje. Požádejte správce TREK o jeho přidání pro hodnocení, otevírací dobu a fotografie.',
+  'places.details.noKeyHintAmap': 'Bez klíče API Amap (高德地图) může tato instance používat jen bezplatné zdroje. Požádejte správce TREK, aby klíč přidal — přibydou hodnocení a otevírací doba.',
+  'places.details.noKeyHintAny': 'Bez klíče API Google nebo Amap (高德地图) může tato instance používat jen bezplatné zdroje. Požádejte správce TREK, aby klíč přidal — přibydou hodnocení a otevírací doba.',
   'places.details.aboutBrand': 'O řetězci',
   'places.details.aboutBrandNote': 'Popisuje řetězec, ne tuto pobočku.',
   'places.details.fact.rating': 'Hodnocení',

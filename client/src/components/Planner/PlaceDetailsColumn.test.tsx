@@ -451,20 +451,47 @@ describe('PlaceDetailsColumn — hours and rating', () => {
  * no key is configured. On an instance with a key there is nothing to suggest,
  * and on a place the free sources described it would read as an advert.
  */
-describe('PlaceDetailsColumn — no Google key', () => {
+describe('PlaceDetailsColumn — no key behind place search', () => {
   const empty = () => placeEnrichment.mockResolvedValue({ photos: [], facts: [], description: null })
 
   it('FE-PDC-027: suggests a key when nothing was found and none is set', async () => {
     empty()
-    renderColumn({ hasMapsKey: false })
+    renderColumn({ keySuggestion: 'google' })
 
     expect(await screen.findByText('places.details.noKeyTitle')).toBeInTheDocument()
     expect(screen.getByText('places.details.noKeyHint')).toBeInTheDocument()
   })
 
+  it('FE-PDC-027b: suggests the Amap key when that is the one the admin chose', async () => {
+    // An install on Amap is not "missing a Google key" — the hint has to name
+    // the key that would actually move search off OpenStreetMap.
+    empty()
+    renderColumn({ keySuggestion: 'amap' })
+
+    expect(await screen.findByText('places.details.noKeyTitle')).toBeInTheDocument()
+    expect(screen.getByText('places.details.noKeyHintAmap')).toBeInTheDocument()
+  })
+
+  it('FE-PDC-027c: names both keys when the choice is automatic and neither is set', async () => {
+    empty()
+    renderColumn({ keySuggestion: 'any' })
+
+    expect(await screen.findByText('places.details.noKeyTitle')).toBeInTheDocument()
+    expect(screen.getByText('places.details.noKeyHintAny')).toBeInTheDocument()
+  })
+
+  it('FE-PDC-027d: stays quiet when OpenStreetMap was chosen on purpose', async () => {
+    // The null suggestion: an explicit admin decision, not a gap to fill.
+    empty()
+    renderColumn({ keySuggestion: null })
+
+    await screen.findByText('places.details.nothing')
+    expect(screen.queryByText('places.details.noKeyTitle')).not.toBeInTheDocument()
+  })
+
   it('FE-PDC-028: stays quiet when a key is already configured', async () => {
     empty()
-    renderColumn({ hasMapsKey: true })
+    renderColumn({ keySuggestion: null })
 
     await screen.findByText('places.details.nothing')
     expect(screen.queryByText('places.details.noKeyTitle')).not.toBeInTheDocument()
@@ -476,7 +503,7 @@ describe('PlaceDetailsColumn — no Google key', () => {
       facts: [],
       description: { text: 'Ein Museum.', source: 'wikipedia', sourceUrl: null, license: 'CC BY-SA 4.0' },
     })
-    renderColumn({ hasMapsKey: false })
+    renderColumn({ keySuggestion: 'google' })
 
     await screen.findByText('Ein Museum.')
     expect(screen.queryByText('places.details.noKeyTitle')).not.toBeInTheDocument()

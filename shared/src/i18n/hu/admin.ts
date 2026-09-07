@@ -97,6 +97,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Időjárás adatokhoz. Ingyenes: openweathermap.org',
   'admin.unsplashKey': 'Unsplash API-kulcs',
   'admin.unsplashKeyHint': 'Képkereséshez. Ingyenes: unsplash.com/developers',
+  'admin.amapKey': 'Amap (高德地图) API-kulcs',
+  'admin.amapKeyHint':
+    'Helykereséshez Kína szárazföldi részén, ahol a Google nem érhető el, az OpenStreetMap adatai pedig hiányosak. „Web 服务" (webszolgáltatás) típusú kulcs kell hozzá, nem JS API-kulcs. A console.amap.com oldalon kérhető.',
+  'admin.placesProvider.title': 'Helykeresési szolgáltató',
+  'admin.placesProvider.subtitle':
+    'Melyik szolgáltatás válaszol a helykeresésre, a javaslatokra és a részletekre. Az automatikus a Google-t használja, ha van Google-kulcs, utána az Amapot, végül az OpenStreetMapet.',
+  'admin.placesProvider.auto': 'Automatikus',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'A kiválasztott szolgáltatóhoz nincs API-kulcs beállítva, ezért a helykeresés az OpenStreetMapre esik vissza.',
+  'admin.placesProvider.saved': 'Helykeresési szolgáltató elmentve',
   'admin.validateKey': 'Teszt',
   'admin.keyValid': 'Csatlakozva',
   'admin.keyInvalid': 'Érvénytelen',

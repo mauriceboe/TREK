@@ -1065,14 +1065,45 @@ describe('AdminPage', () => {
       const apiKeysHeading = await screen.findByRole('heading', { name: /^api keys$/i });
       const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.bg-white');
 
-      // The Unsplash key is the second 'Enter key...' input (after Maps).
-      const keyInputs = within(apiKeysCard!).getAllByPlaceholderText('Enter key...');
-      fireEvent.change(keyInputs[1], { target: { value: 'test-unsplash-key' } });
+      // By accessible name, not by position: the card gained an Amap field
+      // between Maps and Unsplash, and an index would have kept passing while
+      // asserting about the wrong input.
+      fireEvent.change(within(apiKeysCard!).getByLabelText('Unsplash API Key'), {
+        target: { value: 'test-unsplash-key' },
+      });
 
       fireEvent.click(within(apiKeysCard!).getByRole('button', { name: /^save$/i }));
 
       await waitFor(() => {
         expect(capturedBody?.unsplash_api_key).toBe('test-unsplash-key');
+      });
+    });
+
+    it('typing in the Amap API key and clicking Save sends amap_api_key', async () => {
+      let capturedBody: Record<string, unknown> | undefined;
+      server.use(
+        http.put('/api/auth/me/api-keys', async ({ request }) => {
+          capturedBody = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ success: true });
+        })
+      );
+
+      seedStore(useAuthStore, { isAuthenticated: true, user: buildAdmin() });
+      render(<AdminPage />);
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /^users$/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /settings/i }));
+
+      const apiKeysHeading = await screen.findByRole('heading', { name: /^api keys$/i });
+      const apiKeysCard = apiKeysHeading.closest<HTMLElement>('.bg-white');
+
+      fireEvent.change(within(apiKeysCard!).getByLabelText(/Amap/), {
+        target: { value: 'test-amap-key' },
+      });
+      fireEvent.click(within(apiKeysCard!).getByRole('button', { name: /^save$/i }));
+
+      await waitFor(() => {
+        expect(capturedBody?.amap_api_key).toBe('test-amap-key');
       });
     });
   });

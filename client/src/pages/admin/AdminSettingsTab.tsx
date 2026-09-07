@@ -28,7 +28,8 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
     passkeyLogin, setPasskeyLogin, passkeyConfigured,
     webauthnRpId, setWebauthnRpId, webauthnOrigins, setWebauthnOrigins, savingWebauthn, handleSaveWebauthn,
     allowedFileTypes, setAllowedFileTypes, savingFileTypes, setSavingFileTypes,
-    mapsKey, setMapsKey, unsplashKey, setUnsplashKey, showKeys, savingKeys, validating, validation,
+    mapsKey, setMapsKey, unsplashKey, setUnsplashKey, amapKey, setAmapKey, showKeys, savingKeys, validating, validation,
+    placesProvider, savingPlacesProvider, handleSavePlacesProvider,
     managed,
     setShowRotateJwtModal,
     handleToggleAuthSetting, handleToggleRequireMfa,
@@ -280,6 +281,7 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
               <div className="relative flex-1">
                 <input
                   type={showKeys.maps ? 'text' : 'password'}
+                  aria-label={t('admin.mapsKey')}
                   value={mapsKey}
                   onChange={e => setMapsKey(e.target.value)}
                   placeholder={t('settings.keyPlaceholder')}
@@ -323,6 +325,33 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
             )}
           </div>
 
+          {/* Amap Key. No Test button: /auth/validate-keys only knows how to
+              probe Google Places and OpenWeatherMap, and a button that silently
+              tests something else is worse than no button. */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+              {t('admin.amapKey')}
+            </label>
+            <div className="relative">
+              <input
+                type={showKeys.amap ? 'text' : 'password'}
+                aria-label={t('admin.amapKey')}
+                value={amapKey}
+                onChange={e => setAmapKey(e.target.value)}
+                placeholder={t('settings.keyPlaceholder')}
+                className="w-full pr-10 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+              />
+              <button
+                type="button"
+                onClick={() => toggleKey('amap')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showKeys.amap ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">{t('admin.amapKeyHint')}</p>
+          </div>
+
           {/* Unsplash Key */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
@@ -331,6 +360,7 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
             <div className="relative">
               <input
                 type={showKeys.unsplash ? 'text' : 'password'}
+                aria-label={t('admin.unsplashKey')}
                 value={unsplashKey}
                 onChange={e => setUnsplashKey(e.target.value)}
                 placeholder={t('settings.keyPlaceholder')}
@@ -347,6 +377,34 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
             <p className="text-xs text-slate-400 mt-1">{t('admin.unsplashKeyHint')}</p>
           </div>
           </>)}
+
+          {/* Which provider answers place search. Shown on a managed install too:
+              the operator owns the credentials, but what their users search
+              against is still the admin's call (see server managed.ts). */}
+          <div className="py-3 border-t border-slate-100">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="places-provider">
+              {t('admin.placesProvider.title')}
+            </label>
+            <select
+              id="places-provider"
+              value={placesProvider}
+              disabled={savingPlacesProvider}
+              onChange={e => handleSavePlacesProvider(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent disabled:opacity-50"
+            >
+              <option value="auto">{t('admin.placesProvider.auto')}</option>
+              <option value="google">{t('admin.placesProvider.google')}</option>
+              <option value="amap">{t('admin.placesProvider.amap')}</option>
+              <option value="openstreetmap">{t('admin.placesProvider.openstreetmap')}</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">{t('admin.placesProvider.subtitle')}</p>
+            {/* A provider chosen without a key behind it answers with
+                OpenStreetMap rather than failing, which is quiet enough to be
+                mistaken for the provider working. Say so. */}
+            {((placesProvider === 'google' && !mapsKey) || (placesProvider === 'amap' && !amapKey)) && (
+              <p className="text-xs text-amber-600 mt-1">{t('admin.placesProvider.missingKey')}</p>
+            )}
+          </div>
 
           {/* Place Photos Toggle */}
           <div className="flex items-center justify-between gap-4 py-3 border-t border-slate-100">

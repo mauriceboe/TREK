@@ -4257,6 +4257,28 @@ function runMigrations(db: Database.Database): void {
         db.exec('ALTER TABLE journey_entries ADD COLUMN stats_excluded INTEGER NOT NULL DEFAULT 0');
       }
     },
+
+    /**
+     * The per-user Amap (高德) credential.
+     *
+     * Same shape and same role as maps_api_key: encrypted with apiKeyCrypto, and
+     * the last step of the resolver after the operator env var and the
+     * instance-wide app_settings row. Nullable with no default, because "this
+     * install does not use Amap" is the correct state for almost everybody —
+     * only an instance whose users are in China configures it.
+     *
+     * Nothing is backfilled. A Google key is not an Amap key, and the two
+     * providers are chosen by the places_provider setting, not by which column
+     * happens to be populated.
+     *
+     * Appended LAST: the array is index-addressed against schema_version.
+     */
+    () => {
+      const cols = db.prepare("SELECT name FROM pragma_table_info('users')").all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === 'amap_api_key')) {
+        db.exec('ALTER TABLE users ADD COLUMN amap_api_key TEXT');
+      }
+    },
   ];
 
   if (currentVersion < migrations.length) {

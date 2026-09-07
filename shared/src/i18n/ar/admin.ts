@@ -118,6 +118,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'لبيانات الطقس. مجاني من openweathermap.org',
   'admin.unsplashKey': 'مفتاح واجهة برمجة تطبيقات Unsplash',
   'admin.unsplashKeyHint': 'للبحث عن الصور. مجاني من unsplash.com/developers',
+  'admin.amapKey': 'مفتاح واجهة برمجة تطبيقات Amap (高德地图)',
+  'admin.amapKeyHint':
+    'للبحث عن الأماكن في البر الرئيسي للصين، حيث لا يمكن الوصول إلى Google وتكون بيانات OpenStreetMap شحيحة. يتطلب مفتاحًا من نوع «Web 服务» (خدمة ويب)، وليس مفتاح JS API. يمكن الحصول عليه من console.amap.com.',
+  'admin.placesProvider.title': 'مزوّد البحث عن الأماكن',
+  'admin.placesProvider.subtitle':
+    'الخدمة التي تتولى البحث عن الأماكن والإكمال التلقائي والتفاصيل. «تلقائي» يستخدم Google عند توفر مفتاح Google، ثم Amap، ثم OpenStreetMap.',
+  'admin.placesProvider.auto': 'تلقائي',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'المزوّد المحدد لا يحتوي على مفتاح واجهة برمجة تطبيقات، لذا يعود البحث عن الأماكن إلى OpenStreetMap.',
+  'admin.placesProvider.saved': 'تم حفظ مزوّد البحث عن الأماكن',
   'admin.validateKey': 'اختبار',
   'admin.keyValid': 'متصل',
   'admin.keyInvalid': 'غير صالح',

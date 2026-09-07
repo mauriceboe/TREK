@@ -4,6 +4,18 @@ import CustomSelect from '../shared/CustomSelect'
 import NoteFormatToolbar from '../shared/NoteFormatToolbar'
 import { mapsApi } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
+import { effectivePlacesProvider, osmKeySuggestion, type KeySuggestion } from '../../utils/placesProvider'
+
+/**
+ * The "search is on OpenStreetMap" line, per which key would actually move it
+ * off. The Google variant reuses the long-standing key, which every locale
+ * already carries; the other two are new with Amap.
+ */
+const OSM_ACTIVE_KEY: Record<KeySuggestion, string> = {
+  google: 'places.osmActive',
+  amap: 'places.osmActiveAmap',
+  any: 'places.osmActiveAny',
+}
 import { useCanDo } from '../../store/permissionsStore'
 import { useTripStore } from '../../store/tripStore'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -112,7 +124,11 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
   const placesSessionRef = useRef(new PlacesSession())
   const toast = useToast()
   const { t, language, locale } = useTranslation()
-  const { hasMapsKey, placesEnrichEnabled } = useAuthStore()
+  const { hasMapsKey, hasAmapKey, placesProvider, placesEnrichEnabled } = useAuthStore()
+  // What the search notices say depends on what will actually answer: an
+  // install whose admin picked Amap is not "missing a Google key".
+  const searchProvider = effectivePlacesProvider({ placesProvider, hasMapsKey, hasAmapKey })
+  const keySuggestion = osmKeySuggestion(placesProvider)
   const can = useCanDo()
   const timeFormat = useSettingsStore((s) => s.settings.time_format) || '24h'
   const tripObj = useTripStore((s) => s.trip)
@@ -555,7 +571,8 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     language,
     locale,
     timeFormat,
-    hasMapsKey,
+    searchProvider,
+    keySuggestion,
     placesEnrichEnabled,
     can,
     tripObj,
@@ -625,7 +642,8 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
     toast,
     t,
     language,
-    hasMapsKey,
+    searchProvider,
+    keySuggestion,
     placesEnrichEnabled,
     can,
     tripObj,
@@ -699,16 +717,19 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
           language={language}
           timeFormat={S.timeFormat}
           locale={S.locale}
-          hasMapsKey={S.hasMapsKey}
+          // Null when search genuinely has no key behind it — the column then
+          // explains which one would help, or stays quiet when OpenStreetMap
+          // was chosen on purpose.
+          keySuggestion={searchProvider === 'openstreetmap' ? keySuggestion : null}
           t={t}
         />
       )}
       <form onSubmit={handleSubmit} className={twoColumn || showDetails ? 'flex-1 min-w-0 space-y-3' : 'space-y-3'} onPaste={handlePaste}>
         {/* Place Search */}
         <div className="bg-surface-secondary rounded-xl p-3 border border-edge">
-          {!hasMapsKey && (
+          {searchProvider === 'openstreetmap' && keySuggestion && (
             <p className="mb-2 text-xs text-content-faint">
-              {t('places.osmActive')}
+              {t(OSM_ACTIVE_KEY[keySuggestion])}
             </p>
           )}
           <div className="relative">

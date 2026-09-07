@@ -77,6 +77,9 @@ export function isManagedBlocked(env: RuntimeEnvService): boolean {
  * the tiles it fetches.
  */
 export const MANAGED_LOCKED_SETTING_KEYS = [
+  // The operator's for the same reason maps_api_key is: Amap bills the account
+  // the key belongs to, and on a managed install that account is theirs.
+  'amap_api_key',
   'carto_api_key',
   'llm_api_key',
   'llm_base_url',
@@ -108,6 +111,7 @@ export const MANAGED_LOCKED_PROFILE_KEYS = [
   'maps_api_key',
   'openweather_api_key',
   'unsplash_api_key',
+  'amap_api_key',
 ] as const;
 
 /**
@@ -140,6 +144,10 @@ export const MANAGED_CUSTOMER_KEYS = [
   'passkey_login',
   'password_login',
   'password_registration',
+  // WHICH provider answers place search stays the admin's call even when the
+  // operator owns both credentials: it decides what their users see, not what
+  // the operator is billed for — the keys above cover that.
+  'places_provider',
   'require_mfa',
   'temperature_unit',
   'time_format',

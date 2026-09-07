@@ -1,11 +1,13 @@
+import { isOutsideChina } from '@trek/shared'
 import type { AssignmentPlace, Place } from '../../types'
+import { getAmapUrlForPlace } from './placeAmap'
 import { getCoMapsUrlForPlace } from './placeCoMaps'
 import { getGoogleMapsUrlForPlace } from './placeGoogleMaps'
 import { getOpenStreetMapUrlForPlace } from './placeOpenStreetMap'
 
 type PlaceLike = Pick<Place | AssignmentPlace, 'name' | 'address' | 'lat' | 'lng' | 'google_place_id' | 'google_ftid'>
 
-export type NavigationAppId = 'google' | 'waze' | 'apple' | 'osm' | 'comaps'
+export type NavigationAppId = 'google' | 'waze' | 'apple' | 'osm' | 'comaps' | 'amap'
 
 export interface NavigationTarget {
   id: NavigationAppId
@@ -91,6 +93,17 @@ export function getNavigationTargets(
   // end of this list, the one that still works with no signal.
   const coMapsUrl = getCoMapsUrlForPlace(place)
   if (coMapsUrl) targets.push({ id: 'comaps', label: 'CoMaps', url: coMapsUrl })
+
+  // Offered by WHERE the place is, not by who is looking at it. Amap only has a
+  // map of China, so it is the right choice for a stop in Shanghai whoever is
+  // planning the trip, and dead weight for one in Lisbon whoever is planning it —
+  // and this row is deliberately short. showsAppleMaps() above narrows by
+  // platform for the same reason; this one narrows by geography because that is
+  // what decides whether the link leads anywhere.
+  if (place.lat != null && place.lng != null && !isOutsideChina(place.lat, place.lng)) {
+    const amapUrl = getAmapUrlForPlace(place)
+    if (amapUrl) targets.push({ id: 'amap', label: '高德地图', url: amapUrl })
+  }
 
   return targets
 }

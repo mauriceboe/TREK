@@ -18,6 +18,7 @@ import {
   type GlMapProvider,
 } from '../../../components/Map/glProviders'
 import { withTileApiKey } from '../../../utils/tileUrl'
+import { AMAP_ROAD, AMAP_SATELLITE } from '../../../constants/mapDefaults'
 import MToggle from '../../components/MToggle'
 import { MSetCard, MSetEyebrow, MSetSelectRow, MSetInput, MSetButton, MSetHint, MSetRow } from './MSettingsUi'
 import MSetPickerSheet from './MSetPickerSheet'
@@ -39,6 +40,11 @@ const MAP_PRESETS: MapPreset[] = [
   { name: 'CartoDB Light', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
   { name: 'CartoDB Dark', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
   { name: 'Stadia Smooth', url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png' },
+  // Amap (高德). GCJ-02 tiles — the map switches to a shifted projection for
+  // these so markers still land on the right street (see gcj02Crs.ts). The only
+  // basemap here that is genuinely good inside mainland China.
+  { name: '高德地图 (Amap)', url: AMAP_ROAD },
+  { name: '高德卫星 (Amap Satellite)', url: AMAP_SATELLITE },
 ]
 
 type Provider = 'leaflet' | GlMapProvider
