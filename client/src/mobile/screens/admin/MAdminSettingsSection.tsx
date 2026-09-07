@@ -37,7 +37,8 @@ export default function MAdminSettingsSection({ admin, t }: MAdminSettingsSectio
     passkeyLogin, setPasskeyLogin, passkeyConfigured,
     webauthnRpId, setWebauthnRpId, webauthnOrigins, setWebauthnOrigins, savingWebauthn, handleSaveWebauthn,
     allowedFileTypes, setAllowedFileTypes, savingFileTypes, setSavingFileTypes,
-    mapsKey, setMapsKey, unsplashKey, setUnsplashKey, savingKeys, validating, validation,
+    mapsKey, setMapsKey, unsplashKey, setUnsplashKey, amapKey, setAmapKey, savingKeys, validating, validation,
+    placesProvider, savingPlacesProvider, handleSavePlacesProvider,
     setShowRotateJwtModal,
     handleToggleAuthSetting, handleToggleRequireMfa,
     handleSaveApiKeys, handleValidateKey,
@@ -228,6 +229,7 @@ export default function MAdminSettingsSection({ admin, t }: MAdminSettingsSectio
             <div className="flex gap-2">
               <div className="min-w-0 flex-1">
                 <MAdminSecretInput
+                  aria-label={t('admin.mapsKey')}
                   value={mapsKey}
                   onChange={(e) => setMapsKey(e.target.value)}
                   placeholder={t('settings.keyPlaceholder')}
@@ -255,8 +257,39 @@ export default function MAdminSettingsSection({ admin, t }: MAdminSettingsSectio
             )}
           </MAdminField>
 
+          {/* No Test button, same as the desktop tab: /auth/validate-keys only
+              knows how to probe Google Places and OpenWeatherMap. */}
+          <MAdminField label={t('admin.amapKey')} hint={t('admin.amapKeyHint')}>
+            <MAdminSecretInput
+              aria-label={t('admin.amapKey')}
+              value={amapKey}
+              onChange={(e) => setAmapKey(e.target.value)}
+              placeholder={t('settings.keyPlaceholder')}
+            />
+          </MAdminField>
+
+          <MAdminField label={t('admin.placesProvider.title')} hint={t('admin.placesProvider.subtitle')}>
+            <select
+              value={placesProvider}
+              disabled={savingPlacesProvider}
+              onChange={(e) => handleSavePlacesProvider(e.target.value)}
+              className="h-[42px] w-full rounded-xl border border-[color:var(--m-rowbr)] bg-[color:var(--m-ic)] px-3 text-[0.84375rem] text-m-ink outline-none disabled:opacity-50"
+            >
+              <option value="auto">{t('admin.placesProvider.auto')}</option>
+              <option value="google">{t('admin.placesProvider.google')}</option>
+              <option value="amap">{t('admin.placesProvider.amap')}</option>
+              <option value="openstreetmap">{t('admin.placesProvider.openstreetmap')}</option>
+            </select>
+            {((placesProvider === 'google' && !mapsKey) || (placesProvider === 'amap' && !amapKey)) && (
+              <p className="mt-1 font-geist text-[0.625rem] font-bold text-[color:var(--m-st-warn,#b45309)]">
+                {t('admin.placesProvider.missingKey')}
+              </p>
+            )}
+          </MAdminField>
+
           <MAdminField label={t('admin.unsplashKey')} hint={t('admin.unsplashKeyHint')}>
             <MAdminSecretInput
+              aria-label={t('admin.unsplashKey')}
               value={unsplashKey}
               onChange={(e) => setUnsplashKey(e.target.value)}
               placeholder={t('settings.keyPlaceholder')}

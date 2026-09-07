@@ -53,8 +53,8 @@ export class UserProfileService {
 
   /** The three key columns plus the role that decides where a save lands. */
   private currentKeys(userId: number) {
-    return this.db.get<Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'>>(
-      'SELECT role, maps_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?',
+    return this.db.get<Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key'>>(
+      'SELECT role, maps_api_key, openweather_api_key, unsplash_api_key, amap_api_key FROM users WHERE id = ?',
       userId
     );
   }
@@ -67,8 +67,8 @@ export class UserProfileService {
    * their own column only speaks when no instance value has been set yet.
    */
   private storedKeyPlaintext(
-    name: 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key',
-    current: Pick<User, 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined,
+    name: 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key',
+    current: Pick<User, 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key'> | undefined,
     isAdmin: boolean,
   ): string {
     if (isAdmin && (INSTANCE_API_KEY_NAMES as readonly string[]).includes(name)) {
@@ -91,12 +91,12 @@ export class UserProfileService {
    */
   private changedKeyNames(
     body: Record<string, unknown>,
-    current: Pick<User, 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined,
+    current: Pick<User, 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key'> | undefined,
     isAdmin: boolean,
     skipped: string[] = [],
   ): string[] {
     const norm = (v: unknown) => String(v ?? '').trim();
-    return (['maps_api_key', 'openweather_api_key', 'unsplash_api_key'] as const).filter(
+    return (['maps_api_key', 'openweather_api_key', 'unsplash_api_key', 'amap_api_key'] as const).filter(
       (name) => body[name] !== undefined && !skipped.includes(name) && norm(body[name]) !== norm(this.storedKeyPlaintext(name, current, isAdmin))
     );
   }
@@ -135,7 +135,7 @@ export class UserProfileService {
   }
 
   updateApiKeys(userId: number, rawBody: unknown) {
-    const body = rawBody as { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string };
+    const body = rawBody as { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string; amap_api_key?: string };
     const { blocked } = splitManagedKeys(body, this.managed);
     for (const key of blocked) delete body[key as keyof typeof body];
     const current = this.currentKeys(userId);
@@ -146,17 +146,18 @@ export class UserProfileService {
       // `?? null` instead of the former non-null assertions: a user row deleted
       // mid-request must degrade to a 0-row UPDATE, not a TypeError/500.
       this.db.run(
-        'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, unsplash_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, unsplash_api_key = ?, amap_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         body.maps_api_key !== undefined ? maybe_encrypt_api_key(body.maps_api_key) : current?.maps_api_key ?? null,
         body.openweather_api_key !== undefined ? maybe_encrypt_api_key(body.openweather_api_key) : current?.openweather_api_key ?? null,
         body.unsplash_api_key !== undefined ? maybe_encrypt_api_key(body.unsplash_api_key) : current?.unsplash_api_key ?? null,
+        body.amap_api_key !== undefined ? maybe_encrypt_api_key(body.amap_api_key) : current?.amap_api_key ?? null,
         userId
       );
       this.mirrorInstanceKeys(body, isAdmin);
     });
 
-    const updated = this.db.get<Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'>>(
-      'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?',
+    const updated = this.db.get<Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key' | 'avatar' | 'mfa_enabled'>>(
+      'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, amap_api_key, avatar, mfa_enabled FROM users WHERE id = ?',
       userId
     );
 
@@ -164,7 +165,7 @@ export class UserProfileService {
     return {
       success: true,
       ...(blocked.length ? { managed_keys: blocked } : {}),
-      user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
+      user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), amap_api_key: mask_stored_api_key(u?.amap_api_key), avatar_url: avatarUrl(updated || {}) },
       changedKeys,
     };
   }
@@ -173,8 +174,8 @@ export class UserProfileService {
     userId: number,
     rawBody: unknown
   ): { error?: string; status?: number; success?: boolean; user?: Record<string, unknown>; changedKeys?: string[] } {
-    const body = rawBody as { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string; username?: string; email?: string };
-    const { maps_api_key, openweather_api_key, unsplash_api_key, username, email } = body;
+    const body = rawBody as { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string; amap_api_key?: string; username?: string; email?: string };
+    const { maps_api_key, openweather_api_key, unsplash_api_key, amap_api_key, username, email } = body;
 
     if (username !== undefined) {
       const trimmed = username.trim();
@@ -208,6 +209,7 @@ export class UserProfileService {
     if (maps_api_key !== undefined && !keyLocked) { updates.push('maps_api_key = ?'); params.push(maybe_encrypt_api_key(maps_api_key)); }
     if (openweather_api_key !== undefined && !keyLocked) { updates.push('openweather_api_key = ?'); params.push(maybe_encrypt_api_key(openweather_api_key)); }
     if (unsplash_api_key !== undefined && !keyLocked) { updates.push('unsplash_api_key = ?'); params.push(maybe_encrypt_api_key(unsplash_api_key)); }
+    if (amap_api_key !== undefined && !keyLocked) { updates.push('amap_api_key = ?'); params.push(maybe_encrypt_api_key(amap_api_key)); }
     if (username !== undefined) { updates.push('username = ?'); params.push(username.trim()); }
     if (email !== undefined) { updates.push('email = ?'); params.push(email.trim()); }
 
@@ -226,8 +228,8 @@ export class UserProfileService {
       });
     }
 
-    const updated = this.db.get<Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'>>(
-      'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?',
+    const updated = this.db.get<Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key' | 'avatar' | 'mfa_enabled'>>(
+      'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, amap_api_key, avatar, mfa_enabled FROM users WHERE id = ?',
       userId
     );
 
@@ -235,14 +237,14 @@ export class UserProfileService {
     return {
       success: true,
       ...(blocked.length ? { managed_keys: blocked } : {}),
-      user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
+      user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), amap_api_key: mask_stored_api_key(u?.amap_api_key), avatar_url: avatarUrl(updated || {}) },
       changedKeys,
     };
   }
 
   getSettings(userId: number): { error?: string; status?: number; settings?: Record<string, unknown> } {
-    const user = this.db.get<Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'>>(
-      'SELECT role, maps_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?',
+    const user = this.db.get<Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'amap_api_key'>>(
+      'SELECT role, maps_api_key, openweather_api_key, unsplash_api_key, amap_api_key FROM users WHERE id = ?',
       userId
     );
     if (user?.role !== 'admin') return { error: 'Admin access required', status: 403 };
@@ -258,6 +260,7 @@ export class UserProfileService {
           maps_api_key: null,
           openweather_api_key: null,
           unsplash_api_key: null,
+          amap_api_key: null,
           managed_keys: [...MANAGED_LOCKED_PROFILE_KEYS],
         },
       };
@@ -272,6 +275,7 @@ export class UserProfileService {
         maps_api_key: readInstanceApiKey(this.db, 'maps_api_key') ?? decrypt_api_key(user.maps_api_key),
         openweather_api_key: decrypt_api_key(user.openweather_api_key),
         unsplash_api_key: readInstanceApiKey(this.db, 'unsplash_api_key') ?? decrypt_api_key(user.unsplash_api_key),
+        amap_api_key: readInstanceApiKey(this.db, 'amap_api_key') ?? decrypt_api_key(user.amap_api_key),
       },
     };
   }

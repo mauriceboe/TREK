@@ -10,6 +10,7 @@ function createTables(db: Database.Database): void {
       role TEXT NOT NULL DEFAULT 'user',
       maps_api_key TEXT,
       unsplash_api_key TEXT,
+      amap_api_key TEXT,
       openweather_api_key TEXT,
       avatar TEXT,
       oidc_sub TEXT,

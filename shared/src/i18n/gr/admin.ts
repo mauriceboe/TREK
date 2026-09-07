@@ -143,6 +143,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Για δεδομένα καιρού. Δωρεάν στο openweathermap.org',
   'admin.unsplashKey': 'Κλειδί API Unsplash',
   'admin.unsplashKeyHint': 'Για αναζήτηση εικόνων. Δωρεάν στο unsplash.com/developers',
+  'admin.amapKey': 'Κλειδί API του Amap (高德地图)',
+  'admin.amapKeyHint':
+    'Για αναζήτηση τοποθεσιών στην ηπειρωτική Κίνα, όπου το Google δεν είναι προσβάσιμο και το OpenStreetMap έχει ελάχιστα δεδομένα. Χρειάζεται κλειδί τύπου «Web 服务» (υπηρεσία web), όχι κλειδί JS API. Διαθέσιμο στο console.amap.com.',
+  'admin.placesProvider.title': 'Πάροχος αναζήτησης τοποθεσιών',
+  'admin.placesProvider.subtitle':
+    'Ποια υπηρεσία απαντά στην αναζήτηση τοποθεσιών, στις προτάσεις και στις λεπτομέρειες. Το «Αυτόματα» χρησιμοποιεί το Google όταν υπάρχει κλειδί Google, μετά το Amap και μετά το OpenStreetMap.',
+  'admin.placesProvider.auto': 'Αυτόματα',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Ο επιλεγμένος πάροχος δεν έχει ρυθμισμένο κλειδί API, οπότε η αναζήτηση τοποθεσιών επιστρέφει στο OpenStreetMap.',
+  'admin.placesProvider.saved': 'Ο πάροχος αναζήτησης τοποθεσιών αποθηκεύτηκε',
   'admin.validateKey': 'Δοκιμή',
   'admin.keyValid': 'Συνδέθηκε',
   'admin.keyInvalid': 'Μη έγκυρο',

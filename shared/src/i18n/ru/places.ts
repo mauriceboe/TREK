@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Поиск через OpenStreetMap (без фото, часов работы и рейтингов). Добавьте API-ключ Google в настройках для полной информации.',
   'places.osmActive': 'Используется OpenStreetMap. Ключ Google API добавит рейтинги и часы работы.',
+  'places.osmActiveAmap': 'Используется OpenStreetMap. Ключ API Amap (高德地图) добавит оценки и часы работы.',
+  'places.osmActiveAny': 'Используется OpenStreetMap. Ключ API Google или Amap (高德地图) добавит оценки и часы работы.',
   'places.details.title': 'Сведения о месте',
   'places.details.empty': 'Выберите результат поиска, чтобы увидеть изображения и описание.',
   'places.details.loading': 'Загрузка сведений...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Для этого места ничего не найдено.',
   'places.details.noKeyTitle': 'Доступно больше подробностей',
   'places.details.noKeyHint': 'Без ключа Google API этот экземпляр использует только свободные источники. Попросите администратора TREK добавить ключ для оценок, часов работы и фотографий.',
+  'places.details.noKeyHintAmap': 'Без ключа API Amap (高德地图) этот сервер может использовать только бесплатные источники. Попросите администратора TREK добавить ключ — появятся оценки и часы работы.',
+  'places.details.noKeyHintAny': 'Без ключа API Google или Amap (高德地图) этот сервер может использовать только бесплатные источники. Попросите администратора TREK добавить ключ — появятся оценки и часы работы.',
   'places.details.aboutBrand': 'О сети',
   'places.details.aboutBrandNote': 'Описывает сеть, а не это заведение.',
   'places.details.fact.rating': 'Рейтинг',

@@ -355,6 +355,35 @@ describe('PlaceFormModal', () => {
     expect(screen.getByText(/OpenStreetMap/i)).toBeInTheDocument();
   });
 
+  // The notice says what is actually true per provider choice, not "add a
+  // Google key" on an install whose admin picked Amap. See utils/placesProvider.
+  describe('FE-PLANNER-PLACEFORM-022b: the OSM notice follows the provider choice', () => {
+    it('suggests the Amap key when the admin chose Amap and none is set', () => {
+      seedStore(useAuthStore, { user: buildUser(), isAuthenticated: true, hasMapsKey: false, hasAmapKey: false, placesProvider: 'amap' });
+      render(<PlaceFormModal {...defaultProps} />);
+      expect(screen.getByText(/高德|Amap/i)).toBeInTheDocument();
+    });
+
+    it('stays quiet when the chosen provider has its key', () => {
+      seedStore(useAuthStore, { user: buildUser(), isAuthenticated: true, hasMapsKey: false, hasAmapKey: true, placesProvider: 'amap' });
+      render(<PlaceFormModal {...defaultProps} />);
+      expect(screen.queryByText(/OpenStreetMap/i)).not.toBeInTheDocument();
+    });
+
+    it('stays quiet when the admin explicitly chose OpenStreetMap', () => {
+      seedStore(useAuthStore, { user: buildUser(), isAuthenticated: true, hasMapsKey: false, hasAmapKey: false, placesProvider: 'openstreetmap' });
+      render(<PlaceFormModal {...defaultProps} />);
+      // A deliberate choice is not a gap to fill — no upsell line at all.
+      expect(screen.queryByText(/OpenStreetMap/i)).not.toBeInTheDocument();
+    });
+
+    it('stays quiet under auto when a Google key is configured', () => {
+      seedStore(useAuthStore, { user: buildUser(), isAuthenticated: true, hasMapsKey: true, hasAmapKey: true, placesProvider: 'auto' });
+      render(<PlaceFormModal {...defaultProps} />);
+      expect(screen.queryByText(/OpenStreetMap/i)).not.toBeInTheDocument();
+    });
+  });
+
   // ── Category ─────────────────────────────────────────────────────────────────
 
   it('FE-PLANNER-PLACEFORM-023: category selector renders options', () => {

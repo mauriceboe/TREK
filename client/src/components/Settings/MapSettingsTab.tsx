@@ -12,6 +12,7 @@ import { GlMapPreviewMapbox, GlMapPreviewMaplibre } from '../Map/glLazy'
 import Section from './Section'
 import ToggleSwitch from './ToggleSwitch'
 import { withTileApiKey } from '../../utils/tileUrl'
+import { AMAP_ROAD, AMAP_SATELLITE } from '../../constants/mapDefaults'
 import type { Place } from '../../types'
 import {
   MAPBOX_DEFAULT_STYLE,
@@ -40,6 +41,11 @@ const MAP_PRESETS: MapPreset[] = [
   { name: 'CartoDB Light', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
   { name: 'CartoDB Dark', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
   { name: 'Stadia Smooth', url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png' },
+  // Amap (高德). GCJ-02 tiles — the map switches to a shifted projection for
+  // these so markers still land on the right street (see gcj02Crs.ts). The only
+  // basemap here that is genuinely good inside mainland China.
+  { name: '高德地图 (Amap)', url: AMAP_ROAD },
+  { name: '高德卫星 (Amap Satellite)', url: AMAP_SATELLITE },
 ]
 
 // Tag → chip color mapping. Keeps the dropdown readable at a glance so a

@@ -15,6 +15,9 @@ import { validatePassword } from '../common/passwordPolicy';
 import { encryptMfaSecret, decryptMfaSecret } from '../common/crypto/mfaCrypto';
 import { decrypt_api_key, maybe_encrypt_api_key, encrypt_api_key } from '../common/crypto/apiKeyCrypto';
 import { resolveApiKey } from '../settings/instance-api-keys';
+// Type-and-guard only: the app-config read reports the provider choice, it does
+// not construct one, so this does not pull the maps domain into auth.
+import { isPlacesProviderChoice } from '../maps/providers/places-provider';
 import { EphemeralTokenService } from './ephemeral-token.service';
 // Import from sessionManager directly, NOT the ../../mcp barrel: the barrel pulls
 // the whole tools fan-out (and via the domain bridges, the Nest services) into
@@ -263,6 +266,12 @@ export class AuthService {
     // question is only about the instance, which is the first two steps of the
     // chain; id 0 matches no row.
     const hasGoogleKey = !!resolveApiKey(this.db, 'maps_api_key', authenticatedUser?.id ?? 0, readEnv().maps.placesApiKey).key;
+    // The same question for Amap, asked the same way. The client needs both to
+    // tell "search is unavailable" from "search runs on OpenStreetMap", and to
+    // know whether the provider the admin selected actually has a credential.
+    const hasAmapKey = !!resolveApiKey(this.db, 'amap_api_key', authenticatedUser?.id ?? 0, readEnv().maps.amapApiKey).key;
+    const placesProviderRow = this.db.get<{ value: string }>("SELECT value FROM app_settings WHERE key = 'places_provider'")?.value;
+    const placesProvider = isPlacesProviderChoice(placesProviderRow) ? placesProviderRow : 'auto';
     const oidcDisplayName = readEnv().oidc.displayName ||
       this.db.get<{ value: string }>("SELECT value FROM app_settings WHERE key = 'oidc_display_name'")?.value || null;
     const oidcConfigured = !!(
@@ -308,6 +317,8 @@ export class AuthService {
       version,
       is_prerelease: version.includes('-pre.'),
       has_maps_key: hasGoogleKey,
+      has_amap_key: hasAmapKey,
+      places_provider: placesProvider,
       oidc_configured: oidcConfigured,
       oidc_display_name: oidcConfigured ? (oidcDisplayName || 'SSO') : undefined,
       require_mfa: requireMfaRow?.value === 'true',
@@ -689,6 +700,10 @@ export class AuthService {
         if (key === 'require_mfa') {
           val = body[key] === true || val === 'true' ? 'true' : 'false';
         }
+        // An unknown provider name is dropped, not stored: the maps service
+        // degrades an unrecognised row to 'auto', so writing one would show the
+        // admin a saved setting that quietly does nothing.
+        if (key === 'places_provider' && !isPlacesProviderChoice(val)) continue;
         if (key === 'smtp_pass' && val === '••••••••') continue;
         if (key === 'smtp_pass') val = encrypt_api_key(val);
         if (key === 'admin_webhook_url' && val === '••••••••') continue;

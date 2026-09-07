@@ -131,6 +131,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': '天気データ用。openweathermap.org で無料',
   'admin.unsplashKey': 'Unsplash APIキー',
   'admin.unsplashKeyHint': '画像検索用。unsplash.com/developers で無料',
+  'admin.amapKey': 'Amap（高德地图）API キー',
+  'admin.amapKeyHint':
+    'Google に接続できず OpenStreetMap のデータも少ない中国本土での地点検索用です。JS API キーではなく「Web 服务」（Web サービス）タイプのキーが必要です。console.amap.com で取得できます。',
+  'admin.placesProvider.title': '地点検索のプロバイダー',
+  'admin.placesProvider.subtitle':
+    '地点検索・入力候補・詳細をどのサービスが担当するか。自動は、Google キーが設定されていれば Google、次に Amap、次に OpenStreetMap を使います。',
+  'admin.placesProvider.auto': '自動',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap（高德地图）',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': '選択したプロバイダーに API キーが設定されていないため、地点検索は OpenStreetMap にフォールバックします。',
+  'admin.placesProvider.saved': '地点検索のプロバイダーを保存しました',
   'admin.validateKey': 'テスト',
   'admin.keyValid': '接続済み',
   'admin.keyInvalid': '無効',

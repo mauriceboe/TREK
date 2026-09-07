@@ -250,11 +250,17 @@ describe('MAdminSettingsSection', () => {
     const user = userEvent.setup();
     const admin = renderSettings();
 
-    await user.type(screen.getAllByPlaceholderText('Enter key...')[0], 'm');
+    // By accessible name rather than by position: the card gained an Amap field
+    // between Maps and Unsplash, and an index quietly starts asserting about a
+    // different input when that happens.
+    await user.type(screen.getByLabelText('Google Maps API Key'), 'm');
     expect(admin.setMapsKey).toHaveBeenCalledWith('m');
 
-    await user.type(screen.getAllByPlaceholderText('Enter key...')[1], 'u');
+    await user.type(screen.getByLabelText('Unsplash API Key'), 'u');
     expect(admin.setUnsplashKey).toHaveBeenCalledWith('u');
+
+    await user.type(screen.getByLabelText(/Amap/), 'a');
+    expect(admin.setAmapKey).toHaveBeenCalledWith('a');
 
     await user.click(screen.getAllByRole('button', { name: 'Save' })[2]);
     expect(admin.handleSaveApiKeys).toHaveBeenCalled();

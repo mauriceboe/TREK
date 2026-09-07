@@ -7,22 +7,32 @@ import type {
   MapsReverseResult,
   MapsResolveUrlResult,
 } from '@trek/shared';
-import { readEnv, getAppUrl } from '../../app-config';
+import { readEnv } from '../../app-config';
 import { safeFetchFollow, SsrfBlockedError } from '../../utils/ssrfGuard';
 import { discardBody, exceedsDeclaredLength, readCappedText } from '../../utils/cappedFetch';
 import { resolveApiKey, type ApiKeySource } from '../settings/instance-api-keys';
+import {
+  isPlacesProviderChoice,
+  type PlacesProvider,
+  type PlacesProviderChoice,
+} from './providers/places-provider';
+import { GooglePlacesProvider } from './providers/google.provider';
+import {
+  AMAP_SHORT_HOSTS,
+  AmapPlacesProvider,
+  isAmapHost,
+  isAmapPlaceId,
+  parseAmapUrl,
+} from './providers/amap.provider';
 // ── Photo cache (disk-backed) ────────────────────────────────────────────────
 import { PlacePhotoCacheService } from '../place-photos/place-photo-cache.service';
 import { DatabaseService } from '../database/database.service';
 import { nominatimFetch, type GeoLane } from '../geo/nominatim.client';
 import {
   UA,
-  SEARCH_TEXT_FIELD_MASK,
   toApiLang,
   googleFtidFromMapsUrl,
   buildOsmDetails,
-  normalizeOpeningPeriods,
-  normalizeSpecialDays,
   isGooglePlaceId,
   OSM_PLACE_ID,
   CATEGORY_OSM_FILTERS,
@@ -33,67 +43,8 @@ import {
   toWikiLang,
   haversineMetres,
   namesOverlap,
-  type GoogleOpeningHours,
   type OverpassPoi,
 } from './maps.helpers';
-
-// ── Google API call counter ───────────────────────────────────────────────────
-
-let googleApiCallCount = 0;
-
-/** The upstream every Places call is written against. */
-const PLACES_UPSTREAM = 'https://places.googleapis.com';
-
-/**
- * Sends the call somewhere else when PLACES_API_BASE is set.
- *
- * The nine Places endpoints below all spell out the upstream host, so an install
- * that wants these calls to leave through something of its own — an egress proxy,
- * a cache, a gateway holding the key — has no way to say so today. One variable,
- * substituted at the one place every call funnels through.
- *
- * Path and query are untouched, so the replacement has to speak the same API.
- * Unset, which is every install today, the string is returned as it came in.
- */
-function placesEndpoint(endpoint: string): string {
-  const base = readEnv().maps.placesApiBase;
-  if (!base || !endpoint.startsWith(PLACES_UPSTREAM)) return endpoint;
-  // The character before the run is matched and written straight back. A bare
-  // /\/+$/ restarts at every slash of a base that does not end in one, reading
-  // the rest of the run again from each of them.
-  return base.replace(/([^/]|^)\/+$/, '$1') + endpoint.slice(PLACES_UPSTREAM.length);
-}
-
-/**
- * Says which of the three credentials Google rejected, never which value.
- *
- * The response body Google sends ("The caller does not have permission") is
- * identical whichever key was used, so without this line a report of "works for
- * the admin, fails for everyone else" cannot be told apart from a genuinely
- * broken key.
- */
-function logKeyFailure(label: string, status: number, userId: number, source: ApiKeySource | null): void {
-  console.error(`[Maps] ${label} failed with ${status} userId=${userId} keySource=${source}`);
-}
-
-/** Ceiling for one Google Places call. Generous — the photo download is the slow one. */
-const GOOGLE_FETCH_TIMEOUT_MS = 20000;
-
-function googleFetch(rawEndpoint: string, label: string, init?: RequestInit): Promise<Response> {
-  const endpoint = placesEndpoint(rawEndpoint);
-  googleApiCallCount++;
-  console.debug(`[Google API] #${googleApiCallCount} ${label} → ${endpoint}`);
-  const referer = readEnv().app.appUrl ? getAppUrl() : undefined;
-  return fetch(endpoint, {
-    ...init,
-    // A default ceiling here rather than at each of the nine call sites, none of
-    // which passed one: a hung upstream held the request handler open for as
-    // long as it liked. A caller that needs longer still wins, it only has to
-    // say so.
-    signal: init?.signal ?? AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
-    headers: { ...(referer ? { Referer: referer } : {}), ...((init?.headers as Record<string, string>) ?? {}) },
-  });
-}
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -303,42 +254,10 @@ export interface CommonsCandidate {
   descriptors: string | null;
 }
 
-interface GooglePlaceResult {
-  id: string;
-  displayName?: { text: string };
-  /** OPERATIONAL | CLOSED_TEMPORARILY | CLOSED_PERMANENTLY. Absent on non-business results. */
-  businessStatus?: string;
-  formattedAddress?: string;
-  location?: { latitude: number; longitude: number };
-  rating?: number;
-  websiteUri?: string;
-  nationalPhoneNumber?: string;
-  types?: string[];
-  googleMapsUri?: string;
-}
-
-interface GoogleAutocompleteSuggestion {
-  placePrediction?: {
-    placeId: string;
-    structuredFormat?: {
-      mainText?: { text: string };
-      secondaryText?: { text: string };
-    };
-  };
-}
-
-interface GooglePlaceDetails extends GooglePlaceResult {
-  userRatingCount?: number;
-  regularOpeningHours?: GoogleOpeningHours;
-  editorialSummary?: { text: string };
-  reviews?: {
-    authorAttribution?: { displayName?: string; photoUri?: string };
-    rating?: number;
-    text?: { text?: string };
-    relativePublishTimeDescription?: string;
-  }[];
-  photos?: { name: string; authorAttributions?: { displayName?: string }[] }[];
-}
+// The Google wire shapes (GooglePlaceResult / GooglePlaceDetails / the
+// autocomplete suggestion) moved to providers/google.provider.ts together with
+// the calls that parse them. Nothing outside that provider decodes a Google
+// payload any more.
 
 // ── Concurrency limiter for outbound photo fetches ───────────────────────────
 // Caps simultaneous Wikimedia/Google photo requests so a bulk import of hundreds
@@ -513,6 +432,16 @@ async function overpassFetch(query: string): Promise<OverpassPoiElement[]> {
 type LocationBias = { low: { lat: number; lng: number }; high: { lat: number; lng: number } };
 
 /**
+ * The app_settings row that names the places provider.
+ *
+ * A setting rather than "whichever key is configured": an install can hold both
+ * credentials (a team split between China and elsewhere), and in that case only
+ * an admin can say which one should answer. Absent — every install today —
+ * means `auto`, which keeps Google.
+ */
+export const PLACES_PROVIDER_SETTING = 'places_provider';
+
+/**
  * /api/maps domain service — geocoding, the provider fan-out
  * (Nominatim/Overpass/Google), the place-details/photo caches and the SSRF
  * guard on every outbound URL. DI-native since the maps fold: the legacy
@@ -611,6 +540,93 @@ export class MapsService {
 
   getMapsKey(userId: number): string | null {
     return this.resolveMapsKey(userId).key;
+  }
+
+  /** The Amap credential, resolved through the identical three-step chain. */
+  resolveAmapKey(userId: number): { key: string | null; source: ApiKeySource | null } {
+    return resolveApiKey(this.database, 'amap_api_key', userId, readEnv().maps.amapApiKey);
+  }
+
+  // ── Provider selection ─────────────────────────────────────────────────────
+
+  /**
+   * Which keyed provider the admin picked, or `auto`.
+   *
+   * An unrecognised stored value degrades to `auto` rather than throwing: this
+   * is read on the hot path of every search, and a hand-edited settings row must
+   * not take place search down.
+   */
+  placesProviderChoice(): PlacesProviderChoice {
+    const row = this.database.get<{ value: string }>(
+      'SELECT value FROM app_settings WHERE key = ?',
+      PLACES_PROVIDER_SETTING,
+    );
+    return isPlacesProviderChoice(row?.value) ? row.value : 'auto';
+  }
+
+  /**
+   * The provider for this request, or null to use the OpenStreetMap stack.
+   *
+   * `auto` — the default, and what every install that predates Amap has —
+   * prefers Google. That is deliberately the *incumbent* preference rather than
+   * "the newest provider wins": an existing install must not silently start
+   * querying somewhere else, with a different bill and different results,
+   * because a release added a provider. An admin who wants Amap says so.
+   *
+   * Key resolution is ordered to match: under `auto` the Amap chain is only
+   * walked when there is no Google key, so an install on Google issues exactly
+   * the database reads it always did.
+   */
+  resolvePlacesProvider(userId: number): PlacesProvider | null {
+    const choice = this.placesProviderChoice();
+    if (choice === 'openstreetmap') return null;
+
+    if (choice !== 'amap') {
+      const google = this.resolveMapsKey(userId);
+      if (google.key) {
+        return new GooglePlacesProvider({ key: google.key, source: google.source, userId });
+      }
+      // An explicit 'google' choice with no key is not a reason to query Amap
+      // instead — it means this install is on Google and is misconfigured. OSM
+      // answers, the way a keyless install has always been answered.
+      if (choice === 'google') return null;
+    }
+
+    const amap = this.resolveAmapKey(userId);
+    if (amap.key) {
+      return new AmapPlacesProvider({ key: amap.key, source: amap.source, userId });
+    }
+    return null;
+  }
+
+  /**
+   * The provider that can resolve `placeId`, regardless of which one is
+   * currently selected.
+   *
+   * Places outlive the setting. An install that ran on Google for a year and
+   * then switches to Amap still holds thousands of `google_place_id` rows, and
+   * every one of those has to keep opening — against Google, whose credential is
+   * still configured. The reverse is just as true after a switch back. So the id
+   * decides, and the selected provider only gets asked first because it is
+   * usually the right answer and costs no extra database reads.
+   *
+   * Null means nobody can resolve it: an Amap place on an install that has since
+   * dropped its Amap key, a coordinate pseudo-id, an OSM id (which is handled
+   * before this is reached). Callers treat that as a miss, not an error.
+   */
+  private providerForPlaceId(userId: number, placeId: string): PlacesProvider | null {
+    const selected = this.resolvePlacesProvider(userId);
+    if (selected?.ownsPlaceId(placeId)) return selected;
+
+    if (isAmapPlaceId(placeId)) {
+      const amap = this.resolveAmapKey(userId);
+      return amap.key ? new AmapPlacesProvider({ key: amap.key, source: amap.source, userId }) : null;
+    }
+    if (isGooglePlaceId(placeId)) {
+      const google = this.resolveMapsKey(userId);
+      return google.key ? new GooglePlacesProvider({ key: google.key, source: google.source, userId }) : null;
+    }
+    return null;
   }
 
   // ── Nominatim search ───────────────────────────────────────────────────────
@@ -1396,38 +1412,12 @@ export class MapsService {
     apiKey: string,
     cap: number,
   ): Promise<{ name: string; attribution: string | null }[]> {
-    if (!isGooglePlaceId(placeId) || cap < 1) return [];
-    try {
-      const res = await googleFetch(
-        `https://places.googleapis.com/v1/places/${placeId}`,
-        `fetchGooglePhotoRefs(${placeId})`,
-        { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'photos' } },
-      );
-      if (!res.ok) return [];
-      const data = (await res.json()) as GooglePlaceDetails;
-      return (data.photos ?? []).slice(0, cap).map((photo) => ({
-        name: photo.name,
-        attribution: photo.authorAttributions?.[0]?.displayName || null,
-      }));
-    } catch {
-      return [];
-    }
+    return this.googleFor(apiKey).photoRefs(placeId, cap);
   }
 
   /** Image bytes for one photo reference. Null on any miss; the caller skips it. */
   async fetchGooglePhotoBytes(photoName: string, apiKey: string, maxHeightPx = 400): Promise<Buffer | null> {
-    try {
-      const res = await googleFetch(
-        `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=${maxHeightPx}`,
-        `fetchGooglePhotoBytes(${photoName})`,
-        { headers: { 'X-Goog-Api-Key': apiKey } },
-      );
-      if (!res.ok) return null;
-      const bytes = Buffer.from(await res.arrayBuffer());
-      return bytes.length ? bytes : null;
-    } catch {
-      return null;
-    }
+    return this.googleFor(apiKey).photoBytes(photoName, maxHeightPx);
   }
 
   /**
@@ -1438,22 +1428,23 @@ export class MapsService {
    * wants the sentence, so it asks for the sentence.
    */
   async fetchEditorialSummary(placeId: string, apiKey: string, lang?: string): Promise<string | null> {
-    if (!isGooglePlaceId(placeId)) return null;
-    try {
-      const res = await googleFetch(
-        `https://places.googleapis.com/v1/places/${placeId}?languageCode=${toApiLang(lang)}`,
-        `fetchEditorialSummary(${placeId})`,
-        { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'editorialSummary' } },
-      );
-      if (!res.ok) return null;
-      const data = (await res.json()) as GooglePlaceDetails;
-      return data.editorialSummary?.text?.trim() || null;
-    } catch {
-      return null;
-    }
+    return this.googleFor(apiKey).editorialSummary(placeId, lang);
   }
 
-  // ── Search places (Google or Nominatim fallback) ───────────────────────────
+  /**
+   * A Google provider over a key the caller already resolved.
+   *
+   * The three methods above keep taking an explicit `apiKey` because place
+   * enrichment resolves it once and then makes up to four calls with it; asking
+   * the resolver again per call would be three extra database reads per place in
+   * the picker. There is no userId to report here, hence the 0 — these paths log
+   * nothing that needs it, they answer every failure with an empty result.
+   */
+  private googleFor(apiKey: string): GooglePlacesProvider {
+    return new GooglePlacesProvider({ key: apiKey, source: null, userId: 0 });
+  }
+
+  // ── Search places (provider, or Nominatim fallback) ────────────────────────
 
   async searchPlaces(
     userId: number,
@@ -1461,69 +1452,18 @@ export class MapsService {
     lang?: string,
     locationBias?: { lat: number; lng: number; radius?: number },
   ): Promise<{ places: Record<string, unknown>[]; source: string }> {
-    const { key: apiKey, source: keySource } = this.resolveMapsKey(userId);
+    const provider = this.resolvePlacesProvider(userId);
 
-    if (!apiKey) {
+    if (!provider) {
       const places = await this.searchNominatim(query, lang);
       return { places, source: 'openstreetmap' };
     }
 
-    const searchBody: Record<string, unknown> = { textQuery: query, languageCode: toApiLang(lang) };
-    // Bias results toward the caller's area when supplied — without it Google Text
-    // Search falls back to the API key's billing region, which skews foreign-region queries.
-    if (locationBias) {
-      searchBody.locationBias = {
-        circle: {
-          center: { latitude: locationBias.lat, longitude: locationBias.lng },
-          radius: locationBias.radius ?? 50000,
-        },
-      };
-    }
-
-    const response = await googleFetch('https://places.googleapis.com/v1/places:searchText', 'searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': SEARCH_TEXT_FIELD_MASK,
-      },
-      body: JSON.stringify(searchBody),
-    });
-
-    const data = (await response.json()) as { places?: GooglePlaceResult[]; error?: { message?: string } };
-
-    if (!response.ok) {
-      logKeyFailure('searchText', response.status, userId, keySource);
-      const err = new Error(data.error?.message || 'Google Places API error') as Error & { status: number };
-      err.status = response.status;
-      throw err;
-    }
-
-    // A place that has shut down for good is never the answer to "where should we
-    // go" (#1341). Temporarily closed stays: a restaurant on holiday next month is
-    // still worth planning around. Anything without the field is a non-business
-    // result (a park, a viewpoint) and is kept.
-    const places = (data.places || [])
-      .filter((p: GooglePlaceResult) => p.businessStatus !== 'CLOSED_PERMANENTLY')
-      .map((p: GooglePlaceResult) => ({
-      google_place_id: p.id,
-      google_ftid: googleFtidFromMapsUrl(p.googleMapsUri),
-      name: p.displayName?.text || '',
-      address: p.formattedAddress || '',
-      // `?? null`, not `|| null`: 0 is a real coordinate (equator / prime meridian).
-      lat: p.location?.latitude ?? null,
-      lng: p.location?.longitude ?? null,
-      rating: p.rating || null,
-      website: p.websiteUri || null,
-      phone: p.nationalPhoneNumber || null,
-      types: p.types || [],
-      source: 'google',
-    }));
-
-    return { places, source: 'google' };
+    const places = await provider.searchText(query, lang, locationBias);
+    return { places, source: provider.id };
   }
 
-  // ── Autocomplete (Google or Nominatim fallback) ────────────────────────────
+  // ── Autocomplete (provider, or Nominatim fallback) ─────────────────────────
 
   async autocompletePlaces(
     userId: number,
@@ -1532,60 +1472,14 @@ export class MapsService {
     locationBias?: { low: { lat: number; lng: number }; high: { lat: number; lng: number } },
     sessionToken?: string,
   ): Promise<{ suggestions: { placeId: string; mainText: string; secondaryText: string }[]; source: string }> {
-    const { key: apiKey, source: keySource } = this.resolveMapsKey(userId);
+    const provider = this.resolvePlacesProvider(userId);
 
-    if (!apiKey) {
+    if (!provider) {
       return this.autocompleteNominatim(input, lang);
     }
 
-    const body: Record<string, unknown> = {
-      input,
-      languageCode: toApiLang(lang),
-    };
-    // With a session token Google bills the whole search as one autocomplete
-    // session instead of charging each keystroke; the details call that closes
-    // the session carries the same token.
-    if (sessionToken) body.sessionToken = sessionToken;
-    if (locationBias) {
-      body.locationBias = {
-        rectangle: {
-          low: { latitude: locationBias.low.lat, longitude: locationBias.low.lng },
-          high: { latitude: locationBias.high.lat, longitude: locationBias.high.lng },
-        },
-      };
-    }
-
-    const response = await googleFetch('https://places.googleapis.com/v1/places:autocomplete', 'autocomplete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = (await response.json()) as {
-      suggestions?: GoogleAutocompleteSuggestion[];
-      error?: { message?: string };
-    };
-
-    if (!response.ok) {
-      logKeyFailure('autocomplete', response.status, userId, keySource);
-      const err = new Error(data.error?.message || 'Google Places Autocomplete error') as Error & { status: number };
-      err.status = response.status;
-      throw err;
-    }
-
-    const suggestions = (data.suggestions || [])
-      .filter((s) => s.placePrediction)
-      .slice(0, 5)
-      .map((s) => ({
-        placeId: s.placePrediction!.placeId,
-        mainText: s.placePrediction!.structuredFormat?.mainText?.text || '',
-        secondaryText: s.placePrediction!.structuredFormat?.secondaryText?.text || '',
-      }));
-
-    return { suggestions, source: 'google' };
+    const suggestions = await provider.autocomplete(input, lang, locationBias, sessionToken);
+    return { suggestions, source: provider.id };
   }
 
   private async autocompleteNominatim(
@@ -1612,7 +1506,7 @@ export class MapsService {
     }
   }
 
-  // ── Place details (Google or OSM) ──────────────────────────────────────────
+  // ── Place details (provider or OSM) ────────────────────────────────────────
 
   async getPlaceDetails(
     userId: number,
@@ -1620,6 +1514,13 @@ export class MapsService {
     lang?: string,
     sessionToken?: string,
   ): Promise<{ place: Record<string, unknown> | null }> {
+    // Before the OSM branch: an Amap id is `amap:<poiid>` and so also contains a
+    // colon. Reading it as an OSM type/id pair would send "amap" to Overpass as
+    // an element type and answer every Chinese place with an empty record.
+    if (isAmapPlaceId(placeId)) {
+      return this.providerDetails(userId, placeId, lang, { sessionToken });
+    }
+
     // OSM details: placeId is "node:123456" or "way:123456" etc.
     if (placeId.includes(':')) {
       const [osmType, osmId] = placeId.split(':');
@@ -1652,91 +1553,70 @@ export class MapsService {
       };
     }
 
-    // Google details
+    return this.providerDetails(userId, placeId, lang, { sessionToken });
+  }
+
+  /**
+   * A keyed provider's details lookup, with the shared cache around it.
+   *
+   * The cache is keyed by (place_id, lang, expanded) and is therefore already
+   * provider-safe: ids from different providers cannot collide, because an Amap
+   * one carries the `amap:` prefix and a Google one cannot.
+   *
+   * A missing provider is an empty result, not a client error. Search and
+   * autocomplete already answer their keyless case with the OSM stack; this used
+   * to be the one place that threw instead, which turned an instance without a
+   * key into a stream of 400s whenever an older Google place was opened. Callers
+   * already treat a null place as a miss. The same now covers an Amap place
+   * opened on an install that has since dropped its Amap key.
+   */
+  private async providerDetails(
+    userId: number,
+    placeId: string,
+    lang: string | undefined,
+    opts: { sessionToken?: string; expanded?: boolean; refresh?: boolean } = {},
+  ): Promise<{ place: Record<string, unknown> | null }> {
     // 'en' default, aligned with search/autocomplete and the MCP tools' ?? 'en'
     // (the 'de' the legacy service defaulted to was a development leftover;
     // cache rows keyed 'de' for lang-less callers go cold once — 7-day TTL).
     const langKey = toApiLang(lang);
-    const apiKey = this.getMapsKey(userId);
-    // No key means no way to resolve a Google id: they have no OpenStreetMap
-    // equivalent to fall back to. That is an empty result, not a client error.
-    // Search and autocomplete already answer their keyless case with the OSM
-    // stack; this used to be the one place that threw instead, which turned an
-    // instance without a key into a stream of 400s whenever an older Google
-    // place was opened. Callers already treat a null place as a miss.
-    if (!apiKey) return { place: null };
+    const expanded = opts.expanded === true;
+    const provider = this.providerForPlaceId(userId, placeId);
+    if (!provider) return { place: null };
 
-    // Check DB cache first (lean mask, expanded=0) — 7-day TTL
-    const DETAILS_TTL = 7 * 24 * 60 * 60 * 1000;
     const cached = this.database.get<{ payload_json: string; fetched_at: number }>(
-      'SELECT payload_json, fetched_at FROM place_details_cache WHERE place_id = ? AND lang = ? AND expanded = 0',
+      'SELECT payload_json, fetched_at FROM place_details_cache WHERE place_id = ? AND lang = ? AND expanded = ?',
       placeId,
       langKey,
+      expanded ? 1 : 0,
     );
-    if (cached && Date.now() - cached.fetched_at < DETAILS_TTL) return { place: JSON.parse(cached.payload_json) };
-
-    // Closes the autocomplete session this lookup belongs to, so Google bills
-    // the search once instead of per keystroke. A cache hit above never reaches
-    // here, which is billing-neutral: an unclosed session is charged as a plain
-    // autocomplete session.
-    const sessionParam = sessionToken ? `&sessionToken=${encodeURIComponent(sessionToken)}` : '';
-    const response = await googleFetch(
-      `https://places.googleapis.com/v1/places/${placeId}?languageCode=${langKey}${sessionParam}`,
-      `getPlaceDetails(${placeId})`,
-      {
-        method: 'GET',
-        headers: {
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask':
-            'id,displayName,formattedAddress,location,rating,userRatingCount,websiteUri,nationalPhoneNumber,regularOpeningHours,googleMapsUri',
-        },
-      },
-    );
-
-    const data = (await response.json()) as GooglePlaceDetails & { error?: { message?: string } };
-
-    if (!response.ok) {
-      const err = new Error(data.error?.message || 'Google Places API error') as Error & { status: number };
-      err.status = response.status;
-      throw err;
+    // The lean lookup expires after a week; the expanded one is kept until the
+    // caller asks for a refresh, which is what it did before the two merged.
+    const DETAILS_TTL = 7 * 24 * 60 * 60 * 1000;
+    if (cached && (expanded ? !opts.refresh : Date.now() - cached.fetched_at < DETAILS_TTL)) {
+      return { place: JSON.parse(cached.payload_json) };
     }
 
-    const place = {
-      google_place_id: data.id,
-      google_ftid: googleFtidFromMapsUrl(data.googleMapsUri),
-      name: data.displayName?.text || '',
-      address: data.formattedAddress || '',
-      // `?? null`, not `|| null`: 0 is a real coordinate (equator / prime meridian).
-      lat: data.location?.latitude ?? null,
-      lng: data.location?.longitude ?? null,
-      rating: data.rating || null,
-      rating_count: data.userRatingCount || null,
-      website: data.websiteUri || null,
-      phone: data.nationalPhoneNumber || null,
-      opening_hours: data.regularOpeningHours?.weekdayDescriptions || null,
-      open_now: data.regularOpeningHours?.openNow ?? null,
-      // open_now is a snapshot Google took when this payload was fetched and it is cached
-      // for days; the periods let the client recompute the state in the place's own
-      // timezone, which the localised weekday lines above cannot do. Issue #1680.
-      opening_periods: normalizeOpeningPeriods(data.regularOpeningHours?.periods),
-      opening_special_days: normalizeSpecialDays(data.regularOpeningHours?.specialDays),
-      google_maps_url: data.googleMapsUri || null,
-      summary: null,
-      reviews: [],
-      source: 'google' as const,
-      cached_at: Date.now(),
-    };
+    const place = await provider.placeDetails(placeId, {
+      lang,
+      expanded,
+      // A cache hit above never reaches here, which is billing-neutral: an
+      // unclosed Google autocomplete session is charged as a plain session.
+      sessionToken: opts.sessionToken,
+    });
+    if (!place) return { place: null };
 
     try {
       this.database.run(
-        'INSERT OR REPLACE INTO place_details_cache (place_id, lang, expanded, payload_json, fetched_at) VALUES (?, ?, 0, ?, ?)',
+        'INSERT OR REPLACE INTO place_details_cache (place_id, lang, expanded, payload_json, fetched_at) VALUES (?, ?, ?, ?, ?)',
         placeId,
         langKey,
+        expanded ? 1 : 0,
         JSON.stringify(place),
         Date.now(),
       );
     } catch (dbErr) {
-      console.error('Failed to cache place details:', dbErr);
+      console.error(`Failed to cache ${expanded ? 'expanded ' : ''}place details:`, dbErr);
     }
 
     return { place };
@@ -1750,91 +1630,17 @@ export class MapsService {
   ): Promise<{ place: Record<string, unknown> | null }> {
     // Reviews and the editorial summary only exist at Google, but the id does not
     // have to be a Google one — the client sends whatever the place carries. OSM ids
-    // keep the details they do have (Overpass, via the plain lookup); coordinate
-    // pseudo-ids and legacy image URLs have no details source at all. Neither may be
+    // keep the details they do have (Overpass, via the plain lookup); an Amap id has
+    // no richer tier, so it takes the same plain lookup. Coordinate pseudo-ids and
+    // legacy image URLs have no details source at all. None of those may be
     // forwarded to Google, which bills the 400 INVALID_ARGUMENT it answers with.
     if (!isGooglePlaceId(placeId)) {
-      return OSM_PLACE_ID.test(placeId) ? this.getPlaceDetails(userId, placeId, lang) : { place: null };
+      return OSM_PLACE_ID.test(placeId) || isAmapPlaceId(placeId)
+        ? this.getPlaceDetails(userId, placeId, lang)
+        : { place: null };
     }
 
-    const langKey = toApiLang(lang); // 'en' default — see getPlaceDetails
-    const apiKey = this.getMapsKey(userId);
-    // Same as the lean lookup above: an empty result, not a client error.
-    if (!apiKey) return { place: null };
-
-    // Check DB cache for expanded result
-    if (!refresh) {
-      const cached = this.database.get<{ payload_json: string }>(
-        'SELECT payload_json FROM place_details_cache WHERE place_id = ? AND lang = ? AND expanded = 1',
-        placeId,
-        langKey,
-      );
-      if (cached) return { place: JSON.parse(cached.payload_json) };
-    }
-
-    const response = await googleFetch(
-      `https://places.googleapis.com/v1/places/${placeId}?languageCode=${langKey}`,
-      `getPlaceDetailsExpanded(${placeId})`,
-      {
-        method: 'GET',
-        headers: {
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask':
-            'id,displayName,formattedAddress,location,rating,userRatingCount,websiteUri,nationalPhoneNumber,regularOpeningHours,googleMapsUri,reviews,editorialSummary',
-        },
-      },
-    );
-
-    const data = (await response.json()) as GooglePlaceDetails & { error?: { message?: string } };
-
-    if (!response.ok) {
-      const err = new Error(data.error?.message || 'Google Places API error') as Error & { status: number };
-      err.status = response.status;
-      throw err;
-    }
-
-    const place = {
-      google_place_id: data.id,
-      google_ftid: googleFtidFromMapsUrl(data.googleMapsUri),
-      name: data.displayName?.text || '',
-      address: data.formattedAddress || '',
-      // `?? null`, not `|| null`: 0 is a real coordinate (equator / prime meridian).
-      lat: data.location?.latitude ?? null,
-      lng: data.location?.longitude ?? null,
-      rating: data.rating || null,
-      rating_count: data.userRatingCount || null,
-      website: data.websiteUri || null,
-      phone: data.nationalPhoneNumber || null,
-      opening_hours: data.regularOpeningHours?.weekdayDescriptions || null,
-      open_now: data.regularOpeningHours?.openNow ?? null,
-      opening_periods: normalizeOpeningPeriods(data.regularOpeningHours?.periods),
-      opening_special_days: normalizeSpecialDays(data.regularOpeningHours?.specialDays),
-      google_maps_url: data.googleMapsUri || null,
-      summary: data.editorialSummary?.text || null,
-      reviews: (data.reviews || []).slice(0, 5).map((r: NonNullable<GooglePlaceDetails['reviews']>[number]) => ({
-        author: r.authorAttribution?.displayName || null,
-        rating: r.rating || null,
-        text: r.text?.text || null,
-        time: r.relativePublishTimeDescription || null,
-        photo: r.authorAttribution?.photoUri || null,
-      })),
-      source: 'google' as const,
-      cached_at: Date.now(),
-    };
-
-    try {
-      this.database.run(
-        'INSERT OR REPLACE INTO place_details_cache (place_id, lang, expanded, payload_json, fetched_at) VALUES (?, ?, 1, ?, ?)',
-        placeId,
-        langKey,
-        JSON.stringify(place),
-        Date.now(),
-      );
-    } catch (dbErr) {
-      console.error('Failed to cache expanded place details:', dbErr);
-    }
-
-    return { place };
+    return this.providerDetails(userId, placeId, lang, { expanded: true, refresh });
   }
 
   // ── Place photo (Google or Wikimedia, disk-cached) ─────────────────────────
@@ -1876,8 +1682,6 @@ export class MapsService {
     const fetchPromise = (async (): Promise<{ attribution: string | null } | null> => {
       await acquirePhotoFetchSlot();
       try {
-        const apiKey = this.getMapsKey(userId);
-
         // Coordinate-based Wikipedia/Wikimedia lookup. Used for coordinate-only
         // (right-click) places and as a fallback when a Google place yields no photo,
         // so a place added via search still gets a marker image when Google returns
@@ -1908,57 +1712,20 @@ export class MapsService {
         // caller can fall back to Wikimedia; the misses that were Google's fault
         // flag providerFailed on the way out.
         const fetchGooglePhoto = async (): Promise<{ attribution: string | null } | null> => {
-          if (!apiKey) return null;
+          // Only Google offers photos TREK can use: an Amap image carries no
+          // licence statement we could put next to it, so an Amap place goes
+          // straight to the Wikimedia fallback, which supplies one. See the
+          // header of providers/amap.provider.ts.
+          const provider = this.providerForPlaceId(userId, placeId);
+          if (!(provider instanceof GooglePlacesProvider)) return null;
 
-          // Fetch details to get the photo name
-          const detailsRes = await googleFetch(
-            `https://places.googleapis.com/v1/places/${placeId}`,
-            `getPlacePhoto/details(${placeId})`,
-            {
-              headers: {
-                'X-Goog-Api-Key': apiKey,
-                'X-Goog-FieldMask': 'photos',
-              },
-            },
-          );
-          const body = await detailsRes.text();
-          if (!detailsRes.ok) {
-            console.error('Google Places photo details error:', detailsRes.status, body.slice(0, 200));
-            providerFailed = true;
-            return null;
-          }
-          let details: GooglePlaceDetails & { error?: { message?: string } };
-          try {
-            details = body ? JSON.parse(body) : { photos: [] };
-          } catch {
-            providerFailed = true;
-            return null;
-          }
-          if (!details.photos?.length) return null;
-
-          const photo = details.photos[0];
-          const photoName = photo.name;
-          const attribution = photo.authorAttributions?.[0]?.displayName || null;
-
-          // Fetch actual image bytes
-          const mediaRes = await googleFetch(
-            `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400`,
-            `getPlacePhoto/media(${placeId})`,
-            { headers: { 'X-Goog-Api-Key': apiKey } },
-          );
-          // The place does have a photo — only the download for it went wrong.
-          if (!mediaRes.ok) {
-            providerFailed = true;
+          const result = await provider.firstPhotoBytes(placeId);
+          if (!result.bytes) {
+            if (result.failed) providerFailed = true;
             return null;
           }
 
-          const bytes = Buffer.from(await mediaRes.arrayBuffer());
-          if (!bytes.length) {
-            providerFailed = true;
-            return null;
-          }
-
-          const cached = await this.photoCache.put(placeId, bytes, attribution);
+          const cached = await this.photoCache.put(placeId, result.bytes, result.attribution);
 
           // Persist stable proxy URL to database
           try {
@@ -1971,7 +1738,7 @@ export class MapsService {
             console.error('Failed to persist photo URL to database:', dbErr);
           }
 
-          return { attribution };
+          return { attribution: result.attribution };
         };
 
         // Prefer the Google photo (higher quality); if Google yields nothing, fall
@@ -2007,6 +1774,28 @@ export class MapsService {
     lang?: string,
     opts?: { lane?: GeoLane; timeoutMs?: number },
   ): Promise<{ name: string | null; address: string | null }> {
+    // Reverse geocoding has no user behind it in most of its callers — a booking
+    // import, an Atlas tile, a right-click on a shared map — so the credential is
+    // resolved at userId 0, which stops the chain at the operator env var and the
+    // instance-wide row. A personal Amap key deliberately does not apply here:
+    // there is no request-scoped person to attribute the call to, and reading
+    // some other user's key is what #1939 was about.
+    const provider = this.resolvePlacesProvider(0);
+    if (provider?.reverse) {
+      const latNum = Number.parseFloat(lat);
+      const lngNum = Number.parseFloat(lng);
+      if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+        try {
+          const answer = await provider.reverse(latNum, lngNum, lang);
+          if (answer) return answer;
+        } catch (err) {
+          // A provider outage must not make a right-click unusable: Nominatim is
+          // still there, and it is what this method used to do unconditionally.
+          console.error(`[Maps] ${provider.id} reverse geocode failed, falling back to Nominatim:`, err);
+        }
+      }
+    }
+
     const params = new URLSearchParams({
       lat,
       lon: lng,
@@ -2023,7 +1812,21 @@ export class MapsService {
     return { name, address: data.display_name || null };
   }
 
-  // ── Resolve Google Maps URL ────────────────────────────────────────────────
+  // ── Resolve a shared map URL (Google Maps or Amap) ──────────────────────────
+
+  /**
+   * A pasted map link turned into a place.
+   *
+   * Kept under the old name as well (`resolveGoogleMapsUrl`) because the MCP tool
+   * `resolve_maps_url` and the maps controller both call it, and the name is part
+   * of that surface. Amap links take a much shorter path than Google ones: they
+   * carry their coordinates in the query string, so there is no page body to read.
+   */
+  async resolveMapUrl(
+    url: string,
+  ): Promise<{ lat: number; lng: number; name: string | null; address: string | null; google_ftid: string | null }> {
+    return this.resolveGoogleMapsUrl(url);
+  }
 
   async resolveGoogleMapsUrl(
     url: string,
@@ -2063,10 +1866,37 @@ export class MapsService {
     // usually carries the !3d!4d data param we can then parse. Redirects are
     // followed manually so every hop is SSRF-re-checked.
     const parsed = new URL(url);
-    const isShort = GOOGLE_SHORT_HOSTS.includes(parsed.hostname);
+    const isShort = GOOGLE_SHORT_HOSTS.includes(parsed.hostname) || AMAP_SHORT_HOSTS.includes(parsed.hostname);
     const isGoogleMaps = isGoogleMapsHost(parsed.hostname);
     if (isShort || (isGoogleMaps && !extractCoords(url))) {
       resolvedUrl = (await followRedirects(url)).url || resolvedUrl;
+    }
+
+    // Amap first, and separately: its links spell a coordinate `lng,lat` in
+    // GCJ-02, which the Google patterns above would happily read as a WGS-84
+    // `lat,lng` — silently placing a Shanghai restaurant in the East China Sea.
+    // parseAmapUrl owns both the ordering and the datum conversion.
+    let amapHost = '';
+    try { amapHost = new URL(resolvedUrl).hostname; } catch { /* fall through to the Google path */ }
+    if (isAmapHost(amapHost)) {
+      const amap = parseAmapUrl(resolvedUrl);
+      if (amap && Number.isFinite(amap.lat) && Number.isFinite(amap.lng)) {
+        // Nominatim rather than Amap for the address: this method has no user to
+        // resolve a key for, and the coordinates are already in WGS-84 by here.
+        const reverse = await this.reverseGeocode(String(amap.lat), String(amap.lng), undefined, { timeoutMs: 8000 });
+        return {
+          lat: amap.lat,
+          lng: amap.lng,
+          name: amap.name || reverse.name,
+          address: reverse.address,
+          google_ftid: null,
+        };
+      }
+      // A POI page with no coordinates in it. Resolving that needs a keyed
+      // /v5/place/detail lookup, which this method has no credential for, so it
+      // is the same "could not extract" answer a Google page without coordinates
+      // already gives.
+      throw Object.assign(new Error('Could not extract coordinates from URL'), { status: 400 });
     }
 
     let coords = extractCoords(resolvedUrl);

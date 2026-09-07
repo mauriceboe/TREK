@@ -86,6 +86,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'OpenStreetMap 검색 사용 중 (사진, 영업 시간, 평점 없음). 전체 정보를 위해 설정에서 Google API 키를 추가하세요.',
   'places.osmActive': 'OpenStreetMap을 사용 중입니다. Google API 키를 추가하면 평점과 영업시간이 표시됩니다.',
+  'places.osmActiveAmap': 'OpenStreetMap을 사용하고 있습니다. Amap(高德地图) API 키를 추가하면 평점과 영업시간을 볼 수 있습니다.',
+  'places.osmActiveAny': 'OpenStreetMap을 사용하고 있습니다. Google 또는 Amap(高德地图) API 키를 추가하면 평점과 영업시간을 볼 수 있습니다.',
   'places.details.title': '장소 세부정보',
   'places.details.empty': '검색 결과를 선택하면 사진과 설명이 표시됩니다.',
   'places.details.loading': '세부정보를 불러오는 중...',
@@ -100,6 +102,8 @@ const places: TranslationStrings = {
   'places.details.nothing': '이 장소에 대한 정보를 찾지 못했습니다.',
   'places.details.noKeyTitle': '더 자세한 정보를 볼 수 있습니다',
   'places.details.noKeyHint': 'Google API 키가 없으면 이 인스턴스는 무료 소스만 사용합니다. 평점, 영업시간, 사진을 보려면 TREK 관리자에게 키 추가를 요청하세요.',
+  'places.details.noKeyHintAmap': 'Amap(高德地图) API 키가 없으면 이 서버는 무료 출처만 사용할 수 있습니다. 평점과 영업시간을 위해 TREK 관리자에게 키 추가를 요청하세요.',
+  'places.details.noKeyHintAny': 'Google 또는 Amap(高德地图) API 키가 없으면 이 서버는 무료 출처만 사용할 수 있습니다. 평점과 영업시간을 위해 TREK 관리자에게 키 추가를 요청하세요.',
   'places.details.aboutBrand': '체인 소개',
   'places.details.aboutBrandNote': '이 지점이 아니라 체인에 대한 설명입니다.',
   'places.details.fact.rating': '평점',

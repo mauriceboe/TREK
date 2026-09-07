@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Χρήση αναζήτησης OpenStreetMap (χωρίς φωτογραφίες, ώρες λειτουργίας ή αξιολογήσεις). Προσθέστε ένα κλειδί Google API στις ρυθμίσεις για πλήρεις λεπτομέρειες.',
   'places.osmActive': 'Χρησιμοποιείται το OpenStreetMap. Ένα κλειδί Google API προσθέτει αξιολογήσεις και ωράρια.',
+  'places.osmActiveAmap': 'Χρησιμοποιείται το OpenStreetMap. Ένα κλειδί API του Amap (高德地图) προσθέτει βαθμολογίες και ώρες λειτουργίας.',
+  'places.osmActiveAny': 'Χρησιμοποιείται το OpenStreetMap. Ένα κλειδί API Google ή Amap (高德地图) προσθέτει βαθμολογίες και ώρες λειτουργίας.',
   'places.details.title': 'Λεπτομέρειες τοποθεσίας',
   'places.details.empty': 'Διάλεξε ένα αποτέλεσμα για να δεις εικόνες και περιγραφή.',
   'places.details.loading': 'Φόρτωση λεπτομερειών...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Δεν βρέθηκε τίποτα για αυτήν την τοποθεσία.',
   'places.details.noKeyTitle': 'Διατίθενται περισσότερες λεπτομέρειες',
   'places.details.noKeyHint': 'Χωρίς κλειδί Google API, αυτή η εγκατάσταση χρησιμοποιεί μόνο ελεύθερες πηγές. Ζητήστε από τον διαχειριστή TREK να προσθέσει ένα για βαθμολογίες, ώρες λειτουργίας και φωτογραφίες.',
+  'places.details.noKeyHintAmap': 'Χωρίς κλειδί API Amap (高德地图) αυτή η εγκατάσταση μπορεί να χρησιμοποιεί μόνο δωρεάν πηγές. Ζητήστε από τον διαχειριστή TREK να προσθέσει ένα για βαθμολογίες και ώρες λειτουργίας.',
+  'places.details.noKeyHintAny': 'Χωρίς κλειδί API Google ή Amap (高德地图) αυτή η εγκατάσταση μπορεί να χρησιμοποιεί μόνο δωρεάν πηγές. Ζητήστε από τον διαχειριστή TREK να προσθέσει ένα για βαθμολογίες και ώρες λειτουργίας.',
   'places.details.aboutBrand': 'Σχετικά με την αλυσίδα',
   'places.details.aboutBrandNote': 'Περιγράφει την αλυσίδα, όχι αυτό το κατάστημα.',
   'places.details.fact.rating': 'Βαθμολογία',

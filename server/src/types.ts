@@ -8,6 +8,8 @@ export interface User {
   password_hash?: string;
   maps_api_key?: string | null;
   unsplash_api_key?: string | null;
+  /** Amap (高德) web-service key — the per-user fallback for the Amap provider. */
+  amap_api_key?: string | null;
   openweather_api_key?: string | null;
   avatar?: string | null;
   oidc_sub?: string | null;

@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'OpenStreetMap-Suche aktiv (ohne Bilder, Öffnungszeiten, Bewertungen). Für erweiterte Daten Google API Key in den Einstellungen hinterlegen.',
   'places.osmActive': 'OpenStreetMap wird genutzt. Ein Google-API-Key ergänzt Bewertungen und Öffnungszeiten.',
+  'places.osmActiveAmap': 'OpenStreetMap ist aktiv. Ein Amap-API-Key (高德地图) ergänzt Bewertungen und Öffnungszeiten.',
+  'places.osmActiveAny': 'OpenStreetMap ist aktiv. Ein Google- oder Amap-API-Key (高德地图) ergänzt Bewertungen und Öffnungszeiten.',
   'places.details.title': 'Ortsdetails',
   'places.details.empty': 'Wähle ein Suchergebnis, um Bilder und eine Beschreibung zu sehen.',
   'places.details.loading': 'Details werden geladen...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Zu diesem Ort wurde nichts gefunden.',
   'places.details.noKeyTitle': 'Mehr Details möglich',
   'places.details.noKeyHint': 'Ohne Google-API-Key nutzt diese Instanz nur freie Quellen. Wende dich an deine TREK-Administration, um Bewertungen, Öffnungszeiten und Fotos freizuschalten.',
+  'places.details.noKeyHintAmap': 'Ohne Amap-API-Key (高德地图) kann diese Instanz nur freie Quellen nutzen. Bitte die TREK-Administration, einen Key für Bewertungen und Öffnungszeiten hinzuzufügen.',
+  'places.details.noKeyHintAny': 'Ohne Google- oder Amap-API-Key (高德地图) kann diese Instanz nur freie Quellen nutzen. Bitte die TREK-Administration, einen Key für Bewertungen und Öffnungszeiten hinzuzufügen.',
   'places.details.aboutBrand': 'Über die Kette',
   'places.details.aboutBrandNote': 'Beschreibt die Kette, nicht diese Filiale.',
   'places.details.fact.rating': 'Bewertung',

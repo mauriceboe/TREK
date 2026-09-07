@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Uso della ricerca OpenStreetMap (senza foto, orari di apertura o valutazioni). Aggiungi una chiave API Google nelle impostazioni per i dettagli completi.',
   'places.osmActive': 'Si usa OpenStreetMap. Una chiave API Google aggiunge valutazioni e orari.',
+  'places.osmActiveAmap': 'Uso OpenStreetMap. Una chiave API Amap (高德地图) aggiunge valutazioni e orari.',
+  'places.osmActiveAny': 'Uso OpenStreetMap. Una chiave API Google o Amap (高德地图) aggiunge valutazioni e orari.',
   'places.details.title': 'Dettagli del luogo',
   'places.details.empty': 'Scegli un risultato per vedere immagini e una descrizione.',
   'places.details.loading': 'Caricamento dettagli...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Nessun risultato per questo luogo.',
   'places.details.noKeyTitle': 'Sono disponibili più dettagli',
   'places.details.noKeyHint': 'Senza una chiave API di Google questa istanza usa solo fonti libere. Chiedi all\'amministratore di TREK di aggiungerne una per valutazioni, orari e foto.',
+  'places.details.noKeyHintAmap': 'Senza una chiave API Amap (高德地图) questa istanza può usare solo fonti gratuite. Chiedi all’amministratore TREK di aggiungerne una per valutazioni e orari.',
+  'places.details.noKeyHintAny': 'Senza una chiave API Google o Amap (高德地图) questa istanza può usare solo fonti gratuite. Chiedi all’amministratore TREK di aggiungerne una per valutazioni e orari.',
   'places.details.aboutBrand': 'Sulla catena',
   'places.details.aboutBrandNote': 'Descrive la catena, non questa sede.',
   'places.details.fact.rating': 'Valutazione',

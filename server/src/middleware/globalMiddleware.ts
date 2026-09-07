@@ -203,6 +203,15 @@ export function applyGlobalMiddleware(
           // document and never reaches the Service Worker that would cache it
           // (#2180). routing.openstreetmap.de below is a different host.
           "https://tile.openstreetmap.de", "https://tiles.stadiamaps.com",
+          // Amap's raster tiles, for an install whose users are in China. Here
+          // for the same reason as the two above: imgSrc already allows https:,
+          // so the tiles DRAW without this, but the offline tile prefetch is a
+          // fetch() and is refused in the document without a connectSrc entry
+          // (#2180). Road and satellite sit on different hosts, and the wildcard
+          // covers the shard families the same tiles are also served from — a
+          // CSP wildcard never matches the apex, so both forms are listed.
+          "https://webrd01.is.autonavi.com", "https://webst01.is.autonavi.com",
+          "https://*.is.autonavi.com",
           "https://unpkg.com", "https://open-meteo.com", "https://api.open-meteo.com",
           "https://geocoding-api.open-meteo.com", "https://api.frankfurter.dev",
           "https://router.project-osrm.org/route/v1/", "https://routing.openstreetmap.de/",

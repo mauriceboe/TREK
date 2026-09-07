@@ -19,8 +19,9 @@ import { escapeHtml } from '@trek/shared'
 import type { Day, Reservation, RouteVia } from '../../types'
 import { POI_CATEGORY_BY_KEY, type Poi } from './poiCategories'
 import { resolveTrackColor, hasManualTrackColor } from './trackColors'
-import { OFM_POSITRON, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, MAP_MAX_ZOOM, SATELLITE_TILE_URL, SATELLITE_TILE_ATTRIBUTION, SATELLITE_TILE_MAXZOOM, attributionForTile } from '../../constants/mapDefaults'
-import { resolveBasemap } from '../../utils/tileUrl'
+import { OFM_POSITRON, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, MAP_MAX_ZOOM, SATELLITE_TILE_URL, SATELLITE_TILE_ATTRIBUTION, SATELLITE_TILE_MAXZOOM, AMAP_SATELLITE, attributionForTile } from '../../constants/mapDefaults'
+import { crsForBasemap } from './gcj02Crs'
+import { isGcj02Basemap, resolveBasemap } from '../../utils/tileUrl'
 import VectorBasemap from './VectorBasemap'
 import { useSettingsStore } from '../../store/settingsStore'
 import { MapLayerSwitcher } from './MapLayerSwitcher'
@@ -543,6 +544,13 @@ export const MapView = memo(function MapView({
   // that is decides which layer draws it. A saved raster template still wins,
   // the default is a vector style.
   const basemap = useMemo(() => resolveBasemap(tileUrl, OFM_POSITRON), [tileUrl])
+  /**
+   * Amap's tiles are drawn in GCJ-02 (see gcj02Crs.ts). The projection has to be
+   * decided before the map is constructed, because Leaflet cannot change a map's
+   * CRS afterwards — hence the whole map, not just the tile layer.
+   */
+  const isGcjBasemap = basemap.kind === 'raster' && isGcj02Basemap(basemap.url)
+  const gcjCrs = useMemo(() => crsForBasemap(isGcjBasemap), [isGcjBasemap])
   const poiMarkers = useMemo(() => (pois as Poi[]).map((poi: Poi) => (
     <Marker
       key={`poi-${poi.osm_id}`}
@@ -838,6 +846,10 @@ export const MapView = memo(function MapView({
       // VectorBasemap had no ceiling at all. MarkerClusterGroup.onAdd throws
       // outright on an infinite one, which took the whole planner down.
       maxZoom={MAP_MAX_ZOOM}
+      // Omitted entirely for a WGS-84 basemap, which is every install that has
+      // not chosen Amap: passing L.CRS.EPSG3857 explicitly would be the same
+      // value, but leaving the prop off keeps those maps byte-identical.
+      {...(gcjCrs ? { crs: gcjCrs } : {})}
       className="w-full h-full bg-[#e5e7eb]"
     >
       {/* The basemap is a vector style by default and a raster template when the
@@ -848,8 +860,12 @@ export const MapView = memo(function MapView({
       {isSatellite ? (
         <TileLayer
           key="satellite"
-          url={SATELLITE_TILE_URL}
-          attribution={SATELLITE_TILE_ATTRIBUTION}
+          // Esri's imagery is WGS-84 and Amap's is GCJ-02, and the map's CRS is
+          // already fixed by the basemap the user chose. Handing the other datum
+          // to that projection moves the whole photo a few hundred metres, so the
+          // satellite toggle follows the datum rather than always meaning Esri.
+          url={isGcjBasemap ? AMAP_SATELLITE : SATELLITE_TILE_URL}
+          attribution={attributionForTile(isGcjBasemap ? AMAP_SATELLITE : SATELLITE_TILE_URL)}
           maxZoom={SATELLITE_TILE_MAXZOOM}
           keepBuffer={8}
           updateWhenZooming={false}

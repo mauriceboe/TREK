@@ -96,6 +96,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Pro data o počasí. Zdarma na openweathermap.org',
   'admin.unsplashKey': 'Klíč API Unsplash',
   'admin.unsplashKeyHint': 'Pro vyhledávání obrázků. Zdarma na unsplash.com/developers',
+  'admin.amapKey': 'API klíč Amap (高德地图)',
+  'admin.amapKeyHint':
+    'Pro hledání míst v kontinentální Číně, kde Google není dostupný a OpenStreetMap má málo dat. Vyžaduje klíč typu „Web 服务" (webová služba), nikoli klíč JS API. Získáte na console.amap.com.',
+  'admin.placesProvider.title': 'Poskytovatel hledání míst',
+  'admin.placesProvider.subtitle':
+    'Která služba obsluhuje hledání míst, našeptávač a podrobnosti. Automaticky použije Google, pokud je nastaven klíč Google, poté Amap a poté OpenStreetMap.',
+  'admin.placesProvider.auto': 'Automaticky',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Pro vybraného poskytovatele není nastaven API klíč, hledání míst proto přejde na OpenStreetMap.',
+  'admin.placesProvider.saved': 'Poskytovatel hledání míst uložen',
   'admin.validateKey': 'Testovat',
   'admin.keyValid': 'Připojeno',
   'admin.keyInvalid': 'Neplatný',

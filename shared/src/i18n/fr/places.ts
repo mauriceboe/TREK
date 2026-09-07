@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Recherche via OpenStreetMap (pas de photos, horaires ni notes). Ajoutez une clé API Google dans les paramètres pour plus de détails.',
   'places.osmActive': 'OpenStreetMap est utilisé. Une clé API Google ajoute notes et horaires.',
+  'places.osmActiveAmap': 'OpenStreetMap est utilisé. Une clé API Amap (高德地图) ajoute notes et horaires d’ouverture.',
+  'places.osmActiveAny': 'OpenStreetMap est utilisé. Une clé API Google ou Amap (高德地图) ajoute notes et horaires d’ouverture.',
   'places.details.title': 'Détails du lieu',
   'places.details.empty': 'Choisis un résultat pour voir des images et une description.',
   'places.details.loading': 'Chargement des détails...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Rien trouvé pour ce lieu.',
   'places.details.noKeyTitle': 'Plus de détails disponibles',
   'places.details.noKeyHint': 'Sans clé API Google, cette instance n\'utilise que des sources libres. Demandez à votre administrateur TREK d\'en ajouter une pour les avis, les horaires et les photos.',
+  'places.details.noKeyHintAmap': 'Sans clé API Amap (高德地图), cette instance ne peut utiliser que des sources gratuites. Demandez à l’administrateur TREK d’en ajouter une pour les notes et les horaires.',
+  'places.details.noKeyHintAny': 'Sans clé API Google ou Amap (高德地图), cette instance ne peut utiliser que des sources gratuites. Demandez à l’administrateur TREK d’en ajouter une pour les notes et les horaires.',
   'places.details.aboutBrand': 'À propos de la chaîne',
   'places.details.aboutBrandNote': 'Décrit la chaîne, pas cet établissement.',
   'places.details.fact.rating': 'Note',

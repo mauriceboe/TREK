@@ -36,6 +36,12 @@ export const ADMIN_SETTINGS_KEYS = [
   'notify_trip_reminder',
   'password_login', 'password_registration', 'oidc_login', 'oidc_registration',
   'passkey_login', 'webauthn_rp_id', 'webauthn_origins',
+  // Which places provider answers search/autocomplete/details: 'auto' (the
+  // default and what every install had before Amap existed), 'google', 'amap' or
+  // 'openstreetmap'. Validated in updateAppSettings — an unknown value is
+  // refused rather than stored, because the reader degrades a bad row to 'auto'
+  // and the admin would be left looking at a setting that does nothing.
+  'places_provider',
 ];
 
 // ---------------------------------------------------------------------------
@@ -53,6 +59,7 @@ export function stripUserForClient(user: User): Record<string, unknown> {
     maps_api_key: _m,
     openweather_api_key: _o,
     unsplash_api_key: _u,
+    amap_api_key: _a,
     mfa_secret: _mf,
     mfa_backup_codes: _mbc,
     ...rest

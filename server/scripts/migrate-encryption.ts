@@ -290,6 +290,7 @@ async function main() {
       'admin_ntfy_token',
       'maps_api_key',
       'unsplash_api_key',
+      'amap_api_key',
     ]) {
       const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
       if (!row?.value) continue;
@@ -312,6 +313,9 @@ async function main() {
     const apiKeyColumns = [
       'maps_api_key',
       'unsplash_api_key',
+      // Added with the Amap provider; filtered against the real table below, so a
+      // database that has not run that migration yet is not a rotation failure.
+      'amap_api_key',
       'openweather_api_key',
       'immich_api_key',
       'synology_password',

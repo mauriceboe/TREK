@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Using OpenStreetMap search (no photos, opening hours, or ratings). Add a Google API key in settings for full details.',
   'places.osmActive': 'Using OpenStreetMap. A Google API key adds ratings and opening hours.',
+  'places.osmActiveAmap': 'Using OpenStreetMap. An Amap (高德地图) API key adds ratings and opening hours.',
+  'places.osmActiveAny': 'Using OpenStreetMap. A Google or Amap (高德地图) API key adds ratings and opening hours.',
   'places.details.title': 'Place details',
   'places.details.empty': 'Pick a search result to see pictures and a description.',
   'places.details.loading': 'Loading details...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Nothing found for this place.',
   'places.details.noKeyTitle': 'More detail is available',
   'places.details.noKeyHint': 'Without a Google API key this instance can only use free sources. Ask your TREK administrator to add one for ratings, opening hours and photos.',
+  'places.details.noKeyHintAmap': 'Without an Amap (高德地图) API key this instance can only use free sources. Ask your TREK administrator to add one for ratings and opening hours.',
+  'places.details.noKeyHintAny': 'Without a Google or Amap (高德地图) API key this instance can only use free sources. Ask your TREK administrator to add one for ratings and opening hours.',
   'places.details.aboutBrand': 'About the chain',
   'places.details.aboutBrandNote': 'This describes the chain, not this branch.',
   'places.details.fact.rating': 'Rating',

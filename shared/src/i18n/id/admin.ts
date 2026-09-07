@@ -139,6 +139,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'Untuk data cuaca. Gratis di openweathermap.org',
   'admin.unsplashKey': 'Kunci API Unsplash',
   'admin.unsplashKeyHint': 'Untuk pencarian gambar. Gratis di unsplash.com/developers',
+  'admin.amapKey': 'Kunci API Amap (高德地图)',
+  'admin.amapKeyHint':
+    'Untuk pencarian tempat di Tiongkok daratan, tempat Google tidak dapat diakses dan data OpenStreetMap sangat sedikit. Perlu kunci jenis "Web 服务" (layanan web), bukan kunci JS API. Dapatkan di console.amap.com.',
+  'admin.placesProvider.title': 'Penyedia pencarian tempat',
+  'admin.placesProvider.subtitle':
+    'Layanan mana yang menangani pencarian tempat, saran otomatis, dan detail. Otomatis memakai Google jika kunci Google tersedia, lalu Amap, lalu OpenStreetMap.',
+  'admin.placesProvider.auto': 'Otomatis',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap (高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': 'Penyedia yang dipilih belum memiliki kunci API, sehingga pencarian tempat kembali ke OpenStreetMap.',
+  'admin.placesProvider.saved': 'Penyedia pencarian tempat disimpan',
   'admin.validateKey': 'Uji',
   'admin.keyValid': 'Terhubung',
   'admin.keyInvalid': 'Tidak valid',

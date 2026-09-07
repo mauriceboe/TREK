@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'Пошук через OpenStreetMap (без фото, годин роботи та рейтингів). Додайте API-ключ Google у налаштуваннях для повної інформації.',
   'places.osmActive': 'Використовується OpenStreetMap. Ключ Google API додасть рейтинги та години роботи.',
+  'places.osmActiveAmap': 'Використовується OpenStreetMap. Ключ API Amap (高德地图) додасть оцінки й години роботи.',
+  'places.osmActiveAny': 'Використовується OpenStreetMap. Ключ API Google або Amap (高德地图) додасть оцінки й години роботи.',
   'places.details.title': 'Відомості про місце',
   'places.details.empty': 'Виберіть результат пошуку, щоб побачити зображення та опис.',
   'places.details.loading': 'Завантаження відомостей...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'Для цього місця нічого не знайдено.',
   'places.details.noKeyTitle': 'Доступно більше деталей',
   'places.details.noKeyHint': 'Без ключа Google API цей екземпляр використовує лише вільні джерела. Попросіть адміністратора TREK додати ключ, щоб отримати оцінки, години роботи та фото.',
+  'places.details.noKeyHintAmap': 'Без ключа API Amap (高德地图) цей сервер може використовувати лише безкоштовні джерела. Попросіть адміністратора TREK додати ключ — з’являться оцінки й години роботи.',
+  'places.details.noKeyHintAny': 'Без ключа API Google або Amap (高德地图) цей сервер може використовувати лише безкоштовні джерела. Попросіть адміністратора TREK додати ключ — з’являться оцінки й години роботи.',
   'places.details.aboutBrand': 'Про мережу',
   'places.details.aboutBrandNote': 'Описує мережу, а не цей заклад.',
   'places.details.fact.rating': 'Рейтинг',

@@ -25,7 +25,38 @@ When a key is present, the autocomplete uses the Google Places API, which can re
 
 ### Without a Google Maps API key
 
-TREK falls back to OpenStreetMap (Nominatim) automatically — no API key needed. A notice appears above the search box — *Using OpenStreetMap. A Google API key adds ratings and opening hours.* Results include name, address, and coordinates.
+TREK falls back to OpenStreetMap (Nominatim) automatically — no API key needed. A notice appears above the search box — *Using OpenStreetMap…* — and what it suggests follows the **Place search provider** setting: a Google key when the provider is Google, an Amap key when it is Amap, either one when the choice is Automatic and neither key is set. When the provider choice is OpenStreetMap the notice stays quiet: that is a decision, not a gap. Results include name, address, and coordinates.
+
+### With an Amap (高德地图) API key
+
+> **Admin:** Set the key in **Admin → Settings → API Keys → 高德地图 API Key**, then pick **Amap** under **Place search
+> provider** in the same card. It needs a **Web 服务** (web service) key from
+> [console.amap.com](https://console.amap.com/dev/key/app) — a JS API key is a different credential and is rejected.
+
+Google Places is unreachable from most networks inside mainland China, and OpenStreetMap knows very little about
+Chinese restaurants, shops and shopping centres. With Amap selected, search, autocomplete, place details and the
+reverse geocoding behind right-click-to-add-a-place all go through Amap instead, in Chinese, with ratings, phone
+numbers and opening hours where Amap has them.
+
+Amap does not supply place photos here. Its images come with no licence statement TREK could show next to them, so an
+Amap place gets its picture from Wikimedia Commons like any other — with the credit and licence attached.
+
+Places remember which provider found them, so switching provider later does not break anything you already saved: an
+existing Google place still opens against Google, and vice versa.
+
+You can also paste an Amap share link — `uri.amap.com/marker?…`, `amap.com/place/…`, or a `surl.amap.com` short link —
+into the search box, the same way a Google Maps URL works below.
+
+### Which provider answers
+
+**Admin → Settings → API Keys → Place search provider**:
+
+| Setting          | What answers place search                                                     |
+|------------------|-------------------------------------------------------------------------------|
+| `Automatic`      | Google when a Google key is set, otherwise Amap when an Amap key is, otherwise OpenStreetMap. This is the default and preserves what an existing install already did. |
+| `Google Places`  | Google. With no Google key, search falls back to OpenStreetMap rather than to Amap. |
+| `Amap (高德地图)` | Amap. With no Amap key, search falls back to OpenStreetMap.                   |
+| `OpenStreetMap`  | Always OpenStreetMap, ignoring both keys.                                     |
 
 ## Place details while searching
 
@@ -53,9 +84,11 @@ Pictures are copied to your own server and served from there — nothing is load
 
 The column is desktop-only; the mobile place sheet is unchanged.
 
-## Pasting a Google Maps URL
+## Pasting a map URL
 
 Paste a `maps.app.goo.gl/…`, `goo.gl/maps/…`, or `maps.google.*/…` URL directly into the search box and press the search button. TREK resolves it server-side and populates the name, address, and coordinates.
+
+Amap links work the same way: `uri.amap.com/marker?…`, `amap.com/place/…` and `surl.amap.com` short links. Their coordinates are converted from GCJ-02 to WGS-84 on the way in, so the place lands where it belongs on every other map.
 
 ## Entering coordinates manually
 

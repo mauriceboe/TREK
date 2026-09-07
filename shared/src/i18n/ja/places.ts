@@ -87,6 +87,8 @@ const places: TranslationStrings = {
   'places.osmHint':
     'OpenStreetMapで検索しています（写真・営業時間・評価なし）。設定でGoogle APIキーを追加すると詳細が表示されます。',
   'places.osmActive': 'OpenStreetMapを使用中。Google APIキーで評価と営業時間が追加されます。',
+  'places.osmActiveAmap': 'OpenStreetMap を使用中です。Amap（高德地图）の API キーを追加すると評価や営業時間が表示されます。',
+  'places.osmActiveAny': 'OpenStreetMap を使用中です。Google または Amap（高德地图）の API キーを追加すると評価や営業時間が表示されます。',
   'places.details.title': '場所の詳細',
   'places.details.empty': '検索結果を選ぶと写真と説明が表示されます。',
   'places.details.loading': '詳細を読み込み中...',
@@ -101,6 +103,8 @@ const places: TranslationStrings = {
   'places.details.nothing': 'この場所の情報は見つかりませんでした。',
   'places.details.noKeyTitle': 'さらに詳しい情報を表示できます',
   'places.details.noKeyHint': 'Google API キーがない場合、このインスタンスは自由に使えるソースのみを利用します。評価・営業時間・写真のために、TREK の管理者にキーの追加を依頼してください。',
+  'places.details.noKeyHintAmap': 'Amap（高德地图）の API キーがない場合、このサーバーは無料のソースのみ使用できます。評価や営業時間のために TREK 管理者にキーの追加を依頼してください。',
+  'places.details.noKeyHintAny': 'Google または Amap（高德地图）の API キーがない場合、このサーバーは無料のソースのみ使用できます。評価や営業時間のために TREK 管理者にキーの追加を依頼してください。',
   'places.details.aboutBrand': 'チェーンについて',
   'places.details.aboutBrandNote': 'この店舗ではなくチェーン全体の説明です。',
   'places.details.fact.rating': '評価',

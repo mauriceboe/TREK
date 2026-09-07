@@ -37,6 +37,33 @@ export const OFM_ATTRIBUTION =
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 /**
+ * Amap (高德) raster basemaps.
+ *
+ * The reason to offer these at all: OpenStreetMap and OpenFreeMap are thin
+ * inside mainland China, and every foreign tile CDN is slow or unreachable from
+ * a Chinese network. These are the tiles a Chinese user expects to see.
+ *
+ * `style=7` is the road map, `style=6` is satellite imagery. `lang=zh_cn`
+ * because these are the labels the tiles exist for; an install that wants
+ * English labels is better served by OpenFreeMap.
+ *
+ * A single host rather than the `webrd0{1..4}` shard family Amap also serves:
+ * `{s}` in a Leaflet template is substituted from `subdomains`, which defaults
+ * to a/b/c and would produce `webrd0a`. Every consumer of a stored template
+ * would have to pass digits instead, and over HTTP/2 the sharding buys nothing.
+ *
+ * IMPORTANT: these tiles are drawn in GCJ-02, not WGS-84. Everything else in
+ * TREK — every marker, route and bounding box — is WGS-84, and dropping one
+ * datum on top of the other puts markers a few hundred metres off the street
+ * they belong to. isGcj02Basemap() in utils/tileUrl.ts spots these URLs and the
+ * map switches to the shifted CRS in components/Map/gcj02Crs.ts. Anything added
+ * here that serves GCJ-02 tiles must be recognised by that predicate too.
+ */
+export const AMAP_ROAD = 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}'
+export const AMAP_SATELLITE = 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'
+export const AMAP_ATTRIBUTION = '&copy; <a href="https://amap.com">高德地图</a>'
+
+/**
  * Attribution for whatever basemap a map ended up with. OpenFreeMap asks for a
  * credit of its own, and printing OpenStreetMap alone under its tiles is both
  * wrong and a licence problem, so the URL decides rather than a flag at the
@@ -46,6 +73,7 @@ export function attributionForTile(url: string | null | undefined): string {
   if (!url) return OSM_ATTRIBUTION
   if (url.includes('openfreemap.org')) return OFM_ATTRIBUTION
   if (url.includes('arcgisonline.com')) return SATELLITE_TILE_ATTRIBUTION
+  if (url.includes('autonavi.com')) return AMAP_ATTRIBUTION
   return OSM_ATTRIBUTION
 }
 

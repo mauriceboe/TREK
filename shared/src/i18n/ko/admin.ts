@@ -136,6 +136,18 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': '날씨 데이터용. openweathermap.org에서 무료 발급',
   'admin.unsplashKey': 'Unsplash API 키',
   'admin.unsplashKeyHint': '이미지 검색용. unsplash.com/developers에서 무료 발급',
+  'admin.amapKey': 'Amap(高德地图) API 키',
+  'admin.amapKeyHint':
+    'Google에 접속할 수 없고 OpenStreetMap 데이터도 부족한 중국 본토에서 장소를 검색할 때 사용합니다. JS API 키가 아니라 "Web 服务"(웹 서비스) 유형의 키가 필요합니다. console.amap.com에서 발급받을 수 있습니다.',
+  'admin.placesProvider.title': '장소 검색 제공자',
+  'admin.placesProvider.subtitle':
+    '장소 검색, 자동 완성, 상세 정보를 어느 서비스가 처리할지 결정합니다. 자동은 Google 키가 있으면 Google을, 그다음 Amap을, 그다음 OpenStreetMap을 사용합니다.',
+  'admin.placesProvider.auto': '자동',
+  'admin.placesProvider.google': 'Google Places',
+  'admin.placesProvider.amap': 'Amap(高德地图)',
+  'admin.placesProvider.openstreetmap': 'OpenStreetMap',
+  'admin.placesProvider.missingKey': '선택한 제공자에 API 키가 설정되어 있지 않아 장소 검색이 OpenStreetMap으로 대체됩니다.',
+  'admin.placesProvider.saved': '장소 검색 제공자를 저장했습니다',
   'admin.validateKey': '테스트',
   'admin.keyValid': '연결됨',
   'admin.keyInvalid': '유효하지 않음',
