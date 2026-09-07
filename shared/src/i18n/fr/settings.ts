@@ -88,6 +88,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Tâche à échéance',
   'settings.notifyVacayInvite': 'Invitations de fusion Vacay',
   'settings.notifyVacayShare': 'Partages de calendrier Vacay',
+  'settings.notifyCollectionInvite': 'Invitations à des collections',
+  'settings.notifySynologySessionCleared': 'Session Synology effacée',
+  'settings.notifyPluginNotification': 'Notifications des extensions',
   'settings.notifyPhotosShared': 'Photos partagées (Immich)',
   'settings.notifyCollabMessage': 'Messages de chat (Collab)',
   'settings.notifyPackingTagged': 'Liste de bagages : attributions',
@@ -280,6 +283,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabelsHint':
     "Affiche les noms des gares / aéroports sur la carte. Si désactivé, seule l'icône est affichée.",
   'settings.notifyVersionAvailable': 'Nouvelle version disponible',
+  'settings.notifyReplicaFailure': 'Échec de réplique de stockage',
   'settings.notificationPreferences.noChannels':
     "Aucun canal de notification n'est configuré. Demandez à un administrateur de configurer les notifications par e-mail ou webhook.",
   'settings.webhookUrl.label': 'URL du webhook',

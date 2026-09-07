@@ -83,7 +83,7 @@ export default function MAdminNotifyMatrix({ t, toast }: { t: TranslationFn; toa
       </div>
       {matrix.event_types.map((eventType) => {
         const implemented = matrix.implemented_combos[eventType] ?? []
-        // Only version_available has a label key so far; anything else keeps its raw id.
+        // Known admin events use translated labels; anything else keeps its raw id.
         const labelKey = ADMIN_EVENT_LABEL_KEYS[eventType]
         return (
           <div key={eventType} className="flex items-center gap-1 border-b border-[color:var(--m-rowbr)] py-2">

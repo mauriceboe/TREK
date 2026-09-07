@@ -87,6 +87,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Aufgabe bald fällig',
   'settings.notifyVacayInvite': 'Vacay Fusion-Einladungen',
   'settings.notifyVacayShare': 'Vacay Kalender-Freigaben',
+  'settings.notifyCollectionInvite': 'Sammlungs-Einladungen',
+  'settings.notifySynologySessionCleared': 'Synology-Sitzung beendet',
+  'settings.notifyPluginNotification': 'Plugin-Benachrichtigungen',
   'settings.notifyPhotosShared': 'Geteilte Fotos (Immich)',
   'settings.notifyCollabMessage': 'Chat-Nachrichten (Collab)',
   'settings.notifyPackingTagged': 'Packliste: Zuweisungen',
@@ -275,6 +278,7 @@ const settings: TranslationStrings = {
   'settings.mfa.toastDisabled': 'Zwei-Faktor-Authentifizierung deaktiviert',
   'settings.mfa.demoBlocked': 'In der Demo nicht verfügbar',
   'settings.notifyVersionAvailable': 'Neue Version verfügbar',
+  'settings.notifyReplicaFailure': 'Speicher-Replik-Fehler',
   'settings.notificationPreferences.noChannels':
     'Keine Benachrichtigungskanäle konfiguriert. Bitte einen Administrator, E-Mail- oder Webhook-Benachrichtigungen einzurichten.',
   'settings.webhookUrl.label': 'Webhook-URL',

@@ -86,6 +86,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Teendő esedékes',
   'settings.notifyVacayInvite': 'Vacay összevonási meghívók',
   'settings.notifyVacayShare': 'Vacay naptármegosztások',
+  'settings.notifyCollectionInvite': 'Gyűjteménymeghívók',
+  'settings.notifySynologySessionCleared': 'Synology munkamenet törölve',
+  'settings.notifyPluginNotification': 'Bővítményértesítések',
   'settings.notifyPhotosShared': 'Megosztott fotók (Immich)',
   'settings.notifyCollabMessage': 'Csevegés üzenetek (Collab)',
   'settings.notifyPackingTagged': 'Csomagolási lista: hozzárendelések',
@@ -277,6 +280,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabelsHint':
     'Állomás- / repülőtér-nevek megjelenítése a térképen. Ha ki van kapcsolva, csak az ikon látszik.',
   'settings.notifyVersionAvailable': 'Új verzió elérhető',
+  'settings.notifyReplicaFailure': 'Tárhely-replika hiba',
   'settings.notificationPreferences.noChannels':
     'Nincsenek értesítési csatornák beállítva. Kérd meg a rendszergazdát, hogy állítson be e-mail vagy webhook értesítéseket.',
   'settings.webhookUrl.label': 'Webhook URL',

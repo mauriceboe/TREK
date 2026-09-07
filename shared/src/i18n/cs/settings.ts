@@ -83,6 +83,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Úkol se blíží',
   'settings.notifyVacayInvite': 'Pozvánky k propojení Vacay',
   'settings.notifyVacayShare': 'Sdílení kalendáře Vacay',
+  'settings.notifyCollectionInvite': 'Pozvánky do sbírek',
+  'settings.notifySynologySessionCleared': 'Relace Synology byla zrušena',
+  'settings.notifyPluginNotification': 'Oznámení pluginů',
   'settings.notifyPhotosShared': 'Sdílené fotky (Immich)',
   'settings.notifyCollabMessage': 'Zprávy v chatu (Collab)',
   'settings.notifyPackingTagged': 'Seznam balení: přiřazení',
@@ -270,6 +273,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabelsHint': 'Zobrazuje názvy stanic / letišť na mapě. Pokud je vypnuto, zobrazí se pouze ikona.',
   'settings.mustChangePassword': 'Před pokračováním musíte změnit heslo.',
   'settings.notifyVersionAvailable': 'Nová verze k dispozici',
+  'settings.notifyReplicaFailure': 'Selhání repliky úložiště',
   'settings.notificationPreferences.noChannels':
     'Nejsou nakonfigurovány žádné kanály oznámení. Požádejte správce o nastavení e-mailových nebo webhook oznámení.',
   'settings.webhookUrl.label': 'URL webhooku',

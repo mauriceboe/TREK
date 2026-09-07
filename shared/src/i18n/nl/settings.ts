@@ -85,6 +85,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Taak verloopt',
   'settings.notifyVacayInvite': 'Vacay-fusieuitnodigingen',
   'settings.notifyVacayShare': 'Gedeelde Vacay-kalenders',
+  'settings.notifyCollectionInvite': 'Collectie-uitnodigingen',
+  'settings.notifySynologySessionCleared': 'Synology-sessie gewist',
+  'settings.notifyPluginNotification': 'Pluginmeldingen',
   'settings.notifyPhotosShared': "Gedeelde foto's (Immich)",
   'settings.notifyCollabMessage': 'Chatberichten (Collab)',
   'settings.notifyPackingTagged': 'Inpaklijst: toewijzingen',
@@ -275,6 +278,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabels': 'Routelabels voor boekingen',
   'settings.bookingLabelsHint': 'Toon station- / luchthavennamen op de kaart. Indien uit, alleen het icoon.',
   'settings.notifyVersionAvailable': 'Nieuwe versie beschikbaar',
+  'settings.notifyReplicaFailure': 'Opslagreplica mislukt',
   'settings.notificationPreferences.noChannels':
     'Er zijn geen meldingskanalen geconfigureerd. Vraag een beheerder om e-mail- of webhookmeldingen in te stellen.',
   'settings.webhookUrl.label': 'Webhook-URL',

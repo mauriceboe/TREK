@@ -69,6 +69,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Tasca propera',
   'settings.notifyVacayInvite': 'Invitacions de fusió Vacay',
   'settings.notifyVacayShare': 'Comparticions de calendari Vacay',
+  'settings.notifyCollectionInvite': 'Invitacions a col·leccions',
+  'settings.notifySynologySessionCleared': 'Sessió de Synology tancada',
+  'settings.notifyPluginNotification': 'Notificacions de connectors',
   'settings.notifyPhotosShared': 'Fotos compartides (Immich)',
   'settings.notifyCollabMessage': 'Missatges de xat (Col·laboració)',
   'settings.notifyPackingTagged': "Llista d'equipatge: assignacions",
@@ -258,6 +261,7 @@ const settings: TranslationStrings = {
   'settings.currentPasswordRequired': 'La contrasenya actual és obligatòria',
   'settings.passwordWeak': 'La contrasenya ha de contenir majúscules, minúscules, números i un caràcter especial',
   'settings.notifyVersionAvailable': 'Versió nova disponible',
+  'settings.notifyReplicaFailure': "Error de rèplica d'emmagatzematge",
   'settings.notificationPreferences.noChannels':
     'No hi ha canals de notificació configurats. Demana a un administrador que configuri notificacions per correu o webhook.',
   'settings.webhookUrl.label': 'URL del webhook',
