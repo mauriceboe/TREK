@@ -1,4 +1,4 @@
-import { Calendar, Camera, Check, ChevronRight, X } from 'lucide-react';
+import { Calendar, Camera, Check, ChevronRight, Play, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { memoriesApi } from '../../api/client';
 import { useTranslation } from '../../i18n';
@@ -516,6 +516,11 @@ export function ProviderPicker({
                           {isSelected && !alreadyAdded && (
                             <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
                               <Check size={12} />
+                            </div>
+                          )}
+                          {asset.mediaType === 'video' && (
+                            <div className="absolute bottom-1.5 left-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60">
+                              <Play size={8} className="ml-px text-white" fill="currentColor" />
                             </div>
                           )}
                           {asset.city && (
