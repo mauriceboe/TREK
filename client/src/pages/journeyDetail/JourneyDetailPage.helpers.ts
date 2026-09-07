@@ -132,10 +132,24 @@ export function distanceBetweenGeoPoints(a: GeoPoint, b: GeoPoint): number {
 
 /**
  * Keep every asset, but put assets with usable GPS nearest to the selected
- * Journey location. The original provider order is the stable fallback.
+ * Journey location. Without a usable location, fall back to newest-taken-first
+ * (provider search order isn't guaranteed chronological), with a stable index
+ * tiebreak so photos missing `takenAt` keep a deterministic relative order.
  */
 export function sortProviderPhotos<T extends ProviderPhotoAsset>(photos: T[], location?: GeoPoint | null): T[] {
-  if (!isValidGeoPoint(location)) return photos;
+  if (!isValidGeoPoint(location)) {
+    return photos
+      .map((photo, index) => ({ photo, index }))
+      .sort((a, b) => {
+        const at = a.photo.takenAt;
+        const bt = b.photo.takenAt;
+        if (!at && !bt) return a.index - b.index;
+        if (!at) return 1;
+        if (!bt) return -1;
+        return bt.localeCompare(at) || a.index - b.index;
+      })
+      .map((item) => item.photo);
+  }
 
   return photos
     .map((photo, index) => ({

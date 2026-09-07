@@ -94,7 +94,7 @@ export function ProviderPicker({
     setSearchPage(page);
     try {
       const data = await memoriesApi.search(provider, { from, to, page, size: 50 }, signal);
-      const assets = data.assets || [];
+      const assets = sortProviderPhotos(data.assets || [], contextLocation);
       setPhotos((prev) => (append ? [...prev, ...assets] : assets));
       setHasMore(!!data.hasMore);
     } catch {
@@ -119,7 +119,8 @@ export function ProviderPicker({
     setPhotos([]);
     setHasMore(false);
     try {
-      setPhotos((await memoriesApi.albumPhotos(provider, album.id, album.passphrase, signal)).assets || []);
+      const assets = (await memoriesApi.albumPhotos(provider, album.id, album.passphrase, signal)).assets || [];
+      setPhotos(sortProviderPhotos(assets, contextLocation));
     } catch {
       /* ignore */
     }
@@ -148,11 +149,6 @@ export function ProviderPicker({
   const handleCustomSearch = () => {
     if (customFrom && customTo) searchPhotos(customFrom, customTo);
   };
-
-  const sortedPhotos = useMemo(
-    () => sortProviderPhotos(photos, contextLocation),
-    [photos, contextLocation?.lat, contextLocation?.lng]
-  );
 
   const toggleAsset = (id: string) => {
     setSelected((prev) => {
@@ -414,9 +410,9 @@ export function ProviderPicker({
 
         {/* Select all bar — sticky above grid */}
         {!loading &&
-          sortedPhotos.length > 0 &&
+          photos.length > 0 &&
           (() => {
-            const selectable = sortedPhotos.filter((a: any) => !existingAssetIds.has(a.id));
+            const selectable = photos.filter((a: any) => !existingAssetIds.has(a.id));
             const allSelected = selectable.length > 0 && selectable.every((a: any) => selected.has(a.id));
             if (selectable.length === 0) return null;
             return (
@@ -464,7 +460,7 @@ export function ProviderPicker({
             <div className="flex justify-center py-12">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
             </div>
-          ) : sortedPhotos.length === 0 ? (
+          ) : photos.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-[13px] text-zinc-500">
                 {filter === 'trip' && !tripRange.from
@@ -474,7 +470,7 @@ export function ProviderPicker({
             </div>
           ) : (
             <div>
-              {groupPhotosByDate(sortedPhotos).map((group) => (
+              {groupPhotosByDate(photos).map((group) => (
                 <div key={group.date}>
                   {(!embedded || filter !== 'day') && (
                     <p className="mt-4 mb-2 text-[11px] font-medium text-zinc-500 first:mt-0 dark:text-zinc-400">
