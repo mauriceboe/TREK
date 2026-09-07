@@ -86,6 +86,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Tarea próxima',
   'settings.notifyVacayInvite': 'Invitaciones de fusión Vacay',
   'settings.notifyVacayShare': 'Calendarios Vacay compartidos',
+  'settings.notifyCollectionInvite': 'Invitaciones a colecciones',
+  'settings.notifySynologySessionCleared': 'Sesión de Synology cerrada',
+  'settings.notifyPluginNotification': 'Notificaciones de plugins',
   'settings.notifyPhotosShared': 'Fotos compartidas (Immich)',
   'settings.notifyCollabMessage': 'Mensajes de chat (Collab)',
   'settings.notifyPackingTagged': 'Lista de equipaje: asignaciones',
@@ -276,6 +279,7 @@ const settings: TranslationStrings = {
   'settings.currentPasswordRequired': 'La contraseña actual es obligatoria',
   'settings.passwordWeak': 'La contraseña debe contener mayúsculas, minúsculas, números y un carácter especial',
   'settings.notifyVersionAvailable': 'Nueva versión disponible',
+  'settings.notifyReplicaFailure': 'Fallo de réplica de almacenamiento',
   'settings.notificationPreferences.noChannels':
     'No hay canales de notificación configurados. Pide a un administrador que configure notificaciones por correo o webhook.',
   'settings.webhookUrl.label': 'URL del webhook',

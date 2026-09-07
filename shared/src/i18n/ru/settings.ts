@@ -84,6 +84,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Задача к сроку',
   'settings.notifyVacayInvite': 'Приглашения слияния Vacay',
   'settings.notifyVacayShare': 'Общий доступ к календарю Vacay',
+  'settings.notifyCollectionInvite': 'Приглашения в коллекции',
+  'settings.notifySynologySessionCleared': 'Сессия Synology сброшена',
+  'settings.notifyPluginNotification': 'Уведомления плагинов',
   'settings.notifyPhotosShared': 'Общие фото (Immich)',
   'settings.notifyCollabMessage': 'Сообщения чата (Collab)',
   'settings.notifyPackingTagged': 'Список вещей: назначения',
@@ -275,6 +278,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabelsHint':
     'Отображает названия станций / аэропортов на карте. Если выключено, показывается только значок.',
   'settings.notifyVersionAvailable': 'Доступна новая версия',
+  'settings.notifyReplicaFailure': 'Сбой реплики хранилища',
   'settings.notificationPreferences.noChannels':
     'Каналы уведомлений не настроены. Попросите администратора настроить уведомления по электронной почте или через webhook.',
   'settings.webhookUrl.label': 'URL вебхука',

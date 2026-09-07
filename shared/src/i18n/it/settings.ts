@@ -86,6 +86,9 @@ const settings: TranslationStrings = {
   'settings.notifyTodoDue': 'Attività in scadenza',
   'settings.notifyVacayInvite': 'Inviti fusione Vacay',
   'settings.notifyVacayShare': 'Condivisioni calendario Vacay',
+  'settings.notifyCollectionInvite': 'Inviti alle raccolte',
+  'settings.notifySynologySessionCleared': 'Sessione Synology rimossa',
+  'settings.notifyPluginNotification': 'Notifiche dei plugin',
   'settings.notifyPhotosShared': 'Foto condivise (Immich)',
   'settings.notifyCollabMessage': 'Messaggi chat (Collab)',
   'settings.notifyPackingTagged': 'Lista valigia: assegnazioni',
@@ -275,6 +278,7 @@ const settings: TranslationStrings = {
   'settings.bookingLabelsHint':
     "Mostra i nomi di stazioni / aeroporti sulla mappa. Se disattivato, viene mostrata solo l'icona.",
   'settings.notifyVersionAvailable': 'Nuova versione disponibile',
+  'settings.notifyReplicaFailure': "Errore di replica dell'archiviazione",
   'settings.notificationPreferences.noChannels':
     'Nessun canale di notifica configurato. Chiedi a un amministratore di configurare notifiche via e-mail o webhook.',
   'settings.webhookUrl.label': 'URL webhook',
